@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Nastavení → O aplikaci: adresa her na internetu s tlačítkem „Kopírovat adresu“, aby šla snadno poslat dalším lidem.
+
 ## 1.0.5 – 2026-11-09
 
 - Oko bere, Oko bere plus mínus a Kostky: na konci zápasu se vždy ukáže okno s výsledkem, i když hned ťukneš na „Hrát znovu“ nebo „Nová hra“. Nová hra začne až z tohoto okna.

@@ -22,7 +22,7 @@ Main target devices: Xiaomi 13T / 14T / 15T in portrait (CSS viewport about 393�
 ## Structure
 
 ```
-README.md               Czech overview for people: game table, how to use, images, contact (repository URL); keep in sync with CONTACT_URL in index.html
+README.md               Czech overview for people: game table, how to use, images, contact (repository URL) and the web address; keep in sync with CONTACT_URL and SITE_URL in index.html
 CLAUDE.md               this file: rules for the agent
 TODO.md                 what is left to do and open questions for the user (done items are deleted)
 CHANGELOG.md            Czech "Co je nového" for players: "## Nevydáno" collects lines until the next release, then "## X.Y.Z – YYYY-MM-DD" sections
@@ -36,7 +36,7 @@ docs/screenshots/       pictures for README.md
 .claude/skills/new-game/ the procedure for a new game or a bigger rebuild (loads when the user asks for a new game)
 .claude/agents/game-review.md  independent read-only review of one game against this file (the new-game skill runs it)
 .claude/launch.json     a local server for the browser preview (port 8766)
-index.html              launcher: today's date with the app icon on its right, one column of game rows (two on wide screens) sorted by plays, a "Nainstalovat do zařízení" button below them (only while the browser offers installing: `beforeinstallprompt`; user's wish 2026-11-08, Chrome's own offer is unreliable) and a "Nastavení" button below that; its settings screen (the shared .paper look) holds "Ukazovat počet hraní", "Smazat uložená data", "Hlášení chyb", "Verze aplikace" (see Versioning) and "O aplikaci" with the contact, and is the place for further app-wide actions
+index.html              launcher: today's date with the app icon on its right, one column of game rows (two on wide screens) sorted by plays, a "Nainstalovat do zařízení" button below them (only while the browser offers installing: `beforeinstallprompt`; user's wish 2026-11-08, Chrome's own offer is unreliable) and a "Nastavení" button below that; its settings screen (the shared .paper look) holds "Ukazovat počet hraní", "Smazat uložená data", "Hlášení chyb", "Verze aplikace" (see Versioning) and "O aplikaci" with the games' web address (`SITE_URL`, the GitHub Pages site) and its "Kopírovat adresu" button (user's wish 2026-11-09), then the link to the source code on GitHub (`CONTACT_URL`; user's wish 2026-11-09, before "Když něco nefunguje… napiš sem"), and is the place for further app-wide actions
 manifest.webmanifest    one "Vítkovy hry" icon on the phone home screen (the app's name, chosen by the user)
 sw.js                   offline mode for the launcher, all registered games and images/
 icon.svg, icon-*.png    launcher icon (PNGs are generated from icon.svg with a headless Playwright screenshot; icon-maskable-512.png has the die moved further in so Android's round mask never cuts it)

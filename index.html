@@ -112,6 +112,9 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
 .vrow span{display:block;font-size:18px;color:var(--psoft);line-height:1.35}
 .vrow b{display:block;font-size:20px;line-height:1.35}
 .contact{display:block;margin-top:12px;padding:14px 16px;border-radius:14px;background:var(--popt);border:2px solid var(--pline);font-size:18px;font-weight:700;color:var(--pbtn);overflow-wrap:anywhere;text-align:center}
+/* the web address with a small copy button below it (user's wish 2026-11-09) */
+.screen .copy{display:flex;align-items:center;gap:8px;margin:10px auto 0;height:48px;padding:0 18px;border-radius:24px;background:var(--pbtn);color:var(--pbtn-ink);font-size:18px;font-weight:800;box-shadow:0 3px 0 var(--pbtn-sh)}
+.copy svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px}
 .modal[hidden]{display:none}
 .mcard{width:100%;max-width:380px;background:#f4ebdf;border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
@@ -183,7 +186,10 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
   </section>
   <section class="card"><h3>O aplikaci</h3>
     <p>Jednoduché hry pro radost, bez reklam. Fungují i bez internetu. Fotky a znaky jsou z Wikimedia Commons.</p>
-    <div class="fnote">Když něco nefunguje nebo je nápad na vylepšení, napiš sem:</div>
+    <div class="fnote">Hry jsou i na internetu. Tuhle adresu můžeš poslat dalším lidem:</div>
+    <a class="contact" id="siteLink" target="_blank" rel="noopener"></a>
+    <button class="copy" id="btnCopySite"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2"/></svg><span id="copyTxt">Kopírovat adresu</span></button>
+    <div class="fnote">Zdrojové kódy her jsou volně na GitHubu:</div>
     <a class="contact" id="contact" target="_blank" rel="noopener"></a>
   </section>
   <button class="big" data-act="close">Zpět k hrám</button>
@@ -206,12 +212,34 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
 'use strict';
 const grid = document.getElementById('grid');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-// Contact shown in the "O aplikaci" section; keep in sync with README.md
+// The source code (GitHub), shown in the "O aplikaci" section; keep in sync with README.md
 const CONTACT_URL = 'https://github.com/hhvitek/hhvitek-games';
+// The games on the web (GitHub Pages), shown in "O aplikaci" so it can be passed on; keep in sync with README.md
+const SITE_URL = 'https://hhvitek.github.io/hhvitek-games/';
+// an address may wrap only after a slash, never in the middle of a word
+const showUrl = (a, url) => {
+  a.href = url;
+  a.innerHTML = '<span>' + url.replace(/^https?:\/\//, '').replace(/\/$/, '').split('/').map(p => `<span style="white-space:nowrap">${esc(p)}</span>`).join('/<wbr>') + '</span>';
+};
 const contact = document.getElementById('contact');
-contact.href = CONTACT_URL;
-// the address may wrap only after a slash, never in the middle of a word
-contact.innerHTML = CONTACT_URL.replace(/^https?:\/\//, '').split('/').map(p => `<span style="white-space:nowrap">${esc(p)}</span>`).join('/<wbr>');
+showUrl(contact, CONTACT_URL);
+showUrl(document.getElementById('siteLink'), SITE_URL);
+// Kopírovat: the clipboard API, else the old way through a hidden text field; the button says how it went
+const copyTxt = document.getElementById('copyTxt');
+let copyT = 0;
+document.getElementById('btnCopySite').addEventListener('click', async () => {
+  let ok = false;
+  try { await navigator.clipboard.writeText(SITE_URL); ok = true; } catch (e) {}
+  if (!ok) {
+    try {
+      const t = document.createElement('textarea');
+      t.value = SITE_URL; t.setAttribute('readonly', ''); t.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(t); t.select(); ok = document.execCommand('copy'); t.remove();
+    } catch (e) {}
+  }
+  copyTxt.textContent = ok ? 'Zkopírováno ✓' : 'Kopírování nejde';
+  clearTimeout(copyT); copyT = setTimeout(() => { copyTxt.textContent = 'Kopírovat adresu'; }, 2500);
+});
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
