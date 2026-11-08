@@ -30,6 +30,7 @@ CLAUDE.md is the source of the rules; this file only says what to do when.
 | saved game validated, the end derived from the board, a broken history only loses Undo | `games/zavri-cisla/` `validGame` |
 | end dialog only for its game, never over Settings/Help | `whenFree(g0, ms, fn)` from the template |
 | sizes from the room left (no scrolling); sizes in px from a CSS variable, never `%` padding | template `layout()`, `games/zavri-cisla/` dice |
+| `#app` as tall as the visible window (`height:var(--app-h,100dvh)` + the "Visible height" block, checked; see "Visible height" in CLAUDE.md) | template |
 | a computer opponent: own AI and `LEVELS`, the name, face, stars and head from `games/_opponents/opponents.js` (never drawn again in the game) | `games/oko-bere/` (small head), `games/kostky/` (big panel), `games/prsi/` (play styles, two opponents) |
 
 Senior rules to keep in mind while writing: Czech, "ty" only in the imperative, no time pressure (unless the user

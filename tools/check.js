@@ -115,6 +115,7 @@ for (const id of ids) {
   need(hasKey('state'), `storage key games.${id}.state`);
   need(!/\.plays/.test(html.replace(/games\.\$\{a\.dataset\.id\}\.plays/g, '')), 'a game never touches games.<id>.plays (the launcher counts plays)');
   need(!/serviceWorker\.register|rel="manifest"/.test(html), 'a game registers no service worker or manifest (the launcher does)');
+  need(/#app\{[^}]*height:var\(--app-h,100dvh\)/.test(html) && /\/\* ---------- Visible height ---------- \*\//.test(html), 'the game is as tall as the visible window: #app height:var(--app-h,100dvh) and the "Visible height" block from the template');
   need(!/viewport-fit=cover/.test(html), 'no viewport-fit=cover in the viewport meta: the installed app then draws under the navigation bar and hides the bottom buttons');
 
   // storage and the senior rules

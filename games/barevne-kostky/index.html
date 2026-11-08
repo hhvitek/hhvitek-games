@@ -63,7 +63,7 @@ body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;colo
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
 [hidden]{display:none!important}
 
-#app{height:100vh;height:100dvh;max-width:560px;margin:0 auto;display:flex;flex-direction:column;background:var(--bg);
+#app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;background:var(--bg);
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   box-shadow:0 0 40px rgba(0,0,0,.5)}
 
@@ -252,6 +252,37 @@ a.round{text-decoration:none}
 <div id="toast" class="hide"></div>
 
 <script>
+/* ---------- Visible height ---------- */
+// The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
+// enough: some browsers report it taller than what is visible (the app installed by Brave on Android counted the
+// status and navigation bars too and hid the bottom buttons). visualViewport follows what is shown; it is measured
+// again on every change and shortly after loading (a browser bar that hides itself may change it without an event),
+// and a changed height makes the game lay itself out again through a resize event.
+(() => {
+  const root = document.documentElement;
+  let last = 0;
+  const measure = () => {
+    const vv = window.visualViewport;
+    const h = Math.round(vv ? vv.height * vv.scale : innerHeight);
+    if (!(h > 0) || h === last) return;
+    const first = !last; last = h;
+    root.style.setProperty('--app-h', h + 'px');
+    if (!first) dispatchEvent(new Event('resize'));
+  };
+  measure();
+  addEventListener('resize', measure);
+  if (window.visualViewport) visualViewport.addEventListener('resize', measure);
+  addEventListener('pageshow', measure);
+  [100, 500, 1500].forEach(ms => setTimeout(measure, ms));
+  // TEMPORARY (2026-11-08): what this page measured, shown in the launcher's Nastavení → "Údaje o obrazovce"
+  setTimeout(() => { try {
+    const p = document.createElement('div'); p.style.cssText = 'position:absolute;left:-50px;top:0;width:1px;height:100dvh;padding-bottom:env(safe-area-inset-bottom)';
+    document.body.appendChild(p); const dvh = Math.round(p.getBoundingClientRect().height - parseFloat(getComputedStyle(p).paddingBottom)), sb = Math.round(parseFloat(getComputedStyle(p).paddingBottom)); p.remove();
+    const vv = window.visualViewport;
+    localStorage.setItem('games.launcher.diag', JSON.stringify({ page: location.pathname.split('/').slice(-2, -1)[0], vv: vv ? Math.round(vv.height) : null, inner: innerHeight, client: root.clientHeight, dvh, sb, appH: last, app: Math.round(document.getElementById('app').getBoundingClientRect().height) }));
+  } catch (e) {} }, 2000);
+})();
+
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);

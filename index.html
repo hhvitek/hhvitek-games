@@ -572,6 +572,9 @@ async function renderDiag() {
   meta.content = was + ', viewport-fit' + '=cover'; await frame(); // split: tools/check.js rejects it in the meta
   a.push(`safe-area s cover: ${insets()}`, `inner s cover: ${innerWidth} × ${innerHeight}, 100dvh ${probe('100dvh')}`);
   meta.content = was; await frame();
+  // the last game opened: what it measured 2 s after loading (written by its "Visible height" block)
+  try { const g = JSON.parse(localStorage.getItem('games.launcher.diag') || 'null');
+    if (g) a.push(`hra ${g.page}: visualViewport ${g.vv}, inner ${g.inner}, client ${g.client}, 100dvh ${g.dvh}, okraj dole ${g.sb}, výška hry ${g.appH} → ${g.app}`); } catch (e) {}
   out.textContent = a.join('\n');
 }
 
