@@ -70,6 +70,13 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
 .plays{font-size:18px;font-weight:700;color:#6f5a48;font-variant-numeric:tabular-nums}
 .chev{flex:none;width:24px;height:24px;fill:none;stroke:#b39b84;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
 .empty{text-align:center;font-size:20px;color:#6f5a48;padding:40px 0}
+/* "Nainstalovat do zařízení" below the games, above Nastavení: only where the browser can install it (beforeinstallprompt) and only until it is installed */
+/* the same size as the Nastavení button below it, only filled */
+.install{display:flex;align-items:center;justify-content:center;gap:10px;margin:26px auto 0;height:56px;padding:0 26px;font:inherit;font-size:20px;font-weight:700;color:#fff;background:#7a4520;border:2px solid #7a4520;border-radius:18px;cursor:pointer;transition:transform .08s}
+.install[hidden]{display:none}
+.install:not([hidden])+.toSettings{margin-top:16px}
+.install:active{transform:scale(.97)}
+.install svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
 /* The way to the settings: a calm secondary button below the games, so the main page stays only for the games */
 .toSettings{display:flex;align-items:center;justify-content:center;gap:10px;margin:26px auto 0;height:56px;padding:0 26px;font:inherit;font-size:20px;font-weight:700;color:#5a3214;background:#fff;border:2px solid #e6d8c6;border-radius:18px;cursor:pointer;transition:transform .08s}
 .toSettings:active{transform:scale(.97);border-color:#c9a48a}
@@ -138,6 +145,7 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
 <div class="wrap">
   <header><div><h1 id="day">Vítkovy hry</h1><p class="date" id="date">Vyber si hru</p></div><img class="logo" src="icon.svg" alt=""></header>
   <main class="list" id="grid"></main>
+  <button class="install" id="btnInstall" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11M7 9.5l5 5 5-5M4.5 16v3.5h15V16"/></svg>Nainstalovat do zařízení</button>
   <button class="toSettings" id="btnSettings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg>Nastavení</button>
 </div>
 <!-- Settings of the whole app: everything that is not a game lives here (more actions can be added as sections) -->
@@ -530,6 +538,29 @@ if (/^https?:$/.test(location.protocol)) {
   // is noticed at once (never an older copy from the HTTP cache); the answer is tiny when nothing changed
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
 }
+
+// "Nainstalovat do zařízení": Chrome offers installing on its own only sometimes (and never again once dismissed),
+// so the launcher shows its own button whenever the browser says it can install (Chrome, Edge, Samsung Internet).
+// Other browsers never fire beforeinstallprompt: the button stays hidden there, and so does it in the installed app.
+const btnInstall = document.getElementById('btnInstall');
+let installPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); // our button instead of the browser's own mini bar
+  installPrompt = e;
+  btnInstall.hidden = false;
+});
+btnInstall.addEventListener('click', async () => {
+  const p = installPrompt;
+  if (!p) { btnInstall.hidden = true; return; }
+  installPrompt = null; // a prompt can be shown only once; the browser fires a new event when it may ask again
+  btnInstall.hidden = true;
+  try { await p.prompt(); await p.userChoice; } catch (e) {}
+});
+window.addEventListener('appinstalled', () => {
+  installPrompt = null; btnInstall.hidden = true;
+  showModal('<h2>Aplikace je nainstalovaná</h2><p>Na ploše je teď ikona „Vítkovy hry“. Příště hry otevři rovnou z ní, fungují i bez internetu.</p>',
+    [{ text: 'Rozumím', cls: 'keep' }]);
+});
 
 // Persistent storage: the browser then won't delete saved settings and games on its own.
 // Applies to the whole origin, so to all games in games/ too.

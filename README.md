@@ -53,8 +53,8 @@ Nic se neinstaluje ani nesestavuje. Jsou to obyčejné webové stránky (HTML so
 
 ### 1. Hrát rovnou na telefonu (nejjednodušší)
 
-1. Otevři v Chromu <https://hhvitek.github.io/hhvitek-games/> (až bude zapnuté GitHub Pages).
-2. Menu ⋮ → **Přidat na plochu**. Na ploše se objeví jedna ikona „Vítkovy hry“.
+1. Otevři v Chromu <https://hhvitek.github.io/hhvitek-games/>.
+2. Ťukni na **Nainstalovat do zařízení** dole pod hrami (nebo menu ⋮ → **Instalovat aplikaci** / **Přidat na plochu**). Na ploše se objeví jedna ikona „Vítkovy hry“.
 3. Ťukni na hru. Tlačítko s domečkem vlevo nahoře vede zpět na výběr her.
 
 Po první návštěvě hry fungují i bez internetu.
