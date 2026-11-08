@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Nainstalovaná aplikace: spodní tlačítka her už nezajedou pod lištu telefonu.
+
 ## 1.0.1 – 2026-11-08
 
 - Výběr her: nové tlačítko „Nainstalovat do zařízení“ dole pod hrami přidá hry na plochu telefonu jedním ťuknutím. Ukáže se jen v prohlížeči, který to umí, a po instalaci zmizí.

@@ -115,6 +115,7 @@ for (const id of ids) {
   need(hasKey('state'), `storage key games.${id}.state`);
   need(!/\.plays/.test(html.replace(/games\.\$\{a\.dataset\.id\}\.plays/g, '')), 'a game never touches games.<id>.plays (the launcher counts plays)');
   need(!/serviceWorker\.register|rel="manifest"/.test(html), 'a game registers no service worker or manifest (the launcher does)');
+  need(!/viewport-fit=cover/.test(html), 'no viewport-fit=cover in the viewport meta: the installed app then draws under the navigation bar and hides the bottom buttons');
 
   // storage and the senior rules
   need(/navigator\.storage\.persist\(\)/.test(html), 'navigator.storage.persist() on start');
@@ -211,6 +212,7 @@ if (!ONLY || ONLY === 'launcher') {
   const code = idx.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n'); // comments may mention localStorage.clear()
   if (!/OTHER_KEY_NAMES/.test(idx) || /localStorage\.clear\(\)/.test(code)) P.push('reset must remove only our keys (no localStorage.clear())');
   if (!/Back button ----/.test(idx)) P.push('launcher: the "Back button" block for its dialog');
+  if (/viewport-fit=cover/.test(idx)) P.push('launcher: no viewport-fit=cover in the viewport meta (the installed app would draw under the navigation bar)');
   if (!ERRLOG || !idx.includes(ERRLOG) || idx.search(/<script\b/) !== idx.indexOf(ERRLOG)) P.push('launcher: the shared Error log block must be the first <script>');
   if (!(Buffer.from(idx).indexOf('<meta charset="utf-8">') >= 0 && Buffer.from(idx).indexOf('<meta charset="utf-8">') < 1024)) P.push('launcher: <meta charset="utf-8"> in the first 1024 bytes');
   if (!/games\/_cards\/cards\.js/.test(sw)) P.push('sw.js must cache games/_cards/cards.js');
