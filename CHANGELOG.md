@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Nastavení: dočasně ukazuje údaje o obrazovce, aby šlo opravit zobrazení v aplikaci nainstalované přes prohlížeč Brave.
+
 ## 1.0.2 – 2026-11-08
 
 - Nainstalovaná aplikace: spodní tlačítka her už nezajedou pod lištu telefonu.

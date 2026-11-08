@@ -107,6 +107,7 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
 .big.soft{background:var(--popt);color:var(--pbtn);border:2px solid var(--pline);box-shadow:0 4px 0 var(--pline)}
 /* Version of the app: the number, then rows with a label and the date below it */
 .ver{font-size:24px;font-weight:800;line-height:1.3}
+.diag{margin-top:8px;font:18px/1.45 ui-monospace,"Roboto Mono",monospace;white-space:pre-wrap;overflow-wrap:anywhere;-webkit-user-select:text;user-select:text}
 .vrow{margin-top:8px;padding-top:8px;border-top:2px solid var(--pline)}
 .vrow span{display:block;font-size:18px;color:var(--psoft);line-height:1.35}
 .vrow b{display:block;font-size:20px;line-height:1.35}
@@ -174,6 +175,11 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
     <button class="big soft" id="btnUpdate" hidden>Zkontrolovat aktualizace</button>
     <div class="fnote" id="updState" role="status" aria-live="polite"></div>
     <button class="big" id="btnReload" hidden>Načíst novou verzi</button>
+  </section>
+  <!-- TEMPORARY (2026-11-08): screen measurements for the bottom cut off in the app installed by Brave; remove after the fix -->
+  <section class="card"><h3>Údaje o obrazovce</h3>
+    <div class="fnote">Dočasně, pro opravu zobrazení. Vyfoť tuhle část a pošli ji autorovi.</div>
+    <div class="diag" id="diag"></div>
   </section>
   <section class="card"><h3>O aplikaci</h3>
     <p>Jednoduché hry pro radost, bez reklam. Fungují i bez internetu. Fotky a znaky jsou z Wikimedia Commons.</p>
@@ -469,6 +475,7 @@ const ownKey = k => {
 const settings = document.getElementById('screenSettings');
 document.getElementById('btnSettings').addEventListener('click', () => {
   renderErrors(); settings.hidden = false; settings.scrollTop = 0;
+  renderDiag();
   // a version downloaded in the background since this page loaded: say so at once, with "Načíst novou verzi"
   if (canUpdate && !checking && navigator.serviceWorker.controller) compareVersions(true).catch(() => {});
 });
@@ -537,6 +544,35 @@ if (/^https?:$/.test(location.protocol)) {
   // updateViaCache 'none': the browser asks the server for sw.js and version.js on every opening, so a release
   // is noticed at once (never an older copy from the HTTP cache); the answer is tiny when nothing changed
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+}
+
+// TEMPORARY (2026-11-08): what the browser reports about the screen, shown in Nastavení → "Údaje o obrazovce".
+// The app installed by Brave on a Samsung S25 lays the games out taller than the visible area; this finds
+// which value matches the visible height. Remove with its section in Nastavení after the fix.
+async function renderDiag() {
+  const out = document.getElementById('diag'); if (!out) return;
+  const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  const probe = h => { const d = document.createElement('div'); d.style.cssText = `position:absolute;left:-50px;top:0;width:1px;height:${h}`; document.body.appendChild(d); const v = d.getBoundingClientRect().height; d.remove(); return Math.round(v); };
+  const insets = () => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:-50px;top:0;width:1px;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)'; document.body.appendChild(d); const s = getComputedStyle(d), v = [s.paddingTop, s.paddingBottom, s.paddingLeft, s.paddingRight].map(x => Math.round(parseFloat(x))); d.remove(); return v.join(' ') + ' (nahoře dole vlevo vpravo)'; };
+  const mode = ['fullscreen', 'standalone', 'minimal-ui', 'browser'].find(m => matchMedia(`(display-mode: ${m})`).matches) || '?';
+  const vv = window.visualViewport;
+  const lines = () => [
+    `režim: ${mode}${navigator.brave ? ', Brave' : ''}`,
+    `prohlížeč: ${(navigator.userAgent.match(/(Chrome|Firefox|Version)\/[\d.]+/) || ['?'])[0]}`,
+    `obrazovka: ${screen.width} × ${screen.height}, dostupná ${screen.availWidth} × ${screen.availHeight}, dpr ${devicePixelRatio}`,
+    `okno inner: ${innerWidth} × ${innerHeight}`,
+    `okno outer: ${outerWidth} × ${outerHeight}`,
+    `visualViewport: ${vv ? Math.round(vv.width) + ' × ' + Math.round(vv.height) + ', posun ' + Math.round(vv.offsetTop) : '–'}`,
+    `clientHeight: ${document.documentElement.clientHeight}`,
+    `100vh ${probe('100vh')} · 100dvh ${probe('100dvh')} · 100svh ${probe('100svh')} · 100lvh ${probe('100lvh')}`,
+  ];
+  const a = lines(); a.push(`safe-area: ${insets()}`);
+  // the same insets with "cover" in the viewport meta for a moment (the games no longer use it)
+  const meta = document.querySelector('meta[name=viewport]'), was = meta.content;
+  meta.content = was + ', viewport-fit' + '=cover'; await frame(); // split: tools/check.js rejects it in the meta
+  a.push(`safe-area s cover: ${insets()}`, `inner s cover: ${innerWidth} × ${innerHeight}, 100dvh ${probe('100dvh')}`);
+  meta.content = was; await frame();
+  out.textContent = a.join('\n');
 }
 
 // "Nainstalovat do zařízení": Chrome offers installing on its own only sometimes (and never again once dismissed),
