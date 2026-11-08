@@ -114,8 +114,15 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
 .btn:active{transform:translateY(3px)}
 .btn.keep{background:#7a4520;color:#fff;box-shadow:0 4px 0 #3f220e}
 .btn.danger{background:#e7d9c6;color:#a3261b;box-shadow:0 4px 0 #b9a68f}
-/* "Co je nového": the latest releases, a long list scrolls inside the dialog */
-.changes{text-align:left;max-height:calc(100dvh - 230px);overflow-y:auto;margin-bottom:16px}
+/* "Co je nového": every release, newest first; the long list scrolls inside the dialog */
+.modal.wide{padding:12px max(12px,env(safe-area-inset-right)) 12px max(12px,env(safe-area-inset-left))}
+.mcard.wide{max-width:640px;padding:20px 14px 16px}
+/* an always visible, thick scrollbar (Android hides the thin overlay one until the list moves) */
+.changes{text-align:left;max-height:calc(100dvh - 200px);overflow-y:auto;overscroll-behavior:contain;margin-bottom:16px;padding-right:10px}
+.changes::-webkit-scrollbar{width:10px}
+.changes::-webkit-scrollbar-track{background:#e6d8c6;border-radius:5px}
+.changes::-webkit-scrollbar-thumb{background:#7a4520;border-radius:5px}
+@supports not selector(::-webkit-scrollbar){.changes{scrollbar-color:#7a4520 #e6d8c6}}
 .changes h3{font-size:20px;line-height:1.3;color:#5a3214;margin:14px 0 6px}
 .changes h3:first-child{margin-top:0}
 .changes ul{padding-left:24px}
@@ -362,14 +369,14 @@ if (APP) {
 }
 document.getElementById('verUpdated').textContent = fmtDay(install.updated);
 document.getElementById('verFirst').textContent = fmtDay(install.first);
-// "Co je nového": the latest releases from CHANGELOG.md (tools/release.js copies them into version.js)
+// "Co je nového": every release from CHANGELOG.md, newest first (tools/release.js copies them into version.js)
 const CHANGES = (Array.isArray(globalThis.APP_CHANGES) ? globalThis.APP_CHANGES : [])
-  .filter(c => c && typeof c.version === 'string' && Array.isArray(c.items)).slice(0, 3);
+  .filter(c => c && typeof c.version === 'string' && Array.isArray(c.items));
 const btnChanges = document.getElementById('btnChanges');
 btnChanges.hidden = !CHANGES.length;
 btnChanges.addEventListener('click', () => showModal('<h2>Co je nového</h2><div class="changes">' + CHANGES.map(c =>
   `<h3>Verze ${esc(c.version)} · ${fmtDay(c.date)}</h3><ul>${c.items.map(it => `<li>${esc(it)}</li>`).join('')}</ul>`).join('') + '</div>',
-  [{ text: 'Zavřít', cls: 'keep' }]));
+  [{ text: 'Zavřít', cls: 'keep' }], true));
 // "Zkontrolovat aktualizace": asks for a new version at once. sw.js downloads it whole and takes over;
 // this page still shows the old one until it is loaded again ("Načíst novou verzi").
 const canUpdate = /^https?:$/.test(location.protocol) && 'serviceWorker' in navigator;
@@ -463,7 +470,8 @@ if (canUpdate) navigator.serviceWorker.addEventListener('controllerchange', () =
 });
 settings.addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) settings.hidden = true; });
 const modal = document.getElementById('modal'), card = document.getElementById('modalCard');
-function showModal(html, buttons) {
+function showModal(html, buttons, wide) {
+  modal.classList.toggle('wide', !!wide); card.classList.toggle('wide', !!wide);
   card.innerHTML = html + '<div class="mbtns">' + buttons.map((b, i) => `<button class="btn ${b.cls}" data-i="${i}">${b.text}</button>`).join('') + '</div>';
   card.onclick = e => {
     const b = e.target.closest('[data-i]'); if (!b) return;

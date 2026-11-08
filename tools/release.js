@@ -4,7 +4,7 @@
 //     patch (default) 1.0.0 -> 1.0.1, minor -> 1.1.0, major -> 2.0.0. The very first release (no v* tag yet)
 //     releases the version in version.js as it is.
 //     Turns "## Nevydáno" in CHANGELOG.md into "## X.Y.Z – YYYY-MM-DD", writes version.js (the version, the date
-//     and the latest releases for "Co je nového"), commits "Release X.Y.Z", tags vX.Y.Z and pushes both;
+//     and every release for "Co je nového"), commits "Release X.Y.Z", tags vX.Y.Z and pushes both;
 //     the tag starts .github/workflows/deploy.yml, which puts this version on GitHub Pages.
 //     --dry-run only says what would happen, --no-push stops before the push, --trailer adds a commit trailer.
 //   node tools/release.js --verify <tag>
@@ -25,7 +25,6 @@ const die = msg => { console.error(`release: ${msg}`); process.exit(1); };
 const UNRELEASED = 'Nevydáno';
 const RELEASE_TITLE = /^(\d+\.\d+\.\d+) – (\d{4}-\d{2}-\d{2})$/;
 const VERSION_LINE = /^globalThis\.APP_VERSION = \{ version: '(\d+\.\d+\.\d+)', date: '(\d{4}-\d{2}-\d{2})' \};\r?$/m; // \r?: a copy saved with Windows line ends
-const KEEP_CHANGES = 5; // releases copied into version.js (the launcher shows the latest 3)
 // Files the player never gets (tools/release.js asks for at least one other changed file since the last tag)
 const NOT_FOR_PLAYERS = [/^(tools|docs|\.claude|\.github|\.playwright-mcp|games\/_template)\//, /\.md$/, /^\.git/, /^LICENSE$/];
 
@@ -129,7 +128,7 @@ function release(kind, { dryRun, push, trailers }) {
   open.title = `${version} – ${date}`;
   log.sections.splice(log.sections.indexOf(open), 0, { title: UNRELEASED, body: [''] });
   write('CHANGELOG.md', serialize(log));
-  write('version.js', versionJs(version, date, releases(log).slice(0, KEEP_CHANGES)));
+  write('version.js', versionJs(version, date, releases(log)));
 
   git('add', 'version.js', 'CHANGELOG.md');
   git('commit', '--quiet', '-m', `Release ${version}`, '-m', notes.map(n => `- ${n}`).join('\n'), ...trailers.flatMap(t => ['--trailer', t]));

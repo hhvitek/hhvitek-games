@@ -63,7 +63,7 @@ Po první návštěvě hry fungují i bez internetu.
 
 Nové verze se do telefonu stahují samy na pozadí, když je připojení k internetu, a ukážou se při dalším otevření.
 Ve výběru her v **Nastavení** v části „Verze aplikace“ je vidět číslo verze, kdy vyšla a kdy se stáhla do tohoto
-zařízení. Tlačítko „Zkontrolovat aktualizace“ hned zjistí, jestli je novější, a „Co je nového“ ukáže poslední změny.
+zařízení. Tlačítko „Zkontrolovat aktualizace“ hned zjistí, jestli je novější, a „Co je nového“ ukáže změny ve všech verzích.
 Všechny změny po verzích jsou v [CHANGELOG.md](CHANGELOG.md).
 
 ### 2. Stáhnout a otevřít z disku
