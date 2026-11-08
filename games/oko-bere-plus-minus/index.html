@@ -554,13 +554,23 @@ function finishRound() {
       G.counted = true;
       const st = ST[G.level]; st.played++; if (G.result.win === 0) st.won++;
     }
-    const g0 = G, youWon = G.result.win === 0;
-    whenFree(g0, 1400, () => showModal(youWon
-      ? `<h2>Zápas je tvůj! 🎉</h2><p>Vyhráváš <b>${G.score[0]} : ${G.score[1]}</b>.</p>`
-      : `<h2>Zápas ${O.past(G.foe, 'vyhrál', 'vyhrála')} ${nm()}</h2><p>Skončilo to <b>${G.score[0]} : ${G.score[1]}</b>. Zkus to znovu.</p>`,
-      [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]));
+    endDue = G;
+    whenFree(G, 1400, showEnd);
   }
   buzz(30);
+}
+
+// the end dialog comes a moment later, so the last cards can be seen; a quick tap on Hrát znovu meanwhile
+// shows it at once instead of starting a new match unseen (user's report: the match ended without a dialog)
+let endDue = null; // the match whose end dialog has not been shown yet
+function showEnd() {
+  if (endDue !== G) return;
+  endDue = null;
+  const youWon = G.result.win === 0;
+  showModal(youWon
+    ? `<h2>Zápas je tvůj! 🎉</h2><p>Vyhráváš <b>${G.score[0]} : ${G.score[1]}</b>.</p>`
+    : `<h2>Zápas ${O.past(G.foe, 'vyhrál', 'vyhrála')} ${nm()}</h2><p>Skončilo to <b>${G.score[0]} : ${G.score[1]}</b>. Zkus to znovu.</p>`,
+    [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]);
 }
 
 /* ---------- Your moves ---------- */
@@ -787,7 +797,7 @@ $('#tray').addEventListener('click', e => {
   if (Date.now() - lastTray < 450) return;
   lastTray = Date.now();
   const a = b.dataset.a;
-  if (a === 'again') { newGame(); return; }
+  if (a === 'again') { if (endDue === G) showEnd(); else newGame(); return; }
   if (busy || G.phase === 'cpu') { busyToast(); return; }
   if (a === 'undo') {
     if (G.status === 'over') { toast('Zápas skončil. Ťukni na Hrát znovu.'); return; }

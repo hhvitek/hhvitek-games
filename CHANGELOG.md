@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Oko bere, Oko bere plus mínus a Kostky: na konci zápasu se vždy ukáže okno s výsledkem, i když hned ťukneš na „Hrát znovu“ nebo „Nová hra“. Nová hra začne až z tohoto okna.
+
 ## 1.0.4 – 2026-11-08
 
 - Všechny hry: výška se řídí tím, co je na obrazovce opravdu vidět, takže spodní tlačítka nezajedou pod okraj ani v aplikaci nainstalované přes prohlížeč Brave.

@@ -822,6 +822,7 @@ function gameOver() {
   else say('', 'happy', 'Remíza! To se nestává.');
   recordEnd();
   buzz(g.status === 'won' ? [40, 60, 40, 60, 80] : 30); save(); render();
+  endDue = g;
   whenFree(g, 1100, showEnd);
 }
 // The opponent plays one step at a time: roll, choose dice (and say what next), then roll on or write down
@@ -875,7 +876,7 @@ $('#table').addEventListener('click', e => {
   if (G.status === 'playing' && G.turn === 0 && G.phase === 'start' && !busy) doRoll();
 });
 function tapRoll() {
-  if (G.status !== 'playing') { newGame(); return; }
+  if (G.status !== 'playing') { if (endDue === G) showEnd(); else newGame(); return; } // a quick tap shows the waiting end dialog first
   if (!myMove()) return;
   if (G.phase === 'start') { doRoll(); return; }
   const prob = selProblem(); if (prob) { toast(prob); return; }
@@ -911,7 +912,12 @@ function undo() {
   toast(G.rolls ? 'Hozené kostky už vrátit nejde' : 'Zatím není co vrátit');
 }
 $('#btnUndo').addEventListener('click', undo);
+// the end dialog comes a moment later; a quick tap on Nová hra meanwhile shows it at once instead of
+// starting a new game unseen (user's report from Oko bere plus mínus)
+let endDue = null; // the game whose end dialog has not been shown yet
 function showEnd() {
+  if (endDue !== G) return;
+  endDue = null;
   const g = G, f = foe(g), st = stats[rulesKey(g.rules)], lv = lvName(g.rules.level).toLowerCase();
   const head = g.status === 'won' ? 'Výhra! 🎉' : g.status === 'lost' ? `Tentokrát ${O.past(f, 'vyhrál', 'vyhrála')} ${f.name}` : 'Remíza';
   const html = `<h2>${head}</h2><p>Ty <b>${fmt(g.scores[0])}</b> : <b>${fmt(g.scores[1])}</b> ${f.name}</p>`
