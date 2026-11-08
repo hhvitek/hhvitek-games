@@ -7,4 +7,6 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.0 – 2026-11-08
+
 - Počáteční vydání: 22 her.
