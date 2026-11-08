@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.2 – 2026-11-08
+
 - Nainstalovaná aplikace: spodní tlačítka her už nezajedou pod lištu telefonu.
 
 ## 1.0.1 – 2026-11-08
