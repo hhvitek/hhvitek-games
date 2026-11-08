@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.6 – 2026-11-09
+
 - Nastavení → O aplikaci: adresa her na internetu s tlačítkem „Kopírovat adresu“, aby šla snadno poslat dalším lidem.
 
 ## 1.0.5 – 2026-11-09
