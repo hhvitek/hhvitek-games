@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000" flood-opacity=".45"/></filter>
+    <filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .16 0"/></filter>
+    <path id="spade" d="M50 4C40 22 8 38 8 62c0 15 11 24 23 24 8 0 14-4 17-9-1 9-5 15-12 19h28c-7-4-11-10-12-19 3 5 9 9 17 9 12 0 23-9 23-24C92 38 60 22 50 4z"/>
+    <path id="heart" d="M50 92C22 70 6 54 6 32 6 17 17 7 30 7c9 0 16 5 20 13 4-8 11-13 20-13 13 0 24 10 24 25 0 22-16 38-44 60z"/>
+    <path id="diamond" d="M50 3 87 50 50 97 13 50z"/>
+    <g id="club"><circle cx="50" cy="28" r="20"/><circle cx="27" cy="59" r="20"/><circle cx="73" cy="59" r="20"/><path d="M44 36h12v28H44z"/><path d="M47 60c-1 15-5 26-13 34h32c-8-8-12-19-13-34z"/></g>
+    <rect id="card" width="124" height="174" rx="14" fill="#fff" stroke="#8f8f8f" stroke-width="3"/>
+  </defs>
+  <!-- zelené sukno -->
+  <rect width="512" height="512" fill="#1e7135"/>
+  <rect width="512" height="512" filter="url(#n)"/>
+
+  <g font-family="Arial, Helvetica, sans-serif" font-weight="800" font-size="54">
+    <!-- horní řada: K♠ -->
+    <g filter="url(#sh)" transform="translate(194 52)">
+      <use href="#card"/>
+      <text x="12" y="54" fill="#151515">K</text><use href="#spade" transform="translate(72 14) scale(.42)" fill="#151515"/>
+    </g>
+    <!-- prostřední řada: Q♥, A♣ -->
+    <g filter="url(#sh)" transform="translate(128 146)">
+      <use href="#card"/>
+      <text x="12" y="54" fill="#d0101c">Q</text><use href="#heart" transform="translate(74 16) scale(.4)" fill="#d0101c"/>
+    </g>
+    <g filter="url(#sh)" transform="translate(260 146)">
+      <use href="#card"/>
+      <text x="12" y="54" fill="#151515">A</text><use href="#club" transform="translate(72 14) scale(.42)" fill="#151515"/>
+    </g>
+    <!-- spodní řada: 6♣, 7♦, 5♠ -->
+    <g filter="url(#sh)" transform="translate(62 240)">
+      <use href="#card"/>
+      <text x="12" y="54" fill="#151515">6</text><use href="#club" transform="translate(72 14) scale(.42)" fill="#151515"/>
+      <use href="#club" transform="translate(27 74) scale(.7)" fill="#151515"/>
+    </g>
+    <g filter="url(#sh)" transform="translate(194 240)">
+      <use href="#card"/>
+      <text x="12" y="54" fill="#d0101c">7</text><use href="#diamond" transform="translate(72 14) scale(.42)" fill="#d0101c"/>
+      <use href="#diamond" transform="translate(27 74) scale(.7)" fill="#d0101c"/>
+    </g>
+    <g filter="url(#sh)" transform="translate(326 240)">
+      <use href="#card"/>
+      <text x="12" y="54" fill="#151515">5</text><use href="#spade" transform="translate(72 14) scale(.42)" fill="#151515"/>
+      <use href="#spade" transform="translate(27 74) scale(.7)" fill="#151515"/>
+    </g>
+  </g>
+</svg>

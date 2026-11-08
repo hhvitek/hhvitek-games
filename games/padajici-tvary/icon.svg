@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".45"/>
+      <stop offset=".4" stop-color="#fff" stop-opacity=".1"/>
+      <stop offset="1" stop-color="#000" stop-opacity=".12"/>
+    </linearGradient>
+    <!-- one block 66x66 -->
+    <g id="b"><rect width="66" height="66" rx="11"/><rect width="66" height="66" rx="11" fill="url(#g)"/><rect x="2" y="58" width="62" height="6" rx="3" fill="#000" opacity=".18"/></g>
+    <rect id="e" width="66" height="66" rx="10" fill="#22315a"/>
+  </defs>
+  <!-- background and a 5x6 board -->
+  <rect width="512" height="512" fill="#1d2b52"/>
+  <rect x="69" y="33" width="374" height="446" rx="22" fill="#111a36"/>
+  <!-- empty cells -->
+  <g>
+    <use href="#e" x="79" y="43"/><use href="#e" x="151" y="43"/><use href="#e" x="223" y="43"/><use href="#e" x="295" y="43"/><use href="#e" x="367" y="43"/>
+    <use href="#e" x="79" y="115"/><use href="#e" x="151" y="115"/><use href="#e" x="223" y="115"/><use href="#e" x="295" y="115"/><use href="#e" x="367" y="115"/>
+    <use href="#e" x="79" y="187"/><use href="#e" x="151" y="187"/><use href="#e" x="223" y="187"/><use href="#e" x="295" y="187"/><use href="#e" x="367" y="187"/>
+    <use href="#e" x="79" y="259"/><use href="#e" x="151" y="259"/><use href="#e" x="223" y="259"/><use href="#e" x="295" y="259"/><use href="#e" x="367" y="259"/>
+    <use href="#e" x="79" y="331"/><use href="#e" x="151" y="331"/><use href="#e" x="223" y="331"/><use href="#e" x="295" y="331"/><use href="#e" x="367" y="331"/>
+    <use href="#e" x="79" y="403"/><use href="#e" x="151" y="403"/><use href="#e" x="223" y="403"/><use href="#e" x="295" y="403"/><use href="#e" x="367" y="403"/>
+  </g>
+  <!-- landing outline of the falling shape -->
+  <rect x="153" y="333" width="62" height="62" rx="10" fill="#9a55d4" fill-opacity=".22" stroke="#9a55d4" stroke-width="4"/>
+  <rect x="225" y="333" width="62" height="62" rx="10" fill="#9a55d4" fill-opacity=".22" stroke="#9a55d4" stroke-width="4"/>
+  <rect x="297" y="333" width="62" height="62" rx="10" fill="#9a55d4" fill-opacity=".22" stroke="#9a55d4" stroke-width="4"/>
+  <rect x="225" y="405" width="62" height="62" rx="10" fill="#9a55d4" fill-opacity=".22" stroke="#9a55d4" stroke-width="4"/>
+  <!-- two almost full rows at the bottom -->
+  <use href="#b" x="79" y="331" fill="#e8453c"/><use href="#b" x="367" y="331" fill="#3a78e0"/><use href="#b" x="79" y="403" fill="#f39324"/><use href="#b" x="151" y="403" fill="#f5c518"/><use href="#b" x="295" y="403" fill="#43b649"/><use href="#b" x="367" y="403" fill="#22b8cf"/>
+  <!-- the falling T shape -->
+  <use href="#b" x="151" y="115" fill="#9a55d4"/><use href="#b" x="223" y="115" fill="#9a55d4"/><use href="#b" x="295" y="115" fill="#9a55d4"/><use href="#b" x="223" y="187" fill="#9a55d4"/>
+  <!-- arrow showing the fall -->
+  <path d="M256 268 v40 m-16 -16 l16 16 16 -16" fill="none" stroke="#ffd34d" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>
+</svg>

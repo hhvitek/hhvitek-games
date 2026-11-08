@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- one tile 92x92 with a darker bottom edge -->
+    <g id="t"><rect width="92" height="92" rx="12" fill="#e9dccb"/><rect width="92" height="86" rx="12" fill="#fffaf3"/></g>
+  </defs>
+  <!-- background, orange frame and the dark well (4x4, step 100) -->
+  <rect width="512" height="512" fill="#f3e6d2"/>
+  <rect x="24" y="24" width="464" height="464" rx="40" fill="#e8781e"/>
+  <rect x="52" y="52" width="408" height="408" rx="18" fill="#2a211c"/>
+  <g font-family="Georgia, 'Times New Roman', serif" font-weight="700" text-anchor="middle" fill="#d42a1e">
+  <use href="#t" x="60" y="60"/><text x="106" y="126" font-size="60">1</text>
+  <use href="#t" x="160" y="60"/><text x="206" y="126" font-size="60">2</text>
+  <use href="#t" x="260" y="60"/><text x="306" y="126" font-size="60">3</text>
+  <use href="#t" x="360" y="60"/><text x="406" y="126" font-size="60">4</text>
+  <use href="#t" x="60" y="160"/><text x="106" y="226" font-size="60">5</text>
+  <use href="#t" x="160" y="160"/><text x="206" y="226" font-size="60">6</text>
+  <use href="#t" x="260" y="160"/><text x="306" y="226" font-size="60">7</text>
+  <use href="#t" x="360" y="160"/><text x="406" y="226" font-size="60">8</text>
+  <use href="#t" x="60" y="260"/><text x="106" y="326" font-size="60">9</text>
+  <use href="#t" x="160" y="260"/><text x="206" y="326" font-size="50">10</text>
+  <use href="#t" x="260" y="260"/><text x="306" y="326" font-size="50">11</text>
+  <use href="#t" x="360" y="260"/><text x="406" y="326" font-size="50">12</text>
+  <use href="#t" x="60" y="360"/><text x="106" y="426" font-size="50">13</text>
+  <use href="#t" x="160" y="360"/><text x="206" y="426" font-size="50">14</text>
+  <use href="#t" x="360" y="360"/><text x="406" y="426" font-size="50">15</text>
+  </g>
+</svg>

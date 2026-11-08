@@ -1,0 +1,1033 @@
+<!doctype html>
+<html lang="cs" data-table="green" data-back="blue" data-face="white">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e7135">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pavouk">
+<title>Pavouk</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e7135'/%3E%3Cpath d='M32 4v20' stroke='%23fff' stroke-width='2'/%3E%3Cg fill='none' stroke='%23111' stroke-width='3.4' stroke-linecap='round'%3E%3Cpath d='M26 32 12 24 8 30M26 37 10 36 6 44M27 42 14 48 12 56M29 45 22 56M38 32l14-8 4 6M38 37l16-1 4 8M37 42l13 6 2 8M35 45l7 11'/%3E%3C/g%3E%3Cellipse cx='32' cy='40' rx='10' ry='11' fill='%23111'/%3E%3Ccircle cx='32' cy='27' r='7' fill='%23111'/%3E%3Ccircle cx='29' cy='26' r='2.2' fill='%23fff'/%3E%3Ccircle cx='35' cy='26' r='2.2' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+
+/* ---------- Base ---------- */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--tex),var(--grain,none),var(--tbl)}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+
+#app{--gut:12px;height:100vh;height:100dvh;max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;line-height:1.05;font-weight:800;font-size:28px;letter-spacing:.02em;color:var(--ink)} /* no nowrap/overflow: a long title wraps between words, never gets cut */
+.pill{height:46px;padding:0 16px;border-radius:23px;background:var(--btn);font-size:18px;font-weight:700;color:var(--btn-ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round{width:46px;height:46px;border-radius:50%;background:var(--btn);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--btn-ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{display:flex;gap:8px}
+a.round{text-decoration:none}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:23px;letter-spacing:.02em}
+
+/* ---------- Table and cards ---------- */
+#table{position:relative;isolation:isolate;flex:1;min-height:0;touch-action:none;overflow:hidden;--cw:36px;--ch:50px}
+.slot{position:absolute;left:0;top:0;width:var(--cw);height:var(--ch);border-radius:calc(var(--cw)*.1);border:2px solid var(--slot);background:var(--slot-bg);display:grid;place-items:center;color:var(--slot);pointer-events:none}
+.slot.done{border-width:1.5px;opacity:.75}
+.slot.tgt{border-color:var(--accent);border-style:dashed;border-width:3px;background:rgba(255,255,255,.12);opacity:1}
+.slot.hint{animation:pulse .8s ease-in-out infinite alternate;border-color:var(--accent);border-width:3px;opacity:1}
+
+/* Narrow cards (10 columns): the corner index is larger relative to card width than in Solitaire, so it stays readable */
+.ix{position:absolute;left:calc(var(--cw)*.05);right:calc(var(--cw)*.03);top:calc(var(--cw)*.02);height:calc(var(--cw)*.58);display:flex;align-items:center;justify-content:space-between}
+.ix b{font-size:calc(var(--cw)*.56);font-weight:var(--fw);line-height:1;letter-spacing:-.03em}
+.ix b.t{font-size:calc(var(--cw)*.5);letter-spacing:-.11em;margin-left:-.04em}
+.ix svg{flex:none;width:calc(var(--cw)*.36);height:calc(var(--cw)*.36);fill:currentColor}
+.art{position:absolute;left:8%;right:8%;top:45%;bottom:5%}
+#table.tiny .art{display:none}
+.cd.sel{box-shadow:0 0 0 3px var(--accent),0 6px 14px rgba(0,0,0,.45)}
+.cd.tgt{outline:3px dashed var(--accent);outline-offset:1px}
+.cd.hint{animation:pulse .8s ease-in-out infinite alternate}
+@keyframes pulse{from{box-shadow:0 0 0 2px var(--accent)}to{box-shadow:0 0 0 5px var(--accent),0 0 12px var(--accent)}}
+.cd.drag{transition:none!important;box-shadow:0 12px 22px rgba(0,0,0,.5)}
+.cd.no{animation:shake .36s}
+@keyframes shake{20%{margin-left:-6px}40%{margin-left:6px}60%{margin-left:-4px}80%{margin-left:3px}}
+#table.noanim .cd{transition:none}
+#table.won .cd.kf{animation:hop .6s ease-in-out infinite alternate}
+@keyframes hop{to{margin-top:-10px}}
+
+/* Bottom buttons */
+.tray{flex:none;display:flex;gap:8px;padding:8px var(--gut) 10px;background:var(--bar);border-top:1px solid var(--line)}
+.act{flex:1 1 0;min-width:0;height:60px;border-radius:14px;background:var(--btn);color:var(--btn-ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:18px;font-weight:700;box-shadow:inset 0 0 0 1px var(--line);transition:opacity .2s,transform .06s;white-space:nowrap}
+.act:active{transform:scale(.97)}
+.act svg{flex:none;width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.act.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+.act.hint{opacity:1;animation:pulse .8s ease-in-out infinite alternate}
+.act small{font-size:18px;font-weight:700;opacity:.85}
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;font-family:Georgia,serif;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);transition:transform .06s}
+.big:active{transform:translateY(3px);box-shadow:0 1px 0 var(--pbtn-sh)}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0;box-shadow:0 2px 6px rgba(60,30,10,.12)}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink);font-family:Georgia,serif}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.trow .flabel{margin:0;flex:1;min-width:0}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{height:96px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:6px;background:var(--tex),var(--grain,none),var(--tbl);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.mini{--cw:42px;--ch:60px;display:flex;gap:5px;justify-content:center}
+.mini .cd{position:relative;transform:none;flex:none;transition:none}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.stats{font-size:20px;line-height:1.5}
+
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+.legend{display:flex;align-items:center;gap:14px;margin:12px 0;font-size:20px;line-height:1.3}
+.legend .ico{flex:none;width:46px;height:46px;border-radius:12px;background:var(--pcard);display:grid;place-items:center}
+.legend .ico svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.demo{--cw:56px;--ch:78px;position:relative;width:56px;margin:12px auto;padding:0}
+.demo .cd{position:absolute;transition:none}
+.demo-felt{background:var(--tex),var(--tbl);border-radius:14px;padding:12px;margin:10px 0}
+
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:pop .25s ease-out}
+@keyframes pop{from{transform:scale(.9);opacity:0}}
+.mcard h2{font-size:28px;font-family:Georgia,serif;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+.mbtns{display:flex;flex-direction:column;gap:14px;margin-top:8px}
+
+@media (max-height:800px){
+  .topbar{height:52px}
+  .pill{height:42px}.round{width:42px;height:42px}
+  .topbar h1{font-size:25px}
+  .act{height:54px}
+  .tray{padding:6px var(--gut) 8px}
+}
+/* Narrow phones (360 px wide): smaller gaps and a slimmer "Nová hra", so the title fits next to the home button (the 12 px outer margin stays) */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 10px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:20px;letter-spacing:0}
+}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:60;width:max-content;max-width:92vw;background:color-mix(in srgb,var(--ink) 94%,var(--tbl));color:var(--tbl);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--tbl) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Pavouk</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <main id="table"></main>
+  <footer class="tray" id="tray"></footer>
+</div>
+
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+
+<script src="../../images/sets.js"></script>
+<script src="../_cards/cards.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const table = $('#table');
+
+/* ---------- Cards ----------
+   Two decks = 104 cards, a card is a number 0–103. Rank 1 (ace) to 13 (king).
+   The suit is given by which of the eight 13-card "sets" it is in, based on the number of suits in play (1, 2 or 4). */
+const COLS = 10, N = 104;
+const RANK = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const SYM = ['♠︎', '♥︎', '♣︎', '♦︎'];
+const SUITMAP = { 1: [0, 0, 0, 0, 0, 0, 0, 0], 2: [0, 1, 0, 1, 0, 1, 0, 1], 4: [0, 1, 2, 3, 0, 1, 2, 3] };
+let NS = 1; // number of suits in the current game
+const rank = c => c % 13 + 1, suit = c => SUITMAP[NS][(c / 13) | 0], red = c => suit(c) & 1;
+const nm = c => RANK[rank(c)] + SYM[suit(c)];
+const SUIT_NAMES = { 1: 'Jedna barva', 2: 'Dvě barvy', 4: 'Čtyři barvy' };
+
+/* ---------- Appearance: shared with the other card games (games/_cards/cards.js) ---------- */
+const { TABLES, BACKS, FACES, PICS, CASTLE, COAT } = CARDS;
+const { artSVG, faceHTML } = CARDS;
+// takes suit and rank, not a card number like the other card games: with two decks and 1, 2 or 4 suits
+// the suit cannot be read from the card number
+const cardHTML = (s, r, up, pic, style = '') => `<div class="cd${s & 1 ? ' r' : ''}${up ? ' up' : ''}" style="${style}">${faceHTML(s, r, pic)}</div>`;
+
+/* ---------- Other constants ---------- */
+const ICONS = {
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  hint: '<path d="M9.5 18h5"/><path d="M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
+  deal: '<rect x="3" y="3" width="11" height="15" rx="2"/><path d="M18 7v12"/><path d="M14.5 15.5 18 19l3.5-3.5"/>',
+};
+const DEFAULTS = { suits: 1, mode: 'tap', table: 'green', back: 'nachod', face: 'white', pic: 'classic', vibrate: true };
+// Saved state under the launcher's games.<id>.* prefix; OLD_KEY is the name used before (read once, then removed)
+const KEY = 'games.pavouk.state', OLD_KEY = 'spider.v1', BADGE = 'games.pavouk.inProgress';
+
+/* ---------- Randomness ---------- */
+function rnd(n) {
+  try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; }
+  catch (e) { return Math.floor(Math.random() * n); }
+}
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+/* ---------- Rules (functions over state g = { tab, down, stock, done }) ---------- */
+// start of the run that can be taken at once: consecutive same-suit cards at the bottom of the column
+function runStart(a, d) {
+  let i = a.length - 1;
+  if (i < 0) return -1;
+  while (i > d && suit(a[i - 1]) === suit(a[i]) && rank(a[i - 1]) === rank(a[i]) + 1) i--;
+  return i;
+}
+function flip(g, col) {
+  const a = g.tab[col];
+  if (!a.length) g.down[col] = 0;
+  else if (g.down[col] >= a.length) g.down[col] = a.length - 1;
+}
+const fullAt = (g, col) => { const a = g.tab[col]; return a.length >= 13 && rank(a[a.length - 1]) === 1 && runStart(a, g.down[col]) <= a.length - 13; };
+function collect(g) {
+  let n = 0;
+  for (let col = 0; col < COLS; col++) if (fullAt(g, col)) { g.done.push(g.tab[col].splice(-13)); flip(g, col); n++; }
+  return n;
+}
+function moveRun(g, col, idx, to) { const run = g.tab[col].splice(idx); flip(g, col); g.tab[to].push(...run); }
+function dealRow(g) { for (let col = 0; col < COLS; col++) g.tab[col].push(g.stock.pop()); }
+const cloneG = g => ({ tab: g.tab.map(a => a.slice()), down: g.down.slice(), stock: g.stock.slice(), done: g.done.map(a => a.slice()) });
+const snap = g => JSON.stringify({ tab: g.tab, down: g.down, stock: g.stock, done: g.done });
+
+// All sensible moves, sorted best first (sc = how much the move helps)
+function listMoves(g) {
+  const M = [];
+  for (let col = 0; col < COLS; col++) {
+    const a = g.tab[col]; if (!a.length) continue;
+    const d = g.down[col], b = runStart(a, d);
+    for (let idx = b; idx < a.length; idx++) {
+      const c = a[idx], len = a.length - idx;
+      const under = idx > d ? a[idx - 1] : -1;
+      const onSucc = under >= 0 && rank(under) === rank(c) + 1;
+      const onSuited = onSucc && suit(under) === suit(c);
+      const reveal = idx === d && d > 0, empties = idx === 0;
+      for (let to = 0; to < COLS; to++) {
+        if (to === col) continue;
+        const t = g.tab[to];
+        let sc = 0;
+        if (!t.length) {
+          if (empties) continue;
+          sc = reveal ? 45 : (!onSucc && idx === b) ? 2 : 1;
+        } else {
+          const top = t[t.length - 1];
+          if (rank(top) !== rank(c) + 1) continue;
+          const suited = suit(top) === suit(c);
+          if (reveal) sc += 50; else if (empties) sc += 30;
+          if (suited) {
+            if (!onSuited) sc += 20 + len;
+            if (rank(a[a.length - 1]) === 1 && t.length - runStart(t, g.down[to]) + len >= 13) sc = 200; // completes a full run
+          } else if (!onSucc) sc += 8;
+        }
+        if (sc > 0) M.push({ col, idx, to, sc });
+      }
+    }
+  }
+  return M.sort((x, y) => y.sc - x.sc || (y.to > y.col) - (x.to > x.col));
+}
+// moves that do not lead to a position already seen in this game (so Hint does not go back and forth)
+function freshMoves(g) {
+  const seen = new Set(g.hist); seen.add(snap(g));
+  return listMoves(g).filter(m => { const s = cloneG(g); moveRun(s, m.col, m.idx, m.to); collect(s); return !seen.has(snap(s)); });
+}
+
+/* ---------- State and saving ---------- */
+let S, G = null, ST, busy = false, SEL = null;
+// rule: while something runs, a tap explains itself instead of doing nothing
+const busyToast = () => toast('Chvilku, hotová řada ještě odlétá');
+const playing = () => G && G.status === 'playing';
+const hasProgress = () => playing() && G.moves > 0;
+function load() {
+  try {
+    let v = localStorage.getItem(KEY);
+    // move the state from the older key at once
+    if (v === null && (v = localStorage.getItem(OLD_KEY)) !== null) { localStorage.setItem(KEY, v); localStorage.removeItem(OLD_KEY); }
+    return JSON.parse(v);
+  } catch (e) { return null; }
+}
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, stats: ST }));
+    if (hasProgress()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {}
+}
+// All 104 cards are there exactly once in a legal shape (also used for Undo snapshots).
+// Checks suits with g.suits and does not touch the global NS.
+function validState(g) {
+  try {
+    if (!g || ![1, 2, 4].includes(g.suits)) return false;
+    if (!Array.isArray(g.tab) || g.tab.length !== COLS || !g.tab.every(Array.isArray) || !Array.isArray(g.down) || g.down.length !== COLS) return false;
+    if (!Array.isArray(g.stock) || g.stock.length % COLS || !Array.isArray(g.done) || g.done.length > 8 || !g.done.every(Array.isArray)) return false;
+    const all = [...g.stock, ...g.tab.flat(), ...g.done.flat()];
+    if (all.length !== N || new Set(all).size !== N || all.some(c => !Number.isInteger(c) || c < 0 || c >= N)) return false;
+    const st = c => SUITMAP[g.suits][(c / 13) | 0];
+    if (!g.done.every(a => a.length === 13 && a.every((c, i) => st(c) === st(a[0]) && rank(c) === 13 - i))) return false;
+    return g.tab.every((a, i) => Number.isInteger(g.down[i]) && g.down[i] >= 0 && (a.length ? g.down[i] < a.length : g.down[i] === 0));
+  } catch (e) { return false; }
+}
+// A saved snapshot (JSON string) that restore() can apply on top of g
+function validSnap(g, str) {
+  try { const s = JSON.parse(str); return !!s && typeof s === 'object' && validState(Object.assign({}, g, s)); } catch (e) { return false; }
+}
+function validGame(g) {
+  try {
+    if (!validState(g)) return false;
+    g.status = g.done.length === 8 ? 'won' : 'playing'; // the end comes from the cards, never from the save
+    // a broken history only loses Undo, not the game
+    if (!Array.isArray(g.hist) || !g.hist.every(h => typeof h === 'string' && validSnap(g, h))) g.hist = [];
+    if (typeof g.init !== 'string' || !validSnap(g, g.init)) g.init = snap(g);
+    g.moves = Number.isInteger(g.moves) ? g.moves : 0;
+    if (typeof g.stuckAt !== 'number') g.stuckAt = -1;
+    return true;
+  } catch (e) { return false; }
+}
+function normalize(s) {
+  const pick = (k, list) => { if (!list.includes(s[k])) s[k] = list.includes(DEFAULTS[k]) ? DEFAULTS[k] : list[0]; };
+  s.suits = +s.suits; pick('suits', [1, 2, 4]); pick('mode', ['tap', 'select']);
+  CARDS.normalizeLook(s, DEFAULTS);
+  s.vibrate = !!s.vibrate;
+}
+function restore(str) { Object.assign(G, JSON.parse(str)); }
+
+// deals at once: unlike the other card games, Pavouk does not search for a winnable deal first
+// (nothing to wait for, so there is no busy state here; a second "Nová hra" simply deals again)
+function newGame(msg) {
+  SEL = null; clearHint();
+  NS = S.suits;
+  const deck = shuffle([...Array(N).keys()]), tab = [], down = [];
+  for (let col = 0; col < COLS; col++) { const n = col < 4 ? 6 : 5; tab.push(deck.splice(0, n)); down.push(n - 1); }
+  G = { suits: NS, tab, down, stock: deck, done: [], hist: [], status: 'playing', moves: 0, counted: false, stuckAt: -1 };
+  G.init = snap(G);
+  save(); render({ deal: true });
+  if (msg) toast(msg, 3500);
+}
+function restart() {
+  restore(G.init);
+  Object.assign(G, { hist: [], status: 'playing', moves: 0, stuckAt: -1 });
+  SEL = null; clearHint();
+  save(); render({ deal: true });
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) { if (S.vibrate && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+let toastT;
+function toast(msg, ms = 3000) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  t.style.bottom = (innerHeight - $('#tray').getBoundingClientRect().top + 12) + 'px';
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+
+function locate(c) {
+  if (G.stock.includes(c)) return { t: 'stock' };
+  if (G.done.some(a => a.includes(c))) return { t: 'done' };
+  for (let col = 0; col < COLS; col++) { const i = G.tab[col].indexOf(c); if (i >= 0) return { t: 'tab', col, idx: i }; }
+  return null;
+}
+const runOf = src => G.tab[src.col].slice(src.idx);
+const canTake = src => src.idx >= runStart(G.tab[src.col], G.down[src.col]);
+const takeMsg = () => NS === 1
+  ? 'Vzít najednou jde jen řada karet po sobě, třeba 8, 7, 6'
+  : 'Vzít najednou jde jen řada karet po sobě ve stejné barvě, třeba 8♠ 7♠ 6♠';
+
+// '' = move allowed; otherwise an explanation why not ('same' = same column, say nothing)
+function why(src, to) {
+  if (src.col === to) return 'same';
+  const t = G.tab[to];
+  if (!t.length) return '';
+  const c = G.tab[src.col][src.idx], top = t[t.length - 1];
+  if (rank(top) === rank(c) + 1) return '';
+  if (rank(top) === 1) return 'Na eso už nic nepatří';
+  return `Na ${nm(top)} patří jen ${RANK[rank(top) - 1]}` + (NS > 1 ? ' (barva může být jakákoli)' : '');
+}
+
+/* ---------- Moves ---------- */
+// every move starts here: an older message (e.g. the hint that described this move) must not stay over the table
+function pushHist() { hideToast(); G.hist.push(snap(G)); if (G.hist.length > 400) G.hist.shift(); }
+function doMove(src, to) {
+  pushHist();
+  moveRun(G, src.col, src.idx, to);
+  after();
+}
+// Dealing needs a card in every column, unless there are fewer cards on the table than columns
+const dealBlocked = g => g.tab.some(a => !a.length) && g.tab.reduce((n, a) => n + a.length, 0) >= COLS;
+function deal() {
+  if (busy) { busyToast(); return; }
+  clearHint();
+  if (!playing()) { if (G.status === 'won') toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
+  if (!G.stock.length) { toast('Všechny karty už jsou rozdané'); return; }
+  const empty = G.tab.map((a, i) => a.length ? -1 : i).filter(i => i >= 0);
+  if (dealBlocked(G)) {
+    toast('Rozdat jde, až bude v každém sloupci aspoň jedna karta. Dej sem nějakou kartu.', 4500);
+    HINT = empty.map(i => SLOT.col[i]); HINT.forEach(e => e.classList.add('hint'));
+    hintT = setTimeout(clearHint, 3000);
+    buzz(30);
+    return;
+  }
+  pushHist();
+  SEL = null;
+  dealRow(G);
+  const order = {};
+  G.tab.forEach((a, col) => { order[a[a.length - 1]] = col; });
+  after(order);
+}
+function after(order) {
+  G.moves++;
+  if (!G.counted) { G.counted = true; ST[G.suits].played++; }
+  SEL = null; clearHint();
+  buzz(); save(); render(order ? { order } : {});
+  if (G.tab.some((a, i) => fullAt(G, i))) {
+    // a completed K–A run stays visible for a moment, then flies up
+    busy = true;
+    setTimeout(() => {
+      collect(G);
+      busy = false;
+      buzz([30, 50, 30]);
+      save(); render();
+      if (G.done.length < 8) toast(`Hotová řada! ${G.done.length === 7 ? 'Zbývá poslední.' : `Zbývá ${8 - G.done.length}.`}`);
+      checkEnd();
+    }, order ? 700 : 380);
+    return;
+  }
+  checkEnd();
+}
+function undo() {
+  if (busy) { busyToast(); return; }
+  if (!playing()) { toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
+  if (!G.hist.length) { toast('Není co vrátit'); return; }
+  restore(G.hist.pop());
+  SEL = null; clearHint();
+  buzz(); save(); render();
+}
+function autoMove(src) {
+  const a = G.tab[src.col], c = a[src.idx], len = a.length - src.idx;
+  let best = -1, bs = 0;
+  for (let to = 0; to < COLS; to++) {
+    if (to === src.col) continue;
+    const t = G.tab[to];
+    let s = 0;
+    if (!t.length) s = src.idx > 0 ? 1 : 0;
+    else {
+      const top = t[t.length - 1];
+      if (rank(top) === rank(c) + 1) {
+        if (suit(top) === suit(c)) {
+          const tr = t.length - runStart(t, G.down[to]);
+          s = 3 + (rank(a[a.length - 1]) === 1 && tr + len >= 13 ? 5 : 0) + tr * .01;
+        } else s = 2;
+      }
+    }
+    if (s > bs) { bs = s; best = to; }
+  }
+  if (best < 0) {
+    shake(runOf(src));
+    toast(src.idx === 0 && G.tab.some(x => !x.length) ? 'Karta už je na začátku sloupce' : `${nm(c)} teď nejde nikam dát`);
+    return;
+  }
+  doMove(src, best);
+}
+function shake(cards) {
+  for (const c of cards) { const el = EL[c]; el.classList.remove('no'); void el.offsetWidth; el.classList.add('no'); }
+  buzz(30);
+}
+
+/* ---------- End of game ---------- */
+function checkEnd() {
+  if (G.done.length === 8) {
+    G.status = 'won'; ST[G.suits].won++;
+    save(); render();
+    buzz([40, 60, 40, 60, 80]);
+    const st = ST[G.suits];
+    const wonGame = G;
+    whenFree(wonGame, 900, () => {
+      if (busy) return;
+      showModal(`<h2>Vyhráno! 🎉</h2><p>Všech osm řad je složených.</p><p>${SUIT_NAMES[G.suits]}: vyhrané hry <b>${st.won}</b> z ${st.played}</p>`,
+      [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout stůl', cls: 'alt' }]);
+    });
+    return;
+  }
+  if (G.stuckAt !== G.moves && !G.stock.length && !freshMoves(G).length) {
+    G.stuckAt = G.moves; save();
+    const g0 = G, h0 = G.hist.length;
+    whenFree(g0, 500, () => {
+      if (G.hist.length !== h0 || busy || !playing()) return;
+      showModal('<h2>Dál to nejde</h2><p>Všechny karty jsou rozdané a žádný užitečný tah už nevidím.</p>',
+        [{ text: 'Vrátit tah zpět', fn: undo }, { text: 'Nová hra', fn: () => newGame() }, { text: 'Ještě se podívám', cls: 'alt' }]);
+    });
+  }
+}
+
+/* ---------- Hint ---------- */
+let HINT = null, HINT_DEAL = false, hintT, HINT_MOVE = null; // HINT_MOVE: the move the hint shows ({col, idx, to})
+function clearHint() {
+  if (!HINT && !HINT_DEAL) return;
+  document.querySelectorAll('.hint').forEach(e => e.classList.remove('hint'));
+  HINT = null; HINT_DEAL = false; HINT_MOVE = null; clearTimeout(hintT);
+}
+function hint() {
+  if (busy) { busyToast(); return; }
+  if (!playing()) { toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
+  SEL = null; clearHint();
+  const M = freshMoves(G), m = M[0];
+  const empty = G.tab.map((a, i) => a.length ? -1 : i).filter(i => i >= 0);
+  let els = [], msg;
+  if (m && (m.sc >= 8 || empty.length || !G.stock.length)) {
+    const run = G.tab[m.col].slice(m.idx), c = run[0], t = G.tab[m.to];
+    var hintMove = { col: m.col, idx: m.idx, to: m.to };
+    run.forEach(x => els.push(EL[x]));
+    els.push(t.length ? EL[t[t.length - 1]] : SLOT.col[m.to]);
+    msg = t.length ? `Přesuň ${nm(c)} na ${nm(t[t.length - 1])}` : `Přesuň ${nm(c)} na prázdné místo`;
+    if (m.sc >= 200) msg += ', složí se celá řada';
+  } else if (G.stock.length && !dealBlocked(G)) {
+    els = G.stock.slice(-COLS).map(c => EL[c]);
+    HINT_DEAL = true;
+    msg = 'Teď je dobré rozdat další karty: ťukni na Rozdat';
+  } else if (G.stock.length) {
+    els = empty.map(i => SLOT.col[i]);
+    msg = 'Dej na prázdné místo nějakou kartu, potom jde rozdat';
+  } else {
+    render(); toast('Žádný užitečný tah už nevidím. Zkus Zpět nebo novou hru.'); return;
+  }
+  render();
+  els.forEach(e => e.classList.add('hint'));
+  HINT = els;
+  HINT_MOVE = typeof hintMove !== 'undefined' ? hintMove : null;
+  hintT = setTimeout(() => { clearHint(); }, 4000);
+  buzz(8);
+  toast(msg, 4000);
+}
+
+/* ---------- Layout and rendering ---------- */
+const EL = [];
+const SLOT = { stock: null, done: [], col: [] };
+let L = null;
+function buildTable() {
+  let h = '<div class="slot stock"></div>';
+  for (let k = 0; k < 8; k++) h += '<div class="slot done"></div>';
+  for (let c = 0; c < COLS; c++) h += '<div class="slot col"></div>';
+  table.innerHTML = h;
+  const slots = table.querySelectorAll('.slot');
+  SLOT.stock = slots[0];
+  for (let k = 0; k < 8; k++) SLOT.done[k] = slots[1 + k];
+  for (let c = 0; c < COLS; c++) SLOT.col[c] = slots[9 + c];
+  for (let c = 0; c < N; c++) {
+    const el = document.createElement('div');
+    el.className = 'cd';
+    el.dataset.c = c;
+    table.appendChild(el);
+    EL[c] = el;
+  }
+  paintFaces();
+}
+let painted = null;
+function paintFaces() {
+  const key = S.pic + NS;
+  if (painted === key) return;
+  painted = key;
+  for (let c = 0; c < N; c++) { EL[c].innerHTML = faceHTML(suit(c), rank(c), S.pic); EL[c].classList.toggle('r', !!red(c)); }
+}
+function layout() {
+  const W = table.clientWidth, H = table.clientHeight;
+  if (!W || !H) return false;
+  // SIDE: the same side margin as the top bar and the tray (--gut); M: the free room below the top bar and above the tray
+  const SIDE = 12, M = 12;
+  let gap = Math.max(2, Math.round(W * .006));
+  let w = Math.floor((W - 2 * SIDE - (COLS - 1) * gap) / COLS);
+  w = Math.max(24, Math.min(w, Math.floor((H - 2 * M - 21) / (4.4 * 1.4))));
+  // a full-width board spreads the rounding rest into the gaps, so it ends exactly SIDE from both edges; a height-limited one stays centered
+  const spare = W - 2 * SIDE - COLS * w - (COLS - 1) * gap, full = spare >= 0 && spare < COLS;
+  if (full) gap += spare / (COLS - 1);
+  const h = Math.round(w * 1.4), x0 = full ? SIDE : Math.round((W - COLS * w - (COLS - 1) * gap) / 2);
+  const yTop = M, rowGap = Math.max(8, Math.round(h * .16)), yTab = yTop + h + rowGap;
+  L = { W, H, w, h, gap, x0, x: [...Array(COLS)].map((_, i) => Math.round(x0 + i * (w + gap))), yTop, yTab, rowGap,
+    Htab: H - yTab - M, dOff: Math.max(4, Math.round(h * .14)), uOff: Math.round(w * .72), sOff: Math.floor((w + gap) / 4.4) };
+  table.style.setProperty('--cw', w + 'px');
+  table.style.setProperty('--ch', h + 'px');
+  table.classList.toggle('tiny', w < 30);
+  return true;
+}
+function colOffsets(col) {
+  const a = G.tab[col], d = G.down[col], u = Math.max(0, a.length - d - 1);
+  let dOff = L.dOff, uOff = L.uOff;
+  const avail = L.Htab - L.h;
+  if (d * dOff + u * uOff > avail) {
+    if (u) uOff = Math.max(Math.ceil(L.w * .6), Math.floor((avail - d * dOff) / u));
+    if (d && d * dOff + u * uOff > avail) dOff = Math.max(3, Math.floor((avail - u * uOff) / d));
+    if (u && d * dOff + u * uOff > avail) uOff = Math.max(Math.ceil(L.w * .42), Math.floor((avail - d * dOff) / u));
+  }
+  return { dOff, uOff };
+}
+function positions() {
+  const P = new Array(N), { x, yTop, yTab } = L;
+  G.stock.forEach((c, i) => { P[c] = { x: x[0] + ((i / COLS) | 0) * L.sOff, y: yTop, z: 1 + i, up: false }; });
+  G.done.forEach((a, k) => a.forEach((c, j) => { P[c] = { x: x[2 + k], y: yTop, z: 30 - j, up: true }; }));
+  G.tab.forEach((a, col) => {
+    const o = colOffsets(col);
+    let y = yTab;
+    a.forEach((c, i) => {
+      const up = i >= G.down[col];
+      P[c] = { x: x[col], y, z: 10 + i, up };
+      y += up ? o.uOff : o.dOff;
+    });
+  });
+  return P;
+}
+function render(o = {}) {
+  const instant = !!o.instant;
+  applyLook();
+  renderTray();
+  if (!G || !layout()) return;
+  paintFaces();
+  const P = positions();
+  const place = (el, x, y) => { el.style.transform = `translate(${x}px,${y}px)`; };
+  place(SLOT.stock, L.x[0], L.yTop);
+  for (let k = 0; k < 8; k++) place(SLOT.done[k], L.x[2 + k], L.yTop);
+  for (let c = 0; c < COLS; c++) place(SLOT.col[c], L.x[c], L.yTab);
+
+  let order = o.order || null, step = 45;
+  if (o.deal) {
+    dealUntil = Date.now() + 1800; // the deal animation; taps on the table wait for it
+    // dealing: cards fly out of the stock one by one, row by row
+    const sx = L.x[0] + 5 * L.sOff;
+    table.classList.add('noanim');
+    for (let c = 0; c < N; c++) { EL[c].classList.remove('up'); clearTimeout(EL[c]._ft); EL[c].style.transform = `translate(${sx}px,${L.yTop}px)`; EL[c]._x = sx; EL[c]._y = L.yTop; }
+    void table.offsetWidth;
+    table.classList.remove('noanim');
+    order = {}; step = 26; let k = 0;
+    for (let row = 0; row < 6; row++) for (let col = 0; col < COLS; col++) if (G.tab[col][row] !== undefined) order[G.tab[col][row]] = k++;
+  }
+  table.classList.toggle('noanim', instant);
+  const selRun = SEL ? new Set(runOf(SEL)) : null;
+  for (let c = 0; c < N; c++) {
+    const el = EL[c], p = P[c];
+    const moved = el._x !== p.x || el._y !== p.y;
+    const ord = order && order[c] !== undefined ? order[c] : -1;
+    const delay = ord > 0 ? ord * step : 0;
+    el.style.transitionDelay = delay ? delay + 'ms' : '';
+    el.classList.remove('drag', 'tgt', 'kf');
+    el.classList.toggle('sel', !!(selRun && selRun.has(c)));
+    clearTimeout(el._ft);
+    if (ord >= 0 && !instant) el._ft = setTimeout(() => el.classList.toggle('up', p.up), delay + 150);
+    else el.classList.toggle('up', p.up);
+    el.style.transform = `translate(${p.x}px,${p.y}px)`;
+    clearTimeout(el._t);
+    if (moved && !instant) {
+      el.style.zIndex = 300 + p.z;
+      el._t = setTimeout(() => { el.style.zIndex = p.z; el.style.transitionDelay = ''; }, delay + 280);
+    } else el.style.zIndex = p.z;
+    el._x = p.x; el._y = p.y;
+  }
+  SLOT.col.forEach(e => e.classList.remove('tgt'));
+  if (SEL && S.mode === 'select') markTargets();
+  table.classList.toggle('won', G.status === 'won');
+  if (G.status === 'won') G.done.forEach(a => EL[a[0]].classList.add('kf'));
+  if (HINT) HINT.forEach(e => e.classList.add('hint'));
+}
+function markTargets() {
+  for (let col = 0; col < COLS; col++) {
+    if (why(SEL, col)) continue;
+    const a = G.tab[col];
+    (a.length ? EL[a[a.length - 1]] : SLOT.col[col]).classList.add('tgt');
+  }
+}
+function renderTray() {
+  const left = G ? G.stock.length / COLS : 0;
+  const canDeal = playing() && left > 0 && !dealBlocked(G);
+  const acts = [
+    { id: 'undo', label: 'Zpět', cls: !playing() || !G.hist.length ? ' dim' : '' },
+    { id: 'hint', label: 'Poradit', cls: !playing() ? ' dim' : '' },
+    { id: 'deal', label: `Rozdat <small>(${left})</small>`, cls: (canDeal ? '' : ' dim') + (HINT_DEAL ? ' hint' : '') },
+  ];
+  $('#tray').innerHTML = acts.map(a => `<button class="act${a.cls}" data-a="${a.id}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.id]}</svg><span>${a.label}</span></button>`).join('');
+}
+function applyLook() { CARDS.applyLook(S); }
+
+/* ---------- Controls: tap and drag ---------- */
+function hitAt(e) {
+  const cd = e.target.closest && e.target.closest('.cd');
+  if (cd) { const c = +cd.dataset.c; return { kind: 'card', c, loc: locate(c) }; }
+  const r = table.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  const col = Math.floor((px - L.x0 + L.gap / 2) / (L.w + L.gap));
+  if (col < 0 || col >= COLS) return null;
+  if (py < L.yTab - L.rowGap / 2) return col < 2 ? { kind: 'stock' } : { kind: 'done' };
+  return { kind: 'col', col };
+}
+function tap(hit) {
+  const hinted = HINT_MOVE;
+  clearHint();
+  if (!playing()) { if (G.status === 'won') toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
+  if (!hit) { if (SEL) { SEL = null; render(); } return; }
+  if (hit.kind === 'stock' || (hit.kind === 'card' && hit.loc.t === 'stock')) { SEL = null; deal(); return; }
+  if (hit.kind === 'done' || (hit.kind === 'card' && hit.loc.t === 'done')) {
+    if (SEL) { SEL = null; render(); }
+    toast('Sem nahoru odcházejí hotové řady od krále po eso');
+    return;
+  }
+  const l = hit.kind === 'card' ? hit.loc : null;
+  const src = l && l.idx >= G.down[l.col] ? { col: l.col, idx: l.idx } : null;
+  const col = l ? l.col : hit.col;
+  // the hint highlights both the run and its place: a tap on the place (its top card or the empty column) does the hinted move too
+  if (hinted && !SEL && col === hinted.to && (!l || l.idx === G.tab[col].length - 1)) {
+    const h = { col: hinted.col, idx: hinted.idx };
+    if (canTake(h) && !why(h, hinted.to)) { doMove(h, hinted.to); return; }
+  }
+
+  if (S.mode === 'select' && SEL) {
+    if (src && src.col === SEL.col && src.idx === SEL.idx) { SEL = null; buzz(8); render(); return; }
+    const r = why(SEL, col);
+    if (!r) { const s = SEL; SEL = null; doMove(s, col); return; }
+    if (r === 'same') {
+      if (src && canTake(src)) { SEL = src; buzz(8); render(); return; }
+      SEL = null; render(); return;
+    }
+    // tap on a card in the middle of another column = select it instead
+    const isTop = l && l.idx === G.tab[l.col].length - 1;
+    if (src && !isTop && canTake(src)) { SEL = src; buzz(8); render(); return; }
+    shake(runOf(SEL));
+    toast(r);
+    return;
+  }
+
+  if (l) {
+    if (!src) { toast('Tahle karta leží rubem nahoru. Otočí se sama, až z ní odejdou karty nad ní.'); return; }
+    if (!canTake(src)) { shake(runOf(src)); toast(takeMsg(), 4000); return; }
+    if (S.mode === 'tap') {
+      // any card of the hinted run (they all blink) does the hinted move
+      if (hinted && src.col === hinted.col && src.idx >= hinted.idx) {
+        const h = { col: hinted.col, idx: hinted.idx };
+        if (canTake(h) && !why(h, hinted.to)) { doMove(h, hinted.to); return; }
+      }
+      autoMove(src);
+    }
+    else { SEL = src; buzz(8); render(); }
+    return;
+  }
+  if (!G.tab[col].length) toast('Sem jde dát jakákoli karta nebo řada karet');
+}
+
+let PD = null;
+let dealUntil = 0;
+table.addEventListener('pointerdown', e => {
+  if (busy && G) { busyToast(); return; }
+  if (busy || PD || !G || (e.button !== undefined && e.button > 0)) return;
+  if (Date.now() < dealUntil) { toast('Chvilku, karty se ještě rozdávají'); return; }
+  const hit = hitAt(e);
+  PD = { id: e.pointerId, x0: e.clientX, y0: e.clientY, hit, drag: false };
+  if (hit && hit.kind === 'card' && hit.loc.t === 'tab' && playing()) {
+    const src = { col: hit.loc.col, idx: hit.loc.idx };
+    if (src.idx >= G.down[src.col] && canTake(src)) { PD.src = src; PD.cards = runOf(src); }
+  }
+  try { table.setPointerCapture(e.pointerId); } catch (err) {}
+});
+table.addEventListener('pointermove', e => {
+  if (!PD || e.pointerId !== PD.id) return;
+  const dx = e.clientX - PD.x0, dy = e.clientY - PD.y0;
+  if (!PD.drag) {
+    if (!PD.src || Math.hypot(dx, dy) < 10) return;
+    PD.drag = true; clearHint();
+    if (SEL) { SEL = null; render(); }
+    PD.base = PD.cards.map(c => ({ x: EL[c]._x, y: EL[c]._y }));
+    PD.cards.forEach((c, i) => { const el = EL[c]; clearTimeout(el._t); el.classList.add('drag'); el.style.zIndex = 2000 + i; });
+  }
+  PD.cards.forEach((c, i) => { EL[c].style.transform = `translate(${PD.base[i].x + dx}px,${PD.base[i].y + dy}px)`; });
+});
+function endPointer(e, cancel) {
+  if (!PD || e.pointerId !== PD.id) return;
+  const pd = PD; PD = null;
+  if (!pd.drag) { if (!cancel) tap(pd.hit); return; }
+  if (cancel) { render(); return; }
+  const dx = e.clientX - pd.x0, dy = e.clientY - pd.y0;
+  const cx = pd.base[0].x + dx, cy = pd.base[0].y + dy;
+  const ov = (x, y, w, h) => Math.max(0, Math.min(cx + L.w, x + w) - Math.max(cx, x)) * Math.max(0, Math.min(cy + L.h, y + h) - Math.max(cy, y));
+  let best = -1, bestA = 0;
+  for (let col = 0; col < COLS; col++) { const a = ov(L.x[col] - L.gap / 2, L.yTab - L.rowGap, L.w + L.gap, L.H); if (a > bestA) { bestA = a; best = col; } }
+  if (best >= 0) {
+    const r = why(pd.src, best);
+    if (!r) { doMove(pd.src, best); return; }
+    if (r !== 'same') { toast(r); buzz(30); }
+  }
+  render();
+}
+table.addEventListener('pointerup', e => endPointer(e, false));
+table.addEventListener('pointercancel', e => endPointer(e, true));
+
+$('#tray').addEventListener('click', e => {
+  const b = e.target.closest('.act'); if (!b) return;
+  if (busy) { busyToast(); return; }
+  if (PD) return; // a card is being dragged
+  const a = b.dataset.a;
+  if (a === 'undo') undo();
+  else if (a === 'hint') hint();
+  else if (a === 'deal') deal();
+});
+
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + '<div class="mbtns">' + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('') + '</div>';
+  $('#modal').hidden = false;
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+}
+$('#btnNew').addEventListener('click', () => {
+  if (busy) { busyToast(); return; }
+  if (hasProgress()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>',
+      [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Začít tuto znovu', fn: restart }, { text: 'Hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+
+/* ---------- Settings ---------- */
+const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+// sample cards depending on the number of suits: ace, 7 and king
+const sample = () => S.suits === 1 ? [[0, 1], [0, 7], [0, 13]] : S.suits === 2 ? [[1, 1], [0, 7], [1, 13]] : [[1, 1], [0, 7], [3, 13]];
+const minis = (pic, withBack) => `<span class="mini">${sample().slice(0, withBack ? 2 : 3).map(([s, r]) => cardHTML(s, r, true, pic)).join('')}${withBack ? '<div class="cd"></div>' : ''}</span>`;
+
+function renderSettings() {
+  const tile = (act, on, inner, name) => `<button class="tile" data-act="${act}" aria-pressed="${on}">${inner}${name}</button>`;
+  const pending = G && S.suits !== G.suits;
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Pavouk<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Hra</h3>
+      <div class="field"><div class="flabel">Počet barev</div>
+        ${opt('set:suits:1', S.suits === 1, 'Jedna barva', 'Nejsnazší. Všechny karty jsou piky ♠, řady se skládají snadno.')}
+        ${opt('set:suits:2', S.suits === 2, 'Dvě barvy', 'Piky ♠ a srdce ♥. Těžší, hotová řada musí být celá v jedné barvě.')}
+        ${opt('set:suits:4', S.suits === 4, 'Čtyři barvy', 'Všechny barvy ♠ ♥ ♣ ♦. Hodně těžké.')}
+        ${pending ? (G.moves ? `<div class="notice">Počet barev se změní od <b>příští hry</b>.${playing() ? ' Rozehraná hra zůstává.' : ''}</div>`
+          : `<div class="notice">Po návratu do hry se rozdá <b>nová hra</b> (${SUIT_NAMES[S.suits].toLowerCase()}).</div>`) : ''}
+      </div>
+    </section>
+    <section class="card"><h3>Ovládání</h3>
+      <div class="field">
+        ${opt('set:mode:tap', S.mode === 'tap', 'Ťuknout na kartu', 'Karta se sama přesune tam, kam se hodí nejlépe.')}
+        ${opt('set:mode:select', S.mode === 'select', 'Ťuknout na kartu, pak na místo', 'Vybraná karta se zvýrazní a čárkovaně se ukáže, kam může. Pak ťukni, kam ji dát.')}
+        <div class="fnote">Kartu jde vždy i přetáhnout prstem. Karty jsou úzké, protože vedle sebe musí být deset sloupců – ťuknout stačí kamkoli na viditelnou část karty.</div>
+      </div>
+    </section>
+    ${CARDS.appearanceHTML(S, tile, minis, '--cw:52px;--ch:73px', toggleRow('vibrate', 'Vibrace'))}
+    <section class="card"><h3>Statistika</h3>
+      <p class="stats">${[1, 2, 4].map(n => `${SUIT_NAMES[n]}: vyhráno <b>${ST[n].won}</b> z ${ST[n].played}`).join('<br>')}</p>
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, key, val] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'set') S[key] = key === 'suits' ? +val : val;
+  else if (act === 'toggle') S[key] = !S[key];
+  else if (['table', 'back', 'face', 'pic'].includes(act)) S[act] = key;
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S);
+  buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop;
+  renderSettings();
+  $('#screenSettings').scrollTop = y;
+});
+function openSettings() { if (busy) { busyToast(); return; } hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  SEL = null;
+  // the number of suits belongs to the game (rule): it changes from the next game, at once only when nothing was played yet
+  if (G && S.suits !== G.suits && !G.moves) { newGame(`Nová hra: ${SUIT_NAMES[S.suits].toLowerCase()}`); return; }
+  save(); render({ instant: true });
+  if (playing()) checkEnd(); // the cards did not move: "Dál to nejde" is not said again
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help ---------- */
+function renderHelp() {
+  const ico = id => `<span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[id]}</svg></span>`;
+  const ds = NS === 4 ? [0, 1, 2] : NS === 2 ? [0, 1, 0] : [0, 0, 0];
+  const demo = [9, 8, 7].map((r, i) => cardHTML(ds[i], r, true, S.pic, `top:${i * 40}px`)).join('');
+  const how = S.mode === 'tap'
+    ? 'Ťukni na kartu a ona se sama přesune, kam se hodí. Když nemůže nikam, zatřese se.'
+    : 'Ťukni na kartu, zvýrazní se. Čárkovaně se ukáže, kam může. Pak ťukni na místo, kam má jít.';
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Pavouk<small>Jak hrát</small></h2></div>
+    <section class="card help">
+      <ol>
+        <li><b>Cíl:</b> složit ve sloupcích celé řady od <b>krále</b> po <b>eso</b> (K, Q, J, 10 … 2, A)${NS > 1 ? ' v jedné barvě' : ''}. Hotová řada sama odejde nahoru doprava. Vyhráno je, když odejde všech <b>osm řad</b>.</li>
+        <li>Ve sloupcích se skládá <b>dolů o jedno nižší</b> karta: na devítku osmička, na ni sedmička.${NS > 1 ? ' Barva při tom může být <b>jakákoli</b>.' : ''}
+          <div class="demo-felt"><div class="demo" style="height:160px">${demo}</div></div></li>
+        <li>Přesunout jde i řada karet najednou, ale jen když jdou po sobě${NS > 1 ? ' a jsou <b>stejné barvy</b>' : ''}. Stačí vzít tu nejvyšší z nich.</li>
+        <li>Na <b>prázdné místo</b> jde jakákoli karta nebo řada.</li>
+        <li>Karty ležící rubem nahoru se otočí samy, jakmile z nich odejdou karty nad nimi.</li>
+        <li><b>Rozdat</b> (nebo ťuknutí na balíček vlevo nahoře) přidá do každého sloupce jednu kartu. Jde to pětkrát, a jen když žádný sloupec není prázdný. Když je na stole méně než 10 karet, jde to i s prázdným sloupcem.</li>
+        <li>${how} Kartu jde také přetáhnout prstem.</li>
+      </ol>
+    </section>
+    <section class="card help"><h3>Tlačítka</h3>
+      <div class="legend">${ico('undo')}<span><b>Zpět</b> vrátí poslední tah. Dá se ťukat opakovaně.</span></div>
+      <div class="legend">${ico('hint')}<span><b>Poradit</b> ukáže dobrý tah: karta i místo, kam patří, zablikají.</span></div>
+      <div class="legend">${ico('deal')}<span><b>Rozdat</b> dá do každého sloupce jednu kartu. Číslo říká, kolikrát to ještě jde.</span></div>
+      <p class="fnote">Na čas se nehraje. Počet barev (obtížnost), vzhled stolu, karet a obrázky jdou změnit v nastavení ⚙.</p>
+    </section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { if (busy) { busyToast(); return; } hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// Persistent storage: the browser won't evict settings or the saved game on its own
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+// rule: only the known settings are taken over from the save
+const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+ST = {};
+for (const n of [1, 2, 4]) {
+  const v = saved && saved.stats && saved.stats[n];
+  const num = x => Number.isInteger(x) && x >= 0 ? x : 0, played = num(v && v.played);
+  ST[n] = { played, won: Math.min(num(v && v.won), played) };
+}
+NS = S.suits;
+applyLook();
+buildTable();
+if (saved && validGame(saved.game)) {
+  G = saved.game; NS = G.suits;
+  if (playing() && collect(G)) { save(); setTimeout(checkEnd, 0); } // a completed run that did not get to fly away
+  render({ instant: true });
+} else { NS = S.suits; renderTray(); newGame(); }
+
+const relayout = () => { if (!G || PD) return; render({ instant: true }); };
+window.addEventListener('resize', relayout);
+if (window.visualViewport) visualViewport.addEventListener('resize', relayout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing
+window.Spider = { listMoves, freshMoves, runStart, collect, doMove, deal, hint, undo, newGame, get state() { return { S, G, ST, L, busy }; }, render: () => render() };
+})();
+</script>
+</body>
+</html>

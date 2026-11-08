@@ -1,0 +1,5 @@
+.claude/settings.local.json
+.playwright-mcp/
+# Keep the agent instructions in the repo (the global ~/.gitignore ignores CLAUDE.md)
+!CLAUDE.md
+.idea/

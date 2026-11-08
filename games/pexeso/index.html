@@ -1,0 +1,625 @@
+<!doctype html>
+<!--
+  Pexeso: find pairs of the same picture. A tap turns a card over; two different cards stay face up (no timer)
+  until the next tap. Pictures come from the shared image sets (images/sets.js) or a built-in set of emoji.
+-->
+<html lang="cs" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4ebdf">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Pexeso">
+<title>Pexeso</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d5236'/%3E%3Crect x='10' y='14' width='22' height='32' rx='4' fill='%23b8452f'/%3E%3Crect x='34' y='18' width='22' height='32' rx='4' fill='%23fff'/%3E%3Ccircle cx='45' cy='34' r='6' fill='%23ffd66b'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
+[data-theme="green"]{--page:#1d5236;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.08);--ink:#eaf7ee;--soft:#cfe8d7;--accent:#ffd66b;--chip:rgba(255,255,255,.12);--chip-line:rgba(255,255,255,.2);--btn:#ffd66b;--btn-ink:#2a2200;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.25);--back:#b8452f;--back-line:#f0c2b6;--face:#fff;--miss:#ffb4a8}
+[data-theme="night"]{--page:#16233f;--bar:rgba(0,0,0,.25);--line:rgba(255,255,255,.08);--ink:#eef3fb;--soft:#b9c6dc;--accent:#ffd166;--chip:rgba(255,255,255,.12);--chip-line:rgba(255,255,255,.2);--btn:#ffd166;--btn-ink:#2a2000;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.28);--back:#3f66bd;--back-line:#b4c8f0;--face:#fff;--miss:#ff9e94}
+[data-theme="paper"]{--page:#f4ebdf;--bar:rgba(122,69,32,.06);--line:#e6d8c6;--ink:#2b1a0e;--soft:#6f5a48;--accent:#7a4520;--chip:#fff;--chip-line:#e6d8c6;--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--undo-bg:rgba(122,69,32,.1);--back:#7a4520;--back-line:#d9b48f;--face:#fff;--miss:#b3261e}
+
+/* ---------- Base ---------- */
+:root{--gut:12px} /* one side margin: bar buttons, board and bottom buttons line up (the safe areas are on #app) */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{background:var(--page);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+/* rule: 100dvh + safe areas, the board is sized from the room that is left (see layout()) */
+#app{height:100vh;height:100dvh;max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings; touch targets ≥ 45 px) ---------- */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line);text-decoration:none}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:20px}
+/* narrow phones (360 px): less room between the bar buttons, so the name fits whole at 18 px; the outer margin stays */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:18px;letter-spacing:0}
+}
+
+/* ---------- Score row (rule: info goes on its own row, not in place of the name) ---------- */
+.stats{flex:none;display:flex;flex-wrap:wrap;justify-content:center;gap:2px 18px;padding:8px var(--gut) 0;font-size:20px;font-weight:700;color:var(--soft)}
+.stats b{color:var(--ink)}
+@media (max-height:800px){.stats{font-size:18px}}
+
+/* ---------- GAME: board of cards ---------- */
+#board{flex:1;min-height:0;display:grid;place-items:center;padding:12px var(--gut)} /* rule: at least 12 px between the board and the rows above and below, on every screen */
+#grid{display:grid;grid-template-columns:repeat(var(--c),var(--cw));grid-auto-rows:var(--ch);gap:var(--gap)}
+.pc{position:relative;width:var(--cw);height:var(--ch);perspective:700px;border-radius:calc(var(--cw) * .1)}
+.pc .in{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .3s ease}
+.pc.up .in{transform:rotateY(180deg)}
+.side{position:absolute;inset:0;border-radius:calc(var(--cw) * .1);overflow:hidden;-webkit-backface-visibility:hidden;backface-visibility:hidden}
+/* the back: the photo of Náchod castle with a white edge, as in the card games, or the theme's colour with a diamond
+   (the variables are read from the nearest [data-back], so the samples in Settings can show the other back) */
+[data-back="castle"]{--bimg:var(--castle,none);--bbf:.06;--pat:0}
+[data-back="plain"]{--bimg:none;--bbf:0;--pat:1}
+.back{background:var(--bimg,none) center/cover no-repeat,var(--back);border:calc(var(--cw) * var(--bbf,0)) solid #fff;box-shadow:inset 0 -3px 0 rgba(0,0,0,.22),0 2px 3px rgba(0,0,0,.3)}
+.back::before{content:"";position:absolute;inset:calc(var(--cw) * .09);border:2px solid var(--back-line);border-radius:calc(var(--cw) * .06);opacity:var(--pat,1)}
+.back::after{content:"";position:absolute;left:50%;top:50%;width:calc(var(--cw) * .24);height:calc(var(--cw) * .24);border-radius:3px;background:var(--back-line);transform:translate(-50%,-50%) rotate(45deg);opacity:var(--pat,1)}
+.face{transform:rotateY(180deg);background:var(--face) center/cover no-repeat;box-shadow:inset 0 0 0 1px rgba(0,0,0,.12),0 2px 3px rgba(0,0,0,.3)}
+.face.fit{background-size:84% 84%} /* coats of arms and drawings: the whole picture on white */
+.face.em{display:grid;place-items:center}
+.face.em span{font-size:calc(var(--cw) * .62);line-height:1;font-family:"Noto Color Emoji","Segoe UI Emoji","Apple Color Emoji",sans-serif}
+/* a found pair: a frame in the theme's accent and a check mark; two different cards: a frame in the miss colour */
+.pc::after{content:"";position:absolute;inset:0;border-radius:calc(var(--cw) * .1);pointer-events:none}
+.pc.found::after{box-shadow:0 0 0 3px var(--accent)}
+.pc.miss::after{box-shadow:0 0 0 3px var(--miss)}
+.ok{display:none;position:absolute;right:calc(var(--cw) * -.06);bottom:calc(var(--cw) * -.06);width:calc(var(--cw) * .32);height:calc(var(--cw) * .32);max-width:34px;max-height:34px;border-radius:50%;background:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.ok svg{width:100%;height:100%;fill:none;stroke:var(--btn-ink);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.pc.found .ok{display:block}
+@media (prefers-reduced-motion:reduce){.pc .in{transition:none}}
+
+/* ---------- Bottom buttons ---------- */
+.tray{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px var(--gut) 12px;background:var(--bar);border-top:1px solid var(--line)}
+#hint{text-align:center;font-size:19px;line-height:1.3;color:var(--soft);min-height:25px}
+.row{display:flex;gap:10px}
+.undo{flex:1 1 0;display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:16px;font-size:21px;font-weight:800;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.undo svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+/* rule: an unavailable action is only dimmed and explains itself when tapped */
+.undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+/* rule: the head with Zpět and the game name stays at the top while scrolling */
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back-btn{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);margin-top:16px}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink)}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.fnote a{color:inherit;text-decoration:underline}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.trow .flabel{margin:0;flex:1;min-width:0}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{height:70px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:10px;background:var(--page);box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+.swatch .pc{--cw:38px;--ch:50px;flex:none}
+.samples{display:flex;gap:6px;margin-top:10px}
+.thumb{flex:none;width:40px;height:54px;border-radius:6px;background:#fff center/cover no-repeat;box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);display:grid;place-items:center;font-size:28px;line-height:1;font-family:"Noto Color Emoji","Segoe UI Emoji","Apple Color Emoji",sans-serif}
+.thumb.fit{background-size:84% 84%}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+.credits h3{margin-top:6px}.credits li{font-size:18px;line-height:1.35;margin:8px 0;word-break:break-word}.credits a{color:inherit;text-decoration:underline}
+.credits ol{padding-left:22px}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.mcard h2{font-size:28px;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 160px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Pexeso</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <div class="stats"><span>Dvojice <b id="pairs">0 / 0</b></span><span>Pokusy <b id="tries">0</b></span><span id="bestWrap">Rekord <b id="best">0</b></span></div>
+  <main id="board"><div id="grid"></div></main>
+  <footer class="tray">
+    <div id="hint"></div>
+    <div class="row">
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+    </div>
+  </footer>
+</div>
+<!-- Every layer is shown and hidden only through its hidden attribute; every screen has a [data-act="close"] button (Back button contract) -->
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="screenCredits" class="screen paper" hidden><div class="screen-in" id="creditsIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+<script src="../../images/sets.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const GUT = 12; // side margin in px, the same as --gut in the CSS
+
+/* ---------- Settings and storage ---------- */
+const ID = 'pexeso';                                      // = the folder name
+const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const THEMES = [
+  { id: 'green', name: 'Zelené sukno', meta: '#1d5236' },
+  { id: 'night', name: 'Noc',          meta: '#16233f' },
+  { id: 'paper', name: 'Papír', meta: '#f4ebdf' },
+];
+// number of pairs -> [columns, rows]
+const GRID = { 6: [3, 4], 8: [4, 4], 10: [4, 5], 12: [4, 6], 15: [5, 6], 21: [6, 7] };
+const PAIRS = Object.keys(GRID).map(Number);
+const PAIR_DESC = { 6: 'Krátká hra, největší karty.', 21: 'Dlouhá hra, menší karty.' };
+
+// Shared image sets from images/sets.js (missing when the game is opened on its own: then only the emoji are left)
+const IMG = globalThis.IMAGE_SETS || {}, IMG_BASE = '../../images/';
+// Built-in pictures (work everywhere), with Czech names for the toast after a found pair
+const EMO = ['🍎', '🍌', '🍇', '🍓', '🍒', '🍋', '🍐', '🥕', '🌽', '🍄', '🐱', '🐶', '🐰', '🐻', '🐷', '🐸', '🐔', '🐟', '🦋', '🐞', '🐌',
+  '☂️', '⚽', '🔑', '🔔', '🎁', '🏠', '🚗', '⛵', '✈️', '⭐', '🌙', '❤️', '☕', '🌷', '🌻', '🌹', '🌼', '🌱', '☀️', '🍂', '❄️'];
+const EMO_NAMES = ['Jablko', 'Banán', 'Hroznové víno', 'Jahoda', 'Třešně', 'Citron', 'Hruška', 'Mrkev', 'Kukuřice', 'Houba', 'Kočka', 'Pes', 'Králík', 'Medvěd', 'Prasátko', 'Žába', 'Slepice', 'Ryba', 'Motýl', 'Beruška', 'Šnek',
+  'Deštník', 'Míč', 'Klíč', 'Zvonek', 'Dárek', 'Domek', 'Auto', 'Plachetnice', 'Letadlo', 'Hvězda', 'Měsíc', 'Srdce', 'Káva', 'Tulipán', 'Slunečnice', 'Růže', 'Kvítek', 'Rostlinka', 'Slunce', 'Podzimní listí', 'Sněhová vločka'];
+const MAX_PAIRS = Math.max(...PAIRS);
+const SETS = [
+  // the photo of Náchod castle (item 0) is the card back, so it is never a picture in the game (it would look like a back)
+  { id: 'nachod',    name: 'Náchodsko',  desc: 'Zámky, kostely, skály a místa z Náchodska a pár slavných míst z kraje.', img: 'photo', skip: [0], sample: [12, 20, 35, 5] },
+  { id: 'cats',      name: 'Kočky',      desc: 'Fotky koček různých plemen a barev.', img: 'photo', sample: [0, 7, 13, 34] },
+  { id: 'coats',     name: 'Znaky obcí', desc: 'Znaky měst a obcí z okresu Náchod. Jsou si podobné, takže je to těžší. Náchod je v každé hře.', img: 'coat', must: [0], sample: [0, 3, 22, 34] },
+  { id: 'mushrooms', name: 'Houby',      desc: 'Kreslené houby z našich lesů.', img: 'drawing', sample: [0, 2, 3, 38] },
+  { id: 'birds',     name: 'Ptáci',      desc: 'Kreslení ptáci ze zahrad, polí a lesů.', img: 'drawing', sample: [0, 1, 5, 34] },
+  { id: 'produce',   name: 'Ovoce a zelenina', desc: 'Kreslené ovoce a zelenina ze zahrady.', img: 'drawing', sample: [0, 3, 4, 34] },
+  { id: 'pics',      name: 'Obrázky',    desc: 'Ovoce, zvířata a věci. Snadno se rozeznají.', sample: [0, 10, 26, 33] },
+].filter(x => !x.img || (IMG[x.id] && Array.isArray(IMG[x.id].items) && IMG[x.id].items.length >= MAX_PAIRS && IMG[x.id].items.every(it => it && typeof it.file === 'string')));
+const setOf = id => SETS.find(x => x.id === id) || SETS[0];
+const setSize = id => { const x = setOf(id); return x.img ? IMG[x.id].items.length : EMO.length; };
+// Card backs: the photo of Náchod castle, as in the card games (only when images/ is there), or the theme's colour
+const CASTLE = IMG.nachod && Array.isArray(IMG.nachod.items) && IMG.nachod.items[0] && typeof IMG.nachod.items[0].file === 'string' ? IMG.nachod.items[0] : null;
+const BACKS = [
+  CASTLE && { id: 'castle', name: 'Zámek Náchod' },
+  { id: 'plain', name: 'Barva podle vzhledu' },
+].filter(Boolean);
+const DEFAULTS = { set: 'cats', pairs: 10, theme: 'paper', back: 'castle', vibrate: true };
+
+/* ---------- GAME LOGIC ---------- */
+const rnd = n => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; } catch (e) { return Math.floor(Math.random() * n); } };
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+// the pictures of one game: the set's must-have pictures, the rest at random; each one twice, shuffled
+function deal(setId, pairs) {
+  const x = setOf(setId), must = (x.must || []).slice(0, pairs), skip = x.skip || [];
+  const rest = shuffle([...Array(setSize(x.id)).keys()].filter(i => !must.includes(i) && !skip.includes(i)));
+  const pics = must.concat(rest).slice(0, pairs);
+  return shuffle(pics.concat(pics));
+}
+const tries = g => Math.ceil(g.flips / 2); // every turned card counts half a try, and Undo never gives it back
+const allFound = g => g.found.every(Boolean);
+const rulesKey = g => `${g.pairs}-${g.set}`;
+const picName = (setId, f) => { const x = setOf(setId); return x.img ? IMG[x.id].items[f].name : EMO_NAMES[f]; };
+
+/* ---------- State ---------- */
+let S, G, B = {}; // settings, game, records (fewest tries per number of pairs and picture set)
+const isFresh = () => G.flips === 0;
+function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, bests: B }));
+    if (G.status === 'playing' && !isFresh()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {} // rule: storage may be full or blocked; the game goes on
+}
+// rule: corrupted data never crashes the game; the end comes from the board, the saved status is never trusted
+function validGame(g) {
+  try {
+    if (!g || !PAIRS.includes(g.pairs) || !SETS.some(x => x.id === g.set)) return false;
+    const n = g.pairs * 2, max = setSize(g.set), skip = setOf(g.set).skip || [];
+    if (!Array.isArray(g.faces) || g.faces.length !== n || !g.faces.every(f => Number.isInteger(f) && f >= 0 && f < max && !skip.includes(f))) return false;
+    const count = {};
+    for (const f of g.faces) count[f] = (count[f] || 0) + 1;
+    if (Object.keys(count).length !== g.pairs || !Object.values(count).every(c => c === 2)) return false;
+    if (!Array.isArray(g.found) || g.found.length !== n) return false;
+    g.found = g.found.map(Boolean);
+    // both cards of a picture are found together
+    for (let i = 0; i < n; i++) { const j = g.faces.findIndex((f, k) => k !== i && f === g.faces[i]); if (g.found[i] !== g.found[j]) return false; }
+    // open cards: at most two different, not found ones (a same pair is found at once)
+    const open = Array.isArray(g.open) ? g.open : [];
+    const okOpen = open.length <= 2 && open.every(i => Number.isInteger(i) && i >= 0 && i < n && !g.found[i])
+      && new Set(open).size === open.length && !(open.length === 2 && g.faces[open[0]] === g.faces[open[1]]);
+    g.open = okOpen ? open.slice() : [];
+    const least = g.found.filter(Boolean).length + g.open.length;
+    if (!Number.isInteger(g.flips) || g.flips < least) g.flips = least;
+    g.status = allFound(g) ? 'won' : 'playing';
+    return true;
+  } catch (e) { return false; }
+}
+function validBests(b) {
+  const out = {};
+  if (b && typeof b === 'object') for (const [k, v] of Object.entries(b)) if (/^\d+-[a-z]+$/.test(k) && Number.isInteger(v) && v > 0) out[k] = v;
+  return out;
+}
+function normalize(s) {
+  if (!PAIRS.includes(+s.pairs)) s.pairs = DEFAULTS.pairs; else s.pairs = +s.pairs;
+  s.set = setOf(s.set).id;
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  if (!BACKS.some(b => b.id === s.back)) s.back = BACKS[0].id;
+  s.vibrate = !!s.vibrate;
+}
+const rulesChanged = () => S.pairs !== G.pairs || S.set !== G.set;
+function newGame(msg) {
+  G = { pairs: S.pairs, set: S.set, faces: deal(S.set, S.pairs), found: [], open: [], flips: 0, status: 'playing' };
+  G.found = G.faces.map(() => false);
+  save(); build();
+  if (msg) toast(msg);
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) {
+  // Chrome refuses vibration (with a console error) before the first real tap
+  if (!S.vibrate || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+  try { navigator.vibrate(ms); } catch (e) {}
+}
+let toastT;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('');
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+  $('#modal').hidden = false;
+}
+const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const picUrl = (setId, f) => `${IMG_BASE}${IMG[setId].items[f].file}`;
+// the face of a card (or a thumbnail): a photo over the whole card, a coat of arms or drawing whole on white, or an emoji
+function faceHTML(setId, f, cls) {
+  const x = setOf(setId);
+  if (!x.img) return `<span class="${cls} em"><span>${EMO[f]}</span></span>`;
+  return `<span class="${cls}${x.img === 'photo' ? '' : ' fit'}" style="background-image:url('${esc(picUrl(x.id, f))}')"></span>`;
+}
+const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 12.5 10.2 16.5 18 8"/></svg>';
+const cardHTML = (setId, f, i) => `<button class="pc" data-i="${i}"><span class="in"><span class="side back"></span>${faceHTML(setId, f, 'side face')}</span><span class="ok">${CHECK}</span></button>`;
+
+/* ---------- Rendering ---------- */
+function applyLook() {
+  root.dataset.theme = S.theme; root.dataset.back = S.back;
+  if (CASTLE) root.style.setProperty('--castle', `url("${IMG_BASE}${encodeURI(CASTLE.file)}")`);
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+}
+// the cards are built once per game (so they can turn over with an animation); render() only switches their classes
+function build() {
+  const grid = $('#grid');
+  grid.style.setProperty('--c', GRID[G.pairs][0]);
+  grid.innerHTML = G.faces.map((f, i) => cardHTML(G.set, f, i)).join('');
+  grid.classList.add('noanim');
+  // the photos of this game are loaded now, so a card shows its picture at once when it turns
+  const x = setOf(G.set);
+  if (x.img) for (const f of new Set(G.faces)) { const im = new Image(); im.src = picUrl(x.id, f); }
+  render();
+}
+function render() {
+  applyLook();
+  const miss = G.open.length === 2;
+  $('#grid').querySelectorAll('.pc').forEach((el, i) => {
+    const up = G.found[i] || G.open.includes(i);
+    el.classList.toggle('up', up);
+    el.classList.toggle('found', G.found[i]);
+    el.classList.toggle('miss', miss && G.open.includes(i));
+    el.setAttribute('aria-label', up ? picName(G.set, G.faces[i]) + (G.found[i] ? ', nalezeno' : '') : 'Karta obrázkem dolů');
+  });
+  const found = G.found.filter(Boolean).length / 2, best = B[rulesKey(G)];
+  $('#pairs').textContent = `${found} / ${G.pairs}`;
+  $('#tries').textContent = tries(G);
+  $('#bestWrap').hidden = !best;
+  if (best) $('#best').textContent = best;
+  $('#hint').textContent = G.status === 'won' ? 'Všechny dvojice jsou nalezené!'
+    : miss ? 'Nejsou stejné – ťukni na další kartu'
+    : G.open.length === 1 ? 'Teď otoč druhou kartu'
+    : found ? 'Hledej další dvojici' : 'Ťukni na kartu a otoč ji';
+  $('#btnUndo').classList.toggle('dim', !G.open.length || G.status !== 'playing');
+  layout();
+}
+// rule: the board size comes from the room that is left, so it fits without scrolling
+function layout() {
+  if (!G) return;
+  const b = $('#board'), [c, r] = GRID[G.pairs], gap = c >= 5 ? 6 : 8;
+  const W = b.clientWidth - 2 * GUT, H = b.clientHeight - 24; // inside #board's padding (GUT at the sides, 12 px above and below)
+  const byW = Math.floor((W - gap * (c - 1)) / c), byH = Math.floor((H - gap * (r - 1)) / r);
+  // cards are 3:4 (like the photos); on a short screen they may get wider, up to square, rather than tiny
+  let cw = Math.min(byW, Math.floor(byH * 3 / 4), 150);
+  if (cw < 56) cw = Math.min(byW, byH, 56);
+  cw = Math.max(45, cw); // rule: ≥ 45 px (0.8 cm)
+  const ch = Math.max(45, Math.min(byH, Math.round(cw * 4 / 3)));
+  root.style.setProperty('--cw', cw + 'px'); root.style.setProperty('--ch', ch + 'px'); root.style.setProperty('--gap', gap + 'px');
+  // a freshly built board shows the cards as they are, without turning them over
+  const grid = $('#grid');
+  if (grid.classList.contains('noanim')) requestAnimationFrame(() => requestAnimationFrame(() => grid.classList.remove('noanim')));
+}
+
+/* ---------- Controls ---------- */
+function tapCard(i) {
+  if (G.status !== 'playing') { toast('Všechny dvojice jsou nalezené – ťukni na Nová hra'); return; }
+  if (G.found[i]) { toast('Tahle dvojice už je nalezená'); return; }
+  if (G.open.length === 2) {
+    // two different cards are shown until the next tap: it turns them back (and turns the tapped card, if it is another one)
+    const wasOpen = G.open.includes(i);
+    G.open = [];
+    if (wasOpen) { buzz(8); save(); render(); return; }
+  }
+  if (G.open.includes(i)) { toast('Tahle karta už je otočená – ťukni na jinou'); return; }
+  G.open.push(i); G.flips++;
+  if (G.open.length === 2) {
+    const [a, b] = G.open;
+    if (G.faces[a] === G.faces[b]) {
+      G.found[a] = G.found[b] = true; G.open = [];
+      toast(picName(G.set, G.faces[a]), 2000);
+      if (allFound(G)) win();
+    }
+  }
+  buzz(); save(); render();
+}
+function win() {
+  G.status = 'won';
+  const k = rulesKey(G), t = tries(G), prev = B[k], rec = !prev || t < prev;
+  if (rec) B[k] = t;
+  const line = !prev ? '' : rec ? `<p><b>Nový rekord!</b> Dřív nejlépe ${prev}.</p>` : `<p>Rekord: ${prev}</p>`;
+  // rule: an end dialog only for the game that ended, never over Settings or Help (whenFree)
+  whenFree(G, 900, () => showModal(`<h2>Výborně! 🎉</h2><p>Všech ${G.pairs} dvojic je nalezeno.<br>Pokusy: <b>${t}</b></p>${line}`,
+    [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]));
+}
+$('#grid').addEventListener('click', e => { const c = e.target.closest('.pc'); if (c) tapCard(+c.dataset.i); });
+// rule: Undo ("Zpět") wherever it makes sense; here only for a card turned by mistake: it turns the last open card back,
+// the try still counts and a found pair stays found (the user's decision)
+$('#btnUndo').addEventListener('click', () => {
+  if (G.status !== 'playing') { toast('Hra skončila – ťukni na Nová hra'); return; }
+  if (!G.open.length) { toast(G.found.some(Boolean) ? 'Nalezenou dvojici vrátit nejde' : 'Zatím není co vrátit'); return; }
+  G.open.pop();
+  buzz(); save(); render();
+});
+// rule: a new game in the middle of one asks first
+$('#btnNew').addEventListener('click', () => {
+  if (G.status === 'playing' && !isFresh()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+
+/* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
+const opt = (act, on, title, desc, extra = '') => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}${extra}</span></button>`;
+const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+const samples = x => `<span class="samples">${x.sample.map(f => faceHTML(x.id, f, 'thumb')).join('')}</span>`;
+const miniCards = () => { const x = setOf(S.set), f = x.sample[0]; return `<span class="pc"><span class="in"><span class="side back"></span></span></span><span class="pc up"><span class="in">${faceHTML(x.id, f, 'side face')}</span></span>`; };
+const miniBacks = () => '<span class="pc"><span class="in"><span class="side back"></span></span></span>'.repeat(2);
+function renderSettings() {
+  let notice = '';
+  if (rulesChanged()) notice = !isFresh()
+    ? `<div class="notice">Po návratu do hry začne <b>nová hra</b>${G.status === 'playing' && !isFresh() ? ' a rozehraná hra se ztratí' : ''}.</div>`
+    : '<div class="notice">Po návratu do hry se karty rozdají znovu.</div>';
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back-btn" data-act="close">‹ Zpět</button><h2>Pexeso<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Hra</h3>
+      <div class="field"><div class="flabel">Obrázky</div>
+        ${SETS.map(x => opt('set:' + x.id, S.set === x.id, x.name, x.desc, samples(x))).join('')}
+      </div>
+      <div class="field"><div class="flabel">Počet dvojic</div>
+        ${PAIRS.map(n => opt('pairs:' + n, S.pairs === n, `${n} dvojic`, `${GRID[n][0]} × ${GRID[n][1]} karet. ${PAIR_DESC[n] || ''}`)).join('')}
+      </div>
+      ${notice}
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch" data-theme="${t.id}">${miniCards()}</span>${t.name}</button>`).join('')}</div>
+      ${BACKS.length > 1 ? `<div class="field"><div class="flabel">Rub karet</div>
+        <div class="tiles">${BACKS.map(b => `<button class="tile" data-act="back:${b.id}" aria-pressed="${S.back === b.id}"><span class="swatch" data-back="${b.id}">${miniBacks()}</span>${b.name}</button>`).join('')}</div>
+        ${CASTLE ? `<div class="fnote">Fotka zámku Náchod: ${esc(CASTLE.author)}, ${esc(CASTLE.license)}, <a href="${esc(CASTLE.source)}" target="_blank" rel="noopener">zdroj</a>. Proto mezi obrázky Náchodska zámek není.</div>` : ''}
+      </div>` : ''}
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    ${SETS.some(x => x.img) ? '<button class="link" data-act="credits">Autoři obrázků</button>' : ''}
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'credits') { openCredits(); return; }
+  if (act === 'set') S.set = arg;
+  else if (act === 'pairs') S.pairs = +arg;
+  else if (act === 'theme') S.theme = arg;
+  else if (act === 'back') S.back = arg;
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S); buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
+});
+function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+// a change of pictures or of the number of pairs needs a new game: it starts after returning and says so (rule)
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  if (rulesChanged()) newGame(!isFresh() ? 'Začala nová hra s novým nastavením' : '');
+  else render();
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Image credits ---------- */
+function openCredits() {
+  $('#creditsIn').innerHTML = `
+    <div class="screen-head"><button class="back-btn" data-act="close">‹ Zpět</button><h2>Pexeso<small>Autoři obrázků</small></h2></div>
+    <section class="card credits"><p class="fnote" style="margin-top:0">Fotografie a znaky pocházejí z Wikimedia Commons. Obrázky jsou zmenšené a oříznuté. Licence: CC BY / CC BY-SA (creativecommons.org), CC0 nebo volné dílo. Kreslené obrázky jsou nakreslené pro tyto hry a jsou volným dílem (CC0).</p></section>
+    ${SETS.filter(x => x.img).map(x => `<section class="card credits"><h3>${esc(x.name)}</h3><ol>${IMG[x.id].items.map(it => creditLine(it, x.img === 'drawing')).join('')}</ol></section>`).join('')}
+    <button class="big" data-act="close">Zpět</button>`;
+  $('#screenCredits').hidden = false; $('#screenCredits').scrollTop = 0;
+}
+// one line of the credits; the drawings are all by the same author, so they list only the name
+const creditLine = ({ name: n, author: a, license: l, source: u }, drawn) => drawn ? `<li><b>${esc(n)}</b></li>`
+  : `<li><b>${esc(n)}</b>: ${esc(a)}, ${esc(l)}, <a href="${esc(u)}" target="_blank" rel="noopener">zdroj</a></li>`;
+$('#creditsIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenCredits').hidden = true; });
+
+/* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
+function renderHelp() {
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back-btn" data-act="close">‹ Zpět</button><h2>Pexeso<small>Jak hrát</small></h2></div>
+    <section class="card help"><ol>
+      <li>Všechny karty leží obrázkem dolů. Každý obrázek je tu <b>dvakrát</b>.</li>
+      <li>Ťukni na kartu a otoč ji. Potom otoč druhou.</li>
+      <li>Když jsou obě stejné, je to <b>dvojice</b>. Zůstanou otočené a ukáže se jejich název.</li>
+      <li>Když jsou různé, zůstanou otočené až do dalšího ťuknutí. Zapamatuj si, kde byly.</li>
+      <li>Najdi všechny dvojice. Nikam se nespěchá.</li>
+    </ol></section>
+    <section class="card help">
+      <p><b>Pokusy</b> počítají otočené dvojice karet. Čím méně, tím lépe. Nejlepší výsledek se ukáže jako <b>Rekord</b>, zvlášť pro každý počet dvojic a obrázky.</p>
+      <p style="margin-top:10px"><b>Zpět</b> otočí zpátky kartu otočenou omylem. Pokus se tím nevrací a nalezenou dvojici vrátit nejde.</p>
+    </section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// rule: ask for persistent storage so the browser does not delete the saved game by itself
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+const savedSettings = saved && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+B = validBests(saved && saved.bests);
+if (saved && validGame(saved.game)) { G = saved.game; build(); }
+else newGame();
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// contract: opened from the launcher (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing
+window.Pexeso = { deal, tapCard, get state() { return { S, G, B }; } };
+})();
+</script>
+</body>
+</html>

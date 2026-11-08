@@ -1,0 +1,959 @@
+<!doctype html>
+<html lang="cs" data-theme="maple">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#c9a26b">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Logik">
+<title>Logik</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234b2a15'/%3E%3Ccircle cx='20' cy='20' r='10' fill='%23e0302a'/%3E%3Ccircle cx='44' cy='20' r='10' fill='%23ffd31a'/%3E%3Ccircle cx='20' cy='44' r='10' fill='%232fa84f'/%3E%3Ccircle cx='44' cy='44' r='10' fill='%231f5fd6'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes (board colours) ---------- */
+[data-theme="dark-wood"]{--w1:#4b2a15;--gd:.22;--gl:.05;--page:#1e1008;--ink:#f3e3cf;--num:#d9b98f;--accent:#ffcf6b;--btn:#eab84f;--btn-ink:#2a1606;--btn-sh:#8a5a12;--hole-in:#160a03;--hole-out:#2e1709;--bar:rgba(0,0,0,.32)}
+[data-theme="light-wood"]{--w1:#c48b52;--gd:.16;--gl:.08;--page:#6e4628;--ink:#2a1608;--num:#4a2a10;--accent:#7a1f00;--btn:#5a3214;--btn-ink:#fff3df;--btn-sh:#2e1a0a;--hole-in:#3e2614;--hole-out:#6e4a2c;--bar:rgba(60,30,5,.22);--undo-bg:rgba(70,35,10,.2)}
+[data-theme="walnut"]{--w1:#6e4528;--gd:.2;--gl:.06;--page:#2b180c;--ink:#f6e7d3;--num:#e6c79d;--accent:#ffd77a;--btn:#f0c35a;--btn-ink:#2e1a06;--btn-sh:#93681a;--hole-in:#1e0f06;--hole-out:#3d2414;--bar:rgba(0,0,0,.3)}
+[data-theme="plastic"]{--w1:#5d4a3e;--gd:0;--gl:.02;--page:#2a201a;--ink:#f1e6dc;--num:#d8c6b6;--accent:#3cd0aa;--btn:#33b394;--btn-ink:#062a21;--btn-sh:#1d6e5b;--hole-in:#221a15;--hole-out:#43362f;--bar:rgba(0,0,0,.28)}
+[data-theme="green"]{--w1:#2f6b47;--gd:.06;--gl:.03;--page:#10291b;--ink:#eaf7ee;--num:#cfe8d7;--accent:#ffd66b;--btn:#ffd66b;--btn-ink:#2a2200;--btn-sh:#a3842a;--hole-in:#0c2618;--hole-out:#1e4a33;--bar:rgba(0,0,0,.25)}
+/* Wood */
+[data-theme="cherry"]{--w1:#7b3a22;--gd:.2;--gl:.06;--page:#2e130a;--ink:#f8e6d8;--num:#f0c7ae;--accent:#ffd27a;--btn:#f2c062;--btn-ink:#3a1606;--btn-sh:#9a5f1c;--hole-in:#250d06;--hole-out:#4a1e10;--bar:rgba(0,0,0,.3)}
+[data-theme="ebony"]{--w1:#2b1f19;--gd:.3;--gl:.05;--page:#120c09;--ink:#f1e4d4;--num:#c9b08a;--accent:#e7c15a;--btn:#d9b04a;--btn-ink:#22180a;--btn-sh:#7d6020;--hole-in:#0b0705;--hole-out:#1d1410;--bar:rgba(0,0,0,.35)}
+[data-theme="maple"]{--w1:#e0bd88;--gd:.12;--gl:.1;--page:#8a6a3e;--ink:#3a2408;--num:#6b4a1e;--accent:#9a3412;--btn:#6b4318;--btn-ink:#fff6e6;--btn-sh:#3b2208;--hole-in:#5a3d1c;--hole-out:#9a7546;--bar:rgba(90,55,10,.16);--undo-bg:rgba(90,55,10,.16);--fut:.8}
+[data-theme="driftwood"]{--w1:#78726a;--gd:.14;--gl:.08;--page:#35322d;--ink:#fbf8f2;--num:#ece6da;--accent:#ffe08a;--btn:#f3ede1;--btn-ink:#3a352d;--btn-sh:#9d968a;--hole-in:#33302b;--hole-out:#57524a;--bar:rgba(0,0,0,.22)}
+/* Felt */
+[data-theme="navy"]{--w1:#23466e;--gd:.05;--gl:.03;--page:#0d1a2a;--ink:#eaf2fb;--num:#c6d8ee;--accent:#ffd166;--btn:#ffd166;--btn-ink:#2a2000;--btn-sh:#a3842a;--hole-in:#0c1b2d;--hole-out:#1a3554;--bar:rgba(0,0,0,.28)}
+[data-theme="burgundy"]{--w1:#5f1f2c;--gd:.05;--gl:.03;--page:#250a10;--ink:#fbeaea;--num:#f0c4c8;--accent:#ffcf70;--btn:#f3c25e;--btn-ink:#3a1a00;--btn-sh:#9a6a1a;--hole-in:#250a10;--hole-out:#45141e;--bar:rgba(0,0,0,.3)}
+[data-theme="lavender"]{--w1:#6c5d8c;--gd:.04;--gl:.03;--page:#2a2238;--ink:#f6f2fc;--num:#dcd2f0;--accent:#ffd77a;--btn:#ffd77a;--btn-ink:#2e2100;--btn-sh:#a3842a;--hole-in:#2a2238;--hole-out:#46395e;--bar:rgba(0,0,0,.25)}
+/* Stone */
+[data-theme="slate"]{--w1:#3d4852;--gd:.06;--gl:.04;--page:#161b20;--ink:#eef3f6;--num:#c3cdd5;--accent:#ffcf6b;--btn:#e9eef2;--btn-ink:#1f262c;--btn-sh:#8c979f;--hole-in:#161c21;--hole-out:#2b343c;--bar:rgba(0,0,0,.28)}
+[data-theme="marble"]{--w1:#e9e6e1;--gd:.05;--gl:.2;--page:#a9a49c;--ink:#2b2925;--num:#5d5850;--accent:#8a5a12;--btn:#3f3b36;--btn-ink:#fff;--btn-sh:#1d1b18;--hole-in:#8d877d;--hole-out:#c4beb4;--bar:rgba(60,50,40,.08);--undo-bg:rgba(60,50,40,.1);--fut:.8}
+/* Paper: the launcher's palette (the same colours as the settings screens) */
+[data-theme="paper"]{--w1:#faf4eb;--gd:0;--gl:0;--page:#f4ebdf;--ink:#2b1a0e;--num:#6f5a48;--accent:#7a4520;--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--hole-in:#a8896b;--hole-out:#dcc9b0;--bar:rgba(122,69,32,.08);--undo-bg:#fff;--fut:.8}
+[data-theme="paper"] .topbar{border-bottom-color:#e6d8c6}
+[data-theme="paper"] .topbar h1{color:#5a3214;text-shadow:none}
+[data-theme="paper"] .pill,[data-theme="paper"] .round,[data-theme="paper"] .undo{background:#fff;box-shadow:inset 0 0 0 2px #e6d8c6}
+[data-theme="paper"] .tray{border-top-color:#e6d8c6;box-shadow:none}
+[data-theme="paper"] .row.active{background:rgba(232,163,23,.16)}
+[data-theme="paper"] .secret-box{background:rgba(122,69,32,.14);box-shadow:inset 0 2px 6px rgba(60,30,10,.35)}
+[data-theme="paper"] .lid{background:linear-gradient(180deg,rgba(255,255,255,.4) 0,rgba(255,255,255,0) 30%,rgba(90,50,20,.1) 100%),#e7d9c6;box-shadow:inset 0 0 0 2px #d8c6ad,0 3px 8px rgba(60,30,10,.25)}
+/* Night */
+[data-theme="night"]{--w1:#1e2126;--gd:0;--gl:.015;--page:#0b0c0e;--ink:#e6e8eb;--num:#9aa1aa;--accent:#6fb7ff;--btn:#6fb7ff;--btn-ink:#0a1a2a;--btn-sh:#2e6aa3;--hole-in:#0b0c0e;--hole-out:#15181c;--bar:rgba(0,0,0,.35)}
+
+.wood{background:
+  repeating-linear-gradient(90deg, rgba(0,0,0,var(--gd)) 0 1px, transparent 1px 6px, rgba(255,255,255,var(--gl)) 6px 8px, transparent 8px 17px, rgba(0,0,0,calc(var(--gd)*.7)) 17px 19px, transparent 19px 31px, rgba(0,0,0,calc(var(--gd)*.5)) 31px 32px, transparent 32px 45px),
+  repeating-linear-gradient(89.3deg, transparent 0 60px, rgba(0,0,0,calc(var(--gd)*.6)) 60px 63px, transparent 63px 140px),
+  var(--w1);}
+
+/* ---------- Base ---------- */
+:root{--hole:48px;--pal:60px;--palc:6;--fbc:2;--gut:12px} /* --gut: one side margin; top-bar buttons, the code box, the board rows and the bottom buttons line up */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+
+#app{height:100vh;height:100dvh;max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  box-shadow:0 0 40px rgba(0,0,0,.5)}
+
+/* Top bar */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid rgba(255,255,255,.06)}
+.topbar h1{flex:1;text-align:center;font-weight:800;font-size:28px;letter-spacing:.02em;color:var(--ink);text-shadow:0 2px 3px rgba(0,0,0,.4)}
+.pill{height:46px;padding:0 16px;border-radius:23px;background:rgba(255,255,255,.14);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px rgba(255,255,255,.18)}
+.round{width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.14);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px rgba(255,255,255,.18)}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{display:flex;gap:8px}
+a.round{text-decoration:none}
+.topbar h1{min-width:0;line-height:1.05;overflow-wrap:normal;word-break:normal;white-space:normal} /* a long name wraps to two lines between words, never inside one (rule) */
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:23px;letter-spacing:.02em}
+/* narrow phones (360 px): less gap and a slimmer Nová hra pill; the outer margin stays --gut */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+}
+
+/* Secret code */
+/* Secret code: full-row-width compartment covered by a lid */
+.secret{flex:none;padding:12px var(--gut) 4px} /* the code box is the top of the board: 12 px below the top bar */
+.secret-box{position:relative;border-radius:14px;padding:3px 0;background:rgba(0,0,0,.3);box-shadow:inset 0 3px 8px rgba(0,0,0,.6),0 1px 0 rgba(255,255,255,.08);overflow:hidden}
+.secret-row::after{display:none}
+.secret-row .fb{visibility:hidden}
+.lid{position:absolute;inset:0;border-radius:14px;padding:3px 0;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.16) 0, rgba(255,255,255,0) 28%, rgba(0,0,0,.28) 100%),
+    repeating-linear-gradient(0deg, rgba(0,0,0,var(--gd)) 0 1px, transparent 1px 5px, rgba(255,255,255,var(--gl)) 5px 6px, transparent 6px 11px),
+    repeating-linear-gradient(1.2deg, transparent 0 14px, rgba(0,0,0,calc(var(--gd)*.8)) 14px 15px, transparent 15px 33px),
+    var(--w1);
+  box-shadow:inset 0 0 0 2px rgba(0,0,0,.35),inset 0 2px 0 rgba(255,255,255,.15),0 4px 10px rgba(0,0,0,.55);
+  transition:transform .8s cubic-bezier(.5,0,.3,1)}
+.lid-row::after{display:none}
+.lid-row .fb{visibility:hidden}
+/* raised "bumps" over each hole – translucent shading lets the lid's wood show through, so it fits every theme */
+.bump{flex:none;width:var(--hole);height:var(--hole);border-radius:50%;
+  background:radial-gradient(circle at 38% 30%, rgba(255,255,255,.26) 0, rgba(255,255,255,.07) 32%, transparent 56%),
+             radial-gradient(circle at 50% 50%, transparent 55%, rgba(0,0,0,.3) 100%);
+  box-shadow:0 3px 4px rgba(0,0,0,.45),0 -1px 0 rgba(255,255,255,.1)}
+.revealed .lid{transform:translateY(-110%)}
+
+/* Board */
+.board{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;padding:4px var(--gut) 12px;scrollbar-width:none} /* 12 px above the tray; layout() sizes the rows so they fit */
+.board::-webkit-scrollbar{display:none}
+.rows{margin:auto 0;display:flex;flex-direction:column}
+.row{position:relative;display:flex;align-items:center;justify-content:space-between;gap:calc(var(--hole)*.18);height:calc(var(--hole)*1.14);padding:0 8px;border-radius:14px}
+.row:not(:last-child)::after{content:"";position:absolute;left:6%;right:6%;bottom:-1px;height:2px;background:linear-gradient(rgba(0,0,0,.35),rgba(255,255,255,.07));pointer-events:none}
+.row.active{background:rgba(255,255,255,.13);box-shadow:0 0 0 3px var(--accent)}
+.row.active::after,.row:has(+ .row.active)::after{display:none}
+.row.future{opacity:var(--fut,.55)}
+[data-theme="light-wood"]{--fut:.8}
+.num{flex:none;width:calc(var(--hole)*.8);text-align:center;font-weight:800;font-size:calc(var(--hole)*.42);color:var(--num)}
+.row.active .num{color:var(--accent)}
+.holes{display:flex;gap:calc(var(--hole)*.22);justify-content:center}
+.slot{flex:none;position:relative;width:var(--hole);height:var(--hole);border-radius:50%;display:grid;place-items:center;font-size:calc(var(--hole)*.42);
+  background:radial-gradient(circle at 50% 42%, var(--hole-in) 0 50%, var(--hole-out) 78%);
+  box-shadow:inset 0 3px 6px rgba(0,0,0,.65), 0 1px 0 rgba(255,255,255,.14)}
+.slot .peg{width:94%;height:94%}
+.slot.next{box-shadow:inset 0 3px 6px rgba(0,0,0,.65),0 0 0 3px var(--accent)}
+.slot.sel{box-shadow:inset 0 3px 6px rgba(0,0,0,.65),0 0 0 4px var(--accent),0 0 14px 2px var(--accent);animation:pulse 1.2s ease-in-out infinite}
+.slot.drop{box-shadow:inset 0 3px 6px rgba(0,0,0,.65),0 0 0 5px var(--accent),0 0 16px 4px var(--accent)}
+.slot.lifted .peg{opacity:.25}
+@keyframes pulse{50%{transform:scale(1.07)}}
+.fb{flex:none;display:grid;grid-template-columns:repeat(var(--fbc),calc(var(--hole)*.38));grid-auto-rows:calc(var(--hole)*.38);gap:calc(var(--hole)*.1)}
+.fbh{border-radius:50%;background:radial-gradient(circle at 50% 42%, var(--hole-in) 0 45%, var(--hole-out) 80%);box-shadow:inset 0 1px 3px rgba(0,0,0,.7)}
+.fbh.b{background:radial-gradient(circle at 35% 30%, #8a8a8a 0, #2a2a2a 28%, #000 72%);box-shadow:0 0 0 1.5px rgba(255,255,255,.7),0 1px 2px #000}
+.fbh.w{background:radial-gradient(circle at 35% 30%, #fff 0, #f4f4f4 40%, #b9b9b9 100%);box-shadow:0 0 0 1.5px rgba(0,0,0,.55),0 1px 2px #000}
+
+/* Peg */
+.peg{display:grid;place-items:center;border-radius:50%;
+  background:radial-gradient(circle at 34% 28%, rgba(255,255,255,.9) 0, rgba(255,255,255,.35) 14%, transparent 34%),
+             radial-gradient(circle at 50% 55%, var(--c) 0 50%, color-mix(in srgb, var(--c) 55%, #000) 100%);
+  box-shadow:0 3px 5px rgba(0,0,0,.55), inset 0 -2px 4px rgba(0,0,0,.25)}
+.peg b{display:none;color:var(--ct);font-weight:900;line-height:1;text-shadow:0 0 3px rgba(255,255,255,.25)}
+.show-nums .peg b{display:block}
+
+/* Bottom tray */
+.tray{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px var(--gut) 12px;background:var(--bar);box-shadow:inset 0 4px 8px rgba(0,0,0,.35);border-top:1px solid rgba(255,255,255,.07)}
+.hint{text-align:center;font-size:19px;font-weight:600;min-height:25px;line-height:25px;color:var(--ink)}
+.palette{display:grid;grid-template-columns:repeat(var(--palc),var(--pal));justify-content:center;gap:10px 12px}
+.pbtn{width:var(--pal);height:var(--pal);border-radius:50%;padding:0;font-size:calc(var(--pal)*.42);transition:transform .08s}
+.pbtn .peg{width:100%;height:100%}
+.pbtn:active{transform:scale(.92)}
+.mode-drag .pbtn,.mode-drag .slot.act{touch-action:none}
+.big{display:block;width:100%;height:64px;border-radius:18px;font-size:24px;font-weight:800;background:var(--btn);color:var(--btn-ink);box-shadow:0 4px 0 var(--btn-sh);transition:transform .06s, box-shadow .06s, opacity .2s}
+.big:active{transform:translateY(3px);box-shadow:0 1px 0 var(--btn-sh)}
+.big.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+.actions{display:flex;gap:10px}
+.actions .big{flex:1 1 0;width:auto;min-width:0;font-size:min(24px,6vw)}
+.act-left{flex:1 1 0;min-width:0;display:flex;gap:8px}
+.undo{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:16px;font-size:21px;font-weight:800;color:var(--ink);background:var(--undo-bg,rgba(0,0,0,.32));box-shadow:inset 0 2px 5px rgba(0,0,0,.35),inset 0 0 0 2px rgba(255,255,255,.1);transition:opacity .2s,transform .06s}
+.undo svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.undo:active{transform:scale(.98)}
+/* Zpět and Vzdát se share the left half: icon above the label, like the card games' buttons */
+.act-left .undo{flex-direction:column;gap:2px;padding:0 2px;font-size:18px;line-height:1.1;white-space:nowrap}
+.act-left .undo svg{width:24px;height:24px}
+.undo.giveup svg{fill:currentColor;stroke:none}
+.undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px}
+
+#ghost{position:fixed;z-index:50;pointer-events:none;transform:translate(-50%,-50%);width:calc(var(--hole)*1.15);height:calc(var(--hole)*1.15);font-size:calc(var(--hole)*.45);filter:drop-shadow(0 6px 6px rgba(0,0,0,.5))}
+#ghost .peg{width:100%;height:100%}
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain;-webkit-user-select:none;user-select:none}
+.screen-in{max-width:560px;margin:0 auto}
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;font-family:Georgia,serif;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.paper .big{background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh)}
+.paper .big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0;box-shadow:0 2px 6px rgba(60,30,10,.12)}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink);font-family:Georgia,serif}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:10px}
+.stepper{display:flex;align-items:center;gap:12px}
+.sbtn{flex:none;width:60px;height:60px;border-radius:50%;background:var(--pbtn);color:var(--pbtn-ink);font-size:36px;font-weight:700;line-height:1;display:grid;place-items:center;box-shadow:0 3px 0 var(--pbtn-sh)}
+.sbtn.dim{background:var(--psw);box-shadow:none;color:var(--psoft)}
+.sval{flex:1;text-align:center;font-size:25px;font-weight:800}
+.fnote{font-size:18px;color:var(--psoft);margin-top:10px;line-height:1.35}
+.dots{display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+.dots .peg{width:30px;height:30px;font-size:14px}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{--hole:26px;height:60px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.trow .flabel{margin:0}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+.legend{display:flex;align-items:center;gap:14px;margin:12px 0;font-size:20px;line-height:1.3}
+.legend .fbh{flex:none;width:30px;height:30px}
+
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:pop .25s ease-out}
+@keyframes pop{from{transform:scale(.9);opacity:0}}
+.mcard h2{font-size:28px;font-family:Georgia,serif;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+.mcard .codeview{display:flex;justify-content:center;gap:10px;margin:8px 0 16px}
+.mcard .codeview .peg{width:44px;height:44px;font-size:19px}
+.mbtns{display:flex;flex-direction:column;gap:14px;margin-top:8px}
+
+/* Shorter screens (e.g. with the browser bar visible): slimmer bars, more room for the board */
+@media (max-height:800px){
+  .topbar{height:52px}
+  .pill{height:42px}.round{width:42px;height:42px}
+  .topbar h1{font-size:25px}
+  .secret{padding:12px var(--gut) 2px}
+  .tray{gap:6px;padding:6px var(--gut) 10px}
+  .hint{font-size:18px}
+  .big{height:58px;font-size:23px}
+  .undo{height:58px}
+}
+#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 66px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--w1));color:var(--w1);font-size:19px;font-weight:600;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--w1) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app" class="wood">
+  <header class="topbar">
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Logik</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <section class="secret" id="secret"><div class="secret-box" id="secretBox">
+    <div class="row secret-row"><div class="num"></div><div class="holes" id="secretHoles"></div><div class="fb" id="secretFb"></div></div>
+    <div class="lid" aria-label="Schovaný tajný kód"><div class="row lid-row"><div class="num"></div><div class="holes" id="lidBumps"></div><div class="fb" id="lidFb"></div></div></div>
+  </div></section>
+  <main class="board" id="board"><div class="rows" id="rows"></div></main>
+  <footer class="tray" id="tray">
+    <div class="hint" id="hint"></div>
+    <div class="palette" id="palette"></div>
+    <div class="actions">
+    <div class="act-left">
+    <button id="btnGiveUp" class="undo giveup" aria-label="Vzdát se a ukázat tajný kód"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2.5h2V22H5z"/><path d="M8 3.5h11.5l-3 4.75 3 4.75H8z"/></svg>Vzdát se</button>
+    <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+    </div>
+    <button id="btnCheck" class="big">Zkontrolovat</button>
+    </div>
+  </footer>
+</div>
+
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="ghost" hidden></div>
+<div id="toast" class="hide"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+
+/* ---------- Constants ---------- */
+const COLORS = [
+  { name: 'červená',   c: '#e0302a', t: '#fff' },
+  { name: 'žlutá',     c: '#ffd31a', t: '#3a2a00' },
+  { name: 'zelená',    c: '#2fa84f', t: '#fff' },
+  { name: 'modrá',     c: '#1f5fd6', t: '#fff' },
+  { name: 'oranžová',  c: '#ff8a1c', t: '#3a1a00' },
+  { name: 'fialová',   c: '#8e3bc4', t: '#fff' },
+  { name: 'tyrkysová', c: '#22c3d6', t: '#003a40' },
+  { name: 'růžová',    c: '#ff6fb1', t: '#4a0026' },
+];
+const THEMES = [
+  // wood
+  { id: 'dark-wood',  name: 'Tmavé dřevo', meta: '#2f1a0c' },
+  { id: 'walnut',     name: 'Ořech', meta: '#4a2e1a' },
+  { id: 'cherry',     name: 'Třešeň', meta: '#5a2a17' },
+  { id: 'ebony',      name: 'Eben', meta: '#1f1612' },
+  { id: 'light-wood', name: 'Světlé dřevo', meta: '#8a5a32' },
+  { id: 'maple',      name: 'Javor', meta: '#c9a26b' },
+  { id: 'driftwood',  name: 'Naplavené dřevo', meta: '#57524a' },
+  { id: 'plastic',    name: 'Hnědý plast', meta: '#3e3129' },
+  // felt
+  { id: 'green',      name: 'Zelená plsť', meta: '#1f4a31' },
+  { id: 'navy',       name: 'Modrá plsť', meta: '#1a3554' },
+  { id: 'burgundy',   name: 'Vínová plsť', meta: '#4a1621' },
+  { id: 'lavender',   name: 'Levandule', meta: '#54476f' },
+  // stone and night
+  { id: 'slate',      name: 'Břidlice', meta: '#2f3840' },
+  { id: 'marble',     name: 'Mramor', meta: '#d8d4cd' },
+  { id: 'paper',      name: 'Papír', meta: '#f4ebdf' },
+  { id: 'night',      name: 'Noc', meta: '#16181c' },
+];
+const MODES = [
+  { id: 'drag', name: 'Přetahování prstem', desc: 'Barvu přetáhni prstem do jamky. Kolíček přetažený mimo řádek zmizí.' },
+  { id: 'tap',  name: 'Ťuknout na barvu', desc: 'Barva se sama vloží na další volné místo. Ťuknutí na kolíček ho zase vyndá.' },
+  { id: 'slot', name: 'Nejdřív místo, pak barva', desc: 'Ťukni na jamku a potom na barvu, která tam má být.' },
+];
+const LIMITS = { colors: [4, 8], pegs: [4, 6], attempts: [6, 12] };
+// maxRepeat: 1 = no colour twice in the code, 0 = unlimited
+// drag is the default and Ovládání comes first in settings (user's decision, see CLAUDE.md)
+const DEFAULTS = { colors: 6, pegs: 4, maxRepeat: 1, attempts: 10, mode: 'drag', theme: 'maple', nums: false, vibrate: true };
+// Saved state under the launcher's games.<id>.* prefix; OLD_KEY is the name used before (read once, then removed)
+const KEY = 'games.logik.state', OLD_KEY = 'logik.v1';
+
+/* ---------- Game logic ---------- */
+function rnd(n) {
+  try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; }
+  catch (e) { return Math.floor(Math.random() * n); }
+}
+// maxRepeat: 0 = unlimited, otherwise max. occurrences of one colour
+function generateCode(colors, pegs, maxRepeat) {
+  const lim = maxRepeat > 0 ? maxRepeat : Infinity;
+  const cnt = new Array(colors).fill(0), code = [];
+  for (let i = 0; i < pegs; i++) {
+    const avail = [];
+    for (let c = 0; c < colors; c++) if (cnt[c] < lim) avail.push(c);
+    const c = avail.length ? avail[rnd(avail.length)] : rnd(colors);
+    cnt[c]++; code.push(c);
+  }
+  return code;
+}
+function evaluate(guess, code) {
+  let black = 0, white = 0;
+  const cg = {}, cc = {};
+  for (let i = 0; i < code.length; i++) {
+    if (guess[i] === code[i]) black++;
+    else { cg[guess[i]] = (cg[guess[i]] || 0) + 1; cc[code[i]] = (cc[code[i]] || 0) + 1; }
+  }
+  for (const k in cg) white += Math.min(cg[k], cc[k] || 0);
+  return { black, white };
+}
+const minRepeat = (colors, pegs) => Math.ceil(pegs / colors);
+const clamp = (v, [a, b]) => Math.max(a, Math.min(b, v));
+function repeatOptions(pegs) { const a = []; for (let k = 1; k < pegs; k++) a.push(k); a.push(0); return a; }
+
+// Adjusts settings to a valid combination; returns true if the repeat limit had to be changed.
+function normalize(s) {
+  s.colors = clamp(+s.colors || DEFAULTS.colors, LIMITS.colors);
+  s.pegs = clamp(+s.pegs || DEFAULTS.pegs, LIMITS.pegs);
+  s.attempts = clamp(+s.attempts || DEFAULTS.attempts, LIMITS.attempts);
+  s.maxRepeat = Math.max(0, +s.maxRepeat || 0);
+  if (!MODES.some(m => m.id === s.mode)) s.mode = DEFAULTS.mode;
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  s.nums = !!s.nums; s.vibrate = !!s.vibrate;
+  let adjusted = false;
+  if (s.maxRepeat >= s.pegs) s.maxRepeat = 0;
+  const m = minRepeat(s.colors, s.pegs);
+  if (s.maxRepeat !== 0 && s.maxRepeat < m) { s.maxRepeat = m >= s.pegs ? 0 : m; adjusted = true; }
+  return adjusted;
+}
+const rulesOf = s => ({ colors: s.colors, pegs: s.pegs, maxRepeat: s.maxRepeat, attempts: s.attempts });
+const sameCodeRules = (a, b) => a.colors === b.colors && a.pegs === b.pegs && a.maxRepeat === b.maxRepeat;
+const sameRules = (a, b) => a.colors === b.colors && a.pegs === b.pegs && a.maxRepeat === b.maxRepeat && a.attempts === b.attempts;
+
+/* ---------- State and saving ---------- */
+let S, G, sel = null, drag = null, scrollToActive = true;
+
+function load() {
+  try {
+    let v = localStorage.getItem(KEY);
+    // move the state from the older key at once
+    if (v === null && (v = localStorage.getItem(OLD_KEY)) !== null) { localStorage.setItem(KEY, v); localStorage.removeItem(OLD_KEY); }
+    return JSON.parse(v);
+  } catch (e) { return null; }
+}
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G }));
+    // Launcher contract: unfinished game = "in progress" badge on the tile
+    if (G && G.status === 'playing' && !isFresh()) localStorage.setItem('games.logik.inProgress', '1');
+    else localStorage.removeItem('games.logik.inProgress');
+  } catch (e) {}
+}
+function validGame(g) {
+  try {
+    if (!g || !g.rules || !Array.isArray(g.code) || !Array.isArray(g.guesses) || !Array.isArray(g.current)) return false;
+    const r = g.rules, inLim = (v, [a, b]) => Number.isInteger(v) && v >= a && v <= b;
+    if (!inLim(r.pegs, LIMITS.pegs) || !inLim(r.colors, LIMITS.colors) || !inLim(r.attempts, [1, LIMITS.attempts[1]])) return false;
+    if (!Number.isInteger(r.maxRepeat) || r.maxRepeat < 0) return false;
+    const p = r.pegs, col = c => Number.isInteger(c) && c >= 0 && c < r.colors;
+    if (g.code.length !== p || !g.code.every(col)) return false;
+    if (g.current.length !== p || !g.current.every(c => c === null || col(c))) return false;
+    if (g.guesses.length > r.attempts || !g.guesses.every(x => x && Array.isArray(x.g) && x.g.length === p && x.g.every(col)
+      && Number.isInteger(x.b) && Number.isInteger(x.w) && x.b >= 0 && x.w >= 0 && x.b + x.w <= p)) return false;
+    // the feedback and the end of the game come from the board, never from the save
+    for (const x of g.guesses) { const e = evaluate(x.g, g.code); x.b = e.black; x.w = e.white; }
+    const hit = g.guesses.findIndex(x => x.b === p);
+    if (hit >= 0 && hit !== g.guesses.length - 1) return false; // guesses after the code was found: damaged
+    g.gaveUp = g.gaveUp === true;
+    g.status = hit >= 0 ? 'won' : g.gaveUp || g.guesses.length >= r.attempts ? 'lost' : 'playing';
+    if (!Array.isArray(g.order) || !g.order.every(i => Number.isInteger(i) && i >= 0 && i < p)) g.order = [];
+    return true;
+  } catch (e) { return false; }
+}
+const isFresh = () => G.guesses.length === 0 && G.current.every(x => x === null);
+
+function newGame() {
+  clearTimeout(endT); endT = 0;
+  const r = rulesOf(S);
+  G = { rules: r, code: generateCode(r.colors, r.pegs, r.maxRepeat), guesses: [], current: new Array(r.pegs).fill(null), order: [], status: 'playing' };
+  sel = null; scrollToActive = true;
+  save(); render();
+}
+
+/* ---------- Helpers ---------- */
+function pegHTML(c) {
+  const col = COLORS[c];
+  return `<span class="peg" style="--c:${col.c};--ct:${col.t}" aria-label="${col.name}"><b>${c + 1}</b></span>`;
+}
+function buzz(ms = 12) { if (S.vibrate && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+let toastT;
+function hideToast() { clearTimeout(toastT); $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hide'), ms);
+}
+function nextEmpty(from) {
+  const p = G.current.length;
+  for (let k = 1; k <= p; k++) { const j = (from + k) % p; if (G.current[j] === null) return j; }
+  return null;
+}
+function commit() { save(); render(); }
+// Order in which pegs were placed in the current row (for the Undo button)
+function ord() { if (!Array.isArray(G.order)) G.order = []; return G.order; }
+function setSlot(i, c) {
+  const o = ord(), k = o.indexOf(i);
+  if (k >= 0) o.splice(k, 1);
+  G.current[i] = c;
+  if (c !== null) o.push(i);
+}
+function undo() {
+  if (G.status !== 'playing') { toast('Hra skončila – ťukni na Nová hra'); return; }
+  const o = ord().filter(i => G.current[i] !== null);
+  G.order = o;
+  let i = o.length ? o[o.length - 1] : -1;
+  if (i < 0) for (let k = G.current.length - 1; k >= 0; k--) if (G.current[k] !== null) { i = k; break; }
+  if (i < 0) { toast('Řádek je prázdný'); return; }
+  setSlot(i, null);
+  if (S.mode === 'slot') sel = i;
+  buzz(); commit();
+}
+
+/* ---------- Game rendering ---------- */
+function applyLook() {
+  root.dataset.theme = S.theme;
+  root.classList.toggle('show-nums', S.nums);
+  root.classList.toggle('mode-drag', S.mode === 'drag');
+  const th = THEMES.find(t => t.id === S.theme);
+  document.querySelector('meta[name="theme-color"]').content = th.meta;
+}
+
+function rowHTML(i) {
+  const p = G.rules.pegs;
+  const done = i < G.guesses.length;
+  const active = !done && i === G.guesses.length && G.status === 'playing';
+  const pegs = done ? G.guesses[i].g : active ? G.current : new Array(p).fill(null);
+  let mark = -1, markCls = '';
+  if (active && S.mode === 'tap') { mark = G.current.indexOf(null); markCls = 'next'; }
+  if (active && S.mode === 'slot' && sel !== null) { mark = sel; markCls = 'sel'; }
+  let slots = '';
+  for (let k = 0; k < p; k++) {
+    const c = pegs[k];
+    slots += `<div class="slot${active ? ' act' : ''}${k === mark ? ' ' + markCls : ''}" data-i="${k}">${c !== null && c !== undefined ? pegHTML(c) : ''}</div>`;
+  }
+  let fb = '';
+  for (let k = 0; k < p; k++) {
+    let cls = '';
+    if (done) { const { b, w } = G.guesses[i]; cls = k < b ? ' b' : k < b + w ? ' w' : ''; }
+    fb += `<i class="fbh${cls}"></i>`;
+  }
+  return `<div class="row ${done ? 'done' : active ? 'active' : 'future'}" data-r="${i}"><div class="num">${i + 1}</div><div class="holes">${slots}</div><div class="fb">${fb}</div></div>`;
+}
+
+function render() {
+  applyLook();
+  const r = G.rules;
+  if (S.mode === 'slot' && G.status === 'playing' && sel === null) { const f = G.current.indexOf(null); sel = f < 0 ? null : f; }
+  if (S.mode !== 'slot') sel = null;
+
+  // Secret code
+  const ended = G.status !== 'playing';
+  $('#secretHoles').innerHTML = G.code.map(c => `<div class="slot">${ended ? pegHTML(c) : ''}</div>`).join('');
+  $('#secretFb').innerHTML = $('#lidFb').innerHTML = '<i class="fbh"></i>'.repeat(r.pegs);
+  $('#lidBumps').innerHTML = '<div class="bump"></div>'.repeat(r.pegs);
+  $('#secretBox').classList.toggle('revealed', ended);
+
+  // Board: rows from bottom to top
+  let html = '';
+  for (let i = r.attempts - 1; i >= 0; i--) html += rowHTML(i);
+  $('#rows').innerHTML = html;
+
+  // Palette
+  let pal = '';
+  for (let c = 0; c < r.colors; c++) pal += `<button class="pbtn" data-c="${c}" aria-label="${COLORS[c].name}">${pegHTML(c)}</button>`;
+  $('#palette').innerHTML = pal;
+
+  // Hint and button
+  const full = G.current.every(x => x !== null);
+  const btn = $('#btnCheck');
+  let hint;
+  if (G.status === 'won') { hint = 'Vyřešeno! 🎉'; btn.textContent = 'Nová hra'; btn.classList.remove('dim'); }
+  else if (G.status === 'lost') { hint = G.gaveUp ? 'Tajný kód je odkrytý' : 'Konec hry'; btn.textContent = 'Nová hra'; btn.classList.remove('dim'); }
+  else {
+    btn.textContent = 'Zkontrolovat'; btn.classList.toggle('dim', !full);
+    const left = G.current.filter(x => x === null).length;
+    if (full) hint = 'Hotovo? Ťukni na Zkontrolovat';
+    else if (S.mode === 'tap') hint = left === r.pegs ? 'Ťukni na barvy dole' : `Vyber ještě ${left} ${left === 1 ? 'barvu' : 'barvy'}`;
+    else if (S.mode === 'slot') hint = 'Vyber barvu pro označenou jamku';
+    else hint = 'Přetáhni barvy do jamek';
+  }
+  $('#hint').textContent = hint;
+  $('#btnGiveUp').classList.toggle('dim', G.status !== 'playing');
+  $('#btnUndo').classList.toggle('dim', G.status !== 'playing' || G.current.every(x => x === null));
+
+  layout();
+}
+
+function layout() {
+  if (!$('#app') || !G) return;
+  const r = G.rules, p = r.pegs, n = r.attempts, fbc = Math.ceil(p / 2);
+  const ts = getComputedStyle($('#tray')), W = $('#tray').clientWidth - parseFloat(ts.paddingLeft) - parseFloat(ts.paddingRight);
+  const k = r.colors <= 6 ? r.colors : Math.ceil(r.colors / 2);
+  const pal = Math.max(44, Math.min(r.colors <= 6 ? 68 : 58, (W - (k - 1) * 12) / k));
+  root.style.setProperty('--pal', pal.toFixed(1) + 'px');
+  root.style.setProperty('--palc', k);
+  root.style.setProperty('--fbc', fbc);
+  const board = $('#board');
+  // The secret row has the same holes as the board; board + compartment height is constant,
+  // so it is computed as n+1 rows (+ compartment margins).
+  const secret = $('#secret');
+  const secretExtra = secret.offsetHeight - $('.secret-row').offsetHeight;
+  const bs = getComputedStyle(board);
+  // the board's content box (12 px above the tray) + the secret row: every row fits, also in a short window
+  const H = board.clientHeight - parseFloat(bs.paddingTop) - parseFloat(bs.paddingBottom) + secret.offsetHeight - secretExtra - 1;
+  const BW = board.clientWidth - parseFloat(bs.paddingLeft) - parseFloat(bs.paddingRight) - 16;   // without the side margin and the row's own padding
+  // row width in multiples of hole size: number + gaps + holes + feedback
+  const units = 0.8 + 0.18 * 2 + p + (p - 1) * 0.22 + fbc * 0.38 + (fbc - 1) * 0.1 + 0.1;
+  // the rows shrink rather than overflow (a short window must never hide a row under the code box)
+  const hole = Math.max(16, Math.floor(Math.min(BW / units, H / (n + 1) / 1.14, 64) * 10) / 10);
+  root.style.setProperty('--hole', hole + 'px');
+  if (scrollToActive) {
+    scrollToActive = false;
+    const a = $('.row.active');
+    if (a && board.scrollHeight > board.clientHeight + 2) a.scrollIntoView({ block: 'center' });
+  }
+}
+
+/* ---------- Controls: tapping ---------- */
+function placeColor(c) {
+  if (G.status !== 'playing') { toast('Hra skončila – ťukni na Nová hra'); return; }
+  if (S.mode === 'slot') {
+    if (sel === null) { toast('Ťukni nejdřív na jamku, která se má změnit'); return; }
+    setSlot(sel, c);
+    sel = nextEmpty(sel);
+  } else {
+    const i = G.current.indexOf(null);
+    if (i < 0) { toast('Řádek je plný – ťukni na Zkontrolovat'); return; }
+    setSlot(i, c);
+  }
+  buzz(); commit();
+}
+
+$('#palette').addEventListener('click', e => {
+  if (S.mode === 'drag') return;
+  const b = e.target.closest('.pbtn'); if (b) placeColor(+b.dataset.c);
+});
+$('#rows').addEventListener('click', e => {
+  if (S.mode === 'drag') return;
+  if (G.status !== 'playing') { if (e.target.closest('.slot')) toast('Hra skončila – ťukni na Nová hra'); return; }
+  const sl = e.target.closest('.slot.act'); if (!sl) return;
+  const i = +sl.dataset.i;
+  if (S.mode === 'tap') { if (G.current[i] !== null) { setSlot(i, null); buzz(); commit(); } }
+  else { sel = i; buzz(); render(); }
+});
+
+/* ---------- Controls: dragging ---------- */
+const ghost = $('#ghost');
+function holeSize() { return parseFloat(getComputedStyle(root).getPropertyValue('--hole')) || 48; }
+window.addEventListener('pointerdown', e => {
+  if (S.mode !== 'drag' || drag) return;
+  if (!$('#modal').hidden || !$('#screenSettings').hidden || !$('#screenHelp').hidden) return;
+  if (G.status !== 'playing') { if (e.target.closest('.pbtn, .slot')) toast('Hra skončila – ťukni na Nová hra'); return; }
+  const pb = e.target.closest('#palette .pbtn');
+  const sl = e.target.closest('.slot.act');
+  let color, from = null;
+  if (pb) color = +pb.dataset.c;
+  else if (sl && G.current[+sl.dataset.i] !== null) { from = +sl.dataset.i; color = G.current[from]; }
+  else return;
+  e.preventDefault();
+  drag = { color, from, x0: e.clientX, y0: e.clientY, moved: false, id: e.pointerId, touch: e.pointerType === 'touch', target: null, src: sl };
+});
+window.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dx = e.clientX - drag.x0, dy = e.clientY - drag.y0;
+  if (!drag.moved) {
+    if (dx * dx + dy * dy < 100) return;
+    drag.moved = true;
+    ghost.innerHTML = pegHTML(drag.color); ghost.hidden = false;
+    if (drag.src) drag.src.classList.add('lifted');
+  }
+  const h = holeSize();
+  const gx = e.clientX, gy = e.clientY - (drag.touch ? h * 0.75 : 0);
+  ghost.style.left = gx + 'px'; ghost.style.top = gy + 'px';
+  let best = null, bd = Infinity;
+  document.querySelectorAll('.slot.act').forEach(el => {
+    const rc = el.getBoundingClientRect();
+    const d = Math.hypot(rc.left + rc.width / 2 - gx, rc.top + rc.height / 2 - gy);
+    if (d < bd) { bd = d; best = el; }
+  });
+  const tgt = best && bd < h * 0.95 ? best : null;
+  document.querySelectorAll('.slot.drop').forEach(el => { if (el !== tgt) el.classList.remove('drop'); });
+  if (tgt) tgt.classList.add('drop');
+  drag.target = tgt ? +tgt.dataset.i : null;
+});
+function endDrag(e, cancel) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const d = drag; drag = null;
+  ghost.hidden = true;
+  if (cancel) { render(); return; }
+  if (!d.moved) {
+    if (d.from === null) { placeColor(d.color); return; }
+    setSlot(d.from, null);
+  } else if (d.target !== null) {
+    if (d.from !== null && d.from !== d.target) { const t = G.current[d.target]; setSlot(d.target, d.color); setSlot(d.from, t); }
+    else setSlot(d.target, d.color);
+  } else if (d.from !== null) setSlot(d.from, null);
+  else { render(); return; }
+  buzz(); commit();
+}
+window.addEventListener('pointerup', e => endDrag(e, false));
+window.addEventListener('pointercancel', e => endDrag(e, true));
+
+/* ---------- Checking and game end ---------- */
+let endT = 0; // the end-of-game dialog is about to open
+function endSoon() { const g = G; clearTimeout(endT); endT = setTimeout(() => { endT = 0; whenFree(g, 0, showEnd); }, 900); }
+$('#btnCheck').addEventListener('click', () => {
+  if (G.status !== 'playing') { if (endT) toast('Chvilku, hned ukážu výsledek'); else newGame(); return; }
+  const missing = G.current.filter(x => x === null).length;
+  if (missing) { toast(missing === 1 ? 'Chybí ještě 1 barva' : `Chybí ještě ${missing} barvy`); return; }
+  const { black, white } = evaluate(G.current, G.code);
+  G.guesses.push({ g: G.current.slice(), b: black, w: white });
+  G.current = new Array(G.rules.pegs).fill(null); G.order = [];
+  sel = null; scrollToActive = true;
+  if (black === G.rules.pegs) G.status = 'won';
+  else if (G.guesses.length >= G.rules.attempts) G.status = 'lost';
+  buzz(G.status === 'won' ? [40, 60, 40, 60, 80] : 20);
+  commit();
+  if (G.status !== 'playing') endSoon();
+});
+
+function showEnd() {
+  const code = `<div class="codeview">${G.code.map(pegHTML).join('')}</div>`;
+  const won = G.status === 'won';
+  showModal(
+    won ? `<h2>Výborně! 🎉</h2><p>Kód je vyřešený na <b>${G.guesses.length}. pokus</b>.</p>${code}`
+        : G.gaveUp ? `<h2>Tajný kód</h2><p>Schovaný kód byl:</p>${code}`
+        : `<h2>Tentokrát to nevyšlo</h2><p>Tajný kód byl:</p>${code}`,
+    [{ text: 'Nová hra', fn: newGame }, { text: 'Prohlédnout desku', cls: 'alt' }]
+  );
+}
+
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + '<div class="mbtns">' + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('') + '</div>';
+  $('#modal').hidden = false;
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+}
+
+$('#btnUndo').addEventListener('click', undo);
+
+function giveUp() {
+  G.status = 'lost'; G.gaveUp = true;
+  G.current = new Array(G.rules.pegs).fill(null); G.order = [];
+  sel = null; buzz(20); commit();
+  endSoon();
+}
+$('#btnGiveUp').addEventListener('click', () => {
+  if (G.status !== 'playing') { toast('Hra už skončila – ťukni na Nová hra'); return; }
+  showModal('<h2>Vzdát se?</h2><p>Ukáže se tajný kód a tahle hra skončí.</p>',
+    [{ text: 'Ano, ukázat kód', fn: giveUp }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+});
+
+$('#btnNew').addEventListener('click', () => {
+  if (G.status === 'playing' && !isFresh()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>',
+      [{ text: 'Ano, nová hra', fn: newGame }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+
+/* ---------- Settings ---------- */
+// decWhy / incWhy: null = the button works, otherwise it is dimmed and a tap shows this reason
+function stepper(key, label, value, decWhy, incWhy, note) {
+  const btn = (act, aria, sign, why) => `<button class="sbtn${why ? ' dim' : ''}" data-act="${act}:${key}" aria-label="${aria}"${why ? ` data-why="${why}"` : ''}>${sign}</button>`;
+  return `<div class="field"><div class="flabel">${label}</div><div class="stepper">
+    ${btn('dec', 'Méně', '−', decWhy)}
+    <div class="sval">${value}</div>
+    ${btn('inc', 'Více', '+', incWhy)}
+  </div>${note || ''}</div>`;
+}
+function repeatLabel(v) { return v === 1 ? 'Ne' : v === 0 ? 'Bez omezení' : `Max. ${v}× stejná`; }
+function toggleRow(key, label) {
+  return `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+}
+
+function renderSettings() {
+  const opts = repeatOptions(S.pegs), ri = opts.indexOf(S.maxRepeat), mr = minRepeat(S.colors, S.pegs);
+  const repValid = v => v === 0 || v >= mr;
+  let dots = ''; for (let c = 0; c < S.colors; c++) dots += pegHTML(c);
+  const repNote = mr > 1
+    ? `<div class="fnote">Při ${S.colors} barvách a ${S.pegs} kolíčcích se barvy musí opakovat.</div>`
+    : `<div class="fnote">${S.maxRepeat === 1 ? 'Každá barva je v kódu nejvýš jednou.' : S.maxRepeat === 0 ? 'Barvy se v kódu mohou libovolně opakovat.' : `Jedna barva může být v kódu nejvýš ${S.maxRepeat}×.`}</div>`;
+
+  // a game in progress keeps going unless the secret code must change; a finished game is replaced by any rule change
+  let pending = '';
+  if (!isFresh() && G.status === 'playing' && !sameCodeRules(rulesOf(S), G.rules)) {
+    pending = `<div class="notice">Změna barev, kolíčků nebo opakování potřebuje nový tajný kód. Po návratu do hry začne <b>nová hra</b>.</div>`;
+  } else if (!isFresh() && G.status !== 'playing' && !sameRules(rulesOf(S), G.rules)) {
+    pending = `<div class="notice">Po návratu do hry začne <b>nová hra</b> s novými pravidly.</div>`;
+  }
+
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Logik<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Ovládání</h3>
+      ${MODES.map(m => `<button class="opt" data-act="mode:${m.id}" aria-pressed="${S.mode === m.id}"><span class="radio"></span><span><b>${m.name}</b><span class="d">${m.desc}</span></span></button>`).join('')}
+    </section>
+    <section class="card"><h3>Pravidla hry</h3>
+      ${stepper('colors', 'Počet barev', S.colors,
+        S.colors > LIMITS.colors[0] ? null : `Méně než ${LIMITS.colors[0]} barvy nejde`,
+        S.colors < LIMITS.colors[1] ? null : `Víc než ${LIMITS.colors[1]} barev nejde`, `<div class="dots">${dots}</div>`)}
+      ${stepper('pegs', 'Počet kolíčků v kódu', S.pegs,
+        S.pegs > LIMITS.pegs[0] ? null : `Méně než ${LIMITS.pegs[0]} kolíčky nejde`,
+        S.pegs < LIMITS.pegs[1] ? null : `Víc než ${LIMITS.pegs[1]} kolíčků nejde`)}
+      ${stepper('repeat', 'Mohou se barvy v kódu opakovat?', repeatLabel(S.maxRepeat),
+        ri <= 0 ? 'Přísněji to nejde, každá barva je v kódu nejvýš jednou' : repValid(opts[ri - 1]) ? null : `Při ${S.colors} barvách a ${S.pegs} kolíčcích se barvy musí opakovat víc`,
+        ri < opts.length - 1 ? null : 'Volněji to nejde, barvy se mohou opakovat libovolně', repNote)}
+      ${stepper('attempts', 'Počet pokusů', S.attempts,
+        S.attempts > LIMITS.attempts[0] ? null : `Méně než ${LIMITS.attempts[0]} pokusů nejde`,
+        S.attempts < LIMITS.attempts[1] ? null : `Víc než ${LIMITS.attempts[1]} pokusů nejde`,
+        '<div class="fnote">Víc pokusů nebo kolíčků = menší jamky, na které se hůř trefuje.</div>')}
+      ${pending}
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch wood" data-theme="${t.id}"><span class="slot">${pegHTML(0)}</span><span class="slot">${pegHTML(3)}</span><span class="slot"></span></span>${t.name}</button>`).join('')}</div>
+      ${toggleRow('nums', 'Čísla na kolíčcích')}
+      <div class="fnote" style="margin-top:-6px">Pomůže, když se barvy špatně rozlišují.</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  if (b.classList.contains('dim')) { buzz(30); toast(b.dataset.why || 'Tohle teď nejde'); return; }
+  const [act, arg] = b.dataset.act.split(':');
+  let adjusted = false;
+  if (act === 'inc' || act === 'dec') {
+    const d = act === 'inc' ? 1 : -1;
+    if (arg === 'repeat') {
+      const opts = repeatOptions(S.pegs);
+      S.maxRepeat = opts[clamp(opts.indexOf(S.maxRepeat) + d, [0, opts.length - 1])];
+    } else {
+      const wasUnlimited = S.maxRepeat === 0;
+      S[arg] += d;
+      if (arg === 'pegs' && wasUnlimited) S.maxRepeat = 0;
+    }
+    adjusted = normalize(S);
+  } else if (act === 'mode') { S.mode = arg; sel = null; }
+  else if (act === 'theme') { S.theme = arg; }
+  else if (act === 'toggle') { S[arg] = !S[arg]; }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'close') { closeSettings(); return; }
+  buzz(8);
+  if (adjusted) toast('Opakování barev bylo upraveno, aby se kód dal sestavit');
+  applyLook(); save(); renderSettings();
+});
+
+function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+// Settings apply right after returning to the game, no Save needed.
+// Attempts change in the running game; changing colours/pegs/repeats needs a new code = new game.
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  const playing = G.status === 'playing';
+  const needNew = playing ? !sameCodeRules(rulesOf(S), G.rules) : !sameRules(rulesOf(S), G.rules);
+  if (needNew) {
+    const hadProgress = !isFresh(); // also after a finished game
+    newGame();
+    if (hadProgress) toast('Začala nová hra s novými pravidly');
+    return;
+  }
+  if (playing && G.rules.attempts !== S.attempts) {
+    G.rules.attempts = Math.max(S.attempts, G.guesses.length + 1);
+    scrollToActive = true; save();
+    if (G.rules.attempts !== S.attempts) toast(`Pokusů už bylo ${G.guesses.length}, rozehraná hra jich proto má ${G.rules.attempts}`, 4000);
+  }
+  render();
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help ---------- */
+function renderHelp() {
+  const r = G && G.rules ? G.rules : rulesOf(S); // the rules of the game in progress (changed settings apply to the next one)
+  const how = {
+    tap: 'ťukej na barevná tlačítka dole – barvy se postupně vloží do řádku. Při chybě ťukni na kolíček v řádku a zmizí.',
+    slot: 'ťukni na jamku v řádku a potom na barvu dole.',
+    drag: 'přetáhni barvy prstem z dolní řady do jamek v řádku.',
+  }[S.mode];
+  const rep = r.maxRepeat === 1 ? 'Každá barva je v kódu nejvýš jednou.' : 'Barvy se v kódu mohou opakovat.';
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Logik<small>Jak hrát</small></h2></div>
+    <section class="card help">
+      <ol>
+        <li>Počítač schoval tajný kód z <b>${r.pegs} barevných kolíčků</b>. Je nahoře pod víčkem. ${rep}</li>
+        <li>Zkus kód uhodnout: ${how} Tlačítko <b>Zpět</b> vrátí naposledy položenou barvu.</li>
+        <li>Pak ťukni na <b>Zkontrolovat</b>.</li>
+        <li>Vedle řádku se objeví malé kolíčky:
+          <div class="legend"><i class="fbh b"></i><span><b>černý</b> = správná barva na správném místě</span></div>
+          <div class="legend"><i class="fbh w"></i><span><b>bílý</b> = správná barva, ale na jiném místě</span></div>
+          Na pořadí malých kolíčků nezáleží.</li>
+        <li>Na uhodnutí je <b>${r.attempts} pokusů</b>. Hodně štěstí!</li>
+        <li>Když už to dál nejde, ťukni dole na <b>Vzdát se</b> – ukáže se tajný kód.</li>
+      </ol>
+    </section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => {
+  if (!e.target.closest('[data-act="close"]')) return;
+  $('#screenHelp').hidden = true;
+});
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+const saved = load();
+// rule: only the known settings are taken over from the save
+const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+if (saved && validGame(saved.game)) { G = saved.game; render(); }
+else newGame();
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// Launcher contract: opened from the menu (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// Persistent storage (also when run standalone): the browser won't evict settings or the saved game on its own
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+
+// For testing
+window.Logik = { evaluate, generateCode, normalize, get state() { return { S, G }; } };
+})();
+</script>
+</body>
+</html>

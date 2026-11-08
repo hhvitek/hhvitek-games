@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- background: the "Dřevo" theme -->
+  <rect width="512" height="512" fill="#4a2e1a"/>
+
+  <!-- three rods on their bases -->
+  <g fill="#e2b77c">
+    <rect x="76" y="150" width="20" height="260" rx="10"/>
+    <rect x="246" y="150" width="20" height="260" rx="10"/>
+    <rect x="416" y="150" width="20" height="260" rx="10"/>
+  </g>
+  <g fill="#c99a5e">
+    <rect x="12" y="404" width="148" height="28" rx="12"/>
+    <rect x="182" y="404" width="148" height="28" rx="12"/>
+    <rect x="352" y="404" width="148" height="28" rx="12"/>
+  </g>
+
+  <!-- tower on the left rod, biggest at the bottom -->
+  <rect x="18" y="352" width="136" height="52" rx="22" fill="#2fa84f"/>
+  <rect x="32" y="300" width="108" height="52" rx="22" fill="#ffd31a"/>
+  <rect x="46" y="248" width="80" height="52" rx="22" fill="#ff8a1c"/>
+  <!-- shading of the discs -->
+  <g fill="#000" fill-opacity=".2">
+    <rect x="18" y="394" width="136" height="10" rx="5"/>
+    <rect x="32" y="342" width="108" height="10" rx="5"/>
+    <rect x="46" y="290" width="80" height="10" rx="5"/>
+  </g>
+
+  <!-- the smallest disc lifted above the middle rod, with the highlight of the game -->
+  <rect x="198" y="72" width="116" height="52" rx="22" fill="none" stroke="#ffd166" stroke-width="8"/>
+  <rect x="210" y="76" width="92" height="44" rx="20" fill="#e0302a"/>
+  <rect x="210" y="110" width="92" height="10" rx="5" fill="#000" fill-opacity=".2"/>
+</svg>

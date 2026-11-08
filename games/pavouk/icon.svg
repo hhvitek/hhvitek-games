@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000" flood-opacity=".4"/></filter>
+    <filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .16 0"/></filter>
+    <path id="spade" d="M50 4C40 22 8 38 8 62c0 15 11 24 23 24 8 0 14-4 17-9-1 9-5 15-12 19h28c-7-4-11-10-12-19 3 5 9 9 17 9 12 0 23-9 23-24C92 38 60 22 50 4z"/>
+    <g id="card"><rect width="180" height="252" rx="18" fill="#fff" stroke="#8f8f8f" stroke-width="3"/></g>
+  </defs>
+  <!-- zelené sukno -->
+  <rect width="512" height="512" fill="#1e7135"/>
+  <rect width="512" height="512" filter="url(#n)"/>
+
+  <!-- sloupec: K♠ Q♠ J♠ -->
+  <g font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="800" fill="#151515">
+    <g filter="url(#sh)" transform="translate(46 40)"><use href="#card"/><text x="14" y="62">K</text><use href="#spade" transform="translate(112 12) scale(.54)"/></g>
+    <g filter="url(#sh)" transform="translate(46 120)"><use href="#card"/><text x="14" y="62">Q</text><use href="#spade" transform="translate(112 12) scale(.54)"/></g>
+    <g filter="url(#sh)" transform="translate(46 200)"><use href="#card"/><text x="14" y="62">J</text><use href="#spade" transform="translate(112 12) scale(.54)"/><use href="#spade" transform="translate(40 94) scale(1)"/></g>
+  </g>
+  <!-- druhý sloupec: 10♠ 9♠ -->
+  <g font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="800" fill="#151515">
+    <g filter="url(#sh)" transform="translate(206 150)"><use href="#card"/><text x="8" y="62" letter-spacing="-6">10</text><use href="#spade" transform="translate(112 12) scale(.54)"/></g>
+    <g filter="url(#sh)" transform="translate(206 230)"><use href="#card"/><text x="14" y="62">9</text><use href="#spade" transform="translate(112 12) scale(.54)"/><use href="#spade" transform="translate(40 94) scale(1)"/></g>
+  </g>
+
+  <!-- pavouček na vlákně -->
+  <path d="M424 0v170" stroke="#fff" stroke-width="5" stroke-opacity=".85"/>
+  <g filter="url(#sh)">
+    <g fill="none" stroke="#111" stroke-width="11" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M400 196 362 170 350 186M398 210 352 206 340 226M400 224 362 240 356 262M408 234 384 266"/>
+      <path d="M448 196l38-26 12 16M450 210l46-4 12 20M448 224l38 16 6 22M440 234l24 32"/>
+    </g>
+    <ellipse cx="424" cy="218" rx="34" ry="36" fill="#111"/>
+    <circle cx="424" cy="172" r="24" fill="#111"/>
+    <circle cx="414" cy="168" r="8" fill="#fff"/><circle cx="434" cy="168" r="8" fill="#fff"/>
+    <circle cx="415" cy="170" r="3.6" fill="#111"/><circle cx="435" cy="170" r="3.6" fill="#111"/>
+    <path d="M414 182q10 8 20 0" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>
+  </g>
+</svg>

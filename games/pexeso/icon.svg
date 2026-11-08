@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#1d5236"/>
+  <!-- a card lying picture down -->
+  <g transform="rotate(-8 170 262)">
+    <rect x="70" y="122" width="200" height="270" rx="24" fill="#b8452f"/>
+    <rect x="92" y="144" width="156" height="226" rx="14" fill="none" stroke="#f0c2b6" stroke-width="8"/>
+    <rect x="146" y="233" width="48" height="48" rx="6" fill="#f0c2b6" transform="rotate(45 170 257)"/>
+  </g>
+  <!-- a card turned over: a little landscape with the sun -->
+  <g transform="rotate(7 342 262)">
+    <rect x="242" y="122" width="200" height="270" rx="24" fill="#fff"/>
+    <rect x="262" y="142" width="160" height="230" rx="12" fill="#cfe7f7"/>
+    <circle cx="372" cy="200" r="28" fill="#ffc531"/>
+    <path d="M262 312 314 248l40 44 22-24 46 52v40a12 12 0 0 1-12 12H274a12 12 0 0 1-12-12z" fill="#3d8a4e"/>
+  </g>
+  <circle cx="392" cy="384" r="54" fill="#ffd66b"/>
+  <path d="M366 384l18 18 34-34" fill="none" stroke="#2a2200" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#000" flood-opacity=".45"/></filter>
+    <filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="3" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .16 0"/></filter>
+    <path id="spade" d="M50 4C40 22 8 38 8 62c0 15 11 24 23 24 8 0 14-4 17-9-1 9-5 15-12 19h28c-7-4-11-10-12-19 3 5 9 9 17 9 12 0 23-9 23-24C92 38 60 22 50 4z"/>
+    <path id="heart" d="M50 92C22 70 6 54 6 32 6 17 17 7 30 7c9 0 16 5 20 13 4-8 11-13 20-13 13 0 24 10 24 25 0 22-16 38-44 60z"/>
+    <g id="club"><circle cx="50" cy="28" r="20"/><circle cx="27" cy="59" r="20"/><circle cx="73" cy="59" r="20"/><path d="M44 36h12v28H44z"/><path d="M47 60c-1 15-5 26-13 34h32c-8-8-12-19-13-34z"/></g>
+    <path id="diamond" d="M50 3 87 50 50 97 13 50z"/>
+  </defs>
+  <!-- zelené sukno -->
+  <rect width="512" height="512" fill="#1e7135"/>
+  <rect width="512" height="512" filter="url(#n)"/>
+
+  <!-- čtyři volná políčka, v jednom odložená karta -->
+  <g fill="rgba(0,0,0,.16)" stroke="#fff" stroke-opacity=".6" stroke-width="5" stroke-dasharray="14 9">
+    <rect x="146" y="30" width="96" height="128" rx="12"/>
+    <rect x="268" y="30" width="96" height="128" rx="12"/>
+    <rect x="390" y="30" width="96" height="128" rx="12"/>
+  </g>
+  <g filter="url(#sh)">
+    <rect x="24" y="30" width="96" height="128" rx="12" fill="#fff" stroke="#8f8f8f" stroke-width="2"/>
+    <text x="34" y="78" font-family="Arial, Helvetica, sans-serif" font-size="44" font-weight="800" fill="#d0101c">A</text>
+    <use href="#diamond" transform="translate(80 44) scale(.3)" fill="#d0101c"/>
+    <use href="#diamond" transform="translate(46 90) scale(.52)" fill="#d0101c"/>
+  </g>
+
+  <!-- sloupec: K♠, Q♥, J♣ -->
+  <g filter="url(#sh)">
+    <rect x="176" y="186" width="160" height="224" rx="16" fill="#fff" stroke="#8f8f8f" stroke-width="3"/>
+    <text x="188" y="236" font-family="Arial, Helvetica, sans-serif" font-size="56" font-weight="800" fill="#151515">K</text>
+    <use href="#spade" transform="translate(278 196) scale(.46)" fill="#151515"/>
+  </g>
+  <g filter="url(#sh)">
+    <rect x="176" y="236" width="160" height="224" rx="16" fill="#fff" stroke="#8f8f8f" stroke-width="3"/>
+    <text x="188" y="286" font-family="Arial, Helvetica, sans-serif" font-size="56" font-weight="800" fill="#d0101c">Q</text>
+    <use href="#heart" transform="translate(278 246) scale(.46)" fill="#d0101c"/>
+  </g>
+  <g filter="url(#sh)">
+    <rect x="176" y="286" width="160" height="224" rx="16" fill="#fff" stroke="#8f8f8f" stroke-width="3"/>
+    <text x="188" y="336" font-family="Arial, Helvetica, sans-serif" font-size="56" font-weight="800" fill="#151515">J</text>
+    <use href="#club" transform="translate(278 296) scale(.46)" fill="#151515"/>
+    <text x="256" y="476" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="120" font-weight="700" fill="#151515">J</text>
+  </g>
+</svg>

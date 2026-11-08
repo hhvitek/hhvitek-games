@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="cs" data-theme="night">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d2b52">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Barevné kostky">
+<title>Barevné kostky</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d2b52'/%3E%3Crect x='8' y='34' width='22' height='22' rx='5' fill='%23e8453c'/%3E%3Crect x='34' y='34' width='22' height='22' rx='5' fill='%233a78e0'/%3E%3Crect x='34' y='8' width='22' height='22' rx='5' fill='%23f5c518'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes ---------- */
+[data-theme="night"]{--page:#0e1630;--bg:#1d2b52;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.07);--ink:#eef3ff;--soft:#b9c6e8;--frame:#111a36;--accent:#ffd34d;--btn:#ffd34d;--btn-ink:#2a2000;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.3);--edge:rgba(0,0,0,.22);--chip:rgba(255,255,255,.14)}
+[data-theme="wood"]{--page:#2a170b;--bg:#6a4325;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.07);--ink:#fbeedd;--soft:#e8cfae;--frame:#3b2414;--accent:#ffd77a;--btn:#f0c35a;--btn-ink:#2e1a06;--btn-sh:#93681a;--undo-bg:rgba(0,0,0,.28);--edge:rgba(0,0,0,.25);--chip:rgba(255,255,255,.14)}
+[data-theme="paper"]{--page:#f4ebdf;--bg:#f4ebdf;--bar:rgba(122,69,32,.06);--line:#e6d8c6;--ink:#2b1a0e;--soft:#6f5a48;--frame:#d8c6ad;--accent:#c0392b;--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--undo-bg:rgba(122,69,32,.1);--edge:rgba(0,0,0,.3);--chip:#fff}
+[data-theme="green"]{--page:#10291b;--bg:#2f6b47;--bar:rgba(0,0,0,.2);--line:rgba(255,255,255,.07);--ink:#eaf7ee;--soft:#c3e3cf;--frame:#1c4630;--accent:#ffd66b;--btn:#ffd66b;--btn-ink:#2a2200;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.25);--edge:rgba(0,0,0,.25);--chip:rgba(255,255,255,.14)}
+[data-theme="slate"]{--page:#161b20;--bg:#3d4852;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.06);--ink:#eef3f6;--soft:#c3cdd5;--frame:#242b33;--accent:#ffcf6b;--btn:#e9eef2;--btn-ink:#1f262c;--btn-sh:#8c979f;--undo-bg:rgba(0,0,0,.28);--edge:rgba(0,0,0,.25);--chip:rgba(255,255,255,.14)}
+[data-theme="contrast"]{--page:#000;--bg:#000;--bar:#000;--line:#555;--ink:#fff;--soft:#fff;--frame:#000;--accent:#fff;--btn:#ffff00;--btn-ink:#000;--btn-sh:#8a8a00;--undo-bg:#222;--edge:#fff;--chip:#262626}
+
+/* ---------- Base ---------- */
+:root{--cs:46px;--gap:4px;--bpad:6px;--gut:12px} /* --gut: one side margin, bar buttons, board and bottom buttons line up (safe areas are on #app) */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+
+#app{height:100vh;height:100dvh;max-width:560px;margin:0 auto;display:flex;flex-direction:column;background:var(--bg);
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  box-shadow:0 0 40px rgba(0,0,0,.5)}
+
+/* Top bar */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round svg{width:28px;height:28px;fill:currentColor}
+a.round{text-decoration:none}
+.top-right{flex:none;display:flex;gap:8px}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar h1{flex:1;min-width:0;text-align:center;white-space:normal;overflow-wrap:normal;word-break:normal;font-weight:800;font-size:24px;line-height:1.05;letter-spacing:.02em;color:var(--ink)}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:20px} /* the name wraps between words (two lines fit the bar), never cut */
+/* narrow phones (360 px): less room between the bar buttons, so the name fits whole; the outer margin stays */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:19px;letter-spacing:0}
+}
+
+/* Score row: points, blocks left, best */
+.score{flex:none;display:flex;align-items:center;justify-content:center;gap:16px;padding:8px var(--gut) 0;line-height:1;white-space:nowrap}
+.score b{font-size:30px;font-weight:900;font-variant-numeric:tabular-nums}
+.score span{display:flex;align-items:center;gap:5px;font-size:18px;font-weight:700;color:var(--soft);font-variant-numeric:tabular-nums}
+.score svg{width:17px;height:17px;fill:var(--accent)}
+.score b.bump{animation:bump .35s ease-out}
+@keyframes bump{40%{transform:scale(1.18)}}
+
+/* Board */
+.play{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px var(--gut)} /* at least 12 px between the board and the score row / the hint, on every screen */
+.board{position:relative;padding:var(--bpad);background:var(--frame);border-radius:12px;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+[data-theme="contrast"] .board{box-shadow:inset 0 0 0 2px #777}
+.field{position:relative;width:calc(var(--c) * var(--cs));height:calc(var(--r) * var(--cs))}
+.t{position:absolute;left:0;top:0;width:var(--cs);height:var(--cs);padding:calc(var(--gap) / 2);pointer-events:none;transition:transform .3s cubic-bezier(.3,.1,.4,1.15)}
+.t i{display:block;width:100%;height:100%;border-radius:calc(var(--cs) * .18);
+  background:linear-gradient(160deg,rgba(255,255,255,.4) 0,rgba(255,255,255,.1) 36%,rgba(0,0,0,.1) 100%),var(--k);
+  box-shadow:inset 0 calc(var(--cs) * -.08) 0 rgba(0,0,0,.2),inset 0 calc(var(--cs) * .06) 0 rgba(255,255,255,.25),inset 0 0 0 1.5px var(--edge);
+  display:grid;place-items:center;transition:opacity .2s,transform .15s}
+.t svg{width:52%;height:52%;fill:#fff;stroke:rgba(0,0,0,.55);stroke-width:2.2;paint-order:stroke;stroke-linejoin:round;opacity:.92}
+.t.sel{z-index:2}
+.t.sel i{transform:scale(.9);box-shadow:0 0 0 3px #fff,0 0 0 6px rgba(0,0,0,.6),inset 0 0 0 1.5px var(--edge);animation:pulse 1.1s ease-in-out infinite alternate}
+.field.has-sel .t:not(.sel) i{opacity:.5}
+@keyframes pulse{to{transform:scale(.82)}}
+.t.lone i{opacity:.4}
+.t.nope i{animation:nope .4s ease-in-out}
+@keyframes nope{20%{transform:translateX(-12%)}50%{transform:translateX(12%)}80%{transform:translateX(-6%)}}
+.t.gone{transition:none}
+.t.gone i{animation:vanish .32s ease-in forwards}
+@keyframes vanish{to{transform:scale(.1) rotate(30deg);opacity:0}}
+.t.new i{animation:appear .25s ease-out}
+@keyframes appear{from{transform:scale(.4);opacity:0}}
+
+/* Hint and buttons */
+.hint{flex:none;text-align:center;font-size:19px;font-weight:600;line-height:24px;min-height:24px;padding:0 var(--gut) 8px;color:var(--ink)}
+.actions{flex:none;display:flex;gap:10px;padding:0 var(--gut) 12px}
+.big{display:block;width:100%;height:64px;border-radius:18px;font-size:24px;font-weight:800;background:var(--btn);color:var(--btn-ink);box-shadow:0 4px 0 var(--btn-sh);transition:transform .06s,box-shadow .06s,opacity .2s}
+.big:active{transform:translateY(3px);box-shadow:0 1px 0 var(--btn-sh)}
+.big.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+.actions .big{flex:1.4 1 0;width:auto;min-width:0}
+.undo{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:16px;font-size:21px;font-weight:800;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 2px 5px rgba(0,0,0,.3),inset 0 0 0 2px var(--line);transition:opacity .2s,transform .06s}
+.undo svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.undo:active{transform:scale(.98)}
+.undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px}
+
+#praise{position:fixed;z-index:15;left:50%;top:40%;transform:translate(-50%,-50%);pointer-events:none;font-size:34px;font-weight:900;color:var(--accent);white-space:nowrap;text-shadow:0 2px 0 rgba(0,0,0,.45),0 0 12px rgba(0,0,0,.35);opacity:0}
+[data-theme="paper"] #praise{text-shadow:0 2px 0 #fff,0 0 10px #fff}
+#praise.go{animation:praise 1.2s ease-out}
+@keyframes praise{0%{opacity:0;transform:translate(-50%,-30%) scale(.8)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-90%)}}
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;font-family:Georgia,serif;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.paper .big{background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh)}
+.paper .big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0;box-shadow:0 2px 6px rgba(60,30,10,.12)}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink);font-family:Georgia,serif}
+.fld{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .fld{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:10px}
+.stepper{display:flex;align-items:center;gap:12px}
+.sbtn{flex:none;width:60px;height:60px;border-radius:50%;background:var(--pbtn);color:var(--pbtn-ink);font-size:36px;font-weight:700;line-height:1;display:grid;place-items:center;box-shadow:0 3px 0 var(--pbtn-sh)}
+.sbtn.off{background:var(--psw);box-shadow:none;color:var(--psoft)}
+.sval{flex:1;text-align:center;font-size:25px;font-weight:800}
+.fnote{font-size:18px;color:var(--psoft);margin-top:10px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{height:76px;border-radius:10px;display:grid;place-items:center;background:var(--bg);box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+.mini{--cs:16px;--gap:2px;display:grid;grid-template-columns:repeat(var(--mc,4),var(--cs));grid-auto-rows:var(--cs);padding:3px;border-radius:6px;background:var(--frame)}
+.mini .t{position:static;transition:none}
+.mini .t svg{display:none}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.trow .flabel{margin:0}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:12px 0}
+.demo{display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0 4px;flex-wrap:wrap}
+.demo .mini{--cs:26px;--gap:3px;--mc:4;padding:4px;border-radius:8px}
+.demo .mini .t svg{display:block}
+.demo .arrow{font-size:30px;font-weight:900;color:var(--psoft)}
+.demo-cap{text-align:center;font-size:18px;color:var(--psoft)}
+
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:pop .25s ease-out}
+@keyframes pop{from{transform:scale(.9);opacity:0}}
+.mcard h2{font-size:28px;font-family:Georgia,serif;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+.mcard .pts{font-size:44px;font-weight:900;margin:0 0 4px}
+.mbtns{display:flex;flex-direction:column;gap:14px;margin-top:8px}
+
+/* Shorter screens (e.g. with the browser bar visible) */
+@media (max-height:800px){
+  .topbar{height:52px}
+  .pill{height:42px}.round{width:42px;height:42px}
+  .score b{font-size:26px}
+  .score span{font-size:16px}
+  .big,.undo{height:58px}
+  .big{font-size:23px}
+  .actions{padding-bottom:10px}
+  .hint{padding-bottom:6px}
+}
+#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 66px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Barevné kostky</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <div class="score" aria-live="polite">
+    <b id="score">0</b>
+    <span id="left">zbývá 0</span>
+    <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v2h3v3a4.5 4.5 0 0 1-4.3 4.5A5 5 0 0 1 13 15.9V18h3.5v3h-9v-3H11v-2.1a5 5 0 0 1-3.7-3.4A4.5 4.5 0 0 1 3 8V5h3zm0 4H5v1a2.5 2.5 0 0 0 1.2 2.1A6 6 0 0 1 6 9zm12 0v2c0 .4 0 .8-.2 1.1A2.5 2.5 0 0 0 19 8V7z"/></svg>rekord <i id="best" style="font-style:normal">0</i></span>
+  </div>
+  <main class="play" id="play"><div class="board" id="board"><div class="field" id="field" role="grid" aria-label="Hrací pole"></div></div></main>
+  <div class="hint" id="hint"></div>
+  <footer class="actions">
+    <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+    <button id="btnRemove" class="big" hidden>Odebrat</button>
+    <button id="btnAgain" class="big" hidden>Nová hra</button>
+  </footer>
+</div>
+
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="praise"></div>
+<div id="toast" class="hide"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const GUT = 12; // side margin in px, the same as --gut in the CSS
+
+/* ---------- Constants ---------- */
+// Block colours; the first N are used for N colours (most distinct first)
+const COLORS = ['#e8453c', '#3a78e0', '#f5c518', '#43b649', '#a55ad8'];
+const COLOR_NAMES = ['červená', 'modrá', 'žlutá', 'zelená', 'fialová'];
+// Symbols on the blocks (circle, square, triangle, diamond, star) for telling colours apart
+const MARKS = [
+  '<circle cx="12" cy="12" r="7.5"/>',
+  '<rect x="5" y="5" width="14" height="14" rx="1.5"/>',
+  '<path d="M12 3.5 21 19.5H3z"/>',
+  '<path d="M12 2.5 21.5 12 12 21.5 2.5 12z"/>',
+  '<path d="M12 2.2l2.9 6.2 6.8.8-5 4.6 1.3 6.7L12 17.2 6 20.5l1.3-6.7-5-4.6 6.8-.8z"/>',
+];
+const THEMES = [
+  { id: 'night',    name: 'Noc',             meta: '#1d2b52' },
+  { id: 'wood',     name: 'Dřevo',           meta: '#6a4325' },
+  { id: 'paper',    name: 'Papír',           meta: '#f4ebdf' },
+  { id: 'green',    name: 'Zelená plsť',     meta: '#2f6b47' },
+  { id: 'slate',    name: 'Břidlice',        meta: '#3d4852' },
+  { id: 'contrast', name: 'Vysoký kontrast', meta: '#000000' },
+];
+const SIZES = [{ c: 6, r: 8 }, { c: 8, r: 10 }, { c: 8, r: 12 }, { c: 10, r: 14 }];
+const COLOR_COUNTS = [3, 4, 5];
+const MINS = [
+  { id: 2, name: 'Dvě kostky', desc: 'Stačí dvě sousední kostky stejné barvy.' },
+  { id: 3, name: 'Tři kostky', desc: 'Skupina musí mít aspoň tři kostky. Těžší.' },
+];
+const GENS = [
+  { id: 'random', name: 'Náhodné', desc: 'Kostky jsou rozházené náhodně jako v klasické hře. Celé pole se vyčistit povede jen někdy.' },
+  { id: 'clear',  name: 'Vždy jde vyčistit', desc: 'Pole je připravené tak, aby šlo celé vyčistit – když se hraje dobře.' },
+];
+const MODES = [
+  { id: 'one', name: 'Jedno ťuknutí', desc: 'Skupina zmizí hned po ťuknutí. Omyl vrátí tlačítko Zpět.' },
+  { id: 'two', name: 'Dvě ťuknutí', desc: 'Prvním ťuknutím se skupina označí a ukáže se, kolik dá bodů. Druhým ťuknutím (nebo tlačítkem Odebrat) zmizí.' },
+];
+const DEFAULTS = { size: 1, colors: 4, min: 2, gen: 'random', mode: 'one', marks: false, dimLone: false, theme: 'night', vibrate: true };
+// Saved state under the launcher's games.<id>.* prefix; OLD_KEY is the name used before (read once, then removed)
+const KEY = 'games.barevne-kostky.state', OLD_KEY = 'barevne-kostky.v1', BADGE = 'games.barevne-kostky.inProgress';
+const CLEAR_BONUS = 1000;
+const points = n => (n - 1) * (n - 1);
+
+/* ---------- Board logic ----------
+   Board = array of non-empty columns (left to right); a column lists its tiles from the bottom up.
+   Tile = id * 8 + colour, so every tile keeps its id while it falls and slides. */
+// Math.random is enough here and much faster than crypto (the board generator calls it very often)
+const rnd = n => Math.floor(Math.random() * n);
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const at = (cols, x, y) => (cols[x] ? cols[x][y] : undefined);
+function groupAt(cols, x, y) {
+  const t = at(cols, x, y); if (t === undefined) return [];
+  const c = t & 7, seen = new Set([x * 64 + y]), out = [[x, y]], st = [[x, y]];
+  while (st.length) {
+    const [a, b] = st.pop();
+    for (const [dx, dy] of DIRS) {
+      const xx = a + dx, yy = b + dy, u = at(cols, xx, yy);
+      if (u !== undefined && (u & 7) === c && !seen.has(xx * 64 + yy)) { seen.add(xx * 64 + yy); out.push([xx, yy]); st.push([xx, yy]); }
+    }
+  }
+  return out;
+}
+function removeGroup(cols, g) {
+  const del = new Set(g.map(([x, y]) => x * 64 + y));
+  return cols.map((col, x) => col.filter((_, y) => !del.has(x * 64 + y))).filter(col => col.length);
+}
+// Ids of all tiles that are in a big enough group
+function playable(cols, min) {
+  const seen = new Set(), ok = new Set();
+  for (let x = 0; x < cols.length; x++) for (let y = 0; y < cols[x].length; y++) {
+    if (seen.has(x * 64 + y)) continue;
+    const g = groupAt(cols, x, y);
+    for (const [a, b] of g) { seen.add(a * 64 + b); if (g.length >= min) ok.add(cols[a][b] >> 3); }
+  }
+  return ok;
+}
+function hasMove(cols, min) {
+  const seen = new Set();
+  for (let x = 0; x < cols.length; x++) for (let y = 0; y < cols[x].length; y++) {
+    if (seen.has(x * 64 + y)) continue;
+    const g = groupAt(cols, x, y); if (g.length >= min) return true;
+    for (const [a, b] of g) seen.add(a * 64 + b);
+  }
+  return false;
+}
+const countTiles = cols => cols.reduce((s, c) => s + c.length, 0);
+
+function randomBoard(C, R, n, min) {
+  let cols;
+  for (let a = 0; a < 50; a++) {
+    let k = 0; cols = [];
+    for (let x = 0; x < C; x++) { const col = []; for (let y = 0; y < R; y++) col.push((k++) * 8 + rnd(n)); cols.push(col); }
+    if (hasMove(cols, min)) break;
+  }
+  return { cols };
+}
+
+/* Board that can always be cleared: play backwards from an empty board. Each step "un-removes" a small
+   group (tiles inserted into neighbouring columns at a common height, or new columns), coloured so that it
+   does not touch the same colour. Removing these groups in reverse order then clears the board.
+   When stuck it steps back a few moves. */
+function pickLens(frees, min, max) {
+  const lens = frees.map(f => 1 + rnd(Math.min(f, 3)));
+  let sum = lens.reduce((a, b) => a + b, 0);
+  while (sum > max) { const i = lens.findIndex(l => l > 1); if (i < 0) return null; lens[i]--; sum--; }
+  while (sum < min) { const i = lens.findIndex((l, j) => l < frees[j] && l < 4); if (i < 0) return null; lens[i]++; sum++; }
+  return lens;
+}
+function randomOp(cols, C, R, min, max) {
+  const n = cols.length;
+  if (n < C && (n === 0 || rnd(C) >= n)) {
+    const lens = pickLens(new Array(1 + rnd(Math.min(3, C - n))).fill(R), min, max); if (!lens) return null;
+    return { isNew: true, x: rnd(n + 1), h: 0, lens };
+  }
+  // existing columns: emptier columns are chosen more often so heights stay even
+  const frees = cols.map(c => R - c.length), totalFree = frees.reduce((a, b) => a + b, 0);
+  if (!totalFree) return null;
+  let r = rnd(totalFree), x = 0; while (r >= frees[x]) { r -= frees[x]; x++; }
+  let w = Math.min(1 + rnd(4), n);
+  const x0 = Math.max(0, Math.min(x - rnd(w), n - w));
+  const fs = frees.slice(x0, x0 + w); if (fs.some(f => f <= 0)) return null;
+  const minH = Math.min(...cols.slice(x0, x0 + w).map(c => c.length));
+  const lens = pickLens(fs, min, max); if (!lens) return null;
+  return { isNew: false, x: x0, h: rnd(minH + 1), lens };
+}
+function applyOp(cols, op, c, k) {
+  const P = cols.map(col => col.slice());
+  if (op.isNew) P.splice(op.x, 0, ...op.lens.map(() => []));
+  op.lens.forEach((l, i) => { const ins = []; for (let j = 0; j < l; j++) ins.push((k++) * 8 + c); P[op.x + i].splice(op.h, 0, ...ins); });
+  return P;
+}
+function tryBuild(C, R, n, min) {
+  const total = C * R, max = min === 2 ? 4 : 5, stack = [{ cols: [], k: 0, move: null }];
+  let fails = 0, budget = 15000;
+  while (budget-- > 0) {
+    const top = stack[stack.length - 1];
+    if (top.k === total) return { cols: top.cols, moves: stack.slice(1).map(s => s.move).reverse() };
+    if (fails > 40) { stack.length = Math.max(1, stack.length - 1 - rnd(4)); fails = 0; continue; }
+    const op = randomOp(top.cols, C, R, min, max);
+    if (!op) { fails++; continue; }
+    const size = op.lens.reduce((a, b) => a + b, 0), c0 = rnd(n);
+    let P = null;
+    for (let i = 0; i < n && !P; i++) {
+      const Q = applyOp(top.cols, op, (c0 + i) % n, top.k);
+      if (groupAt(Q, op.x, op.h).length === size) P = Q;
+    }
+    if (!P) { fails++; continue; }
+    stack.push({ cols: P, k: top.k + size, move: [op.x, op.h] }); fails = 0;
+  }
+  return null;
+}
+// Small boards succeed almost at once; the biggest board with 3 colours may need a few tries.
+// The browser gets a turn between tries, so the page never freezes; null = nothing built within `ms`.
+const nextTick = () => new Promise(r => setTimeout(r, 0));
+async function clearableBoard(C, R, n, min, ms = 10000) {
+  const end = Date.now() + ms;
+  do {
+    const b = tryBuild(C, R, n, min); if (b) return b;
+    await nextTick();
+  } while (Date.now() < end);
+  return null;
+}
+// Returns { board, ok }; ok: false = "Vždy jde vyčistit" was asked for but no such board was found in time.
+async function makeBoard(r) {
+  const C = SIZES[r.size].c, R = SIZES[r.size].r;
+  const b = r.gen === 'clear' ? await clearableBoard(C, R, r.colors, r.min) : null;
+  return { board: b || randomBoard(C, R, r.colors, r.min), ok: r.gen !== 'clear' || !!b };
+}
+
+/* ---------- State and saving ---------- */
+let S, G, bests = {}, sel = null, busy = false; // busy = a new board is being prepared
+const rulesOf = s => ({ size: s.size, colors: s.colors, min: s.min, gen: s.gen });
+const sameRules = (a, b) => a.size === b.size && a.colors === b.colors && a.min === b.min && a.gen === b.gen;
+const rulesKey = r => `${SIZES[r.size].c}x${SIZES[r.size].r}:${r.colors}:${r.min}:${r.gen}`;
+const bestOf = () => bests[rulesKey(G.rules)] || 0;
+const isFresh = () => G.history.length === 0;
+
+function normalize(s) {
+  s.size = Number.isInteger(s.size) && SIZES[s.size] ? s.size : DEFAULTS.size;
+  if (!COLOR_COUNTS.includes(s.colors)) s.colors = DEFAULTS.colors;
+  if (!MINS.some(m => m.id === s.min)) s.min = DEFAULTS.min;
+  if (!GENS.some(g => g.id === s.gen)) s.gen = DEFAULTS.gen;
+  if (!MODES.some(m => m.id === s.mode)) s.mode = DEFAULTS.mode;
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  for (const k of ['marks', 'dimLone', 'vibrate']) s[k] = !!s[k];
+}
+function load() {
+  try {
+    let v = localStorage.getItem(KEY);
+    // move the state from the older key at once
+    if (v === null && (v = localStorage.getItem(OLD_KEY)) !== null) { localStorage.setItem(KEY, v); localStorage.removeItem(OLD_KEY); }
+    return JSON.parse(v);
+  } catch (e) { return null; }
+}
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, bests }));
+    // Launcher contract: unfinished game = "in progress" badge on the tile
+    if (G && G.status === 'playing' && !isFresh()) localStorage.setItem(BADGE, '1');
+    else localStorage.removeItem(BADGE);
+  } catch (e) {}
+}
+function okCols(cols, r) {
+  const C = SIZES[r.size].c, R = SIZES[r.size].r;
+  return Array.isArray(cols) && cols.length <= C && cols.every(col => Array.isArray(col) && col.length >= 1 && col.length <= R &&
+    col.every(t => Number.isInteger(t) && t >= 0 && (t & 7) < r.colors));
+}
+function validGame(g) {
+  try {
+    const r = g.rules;
+    if (!r || !SIZES[r.size] || !COLOR_COUNTS.includes(r.colors) || !MINS.some(m => m.id === r.min)) return false;
+    if (!GENS.some(x => x.id === r.gen)) r.gen = 'random';
+    if (!okCols(g.cols, r) || !Number.isInteger(g.score) || g.score < 0) return false;
+    if (!Array.isArray(g.history) || !['playing', 'over'].includes(g.status)) return false;
+    g.history = g.history.filter(h => h && okCols(h.cols, r) && Number.isInteger(h.score));
+    const ids = new Set(); for (const col of g.cols) for (const t of col) { if (ids.has(t >> 3)) return false; ids.add(t >> 3); }
+    delete g.nextK; // not used any more (older saves have it)
+    if (typeof g.bestAtStart !== 'number') g.bestAtStart = 0;
+    // The end state is derived from the board (a damaged status is fixed)
+    g.status = hasMove(g.cols, r.min) ? 'playing' : 'over';
+    return true;
+  } catch (e) { return false; }
+}
+
+// Builds the board in the background ("Připravuji pole…"); taps are ignored meanwhile (busy). `msg` is shown when ready.
+async function newGame(msg) {
+  if (busy) { toast('Chvilku, připravuji pole'); return; }
+  busy = true; sel = null;
+  $('#modal').hidden = true;
+  toast('Připravuji pole…', 60000);
+  const r = rulesOf(S), { board: b, ok } = await makeBoard(r);
+  G = { rules: r, cols: b.cols, score: 0, history: [], status: 'playing', bestAtStart: 0 };
+  G.bestAtStart = bestOf();
+  busy = false;
+  hideToast();
+  clearField();
+  save(); render();
+  if (!ok) toast('Tentokrát se nepodařilo připravit pole, které jde celé vyčistit. Kostky jsou rozházené náhodně.', 5000);
+  else if (msg) toast(msg);
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) { if (S.vibrate && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+let toastT;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  // just below the score row, never over it (the CSS top is the fallback)
+  const row = document.querySelector('.score').getBoundingClientRect(); if (row.height) t.style.top = Math.round(row.bottom + 8) + 'px';
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+const fmt = n => n.toLocaleString('cs-CZ');
+function kostek(n) { return n === 1 ? 'kostka' : n >= 2 && n <= 4 ? 'kostky' : 'kostek'; }
+function bodu(n) { return n === 1 ? 'bod' : n >= 2 && n <= 4 ? 'body' : 'bodů'; }
+const markSVG = c => `<svg viewBox="0 0 24 24" aria-hidden="true">${MARKS[c]}</svg>`;
+function praise(text, y) {
+  const el = $('#praise'), br = $('#board').getBoundingClientRect();
+  el.textContent = text; el.style.top = (y !== undefined ? y : br.top + br.height * .45) + 'px';
+  el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+}
+
+/* ---------- Moves ---------- */
+// Selected group: list of [x, y] (valid only for the current board)
+function remove(g) {
+  if (G.status !== 'playing' || g.length < G.rules.min) return;
+  const n = g.length, gain = points(n);
+  // where the group was (for the "+points" text)
+  const els = g.map(([x, y]) => tileEls.get(G.cols[x][y] >> 3)).filter(Boolean);
+  let py; if (els.length) { const rs = els.map(e => e.getBoundingClientRect()); py = Math.min(...rs.map(r => r.top)); }
+  G.history.push({ cols: G.cols, score: G.score, bb: bests[rulesKey(G.rules)] || 0 });
+  const goneIds = new Set(g.map(([x, y]) => G.cols[x][y] >> 3));
+  G.cols = removeGroup(G.cols, g);
+  G.score += gain;
+  let cleared = false;
+  if (!G.cols.length) { cleared = true; G.score += CLEAR_BONUS; }
+  const key = rulesKey(G.rules);
+  if (G.score > (bests[key] || 0)) bests[key] = G.score;
+  if (!hasMove(G.cols, G.rules.min)) G.status = 'over';
+  sel = null;
+  save(); render(goneIds);
+  const sc = $('#score'); sc.classList.remove('bump'); void sc.offsetWidth; sc.classList.add('bump');
+  if (cleared) praise('Vyčištěno! +' + fmt(CLEAR_BONUS));
+  else praise('+' + fmt(gain), py);
+  buzz(n >= 6 ? [25, 40, 25] : 15);
+  if (G.status === 'over') whenFree(G, cleared ? 1300 : 900, () => { if (G.status === 'over' && !busy) showOver(); });
+}
+function undo() {
+  if (busy) { toast('Chvilku, připravuji pole'); return; }
+  if (!G.history.length) { toast('Zatím není co vracet'); return; }
+  const h = G.history.pop();
+  G.cols = h.cols; G.score = h.score; G.status = hasMove(G.cols, G.rules.min) ? 'playing' : 'over';
+  if (Number.isInteger(h.bb)) { const k = rulesKey(G.rules), b = Math.max(h.bb, G.bestAtStart || 0); if (b > 0) bests[k] = b; else delete bests[k]; }
+  sel = null;
+  $('#modal').hidden = true;
+  buzz(); save(); render();
+}
+
+/* ---------- Rendering ---------- */
+const tileEls = new Map();   // tile id -> element
+let firstPaint = true;
+function clearField() { $('#field').innerHTML = ''; tileEls.clear(); firstPaint = true; }
+function applyLook() {
+  root.dataset.theme = S.theme;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+}
+function tileHTML(c) { return `<i style="--k:${COLORS[c]}">${S.marks ? markSVG(c) : ''}</i>`; }
+
+function render(goneIds) {
+  applyLook();
+  layout();
+  const trayH = $('#hint').offsetHeight + $('#btnRemove').offsetHeight;
+  const R = SIZES[G.rules.size].r, field = $('#field');
+  const selIds = new Set(sel ? sel.map(([x, y]) => G.cols[x][y] >> 3) : []);
+  const ok = S.dimLone && G.status === 'playing' ? playable(G.cols, G.rules.min) : null;
+  const live = new Set();
+  G.cols.forEach((col, x) => col.forEach((t, y) => {
+    const id = t >> 3, c = t & 7; live.add(id);
+    let el = tileEls.get(id);
+    if (!el) {
+      el = document.createElement('div');
+      el.innerHTML = tileHTML(c); el.dataset.m = S.marks ? 1 : 0;
+      tileEls.set(id, el); field.appendChild(el);
+      if (!firstPaint) { el.classList.add('new'); setTimeout(() => el.classList.remove('new'), 300); }
+    } else if (+el.dataset.m !== +S.marks) { el.innerHTML = tileHTML(c); el.dataset.m = S.marks ? 1 : 0; }
+    el.className = 't' + (selIds.has(id) ? ' sel' : '') + (ok && !ok.has(id) ? ' lone' : '') + (el.classList.contains('new') ? ' new' : '') + (el.classList.contains('nope') ? ' nope' : ''); // keep a running shake
+    el.style.transform = `translate(calc(${x} * var(--cs)), calc(${R - 1 - y} * var(--cs)))`;
+  }));
+  for (const [id, el] of tileEls) {
+    if (live.has(id)) continue;
+    tileEls.delete(id);
+    if (goneIds && goneIds.has(id)) { el.className = 't gone'; setTimeout(() => el.remove(), 340); }
+    else el.remove();
+  }
+  firstPaint = false;
+  field.classList.toggle('has-sel', !!sel);
+
+  // Score row
+  $('#score').textContent = fmt(G.score);
+  const left = countTiles(G.cols);
+  $('#left').textContent = 'zbývá ' + fmt(left);
+  $('#best').textContent = fmt(bestOf());
+
+  // Hint and buttons
+  const over = G.status === 'over';
+  let hint;
+  if (over) hint = G.cols.length ? 'Už nejde nic odebrat' : 'Pole je celé vyčištěné!';
+  else if (sel) hint = `${sel.length} ${kostek(sel.length)} = +${fmt(points(sel.length))} ${bodu(points(sel.length))} · ťukni znovu`;
+  else hint = G.rules.min === 2 ? 'Ťukni na dvě a víc stejných kostek' : 'Ťukni na tři a víc stejných kostek';
+  $('#hint').textContent = hint;
+  $('#btnUndo').classList.toggle('dim', !G.history.length);
+  $('#btnRemove').hidden = S.mode !== 'two' || over;
+  $('#btnRemove').classList.toggle('dim', !sel);
+  $('#btnAgain').hidden = !over;
+  // a longer hint (e.g. the points of a selected group) or the Remove button changes the room for the board
+  if ($('#hint').offsetHeight + $('#btnRemove').offsetHeight !== trayH) layout();
+}
+
+function layout() {
+  const play = $('#play');
+  if (!G || !play) return;
+  // the room inside .play (flex:1, so its size does not depend on the board): GUT at the sides, 12 px above and below;
+  // a short window shrinks the board instead of letting it touch the score row or the hint
+  const W = play.clientWidth - 2 * GUT, H = play.clientHeight - 24;
+  const C = SIZES[G.rules.size].c, R = SIZES[G.rules.size].r;
+  const byW = (W - 12) / C, byH = (H - 12) / R, cell = Math.max(12, Math.floor(Math.min(byW, byH, 80)));
+  // a board as wide as the screen allows: the frame (6 px) also takes the rounding remainder, so it ends exactly GUT from the sides
+  const bpad = byW <= Math.min(byH, 80) ? 6 + Math.max(0, Math.min(W - 12 - cell * C, H - 12 - cell * R)) / 2 : 6;
+  root.style.setProperty('--cs', cell + 'px');
+  root.style.setProperty('--gap', (cell >= 50 ? 5 : cell >= 40 ? 4 : 3) + 'px');
+  root.style.setProperty('--bpad', bpad + 'px');
+  const f = $('#field'); f.style.setProperty('--c', C); f.style.setProperty('--r', R);
+}
+
+/* ---------- Controls ---------- */
+function cellAt(e) {
+  const f = $('#field').getBoundingClientRect(), C = SIZES[G.rules.size].c, R = SIZES[G.rules.size].r;
+  const cs = f.width / C, x = Math.floor((e.clientX - f.left) / cs), y = R - 1 - Math.floor((e.clientY - f.top) / cs);
+  return { x, y };
+}
+const sameGroup = (a, b) => a && b && a.length === b.length && a.some(([x, y]) => x === b[0][0] && y === b[0][1]);
+function shake(g) {
+  for (const [x, y] of g) {
+    const el = tileEls.get(G.cols[x][y] >> 3); if (!el) continue;
+    el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope');
+    setTimeout(() => el.classList.remove('nope'), 420);
+  }
+}
+$('#board').addEventListener('click', e => {
+  if (!G) return;
+  if (busy) { toast('Chvilku, připravuji pole'); return; }
+  const { x, y } = cellAt(e);
+  const g = groupAt(G.cols, x, y);
+  if (!g.length) {   // empty space
+    if (sel) { sel = null; render(); }
+    return;
+  }
+  if (G.status === 'over') { toast(G.cols.length ? 'Už nejde nic odebrat – ťukni na Zpět nebo Nová hra' : 'Pole je vyčištěné – ťukni na Nová hra'); return; }
+  if (g.length < G.rules.min) {
+    shake(g); buzz(8);
+    toast(g.length === 1 ? 'Tahle kostka nemá vedle sebe žádnou stejnou' : 'Skupina musí mít aspoň 3 kostky');
+    if (sel) { sel = null; render(); }
+    return;
+  }
+  if (S.mode === 'one' || sameGroup(sel, g)) { remove(g); return; }
+  sel = g; buzz(8); render();
+});
+$('#btnRemove').addEventListener('click', () => {
+  if (busy) { toast('Chvilku, připravuji pole'); return; }
+  if (!sel) { toast('Nejdřív ťukni na skupinu stejných kostek'); return; }
+  remove(sel);
+});
+
+/* ---------- Dialogs ---------- */
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + '<div class="mbtns">' + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('') + '</div>';
+  $('#modal').hidden = false;
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+}
+function showOver() {
+  const best = bestOf(), rec = G.score >= best && G.score > G.bestAtStart && G.score > 0;
+  const left = countTiles(G.cols);
+  const title = left ? 'Už nejde nic odebrat' : 'Vyčištěno! 🎉';
+  const sub = left ? `${left === 1 ? 'Zbyla' : left <= 4 ? 'Zbyly' : 'Zbylo'} ${fmt(left)} ${kostek(left)}.` : `Celé pole je prázdné. Bonus +${fmt(CLEAR_BONUS)} bodů.`;
+  showModal(
+    `<h2>${title}</h2><p class="pts">${fmt(G.score)}</p><p>${rec ? '<b>Nový rekord!</b>' : `${bodu(G.score)} · rekord ${fmt(best)}`}<br>${sub}</p>`,
+    [{ text: 'Nová hra', fn: newGame }, { text: 'Vrátit tah', cls: 'alt', fn: undo }, { text: 'Prohlédnout pole', cls: 'alt' }]
+  );
+}
+$('#btnUndo').addEventListener('click', undo);
+$('#btnAgain').addEventListener('click', () => newGame());
+$('#btnNew').addEventListener('click', () => {
+  if (busy) { toast('Chvilku, připravuji pole'); return; }
+  if (G.status === 'playing' && !isFresh()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>',
+      [{ text: 'Ano, nová hra', fn: newGame }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+
+/* ---------- Settings ---------- */
+function toggleRow(key, label) {
+  return `<div class="fld trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+}
+function opts(key, list) {
+  return list.map(m => `<button class="opt" data-act="${key}:${m.id}" aria-pressed="${S[key] === m.id}"><span class="radio"></span><span><b>${m.name}</b><span class="d">${m.desc}</span></span></button>`).join('');
+}
+function stepper(act, value, canDown, canUp) {
+  return `<div class="stepper">
+    <button class="sbtn${canDown ? '' : ' off'}" data-act="${act}:-1" aria-label="Méně">−</button>
+    <div class="sval">${value}</div>
+    <button class="sbtn${canUp ? '' : ' off'}" data-act="${act}:1" aria-label="Více">+</button></div>`;
+}
+function swatch(t) {
+  const pat = [0, 0, 1, 2, 3, 1, 1, 2, 3, 3, 0, 2];
+  return `<span class="swatch" data-theme="${t.id}"><span class="mini">${pat.map(c => `<span class="t">${tileHTML(c)}</span>`).join('')}</span></span>`;
+}
+function renderSettings() {
+  const sz = SIZES[S.size];
+  const pending = !sameRules(rulesOf(S), G.rules) && !isFresh()
+    ? '<div class="notice">Tyhle změny potřebují novou hru. Po návratu do hry začne <b>nová hra</b>.</div>' : '';
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Barevné kostky<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Pravidla hry</h3>
+      <div class="fld"><div class="flabel">Velikost pole</div>${stepper('size', `${sz.c} × ${sz.r}`, S.size > 0, S.size < SIZES.length - 1)}
+        <div class="fnote">Sloupce × řádky. Menší pole má větší kostky${S.size === SIZES.length - 1 ? '. U největšího jsou kostky malé a hůř se na ně trefuje' : ''}.</div></div>
+      <div class="fld"><div class="flabel">Počet barev</div>${stepper('colors', S.colors, S.colors > COLOR_COUNTS[0], S.colors < COLOR_COUNTS[COLOR_COUNTS.length - 1])}
+        <div class="fnote">Méně barev = větší skupiny a snazší hra.</div></div>
+      <div class="fld"><div class="flabel">Nejmenší skupina</div>${opts('min', MINS)}</div>
+      <div class="fld"><div class="flabel">Rozložení kostek</div>${opts('gen', GENS)}</div>
+      ${pending}
+    </section>
+    <section class="card"><h3>Ovládání</h3>${opts('mode', MODES)}</section>
+    <section class="card"><h3>Pomocníci</h3>
+      ${toggleRow('marks', 'Značky na kostkách')}
+      <div class="fnote" style="margin-top:-6px">Každá barva má i svůj tvar (kolečko, čtvereček, trojúhelník…), barvy se pak snáz rozliší.</div>
+      ${toggleRow('dimLone', 'Ztlumit kostky, které nejdou odebrat')}
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}">${swatch(t)}${t.name}</button>`).join('')}</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'size') {
+    const v = S.size + +arg;
+    if (v < 0) { toast('Menší pole už není'); return; }
+    if (v >= SIZES.length) { toast('Větší pole už není'); return; }
+    S.size = v;
+  } else if (act === 'colors') {
+    const v = S.colors + +arg;
+    if (!COLOR_COUNTS.includes(v)) { toast(+arg < 0 ? 'Méně barev už nejde' : 'Víc barev už nejde'); return; }
+    S.colors = v;
+  } else if (act === 'min') S.min = +arg;
+  else if (act === 'gen') S.gen = arg;
+  else if (act === 'mode') { S.mode = arg; sel = null; }
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'theme') S.theme = arg;
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); sel = null; toast('Nastavení je zase výchozí'); }
+  buzz(8); applyLook(); save(); renderSettings();
+});
+function openSettings() { if (busy) { toast('Chvilku, připravuji pole'); return; } hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+// Settings apply immediately; different rules need a new game.
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  if (!sameRules(rulesOf(S), G.rules)) {
+    const had = !isFresh(); // also after a finished game: it could still be revived by Undo
+    newGame(had ? 'Začala nová hra s novým nastavením' : '');
+    return;
+  }
+  render();
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help ---------- */
+function renderHelp() {
+  // Demo: 4×3 board before and after removing the red group
+  const before = [[1, 0, 0, 2], [1, 3, 0, 0], [2, 3, 1, 0]];      // rows top -> bottom, -1 = empty
+  const after = [[1, -1, -1, -1], [1, 3, -1, -1], [2, 3, 1, 2]];
+  const mini = (rows, hl) => `<span class="mini">${rows.flat().map((c, i) => c < 0 ? '<span class="t"></span>'
+    : `<span class="t${hl && c === 0 ? ' sel' : ''}">${tileHTML(c)}</span>`).join('')}</span>`;
+  const how = S.mode === 'two'
+    ? '<b>Ťukni na skupinu</b> – označí se a dole se ukáže, kolik dá bodů. <b>Ťukni na ni znovu</b> (nebo na Odebrat) a zmizí.'
+    : '<b>Ťukni na skupinu</b> a hned zmizí.';
+  const min = G.rules.min;
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Barevné kostky<small>Jak hrát</small></h2></div>
+    <section class="card help">
+      <ol>
+        <li>Hledej <b>${min === 2 ? 'dvě a víc' : 'tři a víc'} stejných kostek</b>, které se dotýkají stranou (vedle sebe nebo nad sebou). ${how}
+          <div class="demo">${mini(before, true)}<span class="arrow">→</span>${mini(after, false)}</div>
+          <div class="demo-cap">červené kostky zmizí, ostatní spadnou dolů</div></li>
+        <li>Kostky nad nimi <b>spadnou dolů</b>. Když se vyprázdní celý sloupec, ostatní se <b>posunou doleva</b>.</li>
+        <li><b>Čím větší skupina, tím víc bodů:</b> ${G && G.rules.min === 3 ? '3 kostky = 4 body' : '2 kostky = 1 bod, 3 = 4 body'}, 4 = 9, 5 = 16, 10 kostek = 81 bodů. Vyplatí se nejdřív spojit stejné barvy do velkých skupin.</li>
+        <li>Když se podaří <b>vyčistit celé pole</b>, je bonus ${fmt(CLEAR_BONUS)} bodů.</li>
+        <li>Hra končí, když už žádná skupina nejde odebrat. Nikam se nespěchá. Tlačítko <b>Zpět</b> vrátí poslední tah – i na konci hry.</li>
+      </ol>
+    </section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { if (!G) { toast('Chvilku, připravuji pole'); return; } hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+const saved = load();
+const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+if (saved && saved.bests && typeof saved.bests === 'object') {
+  // records saved before the board kind was part of the key belong to random boards
+  for (const [k, v] of Object.entries(saved.bests)) if (Number.isInteger(v) && v > 0) bests[/^\d+x\d+:\d:\d$/.test(k) ? k + ':random' : k] = v;
+}
+if (saved && saved.game && validGame(saved.game)) { G = saved.game; sel = null; render(); }
+else newGame();
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+
+// Launcher contract: opened from the menu (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing
+window.BarevneKostky = {
+  groupAt, removeGroup, hasMove, tryBuild, clearableBoard, randomBoard, remove, undo,
+  get state() { return { S, G, bests, sel }; },
+  setBoard(cols) { G.cols = cols.map(c => c.slice()); G.history = []; G.score = 0; G.status = hasMove(G.cols, G.rules.min) ? 'playing' : 'over'; sel = null; clearField(); save(); render(); },
+};
+})();
+</script>
+</body>
+</html>

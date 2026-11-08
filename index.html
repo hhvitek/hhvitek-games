@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4ebdf">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Vítkovy hry">
+<title>Vítkovy hry</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100%;background:#f4ebdf;overscroll-behavior:none}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:#2b1a0e;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.wrap{max-width:560px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 20px) 16px calc(env(safe-area-inset-bottom) + 28px)}
+/* Header: today's day and date (a calendar on the wall, not a title) */
+header{margin:4px 4px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;color:#5a3214}
+.date{font-size:22px;line-height:1.25;color:#6f5a48;margin-top:2px}
+/* The app icon on the right, as tall as the weekday and the date together (42 + 2 + 28 px) */
+.logo{flex:none;width:72px;height:72px;border-radius:18px;display:block}
+/* Games: one column of rows (icon, name, description), two columns on wide screens */
+.list{display:grid;gap:10px}
+@media (min-width:760px){.wrap{max-width:900px}.list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.game{display:flex;align-items:center;gap:14px;min-height:80px;padding:10px;border-radius:18px;background:#fff;border:2px solid #e6d8c6;text-decoration:none;color:inherit;transition:transform .08s}
+.game:active{transform:scale(.98);border-color:#7a4520;background:#fbf5ec}
+.icon{flex:none;width:62px;height:62px;border-radius:15px;overflow:hidden;display:grid;place-items:center;background:#7a4520;color:#fff;font:800 32px Georgia,serif}
+.icon img{width:100%;height:100%;display:block}
+.text{flex:1;min-width:0}
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px}
+.name{font-size:22px;font-weight:800;line-height:1.2}
+.badge{font-size:18px;font-weight:800;line-height:1.3;padding:1px 10px;border-radius:12px;background:#e8a317;color:#2b1a0e}
+.desc{display:block;font-size:18px;line-height:1.3;color:#6f5a48;margin-top:2px}
+.plays{font-size:18px;font-weight:700;color:#6f5a48;font-variant-numeric:tabular-nums}
+.chev{flex:none;width:24px;height:24px;fill:none;stroke:#b39b84;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.empty{text-align:center;font-size:20px;color:#6f5a48;padding:40px 0}
+/* The way to the settings: a calm secondary button below the games, so the main page stays only for the games */
+.toSettings{display:flex;align-items:center;justify-content:center;gap:10px;margin:26px auto 0;height:56px;padding:0 26px;font:inherit;font-size:20px;font-weight:700;color:#5a3214;background:#fff;border:2px solid #e6d8c6;border-radius:18px;cursor:pointer;transition:transform .08s}
+.toSettings:active{transform:scale(.97);border-color:#c9a48a}
+.toSettings svg{width:26px;height:26px;fill:currentColor}
+/* Settings: the same light look as Settings in every game (copied from games/_template) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen[hidden]{display:none}
+.screen-in{max-width:560px;margin:0 auto}
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-family:Georgia,"Times New Roman",serif;font-size:26px;line-height:1.15;min-width:0;color:#5a3214}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.screen button{font-family:inherit;border:0;cursor:pointer} /* only the family: sizes come from .back and .big */
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.back:active,.big:active{transform:translateY(3px)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0}
+.card h3{font-family:Georgia,"Times New Roman",serif;font-size:23px;margin-bottom:6px;color:#5a3214}
+.card p{font-size:19px;line-height:1.45}
+.fnote{font-size:18px;color:var(--psoft);margin-top:10px;line-height:1.4}
+.field{margin-top:12px;padding-top:14px;border-top:2px solid var(--pline)}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.flabel{font-size:20px;font-weight:700;line-height:1.3}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:22px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);margin-top:16px}
+.big.danger{background:var(--psw);color:#a3261b;box-shadow:0 4px 0 #b9a68f}
+.big[hidden]{display:none}
+.big.soft{background:var(--popt);color:var(--pbtn);border:2px solid var(--pline);box-shadow:0 4px 0 var(--pline)}
+/* Version of the app: the number, then rows with a label and the date below it */
+.ver{font-size:24px;font-weight:800;line-height:1.3}
+.vrow{margin-top:8px;padding-top:8px;border-top:2px solid var(--pline)}
+.vrow span{display:block;font-size:18px;color:var(--psoft);line-height:1.35}
+.vrow b{display:block;font-size:20px;line-height:1.35}
+.contact{display:block;margin-top:12px;padding:14px 16px;border-radius:14px;background:var(--popt);border:2px solid var(--pline);font-size:18px;font-weight:700;color:var(--pbtn);overflow-wrap:anywhere;text-align:center}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px}
+.modal[hidden]{display:none}
+.mcard{width:100%;max-width:380px;background:#f4ebdf;border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.mcard h2{font-family:Georgia,"Times New Roman",serif;font-size:28px;margin-bottom:10px;color:#5a3214}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:16px}
+.mbtns{display:flex;flex-direction:column;gap:14px}
+.btn{height:62px;border-radius:18px;border:0;font:inherit;font-size:22px;font-weight:800;cursor:pointer}
+.btn:active{transform:translateY(3px)}
+.btn.keep{background:#7a4520;color:#fff;box-shadow:0 4px 0 #3f220e}
+.btn.danger{background:#e7d9c6;color:#a3261b;box-shadow:0 4px 0 #b9a68f}
+/* "Co je nového": the latest releases, a long list scrolls inside the dialog */
+.changes{text-align:left;max-height:calc(100dvh - 230px);overflow-y:auto;margin-bottom:16px}
+.changes h3{font-size:20px;line-height:1.3;color:#5a3214;margin:14px 0 6px}
+.changes h3:first-child{margin-top:0}
+.changes ul{padding-left:24px}
+.changes li{font-size:19px;line-height:1.4;margin-bottom:6px}
+.errors-table{width:100%;border-collapse:collapse;table-layout:fixed}
+.errors-table th,.errors-table td{padding:10px 6px;border-bottom:2px solid var(--pline);text-align:left;vertical-align:top;font-size:18px;line-height:1.35;overflow-wrap:anywhere}
+.errors-table th{color:var(--psoft)}
+.errors-table th:first-child,.errors-table td:first-child{width:34%}
+.errors-table strong{font-weight:800}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><div><h1 id="day">Vítkovy hry</h1><p class="date" id="date">Vyber si hru</p></div><img class="logo" src="icon.svg" alt=""></header>
+  <main class="list" id="grid"></main>
+  <button class="toSettings" id="btnSettings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg>Nastavení</button>
+</div>
+<!-- Settings of the whole app: everything that is not a game lives here (more actions can be added as sections) -->
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in">
+  <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Vítkovy hry<small>Nastavení</small></h2></div>
+  <section class="card"><h3>Výběr her</h3>
+    <p>Hry, které se hrají nejčastěji, se posouvají nahoru.</p>
+    <div class="field trow"><div class="flabel">Ukazovat počet hraní</div><button class="sw" id="swPlays" aria-pressed="false">Vypnuto</button></div>
+  </section>
+  <section class="card"><h3>Uložená data</h3>
+    <p>Rozehrané hry, nastavení her, rekordy a počty hraní jsou uložené jen v tomto zařízení.</p>
+    <button class="big danger" id="btnReset">Smazat uložená data</button>
+    <div class="fnote">Před smazáním přijde ještě otázka, jestli opravdu smazat. Hry půjdou hrát dál i bez internetu.</div>
+  </section>
+  <section class="card"><h3>Hlášení chyb</h3>
+    <p id="errorsCount">Zatím žádná chyba</p>
+    <button class="big soft" id="btnErrors" hidden>Prohlédnout chyby</button>
+    <div class="fnote">Chyby zůstávají jen v tomto zařízení. Odeslání proběhne až po tvém potvrzení ve vybrané aplikaci.</div>
+  </section>
+  <section class="card"><h3>Verze aplikace</h3>
+    <p class="ver" id="verName">Verze není známá</p>
+    <div class="vrow"><span>Vydáno</span><b id="verDate">–</b></div>
+    <div class="vrow"><span>Aktualizováno v tomto zařízení</span><b id="verUpdated">–</b></div>
+    <div class="vrow"><span>Poprvé spuštěno v tomto zařízení</span><b id="verFirst">–</b></div>
+    <button class="big soft" id="btnChanges" hidden>Co je nového</button>
+    <button class="big soft" id="btnUpdate" hidden>Zkontrolovat aktualizace</button>
+    <div class="fnote" id="updState" role="status" aria-live="polite"></div>
+    <button class="big" id="btnReload" hidden>Načíst novou verzi</button>
+  </section>
+  <section class="card"><h3>O aplikaci</h3>
+    <p>Jednoduché hry pro radost, bez reklam. Fungují i bez internetu. Fotky a znaky jsou z Wikimedia Commons.</p>
+    <div class="fnote">Když něco nefunguje nebo je nápad na vylepšení, napiš sem:</div>
+    <a class="contact" id="contact" target="_blank" rel="noopener"></a>
+  </section>
+  <button class="big" data-act="close">Zpět k hrám</button>
+</div></div>
+<div id="screenErrors" class="screen paper" hidden><div class="screen-in">
+  <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Vítkovy hry<small>Hlášení chyb</small></h2></div>
+  <section class="card"><p id="errorsEmpty">Zatím žádná chyba</p>
+    <table class="errors-table" id="errorsTable" hidden><thead><tr><th>Kdy</th><th>Hra</th><th>Chyba a místo</th></tr></thead><tbody id="errorsRows"></tbody></table>
+  </section>
+  <button class="big" id="btnSendErrors" hidden>Poslat autorovi</button>
+  <button class="big soft" id="btnSaveErrors" hidden>Uložit jako soubor</button>
+  <button class="big danger" id="btnClearErrors" hidden>Smazat seznam chyb</button>
+  <button class="big" data-act="close">Zpět do nastavení</button>
+</div></div>
+<div class="modal" id="modal" hidden><div class="mcard" id="modalCard"></div></div>
+<script src="games/registry.js"></script>
+<script src="version.js"></script>
+<script>
+(() => {
+'use strict';
+const grid = document.getElementById('grid');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// Contact shown in the "O aplikaci" section; keep in sync with README.md
+const CONTACT_URL = 'https://github.com/hhvitek/hhvitek-games';
+const contact = document.getElementById('contact');
+contact.href = CONTACT_URL;
+// the address may wrap only after a slash, never in the middle of a word
+contact.innerHTML = CONTACT_URL.replace(/^https?:\/\//, '').split('/').map(p => `<span style="white-space:nowrap">${esc(p)}</span>`).join('/<wbr>');
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  remove(k) { try { localStorage.removeItem(k); } catch (e) {} },
+};
+
+// One-time migration of the old Czech keys: hry.<id>.rozehrano -> games.<id>.inProgress
+// (some game folders were renamed to match the game names)
+try {
+  const renamed = { skladaniKostek: 'skladani-kostek', solitaire: 'soliter', pyramid: 'pyramida', spider: 'pavouk' };
+  for (const k of Object.keys(localStorage)) {
+    const m = /^hry\.(.+)\.rozehrano$/.exec(k);
+    if (!m) continue;
+    const id = renamed[m[1]] || m[1];
+    if (store.get(`games.${id}.inProgress`) === null) store.set(`games.${id}.inProgress`, store.get(k));
+    store.remove(k);
+  }
+} catch (e) {}
+
+// Launcher contract: a game sets 'games.<id>.inProgress' = '1' while it has an unfinished game.
+const inProgress = id => store.get(`games.${id}.inProgress`) === '1';
+// The launcher counts how many times each game was started; tiles are sorted by it.
+const plays = id => parseInt(store.get(`games.${id}.plays`), 10) || 0;
+// A game moves ahead of the registry.js order only after it was opened at least this many times
+// (so one curious tap doesn't reshuffle the launcher).
+const MIN_PLAYS_TO_RISE = 5;
+const rank = g => g.plays >= MIN_PLAYS_TO_RISE ? g.plays : 0;
+
+// The launcher's own settings (the play count on each row is off by default); invalid data = defaults
+const LAUNCHER_KEY = 'games.launcher.settings';
+const LDEFAULTS = { showPlays: false };
+function loadLauncher() {
+  const s = { ...LDEFAULTS };
+  try { const v = JSON.parse(store.get(LAUNCHER_KEY)); if (v && typeof v === 'object') for (const k of Object.keys(LDEFAULTS)) if (typeof v[k] === typeof LDEFAULTS[k]) s[k] = v[k]; } catch (e) {}
+  return s;
+}
+let L = loadLauncher();
+const swPlays = document.getElementById('swPlays');
+function renderSwitch() { swPlays.setAttribute('aria-pressed', String(L.showPlays)); swPlays.textContent = L.showPlays ? 'Zapnuto' : 'Vypnuto'; }
+swPlays.addEventListener('click', () => {
+  L.showPlays = !L.showPlays;
+  store.set(LAUNCHER_KEY, JSON.stringify(L));
+  renderSwitch(); render(); // applies at once, behind the settings screen
+});
+
+/* ---------- Error reports ---------- */
+const ERROR_KEY = 'games.errors';
+const errorsCount = document.getElementById('errorsCount'), btnErrors = document.getElementById('btnErrors');
+const screenErrors = document.getElementById('screenErrors'), errorsEmpty = document.getElementById('errorsEmpty');
+const errorsTable = document.getElementById('errorsTable'), errorsRows = document.getElementById('errorsRows');
+const btnSendErrors = document.getElementById('btnSendErrors'), btnClearErrors = document.getElementById('btnClearErrors');
+const btnSaveErrors = document.getElementById('btnSaveErrors');
+let errorDeviceModel = '';
+if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) navigator.userAgentData.getHighEntropyValues(['model']).then(v => { errorDeviceModel = v.model || ''; }).catch(() => {});
+function readErrors() {
+  try { const v = JSON.parse(localStorage.getItem(ERROR_KEY) || '[]'); return Array.isArray(v) ? v.filter(e => e && typeof e === 'object' && !Array.isArray(e)) : []; } catch (e) { return []; }
+}
+function renderErrors() {
+  const errors = readErrors(), count = errors.reduce((n, e) => { const repeated = Number(e.n); return n + (Number.isFinite(repeated) && repeated > 1 ? repeated : 1); }, 0);
+  errorsCount.textContent = count ? `${count} ${count === 1 ? 'zaznamenaná chyba' : count < 5 ? 'zaznamenané chyby' : 'zaznamenaných chyb'}` : 'Zatím žádná chyba';
+  btnErrors.hidden = !count;
+  errorsEmpty.hidden = !!count;
+  errorsTable.hidden = !count;
+  btnSendErrors.hidden = !count;
+  btnSaveErrors.hidden = !count;
+  btnClearErrors.hidden = !count;
+  const names = new Map((globalThis.GAMES || []).map(g => [g.id, g.name]));
+  errorsRows.innerHTML = errors.slice().reverse().map(e => {
+    const date = new Date(e.t || ''), when = Number.isNaN(date.getTime()) ? '–' : date.toLocaleString('cs-CZ');
+    const game = names.get(String(e.game || '')) || String(e.game || 'Neznámá hra');
+    const type = e.type === 'unhandledrejection' ? 'Nezachycená výjimka' : 'Chyba';
+    return `<tr><td>${esc(when)}${e.n > 1 ? `<br>opakováno ${esc(e.n)}×` : ''}</td><td>${esc(game)}</td><td><strong>${esc(type)}: ${esc(e.msg || 'Neznámá chyba')}</strong><br>${esc(e.where || '')}</td></tr>`;
+  }).join('');
+}
+function buildErrorReport() {
+  const errors = readErrors();
+  const device = [errorDeviceModel, navigator.userAgent].filter(Boolean).join(' · ');
+  const lines = [
+    'Hlášení chyb – Vítkovy hry',
+    `Verze aplikace: ${APP ? APP.version : install.version || 'neznámá'}`,
+    `Zařízení: ${device || 'neznámé'}`,
+    `Obrazovka: ${screen.width} × ${screen.height}`,
+    `Vytvořeno: ${new Date().toLocaleString('cs-CZ')}`,
+    `Počet záznamů: ${errors.length}`,
+    ''
+  ];
+  errors.forEach((e, i) => {
+    lines.push(`${i + 1}. ${e.t || 'neznámý čas'} | ${e.game || 'neznámá hra'} | ${e.type || 'chyba'}${e.n > 1 ? ` | opakováno ${e.n}×` : ''}`);
+    lines.push(`Verze: ${e.v || 'neznámá'} · Zařízení: ${e.device || 'neznámé'}`);
+    lines.push(`Chyba: ${e.msg || 'Neznámá chyba'}`);
+    lines.push(`Kde: ${e.where || 'neznámé místo'}`);
+    if (e.stack) lines.push(`Zásobník: ${e.stack}`);
+    if (e.state) lines.push(`Stav hry před chybou: ${e.state}`);
+    lines.push('');
+  });
+  return lines.join('\n');
+}
+btnErrors.addEventListener('click', () => { renderErrors(); screenErrors.hidden = false; screenErrors.scrollTop = 0; });
+screenErrors.addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) screenErrors.hidden = true; });
+const errorFileName = () => `chyby-vitkovy-hry-${new Date().toISOString().slice(0, 10)}.txt`;
+// Send: the whole report as a .txt attachment (a mail body or a chat message would cut it),
+// else as shared text, else a mailto: link, which cannot carry an attachment and has to be shortened
+btnSendErrors.addEventListener('click', async () => {
+  const subject = 'Hlášení chyb – Vítkovy hry', text = buildErrorReport();
+  const note = 'Hlášení chyb z Vítkových her je v příloze.';
+  let file = null;
+  try { file = new File([text], errorFileName(), { type: 'text/plain' }); } catch (e) {}
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ title: subject, text: note, files: [file] }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  if (navigator.share) {
+    try { await navigator.share({ title: subject, text }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  const MAX = 1800, cut = '\n… (zkráceno; celé hlášení ulož tlačítkem „Uložit jako soubor“ a pošli ho jako přílohu)';
+  const body = text.length > MAX ? text.slice(0, MAX - cut.length) + cut : text;
+  location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+});
+// Save the report as a .txt file: the browser's save dialog where it has one, otherwise a normal download
+btnSaveErrors.addEventListener('click', async () => {
+  const name = errorFileName();
+  const blob = new Blob([buildErrorReport()], { type: 'text/plain;charset=utf-8' });
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'Textový soubor', accept: { 'text/plain': ['.txt'] } }] });
+      const w = await handle.createWritable(); await w.write(blob); await w.close(); return;
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  const url = URL.createObjectURL(blob), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+btnClearErrors.addEventListener('click', () => showModal(
+  '<h2>Smazat seznam chyb?</h2><p>Všechny uložené záznamy chyb se smažou.</p>',
+  [{ text: 'Nechat být', cls: 'keep' }, { text: 'Ano, smazat', cls: 'danger', fn: () => { store.remove(ERROR_KEY); renderErrors(); } }]));
+
+// Header: today's weekday and date in Czech (own names, so it does not depend on the browser's locale data)
+const DAYS = ['Neděle', 'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota'];
+const MONTHS = ['ledna', 'února', 'března', 'dubna', 'května', 'června', 'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
+function renderDate() {
+  const d = new Date();
+  document.getElementById('day').textContent = DAYS[d.getDay()];
+  document.getElementById('date').textContent = `${d.getDate()}. ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+/* ---------- Version of the app (Nastavení → Verze aplikace) ---------- */
+// version.js is written by tools/release.js; without it (an unreleased copy) the card says the version is unknown
+const APP = globalThis.APP_VERSION && typeof globalThis.APP_VERSION.version === 'string' ? globalThis.APP_VERSION : null;
+const isDay = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const fmtDay = s => { if (!isDay(s)) return '–'; const [y, m, d] = s.split('-').map(Number); return `${d}. ${MONTHS[m - 1]} ${y}`; };
+// When this version first ran on this device, and when the app ran here for the first time. Not game data:
+// "Smazat uložená data" keeps it (ownKey below does not list it). Invalid data starts a new record.
+const INSTALL_KEY = 'games.launcher.install';
+const install = (() => {
+  let v = null;
+  try { v = JSON.parse(store.get(INSTALL_KEY)); } catch (e) {}
+  const ok = v && typeof v === 'object' && typeof v.version === 'string' && isDay(v.updated) && isDay(v.first);
+  const today = dayKey(new Date()), version = APP ? APP.version : '';
+  const rec = ok ? { version: v.version, updated: v.updated, first: v.first } : { version, updated: today, first: today };
+  if (rec.version !== version) { rec.version = version; rec.updated = today; }
+  if (!ok || rec.updated === today) store.set(INSTALL_KEY, JSON.stringify(rec));
+  return rec;
+})();
+if (APP) {
+  document.getElementById('verName').textContent = `Verze ${APP.version}`;
+  document.getElementById('verDate').textContent = fmtDay(APP.date);
+}
+document.getElementById('verUpdated').textContent = fmtDay(install.updated);
+document.getElementById('verFirst').textContent = fmtDay(install.first);
+// "Co je nového": the latest releases from CHANGELOG.md (tools/release.js copies them into version.js)
+const CHANGES = (Array.isArray(globalThis.APP_CHANGES) ? globalThis.APP_CHANGES : [])
+  .filter(c => c && typeof c.version === 'string' && Array.isArray(c.items)).slice(0, 3);
+const btnChanges = document.getElementById('btnChanges');
+btnChanges.hidden = !CHANGES.length;
+btnChanges.addEventListener('click', () => showModal('<h2>Co je nového</h2><div class="changes">' + CHANGES.map(c =>
+  `<h3>Verze ${esc(c.version)} · ${fmtDay(c.date)}</h3><ul>${c.items.map(it => `<li>${esc(it)}</li>`).join('')}</ul>`).join('') + '</div>',
+  [{ text: 'Zavřít', cls: 'keep' }]));
+// "Zkontrolovat aktualizace": asks for a new version at once. sw.js downloads it whole and takes over;
+// this page still shows the old one until it is loaded again ("Načíst novou verzi").
+const canUpdate = /^https?:$/.test(location.protocol) && 'serviceWorker' in navigator;
+const btnUpdate = document.getElementById('btnUpdate'), btnReload = document.getElementById('btnReload');
+const updState = document.getElementById('updState');
+btnUpdate.hidden = !canUpdate;
+const say = t => { updState.textContent = t; };
+// the version the service worker serves now (newer than this page after an update in the background)
+async function servedVersion() {
+  const res = await fetch('version.js', { cache: 'no-store' });
+  const m = /version: '(\d+\.\d+\.\d+)'/.exec(await res.text());
+  return m ? m[1] : null;
+}
+async function compareVersions(silent) {
+  const v = await servedVersion();
+  if (APP && v && v !== APP.version) { say(`Stáhla se nová verze ${v}. Ukáže se po načtení.`); btnReload.hidden = false; return; }
+  if (!silent) say(APP ? `Máš nejnovější verzi ${APP.version}.` : 'Máš nejnovější verzi.');
+}
+// waits until a new worker found by update() has finished: 'activated', 'redundant' (its download failed) or 'timeout'
+function settled(reg, ms) {
+  const w = reg.installing || reg.waiting;
+  if (!w) return Promise.resolve('none');
+  return new Promise(resolve => {
+    const t = setTimeout(() => { w.removeEventListener('statechange', on); resolve('timeout'); }, ms);
+    function on() { if (w.state === 'activated' || w.state === 'redundant') { clearTimeout(t); w.removeEventListener('statechange', on); resolve(w.state); } }
+    w.addEventListener('statechange', on); on();
+  });
+}
+let checking = false;
+btnUpdate.addEventListener('click', async () => {
+  if (checking) { say('Chvilku, hledám novou verzi…'); return; }
+  checking = true; btnReload.hidden = true; say('Hledám novou verzi…');
+  try {
+    if (navigator.onLine === false) throw new Error('offline'); // update() does not always fail without a network
+    const reg = await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
+    await reg.update();
+    const state = await settled(reg, 60000);
+    if (state === 'timeout') say('Nová verze se ještě stahuje a dokončí se sama. Zkus to za chvíli znovu.');
+    else if (state === 'redundant') say('Novou verzi se nepodařilo stáhnout celou. Zkus to později, hry fungují dál.');
+    else await compareVersions(false);
+  } catch (e) { say('Nepodařilo se spojit s internetem. Zkus to později, hry fungují dál.'); }
+  checking = false;
+});
+btnReload.addEventListener('click', () => location.reload());
+
+function render() {
+  renderDate();
+  const games = (globalThis.GAMES || []).map((g, i) => ({ ...g, order: i, plays: plays(g.id) }));
+  if (!games.length) { grid.outerHTML = '<p class="empty">Zatím tu nejsou žádné hry.</p>'; return; }
+  // Most played first (counting only games opened MIN_PLAYS_TO_RISE+ times); ties keep the order from registry.js
+  games.sort((a, b) => rank(b) - rank(a) || a.order - b.order);
+  grid.innerHTML = games.map(g => `
+    <a class="game" href="games/${encodeURIComponent(g.id)}/index.html?menu" data-id="${esc(g.id)}">
+      <span class="icon"><img src="games/${encodeURIComponent(g.id)}/icon.svg" alt="" onerror="this.replaceWith(document.createTextNode('${esc(g.name).charAt(0)}'))"></span>
+      <span class="text">
+        <span class="top"><span class="name">${esc(g.name)}</span>${inProgress(g.id) ? '<span class="badge">Rozehráno</span>' : ''}${L.showPlays && g.plays ? `<span class="plays">hráno ${g.plays}×</span>` : ''}</span>
+        ${g.description ? `<span class="desc">${esc(g.description)}</span>` : ''}
+      </span>
+      <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
+    </a>`).join('');
+}
+// Count a start; the order changes only on the next visit, so rows never jump under the finger
+grid.addEventListener('click', e => {
+  const a = e.target.closest('a.game');
+  if (a) store.set(`games.${a.dataset.id}.plays`, String(plays(a.dataset.id) + 1));
+});
+// Reset: deletes everything these games saved in the browser (games in progress, settings,
+// records, play counts) after a confirmation. Cached files for offline mode stay.
+// Only our own keys: GitHub Pages serves all projects of one user from the same origin
+// (and file:// is shared too), so localStorage.clear() would wipe other projects' data.
+// Exactly our keys, for each game of the registry: games.<id>.state / .inProgress / .plays, the old Czech
+// badge hry.<id>.rozehrano and the older per-game key '<id>.v1' (still read once by the games, see OLD_KEY).
+// Older keys whose name differs from the game id:
+const OTHER_KEY_NAMES = ['solitaire', 'pyramid', 'spider', 'skladaniKostek'];
+const ownKey = k => {
+  if (k === LAUNCHER_KEY) return true;
+  const ids = (globalThis.GAMES || []).map(g => g.id);
+  return ids.some(id => [`games.${id}.state`, `games.${id}.inProgress`, `games.${id}.plays`, `hry.${id}.rozehrano`, `${id}.v1`].includes(k))
+    || OTHER_KEY_NAMES.some(n => k === `${n}.v1` || k === `hry.${n}.rozehrano`);
+};
+// Settings screen: opened by the button below the tiles, closed by Zpět (or the phone's Back)
+const settings = document.getElementById('screenSettings');
+document.getElementById('btnSettings').addEventListener('click', () => {
+  renderErrors(); settings.hidden = false; settings.scrollTop = 0;
+  // a version downloaded in the background since this page loaded: say so at once, with "Načíst novou verzi"
+  if (canUpdate && !checking && navigator.serviceWorker.controller) compareVersions(true).catch(() => {});
+});
+// a new version that takes over while Settings is open says so too
+if (canUpdate) navigator.serviceWorker.addEventListener('controllerchange', () => {
+  if (!settings.hidden && !checking) compareVersions(true).catch(() => {});
+});
+settings.addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) settings.hidden = true; });
+const modal = document.getElementById('modal'), card = document.getElementById('modalCard');
+function showModal(html, buttons) {
+  card.innerHTML = html + '<div class="mbtns">' + buttons.map((b, i) => `<button class="btn ${b.cls}" data-i="${i}">${b.text}</button>`).join('') + '</div>';
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    modal.hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+  modal.hidden = false;
+}
+document.getElementById('btnReset').addEventListener('click', () => showModal(
+  '<h2>Smazat uložená data?</h2><p>Smažou se rozehrané hry, nastavení všech her, rekordy i počty hraní. Vrátit to nepůjde.</p>',
+  [{ text: 'Nechat být', cls: 'keep' }, { text: 'Ano, smazat', cls: 'danger', fn: resetAll }]));
+function resetAll() {
+  try { for (const k of Object.keys(localStorage)) if (ownKey(k)) store.remove(k); } catch (e) {}
+  L = loadLauncher(); renderSwitch();
+  render();
+  showModal('<h2>Uložená data jsou smazaná</h2><p>Hry začnou od začátku s výchozím nastavením.</p>', [{ text: 'Zavřít', cls: 'keep' }]);
+}
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenErrors', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+renderSwitch();
+render();
+// Coming back from a game with the browser Back button when the page was kept in memory
+// (back-forward cache): refresh badges and order. A normal load has already rendered above.
+window.addEventListener('pageshow', e => { if (e.persisted) render(); });
+// The launcher left open overnight: the date is right again when it is shown
+document.addEventListener('visibilitychange', () => { if (!document.hidden) renderDate(); });
+
+// Hosted version: install to home screen and offline mode for all games
+if (/^https?:$/.test(location.protocol)) {
+  const l = document.createElement('link'); l.rel = 'manifest'; l.href = 'manifest.webmanifest'; document.head.appendChild(l);
+  // updateViaCache 'none': the browser asks the server for sw.js and version.js on every opening, so a release
+  // is noticed at once (never an older copy from the HTTP cache); the answer is tiny when nothing changed
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
+}
+
+// Persistent storage: the browser then won't delete saved settings and games on its own.
+// Applies to the whole origin, so to all games in games/ too.
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,943 @@
+<!doctype html>
+<html lang="cs" data-table="paper" data-back="nachod" data-face="white">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4ebdf">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Plus mínus">
+<title>Oko bere plus mínus</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e7135'/%3E%3Crect x='8' y='12' width='26' height='38' rx='4' fill='%23fff'/%3E%3Ccircle cx='44' cy='30' r='14' fill='%23ffd54a'/%3E%3Cpath d='M37 30h14M44 23v14' stroke='%232a2000' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+
+/* ---------- Base ---------- */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--tex),var(--grain,none),var(--tbl)}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+
+#app{--gut:12px;height:100vh;height:100dvh;max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;line-height:1.05;font-weight:800;font-size:23px;color:var(--ink)} /* no nowrap/overflow: a long title wraps between words, never gets cut */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--btn);font-size:18px;font-weight:700;color:var(--btn-ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--btn);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--btn-ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+a.round{text-decoration:none}
+/* the long name needs two lines next to the home button: the bar buttons sit closer together (the outer margin stays) */
+.topbar:has(#btnHome:not([hidden])){gap:4px}
+.topbar:has(#btnHome:not([hidden])) .top-right{gap:4px}
+.topbar:has(#btnHome:not([hidden])) .pill{padding:0 12px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:clamp(18px,4.7vw,21px)}
+
+/* ---------- Table: two player panels (name, points, cards, plus/minus cards, sum) and the big message between them ----------
+   user's decision (as in Oko bere): the score sits with each player, the side that is not playing is clearly dimmed,
+   and the end of a round says in big letters who won it */
+#table{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-between;gap:8px;padding:12px var(--gut);--cw:80px;--ch:112px;--op-ava:40px;--op-ava-bg:var(--btn)}
+.side{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border-radius:18px;background:var(--bar);border:3px solid transparent;transition:opacity .3s,filter .3s,border-color .3s}
+.side.on{border-color:var(--accent)}
+.side.off{opacity:.32;filter:grayscale(.8)}
+.side.win{border-color:var(--accent);box-shadow:0 0 18px color-mix(in srgb,var(--accent) 55%,transparent)}
+.who{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:20px;font-weight:700;line-height:1.2;min-height:30px}
+.who.op-row{min-height:40px} /* the opponent: avatar, name and stars (games/_opponents/opponents.js) */
+.who .me{font-size:22px;font-weight:800}
+.pts{flex:none;display:flex;align-items:center;gap:8px}
+.pts b{font-size:28px;font-weight:900;line-height:1;min-width:18px;text-align:center}
+.dots{display:flex;gap:4px}
+.dots i{width:13px;height:13px;border-radius:50%;border:2px solid currentColor;opacity:.6}
+.dots i.f{background:var(--accent);border-color:var(--accent);opacity:1}
+.sumrow{display:flex;justify-content:center}
+.sum{font-size:22px;font-weight:800;line-height:1.3;padding:1px 14px;border-radius:12px;background:var(--btn);color:var(--btn-ink)}
+.sum.hi{background:var(--accent);color:var(--accent-ink)}
+.sum.over{background:#c0262d;color:#fff}
+.hand{display:flex;justify-content:center;align-items:center;height:var(--ch)}
+.hand .cd{position:relative;flex:none;transition:none}
+.hand .new{animation:deal .32s ease-out}
+@keyframes deal{from{transform:translateY(-36px) scale(.9);opacity:0}}
+#msg{flex:none;min-height:84px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:2px}
+#msg .hd{font-size:26px;font-weight:900;line-height:1.15}
+#msg .ln{font-size:20px;line-height:1.3}
+#msg small{font-size:18px;font-weight:600;opacity:.85}
+#msg .banner{padding:10px 18px;border-radius:16px;display:flex;flex-direction:column;gap:2px;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+#msg .banner.win{background:var(--accent);color:var(--accent-ink)}
+#msg .banner.lose{background:var(--ink);color:var(--tbl)}
+#msg .banner.tie{background:var(--btn);color:var(--btn-ink);box-shadow:inset 0 0 0 2px var(--line)}
+
+/* French cards: the frame, faces, pictures and backs come from games/_cards/cards.js */
+.ix{position:absolute;left:calc(var(--cw)*.05);right:calc(var(--cw)*.04);top:calc(var(--cw)*.04);height:calc(var(--cw)*.44);display:flex;align-items:center;justify-content:space-between}
+.ix b{font-size:calc(var(--cw)*.42);font-weight:var(--fw);line-height:1;letter-spacing:-.02em}
+.ix b.t{font-size:calc(var(--cw)*.39);letter-spacing:-.09em;margin-left:-.03em}
+.ix svg{flex:none;width:calc(var(--cw)*.34);height:calc(var(--cw)*.34);fill:currentColor}
+.art{position:absolute;left:7%;right:7%;top:35%;bottom:4%}
+
+/* Plus/minus cards: a played one lies in the hand (a token as tall as a card), the rest are chips under it */
+.tok{flex:none;width:calc(var(--cw)*.78);height:var(--ch);border-radius:calc(var(--cw)*.14);display:grid;place-items:center;font-size:calc(var(--cw)*.42);font-weight:900;background:var(--pm);color:var(--pm-ink);box-shadow:0 0 0 2px var(--pm-edge),0 2px 5px rgba(0,0,0,.35);margin-left:8px;position:relative}
+.tok.minus{background:var(--mm);color:var(--mm-ink)}
+[data-table]{--pm:#ffd54a;--pm-ink:#2a2000;--pm-edge:#fff;--mm:#7fd0ff;--mm-ink:#06283d}
+.chips{display:flex;justify-content:center;gap:8px;min-height:54px}
+.chip{flex:0 1 84px;min-width:0;height:54px;border-radius:14px;font-size:26px;font-weight:900;background:var(--pm);color:var(--pm-ink);box-shadow:0 0 0 2px var(--pm-edge),0 3px 0 rgba(0,0,0,.3)}
+.chip.minus{background:var(--mm);color:var(--mm-ink)}
+.chip.dim{opacity:1;filter:none;background:transparent;box-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+.chips.cpu{min-height:34px}
+.chips.cpu .back{flex:none;width:34px;height:34px;border-radius:9px;background:var(--bk-bg);border:3px solid var(--bk-edge);box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.chips .none{font-size:18px;opacity:.85;align-self:center}
+
+/* Bottom buttons */
+.tray{flex:none;display:flex;gap:8px;padding:8px var(--gut) 10px;background:var(--bar);border-top:1px solid var(--line)}
+.act{flex:1 1 0;min-width:0;height:64px;border-radius:14px;background:var(--btn);color:var(--btn-ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:18px;font-weight:700;box-shadow:inset 0 0 0 1px var(--line);transition:transform .06s;white-space:nowrap}
+.act:active{transform:scale(.97)}
+.act svg{flex:none;width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.act.go{flex-grow:1.5;background:var(--accent);color:var(--accent-ink);box-shadow:none;font-size:20px;font-weight:800}
+.act.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;font-family:Georgia,serif;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);transition:transform .06s}
+.big:active{transform:translateY(3px);box-shadow:0 1px 0 var(--pbtn-sh)}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0;box-shadow:0 2px 6px rgba(60,30,10,.12)}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink);font-family:Georgia,serif}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.trow .flabel{margin:0;flex:1;min-width:0}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{height:96px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:6px;background:var(--tex),var(--grain,none),var(--tbl);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.mini{--cw:46px;--ch:64px;display:flex;gap:5px;justify-content:center;align-items:center}
+.mini .cd{position:relative;transform:none;flex:none;transition:none}
+.mini .tok{margin-left:0}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.stats{font-size:20px;line-height:1.5}
+
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+.demo-felt{background:var(--tex),var(--tbl);border-radius:14px;padding:12px;margin:10px 0;color:var(--ink);font-size:20px;font-weight:700;text-align:center}
+.demo-felt .mini{--cw:54px;--ch:76px;margin:6px 0}
+
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:pop .25s ease-out}
+@keyframes pop{from{transform:scale(.9);opacity:0}}
+.mcard h2{font-size:28px;font-family:Georgia,serif;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+.mbtns{display:flex;flex-direction:column;gap:14px;margin-top:8px}
+
+/* short windows: a smaller avatar, so the cards keep their room */
+@media (max-height:800px){ #table{--op-ava:32px;gap:6px} .who.op-row{min-height:32px} #msg{min-height:72px} #msg .hd{font-size:23px} }
+@media (max-height:600px){ #table{--op-ava:26px;gap:4px;padding-top:8px;padding-bottom:8px} .who,.who.op-row{min-height:26px} .side{padding:3px 8px;gap:3px} .sum{font-size:19px;padding:0 10px} #msg{min-height:52px} #msg small{display:none} #msg .hd{font-size:20px} #msg .ln{font-size:18px} #msg .banner{padding:3px 12px} .chips,.chips .chip{min-height:44px;height:44px} .chips.cpu{min-height:26px} .chips.cpu .back{width:26px;height:26px} }
+@media (max-height:800px){
+  .topbar{height:52px}
+  .pill{height:42px}.round{width:42px;height:42px}
+  .topbar h1{font-size:21px}
+  .act{height:56px}
+  .tray{padding:6px var(--gut) 8px}
+  .chip{height:48px}
+  .chips{min-height:48px}
+}
+/* Narrow phones (360 px wide): smaller gaps and a slimmer "Nová hra", so the title fits next to the home button (the 12 px outer margin stays) */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 10px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:18px}
+  .topbar:has(#btnHome:not([hidden])) .pill{padding:0 7px}
+}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:60;width:max-content;max-width:92vw;background:color-mix(in srgb,var(--ink) 94%,var(--tbl));color:var(--tbl);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--tbl) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+/* the opponent's badge (stars, play style) in the ink colour on the light sand table, where the orange accent is too faint */
+[data-table="sand"]{--op-accent:var(--ink)}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Oko bere plus mínus</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <main id="table">
+    <section class="side" id="sideCpu">
+      <div class="who op-row"><span id="foeCpu"></span><span class="pts" id="ptsCpu"></span></div>
+      <div class="hand" id="handCpu"></div>
+      <div class="chips cpu" id="chipsCpu"></div>
+      <div class="sumrow"><span class="sum" id="sumCpu"></span></div>
+    </section>
+    <div id="msg" aria-live="polite"></div>
+    <section class="side" id="sideYou">
+      <div class="sumrow"><span class="sum" id="sumYou"></span></div>
+      <div class="hand" id="handYou"></div>
+      <div class="chips" id="chipsYou"></div>
+      <div class="who"><span class="me">Ty</span><span class="pts" id="ptsYou"></span></div>
+    </section>
+  </main>
+  <footer class="tray" id="tray"></footer>
+</div>
+
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+
+<script src="../../images/sets.js"></script>
+<script src="../_cards/cards.js"></script>
+<script src="../_opponents/opponents.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+
+/* ---------- Cards ----------
+   main deck: card = number 0–39; suit = c / 10 (0 ♠, 1 ♥, 2 ♣, 3 ♦; odd = red), value = c % 10 + 1 (ace = 1).
+   plus/minus cards: whole numbers −5…−1 and +1…+5. */
+const suit = c => (c / 10) | 0, val = c => c % 10 + 1, red = c => suit(c) & 1;
+const SNAME = ['piky', 'srdce', 'kříže', 'káry'];
+const sgn = v => v > 0 ? `+${v}` : `−${-v}`;
+const cardHTML = (c, up, cls = '') => up
+  ? `<div class="cd up${red(c) ? ' r' : ''}${cls}" role="img" aria-label="${val(c) === 1 ? 'eso' : val(c)} ${SNAME[suit(c)]}">${CARDS.faceHTML(suit(c), val(c), S.pic)}</div>`
+  : `<div class="cd${cls}" role="img" aria-label="karta rubem nahoru"></div>`;
+const tokHTML = (v, cls = '') => `<div class="tok${v < 0 ? ' minus' : ''}${cls}" role="img" aria-label="karta ${sgn(v)}">${sgn(v)}</div>`;
+
+/* ---------- Settings and storage ---------- */
+const { TABLES, BACKS, FACES } = CARDS;
+const LEVELS = [
+  { id: 'easy', title: 'Mírný', desc: 'Soupeř hraje jednoduše a občas chybuje. Dobré na začátek.' },
+  { id: 'smart', title: 'Chytrý', desc: 'Soupeř dobře počítá šance a šetří si karty plus a mínus. Tvoje karty nevidí, odhaduje je podle toho, kolik jich máš.' },
+];
+// The opponent: a random name and face every match (games/_opponents/opponents.js), the level shown as stars
+const O = OPPONENTS;
+const lvIdx = id => Math.max(0, LEVELS.findIndex(l => l.id === id));
+const nm = () => G.foe.name;
+const WIN = 3;   // won rounds for a match
+const TOP = 21;
+const DEFAULTS = { level: 'easy', table: 'paper', back: 'nachod', face: 'white', pic: 'classic', vibrate: true };
+const KEY = 'games.oko-bere-plus-minus.state', BADGE = 'games.oko-bere-plus-minus.inProgress';
+
+/* ---------- Randomness: from G.seed, saved with the game (a reload goes on with the same cards) ---------- */
+const rnd = n => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; } catch (e) { return Math.floor(Math.random() * n); } };
+function rand01(g) {
+  g.seed = (g.seed + 0x6D2B79F5) | 0;
+  let t = g.seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+  return ((t ^ t >>> 14) >>> 0) / 4294967296;
+}
+function shuffled(g) {
+  const a = [...Array(40).keys()];
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand01(g) * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+// each player gets two plus and two minus cards (1–5) for the whole match
+const sideCards = g => [1, 1, -1, -1].map(s => s * (1 + Math.floor(rand01(g) * 5))).sort((a, b) => b - a);
+
+/* ---------- Sums ---------- */
+const cardSum = h => h.reduce((s, c) => s + val(c), 0);
+const total = (g, p) => cardSum(g.hands[p]) + g.mods[p].reduce((s, v) => s + v, 0);
+const canMod = (g, p) => g.side[p].length > 0; // user's decision: any number of plus/minus cards per round, each once per match
+// the minus card to play over 21: one that alone brings the sum to 21 or below (the highest such sum), otherwise the
+// biggest minus card when all of them together can still save the round; null when nothing can save it
+function rescueStep(t, minus) {
+  if (t <= TOP || !minus.length) return null;
+  const fit = minus.filter(v => t + v <= TOP);
+  if (fit.length) return Math.max(...fit);
+  return t + minus.reduce((a, v) => a + v, 0) <= TOP ? Math.min(...minus) : null;
+}
+const rescue = (g, p) => rescueStep(total(g, p), g.side[p].filter(v => v < 0));
+// the sum after the computer saves itself over 21 exactly as it really plays (rescueStep again and again); -1 = lost
+function afterRescue(t, minus) {
+  const m = minus.slice();
+  while (t > TOP) {
+    const v = rescueStep(t, m);
+    if (v === null) return -1;
+    m.splice(m.indexOf(v), 1); t += v;
+  }
+  return t;
+}
+
+/* ---------- The computer ----------
+   Fair play (user's decision): the computer does not see your cards, just as you do not see its cards; it knows
+   only how many you have, which plus/minus cards you played, and that you are not over 21 when you stopped.
+   Mírný: takes cards until its own limit for the round (15–18), whoever plays first; over 21 it saves itself
+   with minus cards, and before stopping it plays a plus card that brings it from below 19 to 19–21.
+   Chytrý: works out the chances like in Oko bere (playing second it guesses your sum from the number of your
+   cards and your played plus/minus cards); it plays a plus card only to reach 20 or 21 and keeps the minus cards
+   for saving itself. When it weighs stopping, it counts only with the plus/minus cards it will really play
+   (the rescue over 21 and one plus card to 20–21, never a combination). */
+function cpuWants(g) {
+  const t = total(g, 1);
+  if (t >= TOP) return false;
+  if (g.level === 'easy') return t < g.cpuT;
+  return smartWants(g);
+}
+// one plus card that brings it to 19–21 (Mírný) or 20–21 (Chytrý); null when none does
+function firstPlus(level, t, side) {
+  const lo = level === 'smart' ? 20 : 19;
+  if (t >= lo) return null;
+  const good = side.filter(v => v > 0 && t + v <= TOP && t + v >= lo);
+  return good.length ? Math.max(...good) : null;
+}
+// the plus card to play before stopping
+function cpuPlus(g) {
+  if (!canMod(g, 1)) return null;
+  return firstPlus(g.level, total(g, 1), g.side[1]);
+}
+function smartWants(g) {
+  const mine = g.hands[1], unseen = [...Array(40).keys()].filter(c => !mine.includes(c)); // your cards are hidden from it
+  const s = { seed: g.seed ^ 0x5bd1e995 }; // its own copy: thinking does not change the cards that come
+  const rand = () => rand01(s);
+  const draw = pool => pool.splice(Math.floor(rand() * pool.length), 1)[0];
+  // the sum it would end with: it really plays only the rescue over 21 and then one plus card to 20–21 (cpuPlus),
+  // so it counts with just that; -1 = over 21
+  const minus = g.side[1].filter(v => v < 0);
+  const end = t => {
+    const r = t > TOP ? afterRescue(t, minus) : t;
+    return r < 0 ? -1 : r + (firstPlus(g.level, r, g.side[1]) || 0);
+  };
+  const dist = new Map(), N = 400;
+  const add = (v, w) => dist.set(v, (dist.get(v) || 0) + w);
+  if (g.first === 1) {
+    // you play after it: a usual player takes cards until 15–17, saves itself with a minus card and reaches for
+    // 19–21 with a plus card. Your plus/minus cards are face down to it: it knows only which kinds are left
+    // (two of each at the start, the played ones were seen) and guesses their values.
+    const kinds = g.side[0].map(v => Math.sign(v));
+    for (let k = 0; k < N; k++) {
+      const pool = unseen.slice(), mods = kinds.map(x => x * (1 + Math.floor(rand() * 5))), T = 15 + Math.floor(rand() * 3);
+      let t = val(draw(pool));
+      const use = v => { mods.splice(mods.indexOf(v), 1); t += v; };
+      for (;;) {
+        if (t > TOP) { const v = rescueStep(t, mods.filter(x => x < 0)); if (v === null) break; use(v); continue; }
+        if (t < T) { t += val(draw(pool)); continue; }
+        const p = t < 19 ? mods.filter(v => v > 0 && t + v <= TOP && t + v >= 19) : [];
+        if (p.length) use(Math.max(...p));
+        break;
+      }
+      add(t > TOP ? -1 : t, 1 / N);
+    }
+  } else {
+    // you have stopped with n cards and these plus/minus cards, not over 21: sums a usual player could stop with
+    const n = g.hands[0].length, mods = g.mods[0].reduce((a, v) => a + v, 0), found = [];
+    for (let k = 0; k < 4000 && found.length < N; k++) {
+      const pool = unseen.slice(), p = [];
+      for (let i = 0; i < n; i++) p.push(val(draw(pool)));
+      const fin = p.reduce((a, v) => a + v, 0) + mods, T = 14 + Math.floor(rand() * 4);
+      if (fin > TOP || fin < T || (n > 1 && fin - p[n - 1] >= T)) continue; // it took the last card while below its limit
+      found.push(fin);
+    }
+    // too few such sums (e.g. it stopped with one card): any n cards that are not over 21
+    for (let k = 0; k < 4000 && found.length < 30; k++) {
+      const pool = unseen.slice();
+      let fin = mods; for (let i = 0; i < n; i++) fin += val(draw(pool));
+      if (fin <= TOP) found.push(fin);
+    }
+    for (const v of found) add(v, 1 / found.length);
+  }
+  const standU = v => { if (v < 0) return -1; let u = 0; for (const [p, w] of dist) u += w * Math.sign(v - p); return u; };
+  const best = (t, pool, depth) => {
+    const e = end(t);
+    if (e < 0) return -1;
+    const st = standU(e);
+    if (depth === 0 || t >= TOP) return st;
+    let u = 0;
+    for (let i = 0; i < pool.length; i++) u += best(t + val(pool[i]), pool.slice(0, i).concat(pool.slice(i + 1)), depth - 1);
+    return Math.max(st, u / pool.length);
+  };
+  const t = total(g, 1);
+  const st = standU(end(t));
+  let drawU = 0;
+  for (let i = 0; i < unseen.length; i++) drawU += best(t + val(unseen[i]), unseen.slice(0, i).concat(unseen.slice(i + 1)), 1);
+  return drawU / unseen.length > st + 0.001;
+}
+
+/* ---------- State ----------
+   G = { level, foe: { name, fem, face }, score: [you, cpu], round, first, deck, hands: [you, cpu], side: [[…], […]] (plus/minus cards left),
+         mods: [[…], […]] (played this round), undo: ['mod', …] (plus/minus cards Zpět can return), phase: 'you' | 'cpu' | 'done' ('stood' only in older saves),
+         cpuDone, cpuT, result, seed, status: 'playing' | 'over', counted } */
+let S, G, ST, busy = false;
+const playing = () => G && G.status === 'playing';
+const isFresh = () => G.round === 1 && G.phase === 'you' && G.hands[0].length === 1 && !G.mods[0].length && !G.cpuDone && G.score[0] + G.score[1] === 0;
+const hasProgress = () => playing() && !isFresh();
+function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, stats: ST }));
+    if (hasProgress()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {}
+}
+const isCard = c => Number.isInteger(c) && c >= 0 && c < 40;
+const isMod = v => Number.isInteger(v) && v !== 0 && Math.abs(v) <= 5;
+// rule: corrupted data never crashes the game; the end of a round and of the match comes from the cards and the score
+function validGame(g) {
+  try {
+    if (!g || !LEVELS.some(l => l.id === g.level) || !Array.isArray(g.hands) || g.hands.length !== 2 || !Array.isArray(g.deck)) return false;
+    const all = [...g.deck, ...g.hands[0], ...g.hands[1]];
+    if (all.length !== 40 || new Set(all).size !== 40 || !all.every(isCard)) return false;
+    for (const k of ['side', 'mods']) if (!Array.isArray(g[k]) || g[k].length !== 2 || !g[k].every(a => Array.isArray(a) && a.every(isMod))) return false;
+    // each player gets two plus and two minus cards per match; the ones played in earlier rounds are gone,
+    // so the cards left plus the ones played this round hold at most two of each sign
+    if (g.side.some((a, p) => { const m = [...a, ...g.mods[p]]; return m.filter(v => v > 0).length > 2 || m.filter(v => v < 0).length > 2; })) return false;
+    if (!Array.isArray(g.score) || g.score.length !== 2 || !g.score.every(v => Number.isInteger(v) && v >= 0 && v <= WIN)) return false;
+    if (!Number.isInteger(g.round) || g.round < 1 || ![0, 1].includes(g.first) || !Number.isInteger(g.seed)) return false;
+    if (!['you', 'stood', 'cpu', 'done'].includes(g.phase) || !g.hands[0].length || !g.hands[1].length) return false;
+    g.cpuDone = !!g.cpuDone;
+    if (!O.valid(g.foe)) g.foe = O.create(rnd); // a save from before the named opponents
+    if (!Number.isInteger(g.cpuT)) g.cpuT = 16;
+    // a broken Undo list only loses Undo
+    if (!Array.isArray(g.undo) || !g.undo.every(u => u === 'mod') || g.phase !== 'you') g.undo = []; // only a plus/minus card of this turn can go back
+    if (g.phase === 'done') g.result = judge(g);
+    g.status = g.score[0] >= WIN || g.score[1] >= WIN ? 'over' : 'playing';
+    g.counted = g.counted === true || g.status === 'over';
+    return true;
+  } catch (e) { return false; }
+}
+function normalize(s) {
+  if (!LEVELS.some(l => l.id === s.level)) s.level = DEFAULTS.level;
+  CARDS.normalizeLook(s, DEFAULTS);
+  s.vibrate = !!s.vibrate;
+}
+function validStats(v) {
+  const n = x => Number.isInteger(x) && x >= 0 ? x : 0;
+  const out = {};
+  for (const l of LEVELS) { const x = v && v[l.id], played = n(x && x.played); out[l.id] = { played, won: Math.min(n(x && x.won), played) }; }
+  return out;
+}
+
+/* ---------- Rounds ---------- */
+// who won the finished round: 0 you, 1 the computer, -1 nobody; why: 'bust', 'more', 'tie'
+function judge(g) {
+  const a = total(g, 0), b = total(g, 1);
+  if (a > TOP) return { win: 1, why: 'bust' };
+  if (b > TOP) return { win: 0, why: 'bust' };
+  if (a === b) return { win: -1, why: 'tie' };
+  return { win: a > b ? 0 : 1, why: 'more' };
+}
+function startRound(g) {
+  g.deck = shuffled(g);
+  g.hands = [[g.deck.pop()], [g.deck.pop()]];
+  g.mods = [[], []];
+  g.undo = [];
+  g.cpuDone = false;
+  g.cpuT = 15 + Math.floor(rand01(g) * 4); // the easy opponent's limit for this round
+  g.result = null;
+  g.phase = g.first === 0 ? 'you' : 'cpu';
+}
+function newGame(msg) {
+  clearTimeout(cpuTimer); busy = false; // a confirmed new game stops the computer's turn
+  G = { level: S.level, foe: O.create(rnd, G && G.foe ? [G.foe.name] : []), score: [0, 0], round: 1, first: 0, seed: rnd(2 ** 31), status: 'playing', counted: false };
+  G.side = [sideCards(G), sideCards(G)];
+  startRound(G);
+  shown = [0, 0];
+  save(); render();
+  if (msg) toast(msg);
+}
+function nextRound() {
+  G.round++;
+  G.first = 1 - G.first;
+  startRound(G);
+  shown = [0, 0];
+  save(); render();
+  if (G.phase === 'cpu') cpuTurn();
+}
+function finishRound() {
+  G.phase = 'done';
+  G.undo = [];
+  G.result = judge(G);
+  if (G.result.win >= 0) G.score[G.result.win]++;
+  if (G.score[G.result.win] >= WIN) {
+    G.status = 'over';
+    if (!G.counted) {
+      G.counted = true;
+      const st = ST[G.level]; st.played++; if (G.result.win === 0) st.won++;
+    }
+    const g0 = G, youWon = G.result.win === 0;
+    whenFree(g0, 1400, () => showModal(youWon
+      ? `<h2>Zápas je tvůj! 🎉</h2><p>Vyhráváš <b>${G.score[0]} : ${G.score[1]}</b>.</p>`
+      : `<h2>Zápas ${O.past(G.foe, 'vyhrál', 'vyhrála')} ${nm()}</h2><p>Skončilo to <b>${G.score[0]} : ${G.score[1]}</b>. Zkus to znovu.</p>`,
+      [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]));
+  }
+  buzz(30);
+}
+
+/* ---------- Your moves ---------- */
+function takeCard() {
+  G.hands[0].push(G.deck.pop());
+  G.undo = []; // a drawn card cannot be returned, and nothing before it either
+  buzz();
+  // over 21 without minus cards that could help: the round is lost
+  if (total(G, 0) > TOP && rescue(G, 0) === null) finishRound();
+  save(); render();
+  autoStand();
+}
+function playMod(i) {
+  const v = G.side[0][i];
+  G.side[0].splice(i, 1);
+  G.mods[0].push(v);
+  G.undo.push('mod');
+  buzz(); save(); render();
+  autoStand();
+}
+// user's decision: after Stačí the computer plays at once (no extra tap), or the round is judged when it already played
+function stand() {
+  if (total(G, 0) > TOP) { finishRound(); save(); render(); return; } // over 21: the round is lost
+  buzz();
+  goOn();
+}
+// user's decision: exactly 21 cannot get better, so the game says Stačí by itself after a moment
+// (long enough to see the card); a tap meanwhile wins, and a new game drops it
+function autoStand() {
+  if (G.phase !== 'you' || total(G, 0) !== TOP) return;
+  const g0 = G;
+  setTimeout(() => { if (G === g0 && G.phase === 'you' && !busy && total(G, 0) === TOP) stand(); }, 900);
+}
+function undo() {
+  const v = G.mods[0].pop(); G.undo.pop();
+  G.side[0].push(v); G.side[0].sort((a, b) => b - a);
+  toast(`Karta ${sgn(v)} je zpátky v ruce.`);
+  buzz(); save(); render();
+}
+function goOn() {
+  G.undo = [];
+  if (G.cpuDone) { finishRound(); save(); render(); return; }
+  G.phase = 'cpu'; save(); render();
+  cpuTurn();
+}
+
+/* ---------- The computer's turn (one step at a time, so it can be watched) ---------- */
+let cpuTimer = 0;
+function cpuTurn(ms = 700) {
+  busy = true; clearTimeout(cpuTimer);
+  const g0 = G;
+  cpuTimer = setTimeout(function step() {
+    if (G !== g0 || G.phase !== 'cpu') { busy = false; return; }
+    if (!nothingOpen()) { cpuTimer = setTimeout(step, 400); return; } // waits while Settings or Help are open
+    const next = d => { save(); render(); cpuTimer = setTimeout(step, d); };
+    if (total(G, 1) > TOP) {
+      const v = rescue(G, 1);
+      if (v === null) { busy = false; finishRound(); save(); render(); return; }
+      G.side[1].splice(G.side[1].indexOf(v), 1); G.mods[1].push(v); next(900); return;
+    }
+    if (cpuWants(G)) { G.hands[1].push(G.deck.pop()); next(850); return; }
+    const plus = cpuPlus(G);
+    if (plus !== null) { G.side[1].splice(G.side[1].indexOf(plus), 1); G.mods[1].push(plus); next(900); return; }
+    busy = false;
+    G.cpuDone = true;
+    if (G.first === 1) G.phase = 'you';
+    else finishRound();
+    buzz(8); save(); render();
+  }, ms);
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) {
+  if (!S.vibrate || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+  try { navigator.vibrate(ms); } catch (e) {}
+}
+let toastT;
+function toast(msg, ms = 3000) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  t.style.bottom = (innerHeight - $('#tray').getBoundingClientRect().top + 12) + 'px';
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+const busyToast = () => toast(`Chvilku, hraje ${nm()}…`);
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + '<div class="mbtns">' + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('') + '</div>';
+  $('#modal').hidden = false;
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+}
+const plural = (n, one, few, many) => `${n} ${n === 1 ? one : n >= 2 && n <= 4 ? few : many}`;
+
+/* ---------- Rendering ---------- */
+const ICONS = {
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  take: '<rect x="4" y="6" width="11" height="15" rx="2"/><path d="M19 4v8M15 8h8"/>',
+  stand: '<path d="M7 12V6a1.5 1.5 0 0 1 3 0v5M10 11V4.5a1.5 1.5 0 0 1 3 0V11M13 11V5.5a1.5 1.5 0 0 1 3 0V12M16 12V8.5a1.5 1.5 0 0 1 3 0V15a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-3l-2.5-4.5a1.5 1.5 0 0 1 2.5-1.6L7 15"/>',
+  play: '<path d="M7 4v16l13-8z"/>',
+  next: '<path d="M5 12h13M13 6l6 6-6 6"/>',
+  again: '<path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/>',
+};
+let shown = [0, 0]; // cards and tokens already on the table (new ones fly in)
+function applyLook() { CARDS.applyLook(S); }
+const ptsHTML = n => `<span class="dots" aria-hidden="true">${[...Array(WIN)].map((_, i) => `<i${i < n ? ' class="f"' : ''}></i>`).join('')}</span><b>${n}</b>`;
+function render() {
+  applyLook();
+  if (!G) return;
+  const done = G.phase === 'done', res = done ? G.result : null;
+  ['handYou', 'handCpu'].forEach((id, p) => {
+    const el = $('#' + id), items = G.hands[p].length + G.mods[p].length;
+    el.innerHTML = G.hands[p].map((c, i) => cardHTML(c, p === 0 || done, i >= shown[p] ? ' new' : '')).join('')
+      + G.mods[p].map((v, i) => tokHTML(v, G.hands[p].length + i >= shown[p] ? ' new' : '')).join('');
+    shown[p] = items;
+  });
+  // who plays now is lit, the other side is dimmed; after the round the winner is lit and the loser dimmed
+  const turn = G.phase === 'you' ? 0 : G.phase === 'cpu' || G.phase === 'stood' ? 1 : -1;
+  ['sideYou', 'sideCpu'].forEach((id, p) => {
+    const el = $('#' + id);
+    el.classList.toggle('on', turn === p);
+    el.classList.toggle('off', turn === 1 - p || (!!res && res.win === 1 - p));
+    el.classList.toggle('win', !!res && res.win === p);
+  });
+  // your plus/minus cards (tap to play); the computer's lie face down
+  const myTurn = G.phase === 'you' && playing();
+  $('#chipsYou').innerHTML = G.side[0].length
+    ? G.side[0].map((v, i) => `<button class="chip${v < 0 ? ' minus' : ''}${myTurn ? '' : ' dim'}" data-i="${i}" aria-label="Zahrát kartu ${sgn(v)}">${sgn(v)}</button>`).join('')
+    : '<span class="none">Karty plus a mínus jsou všechny zahrané</span>';
+  $('#chipsCpu').innerHTML = G.side[1].length ? G.side[1].map(() => '<span class="back" role="img" aria-label="soupeřova karta plus nebo mínus"></span>').join('') : '';
+  // the goal is always written next to the sum, so nobody has to remember it (user's wish)
+  const sumText = n => n > TOP ? `Součet ${n}, přes ${TOP}` : `Součet ${n} z ${TOP}`;
+  const ty = total(G, 0), sy = $('#sumYou');
+  sy.textContent = sumText(ty);
+  sy.classList.toggle('hi', ty === TOP); sy.classList.toggle('over', ty > TOP);
+  const sc = $('#sumCpu'), tc = total(G, 1);
+  sc.textContent = done ? sumText(tc) : plural(G.hands[1].length, 'karta', 'karty', 'karet');
+  sc.classList.toggle('hi', done && tc === TOP); sc.classList.toggle('over', done && tc > TOP);
+  $('#ptsYou').innerHTML = ptsHTML(G.score[0]); $('#ptsYou').setAttribute('aria-label', `Tvoje vyhraná kola: ${G.score[0]} z ${WIN}`);
+  $('#ptsCpu').innerHTML = ptsHTML(G.score[1]); $('#ptsCpu').setAttribute('aria-label', `Vyhraná kola: ${G.score[1]} z ${WIN}`);
+  $('#foeCpu').innerHTML = O.head(G.foe, { mood: foeMood(), badge: O.levelBadge(LEVELS, lvIdx(G.level)) });
+  $('#msg').innerHTML = message();
+  renderTray();
+  layout();
+}
+// the opponent's face: thinking while it plays, happy or sad when the round is over
+function foeMood() {
+  if (G.phase === 'cpu') return 'think';
+  const r = G.phase === 'done' && G.result;
+  return !r || r.win < 0 ? 'calm' : r.win === 1 ? 'happy' : 'sad';
+}
+function message() {
+  const t = total(G, 0);
+  const info = `<small>Kolo ${G.round} · hraje se na ${WIN} vyhraná kola</small>`;
+  if (G.phase === 'you') {
+    const ln = t > TOP ? `Máš ${t}, to je přes. ${rescue(G, 0) !== null ? 'Zahraj kartu <b>mínus</b>.' : 'Zpět kartu vrátí.'}`
+      : t === TOP ? 'Máš <b>21</b>!'
+      : G.cpuDone ? `${nm()} má ${plural(G.hands[1].length, 'kartu', 'karty', 'karet')} a stačí ${O.past(G.foe, 'mu', 'jí')}.`
+      : 'Ber karty, nebo ťukni na <b>Stačí</b>.';
+    return `<div class="hd">Tvůj tah</div><div class="ln">${ln}</div>${info}`;
+  }
+  if (G.phase !== 'done') {
+    const m = G.mods[1], ln = m.length ? `${O.past(G.foe, 'Zahrál', 'Zahrála')} kartu <b>${sgn(m[m.length - 1])}</b>…` : 'Bere karty…';
+    return `<div class="hd">Hraje ${nm()}</div><div class="ln">${ln}</div>${info}`;
+  }
+  // the end of the round: a big banner says who won it and why
+  const r = G.result, tc = total(G, 1);
+  const why = r.why === 'bust' ? (r.win === 1 ? `Máš ${t}, to je přes.` : `${nm()} má ${tc}, to je přes.`) : `Ty ${t} : ${nm()} ${tc}`;
+  let hd = r.win === 0 ? 'Kolo je tvoje!' : r.win === 1 ? `Kolo bere ${nm()}` : 'Remíza, kolo nikdo';
+  if (G.status === 'over') hd = r.win === 0 ? `Vyhráváš zápas ${G.score[0]} : ${G.score[1]}!` : `Zápas ${O.past(G.foe, 'vyhrál', 'vyhrála')} ${nm()}`;
+  return `<div class="banner ${r.win === 0 ? 'win' : r.win === 1 ? 'lose' : 'tie'}"><div class="hd">${hd}</div><div class="ln">${why}</div></div>`;
+}
+function renderTray() {
+  const ph = G.phase, over = G.status === 'over';
+  const a = (id, icon, label, cls = '') => `<button class="act${cls}" data-a="${id}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[icon]}</svg>${label}</button>`;
+  const undo = `<button class="act${G.undo.length && !over ? '' : ' dim'}" data-a="undo"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.undo}</svg>Zpět</button>`;
+  let html;
+  if (over) html = undo + a('again', 'again', 'Hrát znovu', ' go');
+  else if (ph === 'you') {
+    const full = total(G, 0) >= TOP;
+    html = undo + a('stand', 'stand', 'Stačí', total(G, 0) === TOP ? ' go' : '') + a('take', 'take', 'Ještě kartu', full ? ' dim' : ' go');
+  }
+  else if (ph === 'cpu' || ph === 'stood') html = undo + a('wait', 'play', `Hraje ${nm()}`, ' dim');
+  else html = undo + a('next', 'next', 'Další kolo', ' go');
+  $('#tray').innerHTML = html;
+}
+// rule: the card size comes from the room that is left, so both hands and the chips fit without scrolling
+function layout() {
+  const t = $('#table'), W = $('#handYou').clientWidth, cs = getComputedStyle(t), H = t.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  if (W <= 0 || H <= 0) return;
+  // everything but the two hands: the panels' name, chip and sum rows, paddings and borders, the message, the gaps
+  const sides = [...t.querySelectorAll('.side')].reduce((a, el) => a + el.offsetHeight - el.querySelector('.hand').offsetHeight, 0);
+  const m = $('#msg'), gap = parseFloat(cs.rowGap) || 8;
+  const fixed = sides + Math.max(m.offsetHeight, parseFloat(getComputedStyle(m).minHeight) || 0) + 2 * gap + 4;
+  const cw = Math.max(30, Math.min(108, Math.floor(W / 4.1), Math.floor((H - fixed) / 2 / 1.4))); // tiny only in a very short browser window, never on a phone
+  const ch = Math.round(cw * 1.4);
+  t.style.setProperty('--cw', cw + 'px'); t.style.setProperty('--ch', ch + 'px');
+  // a long hand overlaps like a fan, so it never wraps or gets wider than the table
+  for (const el of t.querySelectorAll('.hand')) {
+    const kids = [...el.children], n = kids.length; if (n < 2) continue;
+    const widths = kids.map(k => k.classList.contains('tok') ? Math.round(cw * .78) : cw);
+    const gap = Math.min(8, Math.floor((W - widths.reduce((a, b) => a + b, 0)) / (n - 1)));
+    kids.forEach((c, i) => { c.style.marginLeft = i ? gap + 'px' : ''; });
+  }
+}
+
+/* ---------- Controls ---------- */
+let lastTray = 0; // the time of the last tap on the bottom row
+$('#tray').addEventListener('click', e => {
+  const b = e.target.closest('.act'); if (!b) return;
+  // a shaky double tap: the row is redrawn at once, so the second tap would hit the next button (Další kolo, Hrát znovu, Ještě kartu)
+  if (Date.now() - lastTray < 450) return;
+  lastTray = Date.now();
+  const a = b.dataset.a;
+  if (a === 'again') { newGame(); return; }
+  if (busy || G.phase === 'cpu') { busyToast(); return; }
+  if (a === 'undo') {
+    if (G.status === 'over') { toast('Zápas skončil. Ťukni na Hrát znovu.'); return; }
+    if (G.undo.length) { undo(); return; }
+    if (G.phase === 'done') { toast('Kolo už je vyhodnocené. Ťukni na Další kolo.'); return; }
+    toast(G.hands[0].length === 1 ? 'Zatím není co vrátit. Zpět vrátí kartu plus nebo mínus, dokud po ní nepřijde další karta.' : 'Vzatou kartu vrátit nejde, to by bylo nahlížení do balíčku.', 4500);
+    return;
+  }
+  if (a === 'take') {
+    if (G.phase !== 'you') return;
+    const t = total(G, 0);
+    if (t > TOP) { toast(rescue(G, 0) !== null ? 'Máš přes 21. Zahraj kartu mínus, nebo ťukni na Stačí.' : `Máš přes 21. Zpět vrátí kartu ${sgn(G.mods[0][0])}.`); return; }
+    if (t === TOP) { toast('Máš 21, víc už nejde. Ťukni na Stačí.'); return; }
+    takeCard();
+  }
+  else if (a === 'stand') {
+    if (G.phase !== 'you') return;
+    if (total(G, 0) > TOP) {
+      showModal(`<h2>Vzdát kolo?</h2><p>Máš ${total(G, 0)}, to je přes. Když teď řekneš Stačí, kolo prohraješ.</p>`,
+        [{ text: 'Ano, vzdát kolo', fn: stand }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+      return;
+    }
+    stand();
+  }
+  else if (a === 'next') { if (G.phase === 'done' && G.status === 'playing') nextRound(); }
+});
+$('#chipsYou').addEventListener('click', e => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  if (busy || G.phase === 'cpu') { busyToast(); return; }
+  if (G.status === 'over') { toast('Zápas skončil. Ťukni na Hrát znovu.'); return; }
+  if (G.phase === 'done') { toast('Kolo skončilo. Karta plus nebo mínus ti zůstane na další kolo.'); return; }
+  playMod(+b.dataset.i);
+});
+$('#table').addEventListener('click', e => {
+  if (e.target.closest('#chipsYou')) return;
+  if (busy || G.phase === 'cpu') { busyToast(); return; }
+  if (e.target.closest('#chipsCpu .back')) toast(`Karty plus a mínus uvidíš, až je ${nm()} zahraje.`);
+  else if (e.target.closest('#handCpu .cd') && G.phase !== 'done') toast(`${nm()} ukáže karty až na konci kola.`);
+});
+$('#btnNew').addEventListener('click', () => {
+  if (hasProgress()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehraný zápas se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+
+/* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
+const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
+const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+const tile = (act, on, inner, name) => `<button class="tile" data-act="${act}" aria-pressed="${on}">${inner}${name}</button>`;
+// sample cards: ace ♥, 7 ♠, 10 ♦ (face colour, pictures and back follow the settings)
+const SAMPLE = [10, 6, 39];
+const minis = (pic, withBack) => `<span class="mini">${SAMPLE.slice(0, withBack ? 2 : 3).map(c => `<div class="cd up${red(c) ? ' r' : ''}">${CARDS.faceHTML(suit(c), val(c), pic)}</div>`).join('')}${withBack ? '<div class="cd"></div>' : ''}</span>`;
+function renderSettings() {
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Oko bere plus mínus<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Soupeř</h3>
+      ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, O.levelName(LEVELS, i), l.desc)).join('')}
+      <div class="fnote">Jméno soupeře je v každé hře jiné. Hvězdičky u jména ukazují, jak dobře hraje.</div>
+      ${S.level !== G.level && !isFresh() ? `<div class="notice">Síla soupeře se změní od <b>příští hry</b>.${playing() ? ' Rozehraný zápas zůstává.' : ''}</div>` : ''}
+    </section>
+    ${CARDS.appearanceHTML(S, tile, minis, '--cw:56px;--ch:78px', toggleRow('vibrate', 'Vibrace'))}
+    <section class="card"><h3>Statistika</h3>
+      <p class="stats">${LEVELS.map((l, i) => `Soupeř ${O.levelName(LEVELS, i).toLowerCase()}: vyhráno <b>${ST[l.id].won}</b> z ${plural(ST[l.id].played, 'zápasu', 'zápasů', 'zápasů')}`).join('<br>')}</p>
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  if (b.tagName === 'A') return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (['level', 'table', 'back', 'face', 'pic'].includes(act)) S[act] = arg;
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S); buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
+});
+function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+// a new opponent plays from the next match; before the first move it takes over at once (rule: say so)
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  if (S.level !== G.level) {
+    if (isFresh()) { G.level = S.level; save(); }
+    else toast('Síla soupeře se změní od příští hry');
+  }
+  render();
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
+function renderHelp() {
+  const c = (n, s) => s * 10 + n - 1;
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Oko bere plus mínus<small>Jak hrát</small></h2></div>
+    <section class="card help">
+      <ol>
+        <li><b>Cíl:</b> mít součet co nejblíž <b>21</b>, ale ne víc. Hraješ proti počítači. Soupeř má v každé hře jiné jméno a hvězdičky u jména ukazují, jak dobře hraje.</li>
+        <li>Hraje se kartami od esa do desítky. Eso má 1 bod, ostatní karty tolik, kolik ukazují.</li>
+        <li>Na začátku kola dostanete každý jednu kartu. Ťukni na <b>Ještě kartu</b> a přibereš si další. Když ti součet stačí, ťukni na <b>Stačí</b>. Když máš přesně 21, řekne hra Stačí sama.</li>
+        <li>Pak hraje soupeř. Jeho karty jsou otočené rubem a uvidíš je až na konci kola. Ani soupeř tvoje karty nevidí, ví jen, kolik jich máš.</li>
+        <li>Kola začínáte střídavě: jednou ty, jednou soupeř. Když začíná soupeř, hraješ až po něm.</li>
+        <li>Kdo je blíž 21, vyhrává kolo. Při stejném součtu kolo nevyhraje nikdo. Zápas vyhraje, kdo první vyhraje <b>${WIN} kola</b>.</li>
+      </ol>
+    </section>
+    <section class="card help"><h3>Karty plus a mínus</h3>
+      <p>Na začátku zápasu dostaneš <b>4 karty plus a mínus</b>: dvě plus a dvě mínus, každou od 1 do 5. Jsou pod tvými kartami.</p>
+      <p>Ťuknutím kartu zahraješ a přičte se nebo odečte od součtu. V jednom kole jich můžeš zahrát i víc, každá karta ale platí jen jednou za celý zápas. Rozmysli si, kdy ji použiješ.</p>
+      <div class="demo-felt">Máš 16 a vezmeš osmičku, to je 24, přes:
+        <span class="mini">${cardHTML(c(9, 0), true)}${cardHTML(c(7, 1), true)}${cardHTML(c(8, 2), true)}${tokHTML(-3)}</span>
+        Karta −3 udělá z 24 přesně 21.</div>
+      <p>Soupeř má karty plus a mínus taky. Když nějakou zahraje, uvidíš ji. A on zase uvidí ty tvoje zahrané.</p>
+    </section>
+    <section class="card help"><h3>Zpět</h3>
+      <p>Zpět vrátí kartu plus nebo mínus zahranou v tomto kole, ale jen dokud po ní nepřišla další karta. Po ťuknutí na <b>Stačí</b> hned hraje soupeř. Vzatou kartu vrátit nejde, to by bylo nahlížení do balíčku.</p>
+      <p class="fnote">Na čas se nehraje. Sílu soupeře, stůl a vzhled karet změníš v nastavení ⚙.</p>
+    </section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// rule: ask for persistent storage so the browser does not delete the saved game by itself
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+// rule: only the known settings are taken over from the save
+const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+ST = validStats(saved && saved.stats);
+applyLook();
+if (saved && validGame(saved.game)) {
+  G = saved.game;
+  save(); // an opponent drawn for an older save stays the same after the next reload
+  if (isFresh()) G.level = S.level; // settings closed by a reload before the first move
+  shown = [G.hands[0].length + G.mods[0].length, G.hands[1].length + G.mods[1].length];
+  render();
+  if (G.phase === 'cpu') cpuTurn(); // reloaded while the computer was playing: it goes on with the same cards
+  else if (G.phase === 'stood') goOn(); // an older save stopped after Stačí: the computer plays now
+  else autoStand(); // reloaded at exactly 21
+} else newGame();
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// contract: opened from the launcher (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing
+window.OkoBerePlusMinus = { total, judge, rescue, cpuWants, cpuPlus, render: () => render(),
+  get state() { return { S, G, ST, busy }; } };
+})();
+</script>
+</body>
+</html>

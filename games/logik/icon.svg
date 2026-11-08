@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- kolíčky: světlý odlesk + tmavší okraj, jako ve hře -->
+    <radialGradient id="pRed" cx=".5" cy=".55" r=".55"><stop offset=".5" stop-color="#e0302a"/><stop offset="1" stop-color="#7b1a17"/></radialGradient>
+    <radialGradient id="pYel" cx=".5" cy=".55" r=".55"><stop offset=".5" stop-color="#ffd31a"/><stop offset="1" stop-color="#8c7410"/></radialGradient>
+    <radialGradient id="pGrn" cx=".5" cy=".55" r=".55"><stop offset=".5" stop-color="#2fa84f"/><stop offset="1" stop-color="#1a5c2b"/></radialGradient>
+    <radialGradient id="pBlu" cx=".5" cy=".55" r=".55"><stop offset=".5" stop-color="#1f5fd6"/><stop offset="1" stop-color="#113475"/></radialGradient>
+    <radialGradient id="pOra" cx=".5" cy=".55" r=".55"><stop offset=".5" stop-color="#ff8a1c"/><stop offset="1" stop-color="#8c4c0f"/></radialGradient>
+    <radialGradient id="pPur" cx=".5" cy=".55" r=".55"><stop offset=".5" stop-color="#8e3bc4"/><stop offset="1" stop-color="#4e206c"/></radialGradient>
+    <radialGradient id="hl" cx=".34" cy=".28" r=".36"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".4" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+    <radialGradient id="hole" cx=".5" cy=".42" r=".55"><stop offset=".5" stop-color="#160a03"/><stop offset="1" stop-color="#2e1709"/></radialGradient>
+    <radialGradient id="fbB" cx=".35" cy=".3" r=".7"><stop offset="0" stop-color="#8a8a8a"/><stop offset=".3" stop-color="#2a2a2a"/><stop offset=".8" stop-color="#000"/></radialGradient>
+    <radialGradient id="fbW" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#fff"/><stop offset=".4" stop-color="#f4f4f4"/><stop offset="1" stop-color="#b9b9b9"/></radialGradient>
+    <!-- víčko: stínování, aby vypadalo vystouplé -->
+    <linearGradient id="lidShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".16"/><stop offset=".3" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".3"/></linearGradient>
+    <radialGradient id="bump" cx=".38" cy=".3" r=".6"><stop offset="0" stop-color="#fff" stop-opacity=".28"/><stop offset=".35" stop-color="#fff" stop-opacity=".07"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/><stop offset=".85" stop-color="#000" stop-opacity=".12"/><stop offset="1" stop-color="#000" stop-opacity=".3"/></radialGradient>
+    <filter id="sh" x="-30%" y="-30%" width="160%" height="170%"><feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#000" flood-opacity=".55"/></filter>
+    <filter id="shLid" x="-10%" y="-20%" width="120%" height="160%"><feDropShadow dx="0" dy="8" stdDeviation="7" flood-color="#000" flood-opacity=".55"/></filter>
+    <g id="peg"><circle r="37" fill="url(#hl)"/></g>
+  </defs>
+
+  <!-- deska: tmavé dřevo, jednolitá barva s jemnou kresbou -->
+  <rect width="512" height="512" fill="#4b2a15"/>
+  <g stroke="#000" stroke-opacity=".14" stroke-width="2">
+    <line x1="22" y1="0" x2="23" y2="512"/><line x1="118" y1="0" x2="116" y2="512"/><line x1="214" y1="0" x2="215" y2="512"/>
+    <line x1="302" y1="0" x2="300" y2="512"/><line x1="392" y1="0" x2="393" y2="512"/><line x1="490" y1="0" x2="488" y2="512"/>
+  </g>
+
+  <!-- víčko s bublinami nad schovaným kódem -->
+  <g filter="url(#shLid)">
+    <rect x="30" y="30" width="452" height="114" rx="26" fill="#4b2a15"/>
+  </g>
+  <rect x="30" y="30" width="452" height="114" rx="26" fill="url(#lidShade)" stroke="#000" stroke-opacity=".4" stroke-width="4"/>
+  <g filter="url(#sh)">
+    <circle cx="79" cy="87" r="36" fill="url(#bump)"/>
+    <circle cx="169" cy="87" r="36" fill="url(#bump)"/>
+    <circle cx="259" cy="87" r="36" fill="url(#bump)"/>
+    <circle cx="349" cy="87" r="36" fill="url(#bump)"/>
+  </g>
+
+  <!-- rýhy mezi řádky -->
+  <g stroke-width="3">
+    <line x1="40" y1="381" x2="472" y2="381" stroke="#000" stroke-opacity=".38"/>
+    <line x1="40" y1="384" x2="472" y2="384" stroke="#fff" stroke-opacity=".07"/>
+  </g>
+
+  <!-- aktivní řádek (zlatě zvýrazněný) -->
+  <rect x="22" y="166" width="468" height="100" rx="24" fill="#fff" fill-opacity=".13" stroke="#ffcf6b" stroke-width="7"/>
+  <circle cx="79" cy="216" r="37" fill="url(#hole)"/>
+  <circle cx="169" cy="216" r="37" fill="url(#hole)"/>
+  <circle cx="259" cy="216" r="37" fill="url(#hole)" stroke="#ffcf6b" stroke-width="6"/>
+  <circle cx="349" cy="216" r="37" fill="url(#hole)"/>
+  <g filter="url(#sh)">
+    <circle cx="79" cy="216" r="35" fill="url(#pBlu)"/><use href="#peg" x="79" y="216"/>
+    <circle cx="169" cy="216" r="35" fill="url(#pRed)"/><use href="#peg" x="169" y="216"/>
+  </g>
+  <g fill="url(#hole)">
+    <circle cx="423" cy="198" r="15"/><circle cx="461" cy="198" r="15"/>
+    <circle cx="423" cy="236" r="15"/><circle cx="461" cy="236" r="15"/>
+  </g>
+
+  <!-- 2. pokus -->
+  <g filter="url(#sh)">
+    <circle cx="79" cy="326" r="35" fill="url(#pYel)"/><use href="#peg" x="79" y="326"/>
+    <circle cx="169" cy="326" r="35" fill="url(#pRed)"/><use href="#peg" x="169" y="326"/>
+    <circle cx="259" cy="326" r="35" fill="url(#pPur)"/><use href="#peg" x="259" y="326"/>
+    <circle cx="349" cy="326" r="35" fill="url(#pGrn)"/><use href="#peg" x="349" y="326"/>
+  </g>
+  <circle cx="423" cy="308" r="14" fill="url(#fbB)" stroke="#fff" stroke-opacity=".75" stroke-width="3"/>
+  <circle cx="461" cy="308" r="14" fill="url(#fbB)" stroke="#fff" stroke-opacity=".75" stroke-width="3"/>
+  <circle cx="423" cy="346" r="14" fill="url(#fbW)" stroke="#000" stroke-opacity=".55" stroke-width="3"/>
+  <circle cx="461" cy="346" r="15" fill="url(#hole)"/>
+
+  <!-- 1. pokus -->
+  <g filter="url(#sh)">
+    <circle cx="79" cy="436" r="35" fill="url(#pRed)"/><use href="#peg" x="79" y="436"/>
+    <circle cx="169" cy="436" r="35" fill="url(#pBlu)"/><use href="#peg" x="169" y="436"/>
+    <circle cx="259" cy="436" r="35" fill="url(#pGrn)"/><use href="#peg" x="259" y="436"/>
+    <circle cx="349" cy="436" r="35" fill="url(#pOra)"/><use href="#peg" x="349" y="436"/>
+  </g>
+  <circle cx="423" cy="418" r="14" fill="url(#fbB)" stroke="#fff" stroke-opacity=".75" stroke-width="3"/>
+  <circle cx="461" cy="418" r="14" fill="url(#fbW)" stroke="#000" stroke-opacity=".55" stroke-width="3"/>
+  <circle cx="423" cy="456" r="14" fill="url(#fbW)" stroke="#000" stroke-opacity=".55" stroke-width="3"/>
+  <circle cx="461" cy="456" r="15" fill="url(#hole)"/>
+</svg>

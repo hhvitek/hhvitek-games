@@ -1,0 +1,1084 @@
+<!doctype html>
+<html lang="cs" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4ebdf">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sudoku">
+<title>Sudoku</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23efe7d8'/%3E%3Crect x='6' y='6' width='52' height='52' fill='%23fffbf2' stroke='%234b3c27' stroke-width='4'/%3E%3Cpath d='M23.3 6v52M40.7 6v52M6 23.3h52M6 40.7h52' stroke='%234b3c27' stroke-width='3'/%3E%3Crect x='25' y='25' width='14' height='14' fill='%23ffe08a'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes ---------- */
+/* Paper: the launcher's palette (the same colours as the settings screens) */
+[data-theme="paper"]{--page:#f4ebdf;--bar:rgba(122,69,32,.08);--ink:#2b1a0e;--board:#fff;--line:#d8c6ad;--box:#5a3214;--given:#2b1a0e;--user:#1f50b5;--note:#6f5a48;--sel-bg:#ffe08a;--sel-ring:#d97a1e;--peer:#f3e6d3;--same:#d9e6fb;--err:#c4271d;--err-bg:#fbd9d3;--key:#faf4eb;--key-ink:#2b1a0e;--key-sh:#d8c6ad;--act:rgba(122,69,32,.1);--accent:#7a4520;--accent-ink:#fff}
+[data-theme="white"]{--page:#f2f2f2;--bar:rgba(0,0,0,.04);--ink:#111;--board:#fff;--line:#a8a8a8;--box:#111;--given:#000;--user:#0a46c2;--note:#4d4d4d;--sel-bg:#fff07a;--sel-ring:#e06a00;--peer:#e6ebf2;--same:#cfe0ff;--err:#c40000;--err-bg:#ffd6d6;--key:#fff;--key-ink:#111;--key-sh:#b5b5b5;--act:rgba(0,0,0,.07);--accent:#e06a00;--accent-ink:#fff}
+[data-theme="sand"]{--page:#e6d5b0;--bar:rgba(90,60,10,.08);--ink:#3a2a10;--board:#faf1dc;--line:#cdb98c;--box:#6b4f1f;--given:#2e2108;--user:#1e55a8;--note:#7a6540;--sel-bg:#ffe28a;--sel-ring:#b5651d;--peer:#ecdcb7;--same:#d6e3f7;--err:#b3261e;--err-bg:#f7d4cc;--key:#faf1dc;--key-ink:#3a2a10;--key-sh:#bfa673;--act:rgba(90,60,10,.12);--accent:#b5651d;--accent-ink:#fff}
+[data-theme="mint"]{--page:#d4ebdf;--bar:rgba(10,60,40,.07);--ink:#12301f;--board:#f5fcf8;--line:#a9cdb9;--box:#23573d;--given:#0f2a1b;--user:#1d4fb0;--note:#4f6f5d;--sel-bg:#fff0a0;--sel-ring:#d08a12;--peer:#d8eee1;--same:#cfe0fb;--err:#c0261e;--err-bg:#fbd8d2;--key:#f5fcf8;--key-ink:#12301f;--key-sh:#9cc2ad;--act:rgba(10,60,40,.1);--accent:#2f7d55;--accent-ink:#fff}
+[data-theme="sky"]{--page:#d5e4f3;--bar:rgba(10,40,80,.07);--ink:#10223a;--board:#f7faff;--line:#aac0da;--box:#24466e;--given:#0d1d33;--user:#1659d6;--note:#4f6584;--sel-bg:#ffe9a0;--sel-ring:#d9851a;--peer:#dde8f7;--same:#c9f0d6;--err:#c0261e;--err-bg:#fbd8d2;--key:#f7faff;--key-ink:#10223a;--key-sh:#9fb5d0;--act:rgba(10,40,80,.1);--accent:#2563c4;--accent-ink:#fff}
+[data-theme="lavender"]{--page:#e4ddf0;--bar:rgba(50,20,90,.07);--ink:#2a1f3d;--board:#fbf9ff;--line:#c3b6dc;--box:#4a3870;--given:#1e1530;--user:#1d55b8;--note:#65587e;--sel-bg:#ffe8a0;--sel-ring:#c97a16;--peer:#e8e0f5;--same:#d4e3fb;--err:#c0261e;--err-bg:#fad6d2;--key:#fbf9ff;--key-ink:#2a1f3d;--key-sh:#b5a7d0;--act:rgba(50,20,90,.1);--accent:#6b4fb0;--accent-ink:#fff}
+[data-theme="slate"]{--page:#1d242b;--bar:rgba(0,0,0,.25);--ink:#e9eef2;--board:#2b343d;--line:#46525e;--box:#a8b4be;--given:#f2f5f7;--user:#8ec5ff;--note:#a9b6c1;--sel-bg:#57502a;--sel-ring:#ffcf6b;--peer:#3a4652;--same:#2f4a66;--err:#ff8f85;--err-bg:#5c2b2b;--key:#2f3943;--key-ink:#eef3f6;--key-sh:#12171c;--act:rgba(255,255,255,.08);--accent:#ffcf6b;--accent-ink:#1f262c}
+[data-theme="night"]{--page:#0b0c0e;--bar:rgba(255,255,255,.03);--ink:#e6e8eb;--board:#16181c;--line:#2b2f35;--box:#7c848e;--given:#eceef1;--user:#6fb7ff;--note:#8c949e;--sel-bg:#3a3420;--sel-ring:#ffcf6b;--peer:#23272d;--same:#1d3350;--err:#ff7b72;--err-bg:#4a1f1f;--key:#1c1f24;--key-ink:#e6e8eb;--key-sh:#050607;--act:rgba(255,255,255,.07);--accent:#6fb7ff;--accent-ink:#0a1a2a}
+
+/* ---------- Base ---------- */
+:root{--cell:40px;--kh:56px;--ah:58px;--kc:5;--ac:4;--T:3px;--bx:3;--bc:3;--nr:3;--gut:12px} /* --gut: one side margin, bar buttons, grid and bottom buttons line up (safe areas are on #app) */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+
+#app{height:100vh;height:100dvh;max-width:560px;margin:0 auto;display:flex;flex-direction:column;background:var(--page);
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* Top bar */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;white-space:normal;overflow-wrap:normal;word-break:normal;font-weight:800;font-size:28px;line-height:1.05;letter-spacing:.02em;color:var(--ink)} /* never cut: wraps between words only */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--act);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--act);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+a.round{text-decoration:none}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:23px;letter-spacing:.02em}
+/* narrow phones (360 px): less room between the bar buttons, so the name fits whole; the outer margin stays */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:20px;letter-spacing:0}
+}
+
+/* Grid */
+.wrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px var(--gut)} /* at least 12 px between the grid and the bar / the tray, on every screen */
+.board{display:grid;grid-template-columns:repeat(var(--bx),auto);gap:var(--T);padding:var(--T);background:var(--box);border-radius:3px}
+.box{display:grid;grid-template-columns:repeat(var(--bc),var(--cell));grid-auto-rows:var(--cell);gap:1px;background:var(--line)}
+.cell{position:relative;display:grid;place-items:center;background:var(--board);cursor:pointer;overflow:hidden}
+.cell .v{font-size:calc(var(--cell)*.68);line-height:1;font-weight:500;color:var(--user)}
+.cell.g .v{color:var(--given);font-weight:800}
+.cell.peer{background:var(--peer)}
+.cell.same{background:var(--same)}
+.cell.sel{background:var(--sel-bg);box-shadow:inset 0 0 0 3px var(--sel-ring)}
+.cell.err{background:var(--err-bg)}
+.cell.err .v{color:var(--err)}
+.nt{position:absolute;inset:1px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(var(--nr),1fr);place-items:center;font-size:calc(var(--cell)*.3);line-height:1;font-weight:700;color:var(--note)}
+.nt i{font-style:normal}
+.nt i.h{color:var(--accent);font-weight:900}
+.nt.wide{display:flex;flex-wrap:wrap;align-content:center;justify-content:center;font-size:calc(var(--cell)*.3)}
+.nt.wide i{width:33%;text-align:center}
+.nt.wide.k1,.nt.wide.k2{font-size:calc(var(--cell)*.44)}
+.nt.wide.k3,.nt.wide.k4{font-size:calc(var(--cell)*.37)}
+.nt.wide.k1 i,.nt.wide.k2 i,.nt.wide.k3 i,.nt.wide.k4 i{width:50%}
+.won .board{box-shadow:0 0 0 3px var(--accent)}
+
+/* Bottom controls */
+.tray{flex:none;display:flex;flex-direction:column;gap:6px;padding:8px var(--gut) 10px;background:var(--bar);border-top:1px solid var(--line)}
+.hint{height:26px;line-height:26px;text-align:center;font-size:19px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctrl{display:flex;flex-direction:column;gap:8px}
+.phone .ctrl{flex-direction:row}
+.phone .keys{flex:1.25 1 0;align-content:flex-start}
+.phone .acts{flex:1 1 0;align-content:flex-start}
+.keys,.acts{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;min-width:0}
+.key{flex:0 0 calc((100% - (var(--kc) - 1) * 8px) / var(--kc));height:var(--kh);position:relative;border-radius:14px;background:var(--key);color:var(--key-ink);font-size:calc(var(--kh)*.56);font-weight:700;box-shadow:0 3px 0 var(--key-sh),inset 0 0 0 1px var(--line);display:grid;place-items:center;transition:transform .06s,opacity .2s}
+.key:active{transform:translateY(2px);box-shadow:0 1px 0 var(--key-sh),inset 0 0 0 1px var(--line)}
+.key small{position:absolute;right:7px;bottom:3px;font-size:18px;font-weight:700;opacity:.75;line-height:1}
+.key.held{background:var(--accent);color:var(--accent-ink)}
+.key.dim{opacity:.38}
+/* Dragging a number from the keypad onto a cell: the number follows the finger (above it, so the finger does not
+   hide it) and the cell it would land on is outlined */
+.key{touch-action:none}
+.ghost{position:fixed;z-index:70;pointer-events:none;width:max(54px,calc(var(--cell)*1.15));height:max(54px,calc(var(--cell)*1.15));transform:translate(-50%,-50%);border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);font-size:max(30px,calc(var(--cell)*.7));font-weight:800;box-shadow:0 8px 18px rgba(0,0,0,.3);opacity:.8}
+.cell.drop{background:var(--sel-bg);box-shadow:inset 0 0 0 4px var(--accent)}
+.pencil .key .d{position:absolute;top:5px;left:9px;font-size:60%;color:var(--note)}
+.pencil .key.held .d{color:inherit}
+.act{flex:0 0 calc((100% - (var(--ac) - 1) * 8px) / var(--ac));min-width:0;height:var(--ah);border-radius:14px;background:var(--act);color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:18px;font-weight:700;box-shadow:inset 0 0 0 1px var(--line);transition:opacity .2s,transform .06s;white-space:nowrap}
+.phone .acts .act{font-size:min(18px,4.4vw)}
+.act:active{transform:scale(.97)}
+.act svg{flex:none;width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.act.on{background:var(--accent);color:var(--accent-ink);box-shadow:none}
+.act.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;font-family:Georgia,serif;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);transition:transform .06s}
+.big:active{transform:translateY(3px);box-shadow:0 1px 0 var(--pbtn-sh)}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0;box-shadow:0 2px 6px rgba(60,30,10,.12)}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink);font-family:Georgia,serif}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.trow .flabel{margin:0;flex:1;min-width:0}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{height:62px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:6px;background:var(--page);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.sc{width:40px;height:40px;display:grid;place-items:center;font-size:25px;line-height:1;background:var(--board);color:var(--user);font-weight:500;box-shadow:0 0 0 2px var(--box)}
+.sc.g{color:var(--given);font-weight:800}
+.sc.s{background:var(--sel-bg);box-shadow:inset 0 0 0 3px var(--sel-ring),0 0 0 2px var(--box)}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+.legend{display:flex;align-items:center;gap:14px;margin:12px 0;font-size:20px;line-height:1.3}
+.legend .ico{flex:none;width:46px;height:46px;border-radius:12px;background:var(--pcard);display:grid;place-items:center}
+.legend .ico svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.demo{display:grid;grid-template-columns:repeat(3,44px);gap:1px;background:var(--line);border:3px solid var(--box);width:max-content;margin:10px auto}
+.demo span{height:44px;display:grid;place-items:center;background:var(--board);font-size:26px;font-weight:800;color:var(--given)}
+.demo span.u{color:var(--user);font-weight:500}
+
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:pop .25s ease-out}
+@keyframes pop{from{transform:scale(.9);opacity:0}}
+.mcard h2{font-size:28px;font-family:Georgia,serif;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+.mbtns{display:flex;flex-direction:column;gap:14px;margin-top:8px}
+
+/* Shorter screens (e.g. with the browser bar visible) */
+@media (max-height:800px){
+  .topbar{height:52px}
+  .pill{height:42px}.round{width:42px;height:42px}
+  .topbar h1{font-size:25px}
+}
+#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 66px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Sudoku</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <main class="wrap" id="wrap"><div class="board" id="board"></div></main>
+  <footer class="tray" id="tray">
+    <div class="hint" id="hint"></div>
+    <div class="ctrl"><div class="keys" id="keys"></div><div class="acts" id="acts"></div></div>
+  </footer>
+</div>
+
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const GUT = 12; // side margin in px, the same as --gut in the CSS
+
+/* ---------- Constants ---------- */
+const THEMES = [
+  { id: 'paper',    name: 'Papír',     meta: '#f4ebdf' },
+  { id: 'white',    name: 'Bílá',      meta: '#f2f2f2' },
+  { id: 'sand',     name: 'Písek',     meta: '#e6d5b0' },
+  { id: 'mint',     name: 'Mátová',    meta: '#d4ebdf' },
+  { id: 'sky',      name: 'Nebeská',   meta: '#d5e4f3' },
+  { id: 'lavender', name: 'Levandule', meta: '#e4ddf0' },
+  { id: 'slate',    name: 'Břidlice',  meta: '#1d242b' },
+  { id: 'night',    name: 'Noc',       meta: '#0b0c0e' },
+];
+const DIFFS = [
+  { id: 'easy',   name: 'Lehká',   desc: 'Hodně vyplněných čísel. Vždy se najde číslo, které jde snadno doplnit.' },
+  { id: 'medium', name: 'Střední', desc: 'Méně vyplněných čísel, je potřeba víc hledat.' },
+  { id: 'hard',   name: 'Těžká',   desc: 'Málo vyplněných čísel. Hodně pomůžou poznámky tužkou.' },
+];
+const ERRORS = [
+  { id: 'none', name: 'Neukazovat', desc: 'Jako na papíře. Řešení se zkontroluje, až budou vyplněná všechna políčka.' },
+  { id: 'dup',  name: 'Když se číslo opakuje', desc: 'Červeně se označí stejné číslo dvakrát v řádku, sloupci nebo čtverci.' },
+  { id: 'sol',  name: 'Hned každé špatné číslo', desc: 'Červeně se označí každé číslo, které do políčka nepatří.' },
+];
+const PLURAL = ['', 'jedniček', 'dvojek', 'trojek', 'čtyřek', 'pětek', 'šestek', 'sedmiček', 'osmiček', 'devítek'];
+const ICONS = {
+  undo:   '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  erase:  '<path d="M14.6 3.9a1.6 1.6 0 0 1 2.2 0l3.3 3.3a1.6 1.6 0 0 1 0 2.2L11 18.6H6.8l-3-3a1.6 1.6 0 0 1 0-2.2z"/><path d="M8.6 9.9l5.5 5.5"/><path d="M11 20.5h9"/>',
+  pencil: '<path d="M4 20l1.1-4.6L15.6 4.9a2 2 0 0 1 2.8 0l.7.7a2 2 0 0 1 0 2.8L8.6 18.9z"/><path d="M14 6.5l3.5 3.5"/>',
+  hint:   '<path d="M9.5 18h5"/><path d="M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
+  check:  '<path d="M4 12.5l5 5L20 6.5"/>',
+  fill:   '<path stroke-width="3.4" d="M6 6h.01M12 6h.01M18 6h.01M6 12h.01M12 12h.01M18 12h.01M6 18h.01M12 18h.01M18 18h.01"/>',
+};
+const ACTS = [
+  { id: 'undo',   label: 'Zpět',     show: () => true },
+  { id: 'erase',  label: 'Guma',     show: () => true },
+  { id: 'pencil', label: 'Tužka',    show: () => S.pencilBtn },
+  { id: 'hint',   label: 'Poradit',  show: () => S.hintBtn },
+  { id: 'check',  label: 'Kontrola', show: () => S.checkBtn },
+  { id: 'fill',   label: 'Možnosti', show: () => S.fillBtn },
+];
+const DEFAULTS = {
+  size: 9, diff: 'medium', mode: 'cell', keypad: 'rows', errors: 'none',
+  hlPeers: false, hlSame: false, counter: false, autoClean: false,
+  pencilBtn: true, noteStyle: 'corner', fillBtn: false, hintBtn: true, checkBtn: false,
+  theme: 'paper', vibrate: true,
+};
+// Saved state under the launcher's games.<id>.* prefix; OLD_KEY is the name used before (read once, then removed)
+const KEY = 'games.sudoku.state', OLD_KEY = 'sudoku.v1';
+
+/* ---------- Grid geometry ---------- */
+const GEO = {};
+function geo(N) {
+  if (GEO[N]) return GEO[N];
+  const br = N === 9 ? 3 : 2, bc = 3, bx = N / bc, by = N / br;
+  const R = [], C = [], B = [];
+  const rows = [], cols = [], boxes = [];
+  for (let k = 0; k < N; k++) { rows.push([]); cols.push([]); boxes.push([]); }
+  for (let i = 0; i < N * N; i++) {
+    const r = Math.floor(i / N), c = i % N, b = Math.floor(r / br) * bx + Math.floor(c / bc);
+    R.push(r); C.push(c); B.push(b);
+    rows[r].push(i); cols[c].push(i); boxes[b].push(i);
+  }
+  const peers = [];
+  for (let i = 0; i < N * N; i++) {
+    const s = new Set([...rows[R[i]], ...cols[C[i]], ...boxes[B[i]]]); s.delete(i);
+    peers.push([...s]);
+  }
+  return (GEO[N] = { N, br, bc, bx, by, R, C, B, rows, cols, boxes, units: [...rows, ...cols, ...boxes], peers, full: (1 << N) - 1 });
+}
+const POP = new Uint8Array(512);
+for (let i = 1; i < 512; i++) POP[i] = POP[i >> 1] + (i & 1);
+const BIT = d => 1 << (d - 1);
+const lowDigit = m => 32 - Math.clz32(m & -m);
+
+/* ---------- Generator and solvers ---------- */
+function rnd(n) {
+  try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; }
+  catch (e) { return Math.floor(Math.random() * n); }
+}
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+// Backtracking on the cell with fewest candidates; random = random digit order (for building a solution).
+function search(g0, N, limit, random) {
+  const P = geo(N), g = g0.slice(), n = N * N;
+  const rm = new Array(N).fill(0), cm = new Array(N).fill(0), bm = new Array(N).fill(0);
+  for (let i = 0; i < n; i++) if (g[i]) {
+    const b = BIT(g[i]);
+    if ((rm[P.R[i]] | cm[P.C[i]] | bm[P.B[i]]) & b) return { count: 0, grid: null };
+    rm[P.R[i]] |= b; cm[P.C[i]] |= b; bm[P.B[i]] |= b;
+  }
+  let count = 0, first = null;
+  const rec = () => {
+    let best = -1, mask = 0, bc = 99;
+    for (let i = 0; i < n; i++) if (!g[i]) {
+      const m = P.full & ~(rm[P.R[i]] | cm[P.C[i]] | bm[P.B[i]]), c = POP[m];
+      if (c < bc) { bc = c; best = i; mask = m; if (c <= 1) break; }
+    }
+    if (best < 0) { count++; if (!first) first = g.slice(); return count >= limit; }
+    if (!mask) return false;
+    const ds = [];
+    for (let d = 1; d <= N; d++) if (mask & BIT(d)) ds.push(d);
+    if (random) shuffle(ds);
+    const r = P.R[best], c = P.C[best], b = P.B[best];
+    for (const d of ds) {
+      const bit = BIT(d);
+      g[best] = d; rm[r] |= bit; cm[c] |= bit; bm[b] |= bit;
+      if (rec()) return true;
+      rm[r] &= ~bit; cm[c] &= ~bit; bm[b] &= ~bit;
+    }
+    g[best] = 0;
+    return false;
+  };
+  rec();
+  return { count, grid: first };
+}
+const countSolutions = (g, N, limit = 2) => search(g, N, limit, false).count;
+const fullSolution = N => search(new Array(N * N).fill(0), N, 1, true).grid;
+
+// Human-style logic solver: 1 = single option (naked/hidden single),
+// 2 = also locked candidates and pairs. Returns whether it solved the puzzle and the highest level it needed.
+function logicSolve(g0, N, maxLevel) {
+  const P = geo(N), g = g0.slice(), n = N * N, cand = new Array(n).fill(0);
+  let empty = 0, level = 1;
+  for (let i = 0; i < n; i++) if (!g[i]) {
+    let m = P.full; for (const p of P.peers[i]) if (g[p]) m &= ~BIT(g[p]);
+    cand[i] = m; empty++;
+  }
+  const place = (i, d) => { g[i] = d; cand[i] = 0; empty--; const b = BIT(d); for (const p of P.peers[i]) cand[p] &= ~b; };
+  const singles = () => {
+    let moved = false;
+    for (let i = 0; i < n; i++) if (!g[i]) {
+      if (!cand[i]) return -1;
+      if (POP[cand[i]] === 1) { place(i, lowDigit(cand[i])); moved = true; }
+    }
+    if (moved) return 1;
+    for (const u of P.units) for (let d = 1; d <= N; d++) {
+      const b = BIT(d); let pos = -1, k = 0;
+      for (const i of u) { if (g[i] === d) { k = -1; break; } if (!g[i] && (cand[i] & b)) { k++; pos = i; } }
+      if (k === 1) { place(pos, d); moved = true; }
+    }
+    return moved ? 1 : 0;
+  };
+  const level2 = () => {
+    let ch = false;
+    const rmv = (i, mask) => { if (!g[i] && (cand[i] & mask)) { cand[i] &= ~mask; ch = true; } };
+    // locked candidates: a digit in a box only in one row/column (and vice versa)
+    for (let bi = 0; bi < N; bi++) for (let d = 1; d <= N; d++) {
+      const b = BIT(d), cs = P.boxes[bi].filter(i => !g[i] && (cand[i] & b));
+      if (cs.length < 2) continue;
+      if (cs.every(i => P.R[i] === P.R[cs[0]])) for (const i of P.rows[P.R[cs[0]]]) if (P.B[i] !== bi) rmv(i, b);
+      if (cs.every(i => P.C[i] === P.C[cs[0]])) for (const i of P.cols[P.C[cs[0]]]) if (P.B[i] !== bi) rmv(i, b);
+    }
+    for (const line of [...P.rows, ...P.cols]) for (let d = 1; d <= N; d++) {
+      const b = BIT(d), cs = line.filter(i => !g[i] && (cand[i] & b));
+      if (cs.length < 2 || !cs.every(i => P.B[i] === P.B[cs[0]])) continue;
+      for (const i of P.boxes[P.B[cs[0]]]) if (!line.includes(i)) rmv(i, b);
+    }
+    // pairs: two cells with the same two options / two digits only in two cells
+    for (const u of P.units) {
+      const e = u.filter(i => !g[i]);
+      for (let a = 0; a < e.length; a++) if (POP[cand[e[a]]] === 2) for (let c = a + 1; c < e.length; c++) {
+        if (cand[e[c]] !== cand[e[a]]) continue;
+        for (const i of e) if (i !== e[a] && i !== e[c]) rmv(i, cand[e[a]]);
+      }
+      for (let d1 = 1; d1 < N; d1++) {
+        const p1 = e.filter(i => cand[i] & BIT(d1)); if (p1.length !== 2) continue;
+        for (let d2 = d1 + 1; d2 <= N; d2++) {
+          const p2 = e.filter(i => cand[i] & BIT(d2));
+          if (p2.length !== 2 || p2[0] !== p1[0] || p2[1] !== p1[1]) continue;
+          const keep = BIT(d1) | BIT(d2);
+          for (const i of p1) if (cand[i] & ~keep) { cand[i] &= keep; ch = true; }
+        }
+      }
+    }
+    return ch;
+  };
+  while (empty > 0) {
+    const s = singles();
+    if (s < 0) break;
+    if (s > 0) continue;
+    if (maxLevel >= 2 && level2()) { level = 2; continue; }
+    break;
+  }
+  return { solved: empty === 0, level, grid: g };
+}
+
+// lo/hi = how many givens to keep; level = highest allowed technique
+const TARGETS = {
+  9: { easy: { lo: 38, hi: 42, level: 1 }, medium: { lo: 30, hi: 34, level: 1 }, hard: { lo: 0, hi: 0, level: 2 } },
+  6: { easy: { lo: 18, hi: 20, level: 1 }, medium: { lo: 12, hi: 14, level: 1 }, hard: { lo: 0, hi: 0, level: 2 } },
+};
+function generate(N, diff) {
+  const T = TARGETS[N][diff], n = N * N;
+  const end = Date.now() + (diff === 'hard' ? (N === 9 ? 1500 : 400) : 600);
+  let best = null;
+  for (let tries = 0; ; tries++) {
+    const sol = fullSolution(N), pz = sol.slice();
+    const target = T.lo + rnd(T.hi - T.lo + 1);
+    const half = []; for (let i = 0; i < Math.ceil(n / 2); i++) half.push(i);
+    shuffle(half);
+    let givens = n;
+    for (const i of half) {
+      if (givens <= target) break;
+      const j = n - 1 - i, pair = i === j ? [i] : [i, j];
+      const keep = pair.map(k => pz[k]);
+      pair.forEach(k => { pz[k] = 0; });
+      if (logicSolve(pz, N, T.level).solved && countSolutions(pz, N, 2) === 1) givens -= pair.length;
+      else pair.forEach((k, x) => { pz[k] = keep[x]; });
+    }
+    const level = logicSolve(pz, N, 1).solved ? 1 : 2;
+    const res = { givens: pz, solution: sol, count: givens, level };
+    const ok = diff === 'hard' ? level === 2 : givens <= T.hi + 2;
+    if (ok) return res;
+    if (!best || res.count < best.count) best = res;
+    if (Date.now() > end) return best;
+  }
+}
+
+/* ---------- State and saving ---------- */
+let S, G, busy = false;
+// the cell Poradit just filled: drawn as selected also in the "Číslo, pak políčka" mode (until the next action)
+let hinted = -1;
+const isGiven = i => G.giv[i] !== '0';
+const hasProgress = () => G.val.some((v, i) => v !== +G.giv[i]) || G.notes.some(x => x);
+
+function load() {
+  try {
+    let v = localStorage.getItem(KEY);
+    // move the state from the older key at once
+    if (v === null && (v = localStorage.getItem(OLD_KEY)) !== null) { localStorage.setItem(KEY, v); localStorage.removeItem(OLD_KEY); }
+    return JSON.parse(v);
+  } catch (e) { return null; }
+}
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G }));
+    // Launcher contract: unfinished game = "in progress" badge on the tile
+    if (G && G.status === 'playing' && hasProgress()) localStorage.setItem('games.sudoku.inProgress', '1');
+    else localStorage.removeItem('games.sudoku.inProgress');
+  } catch (e) {}
+}
+function validGame(g) {
+  try {
+    const N = g.size, n = N * N;
+    if (N !== 6 && N !== 9) return false;
+    if (typeof g.giv !== 'string' || g.giv.length !== n || typeof g.sol !== 'string' || g.sol.length !== n) return false;
+    const digits = new RegExp(`^[0-${N}]+$`), sol = new RegExp(`^[1-${N}]+$`);
+    if (!digits.test(g.giv) || !sol.test(g.sol)) return false;
+    if (!Array.isArray(g.val) || g.val.length !== n || !Array.isArray(g.notes) || g.notes.length !== n) return false;
+    const okV = v => Number.isInteger(v) && v >= 0 && v <= N, okN = v => Number.isInteger(v) && v >= 0 && v < 1 << N;
+    const okI = i => Number.isInteger(i) && i >= 0 && i < n;
+    if (!g.val.every(okV) || !g.notes.every(okN)) return false;
+    if (!DIFFS.some(d => d.id === g.diff)) return false;
+    // the given numbers belong to the solution and stay in their cells (they cannot be erased)
+    for (let i = 0; i < n; i++) if (g.giv[i] !== '0') { if (g.giv[i] !== g.sol[i]) return false; g.val[i] = +g.giv[i]; g.notes[i] = 0; }
+    // the end comes from the board, never from the save
+    g.status = g.val.every((v, i) => v === +g.sol[i]) ? 'won' : 'playing';
+    // a broken history only loses Undo, not the game
+    if (!Array.isArray(g.hist) || !g.hist.every(h => Array.isArray(h) && h.length && h.every(x => x && okI(x.i) && okV(x.v) && okN(x.n)))) g.hist = [];
+    g.marked = Array.isArray(g.marked) ? g.marked.filter(okI) : [];
+    if (!Number.isInteger(g.sel) || g.sel < -1 || g.sel >= n) g.sel = -1;
+    if (!Number.isInteger(g.held) || g.held < -1 || g.held > N) g.held = 0; // -1 = the eraser
+    g.pencil = !!g.pencil;
+    return true;
+  } catch (e) { return false; }
+}
+function normalize(s) {
+  const pick = (k, list) => { if (!list.includes(s[k])) s[k] = DEFAULTS[k]; };
+  s.size = +s.size; pick('size', [6, 9]);
+  pick('diff', DIFFS.map(d => d.id)); pick('mode', ['cell', 'digit']); pick('keypad', ['rows', 'phone']);
+  pick('errors', ERRORS.map(e => e.id)); pick('noteStyle', ['corner', 'big']); pick('theme', THEMES.map(t => t.id));
+  for (const k of ['hlPeers', 'hlSame', 'counter', 'autoClean', 'pencilBtn', 'fillBtn', 'hintBtn', 'checkBtn', 'vibrate']) s[k] = !!s[k];
+}
+
+function makeGame(N, diff) {
+  const p = generate(N, diff);
+  return { size: N, diff, giv: p.givens.join(''), sol: p.solution.join(''), val: p.givens.slice(), notes: new Array(N * N).fill(0),
+    hist: [], marked: [], status: 'playing', sel: -1, held: 0, pencil: false };
+}
+function newGame(msg) {
+  hinted = -1;
+  busy = true;
+  $('#hint').textContent = 'Připravuji sudoku…';
+  setTimeout(() => {
+    G = makeGame(S.size, S.diff);
+    busy = false;
+    save(); render();
+    if (msg) toast(msg);
+  }, 30);
+}
+function restart() {
+  hinted = -1;
+  G.val = [...G.giv].map(Number); G.notes.fill(0);
+  G.hist = []; G.marked = []; G.status = 'playing'; G.sel = -1; G.held = 0; G.pencil = false;
+  save(); render();
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) { if (S.vibrate && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+let toastT;
+function hideToast() { clearTimeout(toastT); $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  // The toast must not cover the selected cell: if it is in the upper part, show it at the bottom above the keypad.
+  const c = G && G.sel >= 0 && $('#screenSettings').hidden ? document.querySelector(`.cell[data-i="${G.sel}"]`) : null;
+  const low = !!c && c.getBoundingClientRect().top < innerHeight * 0.4;
+  t.style.top = low ? ($('#tray').getBoundingClientRect().top - 8) + 'px' : '';
+  t.style.transform = low ? 'translate(-50%,-100%)' : '';
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hide'), 2800);
+}
+function remaining(d) { let k = 0; for (const v of G.val) if (v === d) k++; return G.size - k; }
+// Possible digits in cells based on what is currently in the grid
+function candidatesNow() {
+  const P = geo(G.size);
+  return G.val.map((v, i) => {
+    if (v) return 0;
+    let m = P.full; for (const p of P.peers[i]) if (G.val[p]) m &= ~BIT(G.val[p]);
+    return m;
+  });
+}
+function wrongCells() { const w = []; G.val.forEach((v, i) => { if (v && v !== +G.sol[i]) w.push(i); }); return w; }
+
+/* ---------- Moves ---------- */
+// One player action = one Undo step (including automatically removed notes).
+function change(list, mark = -1) {
+  hinted = mark;
+  G.hist.push(list.map(x => ({ i: x.i, v: G.val[x.i], n: G.notes[x.i] })));
+  if (G.hist.length > 500) G.hist.shift();
+  for (const x of list) { G.val[x.i] = x.v; G.notes[x.i] = x.n; }
+  const touched = new Set(list.map(x => x.i));
+  G.marked = G.marked.filter(i => !touched.has(i));
+  buzz(); save(); render();
+  if (list.some(x => x.v) && G.val.every(v => v)) checkFull();
+}
+function input(i, d) {
+  if (isGiven(i)) { toast('Tohle číslo bylo zadané, nejde ho změnit'); return; }
+  if (G.pencil) {
+    if (G.val[i]) { toast('V políčku už je číslo. Nejdřív ho smaž gumou.'); return; }
+    change([{ i, v: 0, n: G.notes[i] ^ BIT(d) }]);
+    return;
+  }
+  if (G.val[i] === d) {
+    if (S.mode === 'digit') change([{ i, v: 0, n: 0 }]);
+    return;
+  }
+  if (S.counter && remaining(d) <= 0) { toast(`Všech ${G.size} ${PLURAL[d]} už je v mřížce`); return; }
+  const list = [{ i, v: d, n: 0 }];
+  if (S.autoClean) for (const p of geo(G.size).peers[i]) if (!G.val[p] && (G.notes[p] & BIT(d))) list.push({ i: p, v: 0, n: G.notes[p] & ~BIT(d) });
+  change(list);
+}
+function eraseCell(i) {
+  if (i < 0) { toast('Nejdřív ťukni na políčko, které se má smazat'); return; }
+  if (isGiven(i)) { toast('Zadané číslo nejde smazat'); return; }
+  if (!G.val[i] && !G.notes[i]) { toast('Políčko je prázdné'); return; }
+  change([{ i, v: 0, n: 0 }]);
+}
+function undo() {
+  hinted = -1;
+  if (G.status !== 'playing') { toast('Sudoku je vyřešené'); return; }
+  if (!G.hist.length) { toast('Není co vrátit'); return; }
+  const prev = G.hist.pop();
+  for (const x of prev) { G.val[x.i] = x.v; G.notes[x.i] = x.n; }
+  const touched = new Set(prev.map(x => x.i));
+  G.marked = G.marked.filter(i => !touched.has(i));
+  G.sel = prev[0].i;
+  buzz(); save(); render();
+}
+function doHint() {
+  const N = G.size, P = geo(N);
+  const wrong = wrongCells();
+  if (wrong.length) {
+    const i = wrong.includes(G.sel) ? G.sel : wrong[0];
+    G.sel = i; if (!G.marked.includes(i)) G.marked.push(i);
+    buzz(); save(); render();
+    toast('Tady je chyba. Oprav ji nebo ji smaž gumou.');
+    return;
+  }
+  let i = -1, why = '';
+  if (S.mode === 'cell' && G.sel >= 0 && !G.val[G.sel]) i = G.sel;
+  else {
+    const cand = candidatesNow();
+    let bc = 99;
+    for (let j = 0; j < N * N; j++) if (!G.val[j] && POP[cand[j]] < bc) { bc = POP[cand[j]]; i = j; }
+    if (bc === 1) why = 'nic jiného se sem nevejde';
+    else {
+      const names = ['v tomto řádku', 'v tomto sloupci', 'v tomto čtverci'];
+      outer: for (let u = 0; u < P.units.length; u++) for (let d = 1; d <= N; d++) {
+        const cs = P.units[u].filter(j => !G.val[j] && (cand[j] & BIT(d)));
+        if (cs.length === 1 && !P.units[u].some(j => G.val[j] === d)) { i = cs[0]; why = `${d} může být ${names[Math.floor(u / N)]} jen tady`; break outer; }
+      }
+    }
+  }
+  if (i < 0) return;
+  const d = +G.sol[i];
+  G.sel = i;
+  const list = [{ i, v: d, n: 0 }];
+  if (S.autoClean) for (const p of P.peers[i]) if (!G.val[p] && (G.notes[p] & BIT(d))) list.push({ i: p, v: 0, n: G.notes[p] & ~BIT(d) });
+  toast(why ? `Sem patří ${d}: ${why}` : `Sem patří ${d}`);
+  change(list, i);
+}
+function doCheck() {
+  const wrong = wrongCells();
+  G.marked = [...new Set([...G.marked, ...wrong])];
+  buzz(); save(); render();
+  toast(wrong.length ? (wrong.length === 1 ? 'Jedna chyba je označená červeně' : `Chyby jsou označené červeně (${wrong.length})`) : 'Zatím žádná chyba');
+}
+function doFill() {
+  const cand = candidatesNow(), list = [];
+  G.val.forEach((v, i) => { if (!v && G.notes[i] !== cand[i]) list.push({ i, v: 0, n: cand[i] }); });
+  if (!list.length) { toast('Možnosti už jsou doplněné'); return; }
+  change(list);
+  toast('Možná čísla jsou doplněná tužkou');
+}
+function checkFull() {
+  if (wrongCells().length === 0) {
+    G.status = 'won'; G.pencil = false; G.held = 0;
+    buzz([40, 60, 40, 60, 80]); save(); render();
+    const solved = G;
+    whenFree(solved, 500, () => {
+      showModal('<h2>Výborně! 🎉</h2><p>Sudoku je vyřešené.</p>',
+        [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout mřížku', cls: 'alt' }]);
+    });
+  } else {
+    showModal('<h2>Ještě to není ono</h2><p>Všechna políčka jsou vyplněná, ale někde je chyba.</p>',
+      [{ text: 'Ukázat chyby', fn: () => { G.marked = wrongCells(); save(); render(); } }, { text: 'Hledat dál', cls: 'alt' }]);
+  }
+}
+
+/* ---------- Rendering ---------- */
+function applyLook() {
+  root.dataset.theme = S.theme;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+}
+function errorSet() {
+  const s = new Set(G.marked), P = geo(G.size);
+  G.val.forEach((v, i) => {
+    if (!v) return;
+    if (S.errors === 'sol' && !isGiven(i) && v !== +G.sol[i]) s.add(i);
+    if (S.errors === 'dup' && P.peers[i].some(p => G.val[p] === v)) s.add(i);
+  });
+  return s;
+}
+function notesHTML(mask, focus) {
+  const N = G.size;
+  if (S.noteStyle === 'big') {
+    let h = '', k = 0;
+    for (let d = 1; d <= N; d++) if (mask & BIT(d)) { k++; h += `<i${d === focus ? ' class="h"' : ''}>${d}</i>`; }
+    return `<div class="nt wide k${k}">${h}</div>`;
+  }
+  let h = '';
+  for (let d = 1; d <= N; d++) h += `<i${d === focus ? ' class="h"' : ''}>${mask & BIT(d) ? d : ''}</i>`;
+  return `<div class="nt">${h}</div>`;
+}
+const visibleActs = () => ACTS.filter(a => a.show());
+
+function render() {
+  applyLook();
+  const N = G.size, P = geo(N), playing = G.status === 'playing';
+  const cellMode = S.mode === 'cell';
+  if (!S.pencilBtn) G.pencil = false;
+  if (cellMode) G.held = 0;
+  root.style.setProperty('--bx', P.bx); root.style.setProperty('--bc', P.bc); root.style.setProperty('--nr', P.br === 3 ? 3 : 2);
+  $('#app').classList.toggle('phone', S.keypad === 'phone');
+  $('#app').classList.toggle('pencil', G.pencil);
+  $('#app').classList.toggle('won', !playing);
+
+  // Grid
+  const sel = cellMode ? G.sel : -1;
+  const focus = !S.hlSame ? 0 : !cellMode ? (G.held > 0 ? G.held : 0) : (sel >= 0 ? G.val[sel] : 0);
+  const peers = S.hlPeers && sel >= 0 ? new Set(P.peers[sel]) : null;
+  const errs = errorSet();
+  let h = '';
+  for (let by = 0; by < P.by; by++) for (let bx = 0; bx < P.bx; bx++) {
+    h += '<div class="box">';
+    for (let r = by * P.br; r < (by + 1) * P.br; r++) for (let c = bx * P.bc; c < (bx + 1) * P.bc; c++) {
+      const i = r * N + c, v = G.val[i];
+      let cls = 'cell' + (isGiven(i) ? ' g' : v ? ' u' : '');
+      if (i === sel || i === hinted) cls += ' sel';
+      else if (focus && v === focus) cls += ' same';
+      else if (peers && peers.has(i)) cls += ' peer';
+      if (errs.has(i)) cls += ' err';
+      const inner = v ? `<span class="v">${v}</span>` : G.notes[i] ? notesHTML(G.notes[i], focus) : '';
+      h += `<div class="${cls}" data-i="${i}">${inner}</div>`;
+    }
+    h += '</div>';
+  }
+  $('#board').innerHTML = h;
+
+  // Keypad
+  let k = '';
+  for (let d = 1; d <= N; d++) {
+    const left = remaining(d);
+    const cls = 'key' + (!cellMode && G.held === d ? ' held' : '') + (S.counter && left <= 0 ? ' dim' : '');
+    k += `<button class="${cls}" data-d="${d}" aria-label="Číslo ${d}"><span class="d">${d}</span>${S.counter ? `<small>${Math.max(0, left)}</small>` : ''}</button>`;
+  }
+  $('#keys').innerHTML = k;
+
+  // Buttons
+  const selI = G.sel;
+  $('#acts').innerHTML = visibleActs().map(a => {
+    let st = '';
+    if (!playing) st = ' dim';
+    else if (a.id === 'undo' && !G.hist.length) st = ' dim';
+    else if (a.id === 'erase') st = !cellMode ? (G.held === -1 ? ' on' : '') : (selI < 0 || isGiven(selI) || (!G.val[selI] && !G.notes[selI]) ? ' dim' : '');
+    else if (a.id === 'pencil' && G.pencil) st = ' on';
+    return `<button class="act${st}" data-a="${a.id}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.id]}</svg>${a.label}</button>`;
+  }).join('');
+
+  $('#hint').textContent = hintText();
+  layout();
+}
+function hintText() {
+  if (G.status !== 'playing') return 'Vyřešeno! 🎉';
+  const pen = G.pencil;
+  if (S.mode === 'digit') {
+    if (G.held === -1) return 'Guma: ťukej na políčka ke smazání';
+    if (G.held > 0) return pen ? `Tužka ${G.held}: ťukej na políčka` : `Číslo ${G.held}: ťukej na políčka`;
+    return pen ? 'Tužka: vyber číslo dole' : 'Vyber číslo dole';
+  }
+  const i = G.sel;
+  if (i < 0) return 'Ťukni na políčko v mřížce';
+  if (isGiven(i)) return 'Zadané číslo, vyber jiné políčko';
+  if (pen) return G.val[i] ? 'Tužka: políčko už má číslo' : 'Tužka: ťukej na čísla dole';
+  return G.val[i] ? 'Přepiš číslem nebo smaž gumou' : 'Vyber číslo dole';
+}
+
+// Size the grid and keys to the available space (everything fits without scrolling)
+function layout() {
+  if (!G) return;
+  const N = G.size, P = geo(N), phone = S.keypad === 'phone', GAP = 8;
+  const na = visibleActs().length;
+  const kc = phone ? 3 : Math.ceil(N / 2), kr = Math.ceil(N / kc);
+  const ac = phone ? (na <= 3 ? 1 : 2) : (na <= 4 ? na : 3), ar = Math.ceil(na / ac);
+  root.style.setProperty('--kc', kc); root.style.setProperty('--ac', ac);
+  const app = $('#app'), cs = getComputedStyle(app);
+  const W = app.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const H = app.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - $('.topbar').offsetHeight;
+  const KMAX = phone ? 84 : 72, AMAX = 66;
+  const fixTray = 8 + 10 + 6 + 1 + $('#hint').offsetHeight;
+  const T = 3, fixW = 2 * T + (P.bx - 1) * T + (N - P.bx), fixH = 2 * T + (P.by - 1) * T + (N - P.by), M = 24; // .wrap padding: GUT at the sides, 12 px above and below
+  let KMIN, AMIN, kpadMin, apadMin, trayMin, cell;
+  const fit = (km, am) => {
+    KMIN = km; AMIN = am;
+    kpadMin = kr * KMIN + (kr - 1) * GAP; apadMin = ar * AMIN + (ar - 1) * GAP;
+    trayMin = fixTray + (phone ? Math.max(kpadMin, apadMin) : kpadMin + GAP + apadMin);
+    cell = Math.floor(Math.min((W - 2 * GUT - fixW) / N, (H - trayMin - M - fixH) / N, 80));
+  };
+  fit(50, 54);
+  if (cell < 32) fit(46, 48); // a short window (desktop, landscape): smaller keys (still ≥ 45 px) leave more room for the grid
+  cell = Math.max(cell, 12); // the grid shrinks rather than touching the bar or the tray
+  const extra = Math.max(0, H - trayMin - (N * cell + fixH + M));
+  let kh, ah;
+  if (phone) {
+    const pad = Math.min(kr * KMAX + (kr - 1) * GAP, Math.max(kpadMin, apadMin) + extra);
+    kh = (pad - (kr - 1) * GAP) / kr; ah = (pad - (ar - 1) * GAP) / ar;
+  } else {
+    const per = extra / (kr + ar);
+    kh = Math.min(KMAX, KMIN + per); ah = Math.min(AMAX, AMIN + per);
+  }
+  root.style.setProperty('--cell', cell + 'px');
+  root.style.setProperty('--kh', kh.toFixed(1) + 'px');
+  root.style.setProperty('--ah', ah.toFixed(1) + 'px');
+}
+
+/* ---------- Controls ---------- */
+$('#board').addEventListener('click', e => {
+  const c = e.target.closest('.cell'); if (!c || busy) return;
+  hinted = -1;
+  const i = +c.dataset.i;
+  G.sel = i;
+  if (G.status !== 'playing' || S.mode === 'cell') { buzz(8); save(); render(); return; }
+  if (G.held === 0) { render(); toast(G.pencil ? 'Nejdřív vyber dole číslo pro poznámku' : 'Nejdřív vyber dole číslo'); return; }
+  if (G.held === -1) { eraseCell(i); return; }
+  input(i, G.held);
+});
+// Drag a number from the keypad onto a cell: the same as tapping the cell and then the number (pencil, counter,
+// given cells and Undo work as usual). A short tap stays a tap (the click handler below).
+let drag = null, dragEnded = 0;
+const DRAG_LIFT = 46; // the dragged number floats this far above the finger; it lands where it is seen
+const cellAt = (x, y) => { const el = document.elementFromPoint(x, y); return el && el.closest && el.closest('#board .cell'); };
+$('#keys').addEventListener('pointerdown', e => {
+  const b = e.target.closest('.key');
+  if (!b || busy || drag || G.status !== 'playing' || (e.button !== undefined && e.button > 0)) return;
+  drag = { d: +b.dataset.d, key: b, id: e.pointerId, x0: e.clientX, y0: e.clientY, ghost: null, over: null };
+  try { b.setPointerCapture(e.pointerId); } catch (err) {}
+});
+$('#keys').addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  if (!drag.ghost) {
+    if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 10) return;
+    drag.ghost = document.createElement('div'); drag.ghost.className = 'ghost'; drag.ghost.textContent = drag.d;
+    document.body.appendChild(drag.ghost); hinted = -1; hideToast();
+  }
+  const x = e.clientX, y = e.clientY - DRAG_LIFT;
+  drag.ghost.style.left = x + 'px'; drag.ghost.style.top = y + 'px';
+  const c = cellAt(x, y);
+  if (c !== drag.over) { if (drag.over) drag.over.classList.remove('drop'); drag.over = c; if (c) c.classList.add('drop'); }
+});
+function endDrag(e, cancel) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dr = drag; drag = null;
+  if (!dr.ghost) return; // no movement: a normal tap, handled by the click
+  dr.ghost.remove(); if (dr.over) dr.over.classList.remove('drop');
+  dragEnded = Date.now(); // the click that follows the drag is not a tap on the key
+  if (cancel) return;
+  const c = cellAt(e.clientX, e.clientY - DRAG_LIFT);
+  if (!c) { toast('Číslo pusť na políčko v mřížce'); return; }
+  const i = +c.dataset.i;
+  G.sel = i;
+  input(i, dr.d); // saves and draws on a change; the save and render below also cover a refused drop (toast)
+  save(); render();
+}
+$('#keys').addEventListener('pointerup', e => endDrag(e, false));
+$('#keys').addEventListener('pointercancel', e => endDrag(e, true));
+$('#keys').addEventListener('click', e => {
+  if (Date.now() - dragEnded < 400) return;
+  const b = e.target.closest('.key'); if (!b || busy) return;
+  const d = +b.dataset.d;
+  if (G.status !== 'playing') { toast('Sudoku je vyřešené. Ťukni na Nová hra.'); return; }
+  if (S.mode === 'digit') { G.held = G.held === d ? 0 : d; buzz(8); save(); render(); return; }
+  if (G.sel < 0) { toast('Nejdřív ťukni na políčko v mřížce'); return; }
+  input(G.sel, d);
+});
+$('#acts').addEventListener('click', e => {
+  const b = e.target.closest('.act'); if (!b || busy) return;
+  const a = b.dataset.a;
+  if (a === 'undo') { undo(); return; }
+  if (G.status !== 'playing') { toast('Sudoku je vyřešené. Ťukni na Nová hra.'); return; }
+  if (a === 'erase') {
+    if (S.mode === 'digit') { G.held = G.held === -1 ? 0 : -1; buzz(8); save(); render(); }
+    else eraseCell(G.sel);
+  } else if (a === 'pencil') { G.pencil = !G.pencil; buzz(8); save(); render(); }
+  else if (a === 'hint') doHint();
+  else if (a === 'check') doCheck();
+  else if (a === 'fill') doFill();
+});
+
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + '<div class="mbtns">' + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('') + '</div>';
+  $('#modal').hidden = false;
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+}
+$('#btnNew').addEventListener('click', () => {
+  if (busy) return;
+  if (G.status === 'playing' && hasProgress()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehrané sudoku se ztratí.</p>',
+      [{ text: 'Nové sudoku', fn: () => newGame() }, { text: 'Začít toto znovu', fn: restart }, { text: 'Hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+
+/* ---------- Settings ---------- */
+const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+
+function renderSettings() {
+  let pending = '';
+  if (S.size !== G.size || S.diff !== G.diff) {
+    pending = G.status === 'playing' && hasProgress()
+      ? '<div class="notice">Jiná velikost nebo obtížnost potřebuje nové sudoku. Po návratu do hry začne <b>nová hra</b>.</div>'
+      : '<div class="notice">Po návratu do hry začne nové sudoku.</div>';
+  }
+  const rowsDesc = S.size === 9 ? 'Nahoře 1 až 5, dole 6 až 9. Tlačítka jsou pod čísly.' : 'Nahoře 1 až 3, dole 4 až 6. Tlačítka jsou pod čísly.';
+  const phoneDesc = S.size === 9 ? 'Čísla 1 2 3 / 4 5 6 / 7 8 9 jako na telefonu, tlačítka vpravo vedle.' : 'Čísla 1 2 3 / 4 5 6, tlačítka vpravo vedle.';
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Sudoku<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Hra</h3>
+      <div class="field"><div class="flabel">Velikost mřížky</div>
+        ${opt('set:size:9', S.size === 9, '9 × 9', 'Klasické sudoku s čísly 1 až 9. Políčka jsou na telefonu malá – když se špatně trefuje, zkus 6 × 6.')}
+        ${opt('set:size:6', S.size === 6, '6 × 6', 'Menší mřížka s většími políčky, čísla 1 až 6.')}
+      </div>
+      <div class="field"><div class="flabel">Obtížnost</div>
+        ${DIFFS.map(d => opt('set:diff:' + d.id, S.diff === d.id, d.name, d.desc)).join('')}
+      </div>
+      ${pending}
+    </section>
+    <section class="card"><h3>Ovládání</h3>
+      <div class="field"><div class="flabel">Způsob</div>
+        ${opt('set:mode:cell', S.mode === 'cell', 'Políčko, pak číslo', 'Ťukni na políčko v mřížce a potom na číslo dole.')}
+        ${opt('set:mode:digit', S.mode === 'digit', 'Číslo, pak políčka', 'Vyber číslo dole a pak ťukej na políčka, kam patří. Ťuknutím na stejné číslo v políčku se smaže.')}
+      </div>
+      <div class="field"><div class="flabel">Rozložení klávesnice</div>
+        ${opt('set:keypad:rows', S.keypad === 'rows', 'Dvě řady', rowsDesc)}
+        ${opt('set:keypad:phone', S.keypad === 'phone', 'Jako telefon', phoneDesc)}
+      </div>
+    </section>
+    <section class="card"><h3>Chyby</h3>
+      ${ERRORS.map(x => opt('set:errors:' + x.id, S.errors === x.id, x.name, x.desc)).join('')}
+    </section>
+    <section class="card"><h3>Zvýraznění</h3>
+      ${toggleRow('hlPeers', 'Řádek, sloupec a čtverec', 'Podbarví řádek, sloupec a čtverec vybraného políčka.')}
+      ${toggleRow('hlSame', 'Stejná čísla', 'Podbarví všechna stejná čísla jako ve vybraném políčku, i v poznámkách.')}
+      ${toggleRow('counter', 'Kolik kterého čísla zbývá', 'Malé číslo v rohu klávesy. Hotové číslo se ztlumí.')}
+    </section>
+    <section class="card"><h3>Tlačítka pod čísly</h3>
+      <div class="fnote" style="margin-top:0">Zpět a Guma jsou tam vždy.</div>
+      ${toggleRow('pencilBtn', 'Tužka (poznámky)', 'Malá čísla v políčku, jako když se na papíře píšou možnosti.')}
+      ${toggleRow('hintBtn', 'Poradit', 'Doplní jedno správné číslo, nebo ukáže chybu.')}
+      ${toggleRow('checkBtn', 'Kontrola', 'Na požádání červeně označí špatná čísla.')}
+      ${toggleRow('fillBtn', 'Možnosti', 'Vepíše tužkou do prázdných políček všechna čísla, která tam můžou být.')}
+    </section>
+    <section class="card"><h3>Poznámky tužkou</h3>
+      <div class="field"><div class="flabel">Vzhled poznámek</div>
+        ${opt('set:noteStyle:corner', S.noteStyle === 'corner', 'Na pevném místě', 'Každé číslo má v políčku své místo: 1 vlevo nahoře, ' + (S.size === 9 ? '9' : '6') + ' vpravo dole.')}
+        ${opt('set:noteStyle:big', S.noteStyle === 'big', 'Větší, vedle sebe', 'Čísla jsou větší, když je jich v políčku málo.')}
+      </div>
+      ${toggleRow('autoClean', 'Smazat poznámky po zapsání čísla', 'Když se zapíše číslo, zmizí stejná poznámka z jeho řádku, sloupce a čtverce.')}
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch" data-theme="${t.id}"><span class="sc g">5</span><span class="sc">3</span><span class="sc s">7</span></span>${t.name}</button>`).join('')}</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, key, val] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'set') S[key] = key === 'size' ? +val : val;
+  else if (act === 'toggle') S[key] = !S[key];
+  else if (act === 'theme') S.theme = key;
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S);
+  buzz(8); applyLook(); save(); renderSettings();
+});
+function openSettings() { if (busy) return; hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+// Settings apply immediately; a different size or difficulty needs a new puzzle.
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  if (S.size !== G.size || S.diff !== G.diff) {
+    const had = G.status === 'playing' && hasProgress();
+    newGame(had ? 'Začala nová hra s novým nastavením' : '');
+    return;
+  }
+  save(); render();
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help ---------- */
+function renderHelp() {
+  const N = G.size, box = N === 9 ? '3 × 3' : '2 × 3';
+  const ico = id => `<span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[id]}</svg></span>`;
+  const how = S.mode === 'cell'
+    ? 'Ťukni na prázdné políčko a potom na číslo dole. Vybrané políčko je podbarvené. Číslo jde také <b>přetáhnout</b> prstem z dolní řady rovnou na políčko.'
+    : 'Vyber číslo dole a potom ťukej na políčka, kam patří. Ťuknutím na políčko se stejným číslem se číslo smaže. Číslo jde také <b>přetáhnout</b> prstem z dolní řady rovnou na políčko.';
+  const legend = [
+    ['undo', '<b>Zpět</b> vrátí poslední krok. Dá se ťukat opakovaně.'],
+    ['erase', S.mode === 'cell' ? '<b>Guma</b> smaže číslo nebo poznámky ve vybraném políčku.' : '<b>Guma</b> se vybere jako číslo; pak ťukej na políčka, která se mají smazat.'],
+    S.pencilBtn && ['pencil', '<b>Tužka</b> zapne poznámky: čísla se píšou malá, jako možnosti. Dalším ťuknutím se tužka vypne.'],
+    S.hintBtn && ['hint', '<b>Poradit</b> doplní jedno správné číslo. Když je někde chyba, ukáže ji.'],
+    S.checkBtn && ['check', '<b>Kontrola</b> označí červeně čísla, která tam nepatří.'],
+    S.fillBtn && ['fill', '<b>Možnosti</b> vepíše tužkou do prázdných políček všechna čísla, která tam můžou být.'],
+  ].filter(Boolean).map(([id, t]) => `<div class="legend">${ico(id)}<span>${t}</span></div>`).join('');
+  const demo = N === 9 ? [5, 3, '', 6, '', 9, '', 1, 8] : [];
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Sudoku<small>Jak hrát</small></h2></div>
+    <section class="card help">
+      <ol>
+        <li>Doplň čísla do prázdných políček tak, aby v každém <b>řádku</b>, každém <b>sloupci</b> a každém silně ohraničeném <b>čtverci ${box}</b> bylo každé číslo od 1 do ${N} <b>právě jednou</b>.</li>
+        ${demo.length ? `<li>Třeba tady ve čtverci chybí 2, 4 a 7. Každé z nich patří do jednoho z prázdných políček.<div class="demo">${demo.map(d => `<span>${d}</span>`).join('')}</div></li>` : ''}
+        <li>${how}</li>
+        <li>Čísla, která byla v sudoku od začátku, jsou tučná a nejdou změnit. Doplněná čísla mají jinou barvu.</li>
+        <li>Až bude vyplněné každé políčko, hra řešení sama zkontroluje.</li>
+      </ol>
+    </section>
+    <section class="card help"><h3>Tlačítka</h3>${legend}
+      <p class="fnote">Další pomůcky (zvýraznění, upozornění na chyby, počítadlo čísel) jdou zapnout v nastavení ⚙. Na čas se nehraje.</p>
+    </section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { if (busy) return; hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// Persistent storage: the browser won't evict settings or the saved game on its own
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+// rule: only the known settings are taken over from the save
+const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+// No saved game: generate in the background so "Připravuji sudoku…" shows first (hard 9×9 can take a moment)
+if (saved && validGame(saved.game)) { G = saved.game; render(); }
+else { applyLook(); newGame(); } // the saved theme shows while the first sudoku is prepared
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// Launcher contract: opened from the menu (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing
+window.Sudoku = { generate, countSolutions, logicSolve, fullSolution, geo, get state() { return { S, G }; } };
+})();
+</script>
+</body>
+</html>

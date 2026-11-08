@@ -1,0 +1,1188 @@
+<!doctype html>
+<html lang="cs" data-table="green" data-back="blue" data-face="white">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1e7135">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FreeCell">
+<title>FreeCell</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e7135'/%3E%3Crect x='7' y='7' width='22' height='22' rx='4' fill='none' stroke='%23fff' stroke-width='3' stroke-dasharray='5 3'/%3E%3Crect x='24' y='18' width='30' height='40' rx='4' fill='%23fff' stroke='%23333' stroke-width='1.5'/%3E%3Cpath d='M39 24c-3 5-9 8-9 13 0 4 4 6 7 4l-2 6h8l-2-6c3 2 7 0 7-4 0-5-6-8-9-13z' fill='%23111'/%3E%3C/svg%3E">
+<style>
+
+/* ---------- Base ---------- */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--tex),var(--grain,none),var(--tbl)}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+
+#app{--gut:12px;height:100vh;height:100dvh;max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;line-height:1.05;font-weight:800;font-size:28px;letter-spacing:.02em;color:var(--ink)} /* no nowrap/overflow: a long title wraps between words, never gets cut */
+.pill{height:46px;padding:0 16px;border-radius:23px;background:var(--btn);font-size:18px;font-weight:700;color:var(--btn-ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round{width:46px;height:46px;border-radius:50%;background:var(--btn);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--btn-ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{display:flex;gap:8px}
+a.round{text-decoration:none}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:22px;letter-spacing:0}
+
+/* ---------- Table and cards ---------- */
+#table{position:relative;isolation:isolate;flex:1;min-height:0;touch-action:none;overflow:hidden;--cw:45px;--ch:63px}
+.slot{position:absolute;left:0;top:0;width:var(--cw);height:var(--ch);border-radius:calc(var(--cw)*.1);border:2px solid var(--slot);background:var(--slot-bg);display:grid;place-items:center;color:var(--slot);pointer-events:none}
+.slot svg{width:58%;height:58%;fill:currentColor}
+.slot.cell{border-style:dashed;background:rgba(0,0,0,.16)}
+.slot.col{border-color:transparent;background:rgba(0,0,0,.08)}
+.slot.tgt{border-color:var(--accent);border-style:dashed;border-width:3px;background:rgba(255,255,255,.12)}
+.slot.hint{animation:pulse .8s ease-in-out infinite alternate;border-color:var(--accent);border-width:3px}
+
+/* corner index: cards are narrow with 8 columns, so slightly larger than in Klondike */
+.ix{position:absolute;left:calc(var(--cw)*.04);right:calc(var(--cw)*.03);top:calc(var(--cw)*.03);height:calc(var(--cw)*.48);display:flex;align-items:center;justify-content:space-between}
+.ix b{font-size:calc(var(--cw)*.47);font-weight:var(--fw);line-height:1;letter-spacing:-.03em}
+.ix b.t{font-size:calc(var(--cw)*.42);letter-spacing:-.1em;margin-left:-.04em}
+.ix svg{flex:none;width:calc(var(--cw)*.36);height:calc(var(--cw)*.36);fill:currentColor}
+.art{position:absolute;left:7%;right:7%;top:37%;bottom:4%}
+.cd.sel{box-shadow:0 0 0 4px var(--accent),0 6px 14px rgba(0,0,0,.45)}
+.cd.tgt{outline:3px dashed var(--accent);outline-offset:2px}
+.cd.hint{animation:pulse .8s ease-in-out infinite alternate}
+@keyframes pulse{from{box-shadow:0 0 0 2px var(--accent)}to{box-shadow:0 0 0 6px var(--accent),0 0 14px var(--accent)}}
+.cd.drag{transition:none!important;box-shadow:0 12px 22px rgba(0,0,0,.5)}
+.cd.no{animation:shake .36s}
+@keyframes shake{20%{margin-left:-7px}40%{margin-left:7px}60%{margin-left:-5px}80%{margin-left:4px}}
+#table.noanim .cd{transition:none}
+#table.won .cd.kf{animation:hop .6s ease-in-out infinite alternate}
+@keyframes hop{to{margin-top:-10px}}
+
+/* Bottom buttons */
+.tray{flex:none;display:flex;gap:8px;padding:8px var(--gut) 10px;background:var(--bar);border-top:1px solid var(--line)}
+.act{flex:1 1 0;min-width:0;height:60px;border-radius:14px;background:var(--btn);color:var(--btn-ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:18px;font-weight:700;box-shadow:inset 0 0 0 1px var(--line);transition:opacity .2s,transform .06s;white-space:nowrap}
+.act:active{transform:scale(.97)}
+.act svg{flex:none;width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.act.on{background:var(--accent);color:var(--accent-ink);box-shadow:none}
+.act.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;font-family:Georgia,serif;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);transition:transform .06s}
+.big:active{transform:translateY(3px);box-shadow:0 1px 0 var(--pbtn-sh)}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0;box-shadow:0 2px 6px rgba(60,30,10,.12)}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink);font-family:Georgia,serif}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.trow .flabel{margin:0;flex:1;min-width:0}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{height:96px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:6px;background:var(--tex),var(--grain,none),var(--tbl);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.mini{--cw:46px;--ch:64px;display:flex;gap:5px;justify-content:center}
+.mini .cd{position:relative;transform:none;flex:none;transition:none}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.stats{font-size:20px;line-height:1.5}
+
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+.legend{display:flex;align-items:center;gap:14px;margin:12px 0;font-size:20px;line-height:1.3}
+.legend .ico{flex:none;width:46px;height:46px;border-radius:12px;background:var(--pcard);display:grid;place-items:center}
+.legend .ico svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.demo{--cw:56px;--ch:78px;position:relative;width:56px;margin:12px auto;padding:0}
+.demo .cd{position:absolute;transition:none}
+.demo-felt{background:var(--tex),var(--tbl);border-radius:14px;padding:12px;margin:10px 0}
+.demo-cells{--cw:46px;--ch:64px;display:flex;gap:6px;justify-content:center}
+.demo-cells .slot,.demo-cells .cd{position:relative;flex:none;transition:none}
+
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:pop .25s ease-out}
+@keyframes pop{from{transform:scale(.9);opacity:0}}
+.mcard h2{font-size:28px;font-family:Georgia,serif;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+.mbtns{display:flex;flex-direction:column;gap:14px;margin-top:8px}
+
+@media (max-height:800px){
+  .topbar{height:52px}
+  .pill{height:42px}.round{width:42px;height:42px}
+  .topbar h1{font-size:25px}
+  .act{height:54px}
+  .tray{padding:6px var(--gut) 8px}
+}
+/* Narrow phones (360 px wide): smaller gaps and a slimmer "Nová hra", so the title fits next to the home button (the 12 px outer margin stays) */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 10px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:20px;letter-spacing:0}
+}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:60;width:max-content;max-width:92vw;background:color-mix(in srgb,var(--ink) 94%,var(--tbl));color:var(--tbl);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--tbl) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>FreeCell</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <main id="table"></main>
+  <footer class="tray" id="tray"></footer>
+</div>
+
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+
+<script src="../../images/sets.js"></script>
+<script src="../_cards/cards.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const table = $('#table');
+
+/* ---------- Cards ---------- */
+// card = number 0–51; suit 0 ♠, 1 ♥, 2 ♣, 3 ♦ (odd = red); rank 1 (ace) to 13 (king)
+const RANK = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const SYM = ['♠︎', '♥︎', '♣︎', '♦︎'];
+const suit = c => (c / 13) | 0, rank = c => c % 13 + 1, red = c => suit(c) & 1;
+const nm = c => RANK[rank(c)] + SYM[suit(c)];
+const canStack = (c, top) => rank(top) === rank(c) + 1 && red(top) !== red(c);
+const NCOL = 8, NCELL = 4;
+// length of the properly ordered run at the end of a column (descending by one, alternating colours)
+function runLen(a) {
+  let k = a.length ? 1 : 0;
+  while (k < a.length && canStack(a[a.length - k], a[a.length - k - 1])) k++;
+  return k;
+}
+// how many cards can be moved at once: (free cells + 1) × 2^(empty columns)
+const maxRunOf = (freeCells, emptyCols, toEmpty) => (freeCells + 1) * (1 << Math.max(0, emptyCols - (toEmpty ? 1 : 0)));
+const cardCountAcc = n => n === 1 ? 'jednu kartu' : n < 5 ? `${n} karty` : `${n} karet`;
+
+/* ---------- Appearance: shared with the other card games (games/_cards/cards.js) ---------- */
+const { TABLES, BACKS, FACES, PICS, CASTLE, COAT } = CARDS;
+const artSVG = (c, pic) => CARDS.artSVG(suit(c), rank(c), pic);
+const faceHTML = (c, pic) => CARDS.faceHTML(suit(c), rank(c), pic);
+const cardHTML = (c, up, pic, style = '') => `<div class="cd${red(c) ? ' r' : ''}${up ? ' up' : ''}" style="${style}">${faceHTML(c, pic)}</div>`;
+
+/* ---------- Other constants ---------- */
+const ICONS = {
+  undo:   '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  hint:   '<path d="M9.5 18h5"/><path d="M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
+  finish: '<path d="M12 20V8"/><path d="M6.5 13.5 12 8l5.5 5.5"/><path d="M5 4h14"/>',
+};
+const DEFAULTS = { mode: 'tap', auto: true, table: 'green', back: 'nachod', face: 'white', pic: 'classic', vibrate: true };
+// Saved state under the launcher's games.<id>.* prefix; OLD_KEY is the name used before (read once, then removed)
+const KEY = 'games.freecell.state', OLD_KEY = 'freecell.v1', BADGE = 'games.freecell.inProgress';
+
+/* ---------- Randomness ---------- */
+function rnd(n) {
+  try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; }
+  catch (e) { return Math.floor(Math.random() * n); }
+}
+function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+/* ---------- Solver ----------
+   State s = { c: 8 columns, fc: 4 free cells (-1 = empty), f: number of cards on each suit's foundation }.
+   Move m = { fr: 'c' column | 'f' cell, i, n (card count), to: 'h' foundation | 'c' column | 'f' cell, j }.
+   Best-first search with an estimate of how much work remains. */
+const svFree = s => s.fc.reduce((n, x) => n + (x < 0), 0);
+const svEmpty = s => s.c.reduce((n, a) => n + !a.length, 0);
+const svClone = s => ({ c: s.c.map(a => a.slice()), fc: s.fc.slice(), f: s.f.slice() });
+// a card no longer needed in the columns (nothing that could be placed on it is still in play)
+function svSafe(s, c) {
+  const r = rank(c);
+  if (s.f[suit(c)] !== r - 1) return false;
+  if (r <= 2) return true;
+  const o = red(c) ? [0, 2] : [1, 3];
+  return s.f[o[0]] >= r - 1 && s.f[o[1]] >= r - 1;
+}
+function svPlay(s, m) {
+  let run;
+  if (m.fr === 'c') run = s.c[m.i].splice(s.c[m.i].length - m.n);
+  else { run = [s.fc[m.i]]; s.fc[m.i] = -1; }
+  if (m.to === 'h') s.f[suit(run[0])]++;
+  else if (m.to === 'f') s.fc[m.j] = run[0];
+  else s.c[m.j].push(...run);
+}
+function svSafeMove(s) {
+  for (let i = 0; i < NCOL; i++) { const a = s.c[i]; if (a.length && svSafe(s, a[a.length - 1])) return { fr: 'c', i, n: 1, to: 'h' }; }
+  for (let i = 0; i < NCELL; i++) if (s.fc[i] >= 0 && svSafe(s, s.fc[i])) return { fr: 'f', i, to: 'h' };
+  return null;
+}
+function svAuto(s) { for (let m; (m = svSafeMove(s));) svPlay(s, m); }
+function svMoves(s) {
+  const M = [], tops = s.c.map(a => a.length ? a[a.length - 1] : -1);
+  const fcFree = s.fc.indexOf(-1), empty = tops.indexOf(-1);
+  const free = svFree(s), nEmpty = svEmpty(s), mr = maxRunOf(free, nEmpty, false), mrE = maxRunOf(free, nEmpty, true);
+  for (let i = 0; i < NCOL; i++) { const c = tops[i]; if (c >= 0 && s.f[suit(c)] === rank(c) - 1) M.push({ fr: 'c', i, n: 1, to: 'h' }); }
+  for (let i = 0; i < NCELL; i++) { const c = s.fc[i]; if (c >= 0 && s.f[suit(c)] === rank(c) - 1) M.push({ fr: 'f', i, to: 'h' }); }
+  for (let i = 0; i < NCELL; i++) {
+    const c = s.fc[i]; if (c < 0) continue;
+    for (let j = 0; j < NCOL; j++) if (tops[j] >= 0 && canStack(c, tops[j])) M.push({ fr: 'f', i, to: 'c', j });
+    if (empty >= 0) M.push({ fr: 'f', i, to: 'c', j: empty });
+  }
+  for (let i = 0; i < NCOL; i++) {
+    const a = s.c[i]; if (!a.length) continue;
+    const L = runLen(a);
+    for (let j = 0; j < NCOL; j++) {
+      if (j === i || tops[j] < 0) continue;
+      const k = rank(tops[j]) - rank(a[a.length - 1]);
+      if (k >= 1 && k <= L && k <= mr && canStack(a[a.length - k], tops[j])) M.push({ fr: 'c', i, n: k, to: 'c', j });
+    }
+    if (empty >= 0 && a.length > 1) {
+      const k = Math.min(L, mrE);
+      if (k < a.length) { M.push({ fr: 'c', i, n: k, to: 'c', j: empty }); if (k > 1) M.push({ fr: 'c', i, n: 1, to: 'c', j: empty }); }
+    }
+    if (fcFree >= 0) M.push({ fr: 'c', i, n: 1, to: 'f', j: fcFree });
+  }
+  return M;
+}
+function svKey(s) {
+  return s.c.map(a => String.fromCharCode(...a.map(c => c + 60))).sort().join('|') + '#'
+    + s.fc.filter(x => x >= 0).sort((a, b) => a - b).map(c => String.fromCharCode(c + 60)).join('');
+}
+const svWon = s => s.f[0] + s.f[1] + s.f[2] + s.f[3] === 52;
+// remaining-work estimate: cards off the foundations + cards lying on a lower card + occupied cells − empty columns
+function svH(s) {
+  let h = 52 - s.f[0] - s.f[1] - s.f[2] - s.f[3];
+  for (const a of s.c) {
+    let mn = 99;
+    for (let i = 0; i < a.length; i++) { const r = rank(a[i]); if (r > mn) h += 2; else mn = r; }
+  }
+  return h + (NCELL - svFree(s)) - 2 * svEmpty(s);
+}
+function Heap() { this.a = []; }
+Heap.prototype.push = function (p, v) { const a = this.a; a.push([p, v]); let i = a.length - 1; while (i) { const q = (i - 1) >> 1; if (a[q][0] <= a[i][0]) break; [a[q], a[i]] = [a[i], a[q]]; i = q; } };
+Heap.prototype.pop = function () { const a = this.a, top = a[0], last = a.pop(); if (a.length) { a[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < a.length && a[l][0] < a[m][0]) m = l; if (r < a.length && a[r][0] < a[m][0]) m = r; if (m === i) break; [a[m], a[i]] = [a[i], a[m]]; i = m; } } return top[1]; };
+// Returns the moves leading to a win (after each, safe cards auto-move to the foundations), null = not found within the limit.
+function solve(s0, limit) {
+  const start = svClone(s0); svAuto(start);
+  if (svWon(start)) return [];
+  const seen = new Set([svKey(start)]), heap = new Heap();
+  heap.push(svH(start), { s: start, par: null, m: null, g: 0 });
+  let nodes = 0;
+  while (heap.a.length) {
+    const nd = heap.pop();
+    if (++nodes > limit) return null;
+    for (const m of svMoves(nd.s)) {
+      const s = svClone(nd.s); svPlay(s, m); svAuto(s);
+      const k = svKey(s);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const ch = { s, par: nd, m, g: nd.g + 1 };
+      if (svWon(s)) { const p = []; for (let x = ch; x.par; x = x.par) p.push(x.m); return p.reverse(); }
+      heap.push(svH(s) + ch.g * .1, ch);
+    }
+  }
+  return null;
+}
+
+// Winning plan: state (exact, including column order) → move. Hint uses it while the game stays on the winning path.
+const exactKey = s => s.c.map(a => String.fromCharCode(...a.map(c => c + 60))).join('|') + '#' + s.fc.map(c => String.fromCharCode(c + 61)).join('');
+function makePlan(s0, path) {
+  const s = svClone(s0), keys = [];
+  svAuto(s);
+  for (const m of path) { keys.push(exactKey(s)); svPlay(s, m); svAuto(s); }
+  return { keys, moves: path };
+}
+
+/* ---------- Dealing ---------- */
+function dealFrom(deck) {
+  const tab = [...Array(NCOL)].map(() => []);
+  deck.forEach((c, i) => tab[i % NCOL].push(c));
+  return { tab, cells: [-1, -1, -1, -1], found: [[], [], [], []] };
+}
+const svFromG = g => ({ c: g.tab.map(a => a.slice()), fc: g.cells.slice(), f: g.found.map(a => a.length) });
+// Tries random decks until the solver wins one. Yields to the browser between tries, so the page
+// never freezes; gives up after `ms` (then ok: false and the deck is just random).
+const nextTick = () => new Promise(r => setTimeout(r, 0));
+async function solvableDeck(ms = 10000) {
+  const end = Date.now() + ms;
+  let deck, tries = 0;
+  do {
+    deck = shuffle([...Array(52).keys()]); tries++;
+    const s = svFromG(dealFrom(deck)), path = solve(s, 8000); // 8000 verifies as many deals as 20000, with shorter pauses
+    if (path) return { deck, ok: true, tries, plan: makePlan(s, path) };
+    await nextTick();
+  } while (Date.now() < end);
+  return { deck, ok: false, tries, plan: null };
+}
+
+/* ---------- State and saving ---------- */
+let S, G = null, ST, busy = false, SEL = null;
+const playing = () => G && G.status === 'playing';
+const hasProgress = () => playing() && G.moves > 0;
+function load() {
+  try {
+    let v = localStorage.getItem(KEY);
+    // move the state from the older key at once
+    if (v === null && (v = localStorage.getItem(OLD_KEY)) !== null) { localStorage.setItem(KEY, v); localStorage.removeItem(OLD_KEY); }
+    return JSON.parse(v);
+  } catch (e) { return null; }
+}
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, stats: ST }));
+    if (hasProgress()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {}
+}
+// The piles hold all 52 cards exactly once and in a legal shape (also used for Undo snapshots).
+function validState(g) {
+  try {
+    if (!g || !Array.isArray(g.tab) || g.tab.length !== NCOL || !g.tab.every(Array.isArray)) return false;
+    if (!Array.isArray(g.cells) || g.cells.length !== NCELL || !Array.isArray(g.found) || g.found.length !== 4 || !g.found.every(Array.isArray)) return false;
+    const all = [...g.cells.filter(c => c !== -1), ...g.tab.flat(), ...g.found.flat()];
+    if (all.length !== 52 || new Set(all).size !== 52 || all.some(c => !Number.isInteger(c) || c < 0 || c > 51)) return false;
+    return g.found.every((a, s) => a.every((c, i) => suit(c) === s && rank(c) === i + 1));
+  } catch (e) { return false; }
+}
+// A saved snapshot (JSON string) that restore() can apply on top of g
+function validSnap(g, str) {
+  try { const s = JSON.parse(str); return !!s && typeof s === 'object' && validState(Object.assign({}, g, s)); } catch (e) { return false; }
+}
+// A solver move as svPlay/hint read it: { fr: 'c'|'f', i, n, to: 'h'|'c'|'f', j }
+function validMove(m) {
+  const idx = (v, max) => Number.isInteger(v) && v >= 0 && v < max;
+  if (!m || typeof m !== 'object') return false;
+  if (m.fr === 'c') { if (!idx(m.i, NCOL) || !Number.isInteger(m.n) || m.n < 1 || m.n > 13) return false; }
+  else if (m.fr === 'f') { if (!idx(m.i, NCELL)) return false; }
+  else return false;
+  if (m.to === 'h') return true;
+  if (m.to === 'c') return idx(m.j, NCOL);
+  return m.to === 'f' && idx(m.j, NCELL);
+}
+function validGame(g) {
+  try {
+    if (!validState(g)) return false;
+    g.status = g.found.every(a => a.length === 13) ? 'won' : 'playing'; // the end comes from the cards, never from the save
+    // a broken history only loses Undo, not the game
+    if (!Array.isArray(g.hist) || !g.hist.every(h => typeof h === 'string' && validSnap(g, h))) g.hist = [];
+    if (typeof g.init !== 'string' || !validSnap(g, g.init)) g.init = snap(g);
+    g.moves = Number.isInteger(g.moves) ? g.moves : 0;
+    if (typeof g.stuckAt !== 'number') g.stuckAt = -1;
+    const p = g.plan;
+    if (!p || !Array.isArray(p.keys) || !Array.isArray(p.moves) || p.keys.length !== p.moves.length
+      || !p.keys.every(k => typeof k === 'string') || !p.moves.every(validMove)) g.plan = null;
+    return true;
+  } catch (e) { return false; }
+}
+function validStats(v) {
+  const n = x => Number.isInteger(x) && x >= 0 ? x : 0;
+  const played = n(v && v.played);
+  return { played, won: Math.min(n(v && v.won), played) };
+}
+function normalize(s) {
+  const pick = (k, list) => { if (!list.includes(s[k])) s[k] = list.includes(DEFAULTS[k]) ? DEFAULTS[k] : list[0]; };
+  pick('mode', ['tap', 'select']);
+  CARDS.normalizeLook(s, DEFAULTS);
+  s.auto = !!s.auto; s.vibrate = !!s.vibrate;
+}
+const snap = g => JSON.stringify({ tab: g.tab, cells: g.cells, found: g.found });
+function restore(str) { Object.assign(G, JSON.parse(str)); }
+
+function newGame(msg) {
+  if (busy) return; // a deal is already being prepared
+  busy = true; SEL = null; clearHint();
+  toast('Míchám karty…', 60000);
+  setTimeout(async () => {
+    const r = await solvableDeck();
+    G = Object.assign(dealFrom(r.deck), { hist: [], status: 'playing', moves: 0, counted: false, stuckAt: -1, finTold: false, plan: r.plan });
+    G.init = snap(G);
+    busy = false;
+    hideToast();
+    save(); render({ deal: true });
+    if (!r.ok) toast('Tentokrát se nepodařilo ověřit, že hra jde vyhrát. Karty jsou zamíchané náhodně.', 5000);
+    else if (msg) toast(msg);
+  }, 60);
+}
+function restart() {
+  restore(G.init);
+  Object.assign(G, { hist: [], status: 'playing', moves: 0, stuckAt: -1, finTold: false });
+  SEL = null; clearHint();
+  save(); render({ deal: true });
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) { if (S.vibrate && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+let toastT;
+function toast(msg, ms = 3000) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  t.style.bottom = (innerHeight - $('#tray').getBoundingClientRect().top + 12) + 'px';
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+
+const freeCells = () => G.cells.reduce((n, x) => n + (x < 0), 0);
+const emptyCols = () => G.tab.reduce((n, a) => n + !a.length, 0);
+const maxMove = toEmpty => maxRunOf(freeCells(), emptyCols(), toEmpty);
+const tooMany = mx => mx === 1
+  ? 'Teď jde přesunout jen jedna karta. Víc jich půjde s volným políčkem nebo prázdným sloupcem.'
+  : `Najednou jde teď přesunout nejvýš ${cardCountAcc(mx)}. Víc jich půjde s volnými políčky nebo prázdným sloupcem.`;
+
+function locate(c) {
+  let i = G.cells.indexOf(c); if (i >= 0) return { t: 'cell', i };
+  for (let s = 0; s < 4; s++) { i = G.found[s].indexOf(c); if (i >= 0) return { t: 'found', s, idx: i }; }
+  for (let col = 0; col < NCOL; col++) { i = G.tab[col].indexOf(c); if (i >= 0) return { t: 'tab', col, idx: i }; }
+  return null;
+}
+// the card (and the cards below it) that can be played; null = cannot
+function srcFromLoc(l) {
+  if (!l) return null;
+  if (l.t === 'tab') { const a = G.tab[l.col]; return l.idx >= a.length - runLen(a) ? { t: 'tab', col: l.col, idx: l.idx } : null; }
+  if (l.t === 'cell') return { t: 'cell', i: l.i };
+  return null;
+}
+function runOf(src) {
+  if (src.t === 'tab') return G.tab[src.col].slice(src.idx);
+  return [G.cells[src.i]];
+}
+const sameSrc = (a, b) => a && b && a.t === b.t && a.col === b.col && a.idx === b.idx && a.i === b.i;
+
+// '' = move is allowed; otherwise an explanation why not ('same' = same place, say nothing)
+function why(src, dest) {
+  const run = runOf(src), c = run[0], n = run.length;
+  if (dest.t === 'found') {
+    if (n > 1) return 'Na hromádku jde vždy jen jedna karta';
+    const need = G.found[suit(c)].length + 1;
+    if (rank(c) !== need) return need === 1 ? `Hromádka ${SYM[suit(c)]} začíná esem` : `Na hromádku ${SYM[suit(c)]} teď patří ${RANK[need]}${SYM[suit(c)]}`;
+    return '';
+  }
+  if (dest.t === 'cell') {
+    if (src.t === 'cell' && (dest.i === undefined || dest.i === src.i)) return 'same';
+    if (n > 1) return 'Na volné políčko jde jen jedna karta';
+    const i = dest.i === undefined ? G.cells.indexOf(-1) : dest.i;
+    if (i < 0) return 'Všechna čtyři políčka nahoře jsou obsazená';
+    if (G.cells[i] >= 0) return 'Tohle políčko je obsazené';
+    return '';
+  }
+  if (src.t === 'tab' && src.col === dest.col) return 'same';
+  const t = G.tab[dest.col];
+  if (t.length) {
+    const top = t[t.length - 1];
+    if (!canStack(c, top)) {
+      if (rank(top) === 1) return 'Na eso ve sloupci už nic nepatří';
+      return `Na ${nm(top)} patří jen ${RANK[rank(top) - 1]} v ${red(top) ? 'černé' : 'červené'} barvě`;
+    }
+  }
+  const mx = maxMove(!t.length);
+  if (n > mx) return tooMany(mx);
+  return '';
+}
+
+/* ---------- Moves ---------- */
+// every move starts here: an older message (e.g. the hint that described this move) must not stay over the table
+function pushHist() { hideToast(); G.hist.push(snap(G)); if (G.hist.length > 400) G.hist.shift(); }
+function take(src) {
+  if (src.t === 'tab') return G.tab[src.col].splice(src.idx);
+  const c = G.cells[src.i]; G.cells[src.i] = -1; return [c];
+}
+function put(run, dest) {
+  if (dest.t === 'found') G.found[suit(run[0])].push(run[0]);
+  else if (dest.t === 'cell') G.cells[dest.i === undefined ? G.cells.indexOf(-1) : dest.i] = run[0];
+  else G.tab[dest.col].push(...run);
+}
+function doMove(src, dest) {
+  pushHist();
+  put(take(src), dest);
+  after();
+}
+const safeNow = c => svSafe({ f: G.found.map(a => a.length) }, c);
+function autoFound() {
+  for (let moved = true; moved;) {
+    moved = false;
+    for (let col = 0; col < NCOL && !moved; col++) {
+      const a = G.tab[col];
+      if (a.length && safeNow(a[a.length - 1])) { put(take({ t: 'tab', col, idx: a.length - 1 }), { t: 'found' }); moved = true; }
+    }
+    for (let i = 0; i < NCELL && !moved; i++) if (G.cells[i] >= 0 && safeNow(G.cells[i])) { put(take({ t: 'cell', i }), { t: 'found' }); moved = true; }
+  }
+}
+function after() {
+  G.moves++;
+  if (!G.counted) { G.counted = true; ST.played++; }
+  if (S.auto) autoFound();
+  SEL = null; clearHint();
+  buzz(); save(); render();
+  checkEnd();
+}
+function undo() {
+  if (busy) return;
+  if (!playing()) { toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
+  if (!G.hist.length) { toast('Není co vrátit'); return; }
+  restore(G.hist.pop());
+  SEL = null; clearHint();
+  buzz(); save(); render();
+}
+// tap: foundation → onto a card in a column → free cell → empty column
+function autoMove(src) {
+  const run = runOf(src), c = run[0], n = run.length;
+  let dest = null, long = 0;
+  if (n === 1 && G.found[suit(c)].length === rank(c) - 1) dest = { t: 'found' };
+  for (let col = 0; col < NCOL && !dest; col++) {
+    if (src.t === 'tab' && src.col === col) continue;
+    const a = G.tab[col];
+    if (a.length && canStack(c, a[a.length - 1])) { if (n <= maxMove(false)) dest = { t: 'tab', col }; else long = maxMove(false); }
+  }
+  if (!dest && n === 1 && src.t === 'tab') { const i = G.cells.indexOf(-1); if (i >= 0) dest = { t: 'cell', i }; }
+  if (!dest && !(src.t === 'tab' && src.idx === 0)) {
+    const e = G.tab.findIndex(a => !a.length);
+    if (e >= 0) { if (n <= maxMove(true)) dest = { t: 'tab', col: e }; else if (!long) long = maxMove(true); }
+  }
+  if (!dest) {
+    shake(run);
+    toast(long ? tooMany(long) : `${n > 1 ? 'Řada od ' : ''}${nm(c)} teď nejde nikam dát`);
+    return;
+  }
+  doMove(src, dest);
+}
+function shake(cards) {
+  for (const c of cards) { const el = EL[c]; el.classList.remove('no'); void el.offsetWidth; el.classList.add('no'); }
+  buzz(30);
+}
+
+/* ---------- End of game ---------- */
+// Finish is available once it is enough to move cards only to the foundations
+function finishStep(s) {
+  let best = null, br = 99;
+  for (let i = 0; i < NCOL; i++) {
+    const a = s.c[i]; if (!a.length) continue;
+    const c = a[a.length - 1];
+    if (s.f[suit(c)] === rank(c) - 1 && rank(c) < br) { br = rank(c); best = { fr: 'c', i, n: 1, to: 'h' }; }
+  }
+  for (let i = 0; i < NCELL; i++) {
+    const c = s.fc[i];
+    if (c >= 0 && s.f[suit(c)] === rank(c) - 1 && rank(c) < br) { br = rank(c); best = { fr: 'f', i, to: 'h' }; }
+  }
+  return best;
+}
+function canFinish() {
+  if (!playing()) return false;
+  const s = svFromG(G);
+  for (let m; (m = finishStep(s));) svPlay(s, m);
+  return svWon(s);
+}
+function finish() {
+  if (busy) return;
+  if (!playing()) { toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
+  if (!canFinish()) { toast('Ještě to nejde. Dokončit jde, až žádná karta nebude ležet na menší kartě.', 4000); return; }
+  pushHist(); busy = finishing = true; SEL = null; clearHint();
+  const step = () => {
+    const m = finishStep(svFromG(G));
+    if (!m) { busy = finishing = false; G.moves++; save(); render(); checkEnd(); return; }
+    put(take(m.fr === 'c' ? { t: 'tab', col: m.i, idx: G.tab[m.i].length - 1 } : { t: 'cell', i: m.i }), { t: 'found' });
+    render();
+    setTimeout(step, 110);
+  };
+  step();
+}
+function checkEnd() {
+  if (G.found.every(a => a.length === 13)) {
+    G.status = 'won'; ST.won++;
+    save(); render();
+    buzz([40, 60, 40, 60, 80]);
+    const wonGame = G;
+    whenFree(wonGame, 900, () => {
+      if (busy) return;
+      showModal(`<h2>Vyhráno! 🎉</h2><p>Všechny karty jsou na hromádkách.</p><p>Vyhrané hry: <b>${ST.won}</b> z ${ST.played}</p>`,
+      [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout stůl', cls: 'alt' }]);
+    });
+    return;
+  }
+  if (!G.finTold && canFinish()) {
+    G.finTold = true; save();
+    toast('Teď už jde všechno rovnou na hromádky. Ťukni na Dokončit.', 4500);
+    return;
+  }
+  if (G.stuckAt !== G.moves && !svMoves(svFromG(G)).length) {
+    G.stuckAt = G.moves; save();
+    const g0 = G, h0 = G.hist.length;
+    whenFree(g0, 500, () => {
+      if (G.hist.length !== h0 || busy || !playing()) return;
+      showModal('<h2>Dál to nejde</h2><p>Políčka nahoře jsou plná a žádná karta nejde přesunout.</p>',
+        [{ text: 'Vrátit tah zpět', fn: undo }, { text: 'Nová hra', fn: () => newGame() }, { text: 'Ještě se podívám', cls: 'alt' }]);
+    });
+  }
+}
+
+/* ---------- Hint ---------- */
+let HINT = null, hintT, HINT_MOVE = null; // HINT_MOVE: the move the hint shows ({src, dest})
+function clearHint() {
+  if (!HINT) return;
+  document.querySelectorAll('.hint').forEach(e => e.classList.remove('hint'));
+  HINT = null; HINT_MOVE = null; clearTimeout(hintT);
+}
+// fallback hint when the solver finds no path: foundation, from a cell onto a card, card onto a card
+function fallbackMove(s) {
+  const M = svMoves(s);
+  return M.find(m => m.to === 'h') || M.find(m => m.fr === 'f' && m.to === 'c' && s.c[m.j].length)
+    || M.find(m => m.fr === 'c' && m.to === 'c' && s.c[m.j].length && m.n < s.c[m.i].length);
+}
+// next move towards a win: safe foundation move → plan → new search → fallback move (lost = no win found)
+function nextMove() {
+  const s = svFromG(G), safe = svSafeMove(s);
+  if (safe) return { m: safe };
+  if (G.plan) { const i = G.plan.keys.indexOf(exactKey(s)); if (i >= 0) return { m: G.plan.moves[i] }; }
+  const p = solve(s, 30000);
+  if (p && p.length) { G.plan = makePlan(s, p); save(); return { m: p[0] }; }
+  const f = fallbackMove(s);
+  return f ? { m: f, lost: true } : null;
+}
+function hint() {
+  if (busy) return;
+  if (!playing()) { toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
+  SEL = null; clearHint();
+  // the search can take a moment on a phone: show a message first, then think
+  busy = true; toast('Přemýšlím…', 60000);
+  setTimeout(() => { busy = false; hideToast(); showHint(); }, 30);
+}
+function showHint() {
+  const nx = nextMove(), m = nx && nx.m, lost = !!(nx && nx.lost);
+  if (!m) { render(); toast('Žádný dobrý tah už nevidím. Zkus Zpět nebo novou hru.', 4000); return; }
+  const src = m.fr === 'c' ? { t: 'tab', col: m.i, idx: G.tab[m.i].length - m.n } : { t: 'cell', i: m.i };
+  const hintMove = { src, dest: m.to === 'h' ? { t: 'found' } : m.to === 'f' ? { t: 'cell', i: m.j } : { t: 'tab', col: m.j } };
+  const run = runOf(src), c = run[0], from = run.length > 1 ? 'řadu od ' : '';
+  const els = run.map(x => EL[x]);
+  let msg;
+  if (m.to === 'h') {
+    const f = G.found[suit(c)];
+    els.push(f.length ? EL[f[f.length - 1]] : SLOT.found[suit(c)]);
+    msg = `Dej ${nm(c)} na hromádku vpravo nahoře`;
+  } else if (m.to === 'f') {
+    els.push(SLOT.cell[m.j]);
+    msg = `Odlož ${nm(c)} na volné políčko vlevo nahoře`;
+  } else {
+    const t = G.tab[m.j];
+    els.push(t.length ? EL[t[t.length - 1]] : SLOT.col[m.j]);
+    msg = t.length ? `Přesuň ${from}${nm(c)} na ${nm(t[t.length - 1])}` : `Přesuň ${from}${nm(c)} na prázdný sloupec`;
+  }
+  if (lost) msg += '. Výhru odsud ale nevidím, možná pomůže Zpět.';
+  render();
+  els.forEach(e => e.classList.add('hint'));
+  HINT = els;
+  HINT_MOVE = hintMove;
+  hintT = setTimeout(clearHint, lost ? 5000 : 4000);
+  buzz(8);
+  toast(msg, lost ? 5000 : 4000);
+}
+
+/* ---------- Layout and rendering ---------- */
+const EL = [];
+const SLOT = { cell: [], found: [], col: [] };
+let L = null;
+function buildTable() {
+  let h = '';
+  for (let i = 0; i < NCELL; i++) h += '<div class="slot cell"></div>';
+  for (let s = 0; s < 4; s++) h += `<div class="slot fnd"><svg viewBox="0 0 100 100"><use href="#s${s}"/></svg></div>`;
+  for (let c = 0; c < NCOL; c++) h += '<div class="slot col"></div>';
+  table.innerHTML = h;
+  const slots = table.querySelectorAll('.slot');
+  for (let i = 0; i < NCELL; i++) SLOT.cell[i] = slots[i];
+  for (let s = 0; s < 4; s++) SLOT.found[s] = slots[NCELL + s];
+  for (let c = 0; c < NCOL; c++) SLOT.col[c] = slots[NCELL + 4 + c];
+  for (let c = 0; c < 52; c++) {
+    const el = document.createElement('div');
+    el.className = 'cd' + (red(c) ? ' r' : '');
+    el.dataset.c = c;
+    table.appendChild(el);
+    EL[c] = el;
+  }
+  paintFaces();
+}
+let paintedPic = null;
+function paintFaces() {
+  if (paintedPic === S.pic) return;
+  paintedPic = S.pic;
+  for (let c = 0; c < 52; c++) EL[c].innerHTML = faceHTML(c, S.pic);
+}
+function layout() {
+  const W = table.clientWidth, H = table.clientHeight;
+  if (!W || !H) return false;
+  // SIDE: the same side margin as the top bar and the tray (--gut); M: the free room below the top bar and above the tray
+  const SIDE = 12, M = 12;
+  let gap = Math.max(3, Math.round(W * .008));
+  let w = Math.floor((W - 2 * SIDE - (NCOL - 1) * gap) / NCOL);
+  w = Math.max(28, Math.min(w, Math.floor((H - 2 * M - 18) / (3.4 * 1.4))));
+  // a full-width board spreads the rounding rest into the gaps, so it ends exactly SIDE from both edges; a height-limited one stays centered
+  const spare = W - 2 * SIDE - NCOL * w - (NCOL - 1) * gap, full = spare >= 0 && spare < NCOL;
+  if (full) gap += spare / (NCOL - 1);
+  const h = Math.round(w * 1.4), x0 = full ? SIDE : Math.round((W - NCOL * w - (NCOL - 1) * gap) / 2);
+  const yTop = M, rowGap = Math.max(10, Math.round(h * .2)), yTab = yTop + h + rowGap;
+  L = { W, H, w, h, gap, x0, x: [...Array(NCOL)].map((_, i) => Math.round(x0 + i * (w + gap))), yTop, yTab, rowGap,
+    Htab: H - yTab - M, off: Math.round(h * .85), minOff: Math.round(h * .3) };
+  table.style.setProperty('--cw', w + 'px');
+  table.style.setProperty('--ch', h + 'px');
+  return true;
+}
+// card spacing in a column: when the column does not fit, cards move closer (the corner index stays visible)
+function colOffset(col) {
+  const n = G.tab[col].length;
+  if (n < 2) return L.off;
+  return Math.max(L.minOff, Math.min(L.off, Math.floor((L.Htab - L.h) / (n - 1))));
+}
+function positions() {
+  const P = new Array(52), { x, yTop, yTab } = L;
+  G.cells.forEach((c, i) => { if (c >= 0) P[c] = { x: x[i], y: yTop, z: 1 }; });
+  G.found.forEach((a, s) => a.forEach((c, i) => { P[c] = { x: x[NCELL + s], y: yTop, z: 1 + i }; }));
+  G.tab.forEach((a, col) => {
+    const o = colOffset(col);
+    a.forEach((c, i) => { P[c] = { x: x[col], y: yTab + i * o, z: 10 + i }; });
+  });
+  return P;
+}
+function render(o = {}) {
+  const deal = !!o.deal, instant = !!o.instant;
+  applyLook();
+  renderTray();
+  if (!G || !layout()) return;
+  paintFaces();
+  const P = positions();
+  const deco = (el, x, y) => { el.style.transform = `translate(${x}px,${y}px)`; };
+  for (let i = 0; i < NCELL; i++) deco(SLOT.cell[i], L.x[i], L.yTop);
+  for (let s = 0; s < 4; s++) deco(SLOT.found[s], L.x[NCELL + s], L.yTop);
+  for (let c = 0; c < NCOL; c++) deco(SLOT.col[c], L.x[c], L.yTab);
+
+  // dealing: cards fly out one by one from the deck at top centre and flip over
+  let order = null;
+  if (deal) {
+    dealUntil = Date.now() + 1800; // the deal animation; taps on the table wait for it
+    const bx = Math.round((L.W - L.w) / 2);
+    table.classList.add('noanim');
+    for (let c = 0; c < 52; c++) { EL[c].classList.remove('up'); clearTimeout(EL[c]._ft); EL[c].style.transform = `translate(${bx}px,${L.yTop}px)`; EL[c]._x = bx; EL[c]._y = L.yTop; }
+    void table.offsetWidth;
+    table.classList.remove('noanim');
+    order = {};
+    G.tab.forEach((a, col) => a.forEach((c, row) => { order[c] = row * NCOL + col; }));
+  }
+  table.classList.toggle('noanim', instant);
+  const selRun = SEL ? new Set(runOf(SEL)) : null;
+  for (let c = 0; c < 52; c++) {
+    const el = EL[c], p = P[c];
+    const moved = el._x !== p.x || el._y !== p.y;
+    const delay = order && order[c] !== undefined ? order[c] * 28 : 0;
+    el.style.transitionDelay = delay ? delay + 'ms' : '';
+    el.classList.toggle('drag', false);
+    el.classList.toggle('sel', !!(selRun && selRun.has(c)));
+    el.classList.remove('tgt', 'kf');
+    clearTimeout(el._ft);
+    if (order) el._ft = setTimeout(() => el.classList.add('up'), delay + 150);
+    else el.classList.add('up');
+    el.style.transform = `translate(${p.x}px,${p.y}px)`;
+    clearTimeout(el._t);
+    if (moved && !instant) {
+      el.style.zIndex = 300 + p.z;
+      el._t = setTimeout(() => { el.style.zIndex = p.z; el.style.transitionDelay = ''; }, delay + 280);
+    } else el.style.zIndex = p.z;
+    el._x = p.x; el._y = p.y;
+  }
+  SLOT.cell.forEach(e => e.classList.remove('tgt'));
+  SLOT.found.forEach(e => e.classList.remove('tgt'));
+  SLOT.col.forEach(e => e.classList.remove('tgt'));
+  if (SEL && S.mode === 'select') markTargets();
+  table.classList.toggle('won', G.status === 'won');
+  if (G.status === 'won') G.found.forEach(a => a.length && EL[a[a.length - 1]].classList.add('kf'));
+  if (HINT) HINT.forEach(e => e.classList.add('hint'));
+}
+function markTargets() {
+  const run = runOf(SEL);
+  if (!why(SEL, { t: 'found' })) {
+    const f = G.found[suit(run[0])];
+    (f.length ? EL[f[f.length - 1]] : SLOT.found[suit(run[0])]).classList.add('tgt');
+  }
+  if (SEL.t === 'tab' && run.length === 1) { const i = G.cells.indexOf(-1); if (i >= 0) SLOT.cell[i].classList.add('tgt'); }
+  for (let col = 0; col < NCOL; col++) {
+    if (why(SEL, { t: 'tab', col })) continue;
+    const a = G.tab[col];
+    (a.length ? EL[a[a.length - 1]] : SLOT.col[col]).classList.add('tgt');
+  }
+}
+function renderTray() {
+  const fin = G && canFinish();
+  const acts = [
+    { id: 'undo', label: 'Zpět', cls: !playing() || !G.hist.length ? ' dim' : '' },
+    { id: 'hint', label: 'Poradit', cls: !playing() ? ' dim' : '' },
+    { id: 'finish', label: 'Dokončit', cls: fin ? ' on' : ' dim' },
+  ];
+  $('#tray').innerHTML = acts.map(a => `<button class="act${a.cls}" data-a="${a.id}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.id]}</svg>${a.label}</button>`).join('');
+}
+function applyLook() { CARDS.applyLook(S); }
+
+/* ---------- Controls: tap and drag ---------- */
+function hitAt(e) {
+  const cd = e.target.closest && e.target.closest('.cd');
+  if (cd) { const c = +cd.dataset.c; return { kind: 'card', c, loc: locate(c) }; }
+  const r = table.getBoundingClientRect(), px = e.clientX - r.left, py = e.clientY - r.top;
+  const col = Math.floor((px - L.x0 + L.gap / 2) / (L.w + L.gap));
+  if (col < 0 || col >= NCOL) return null;
+  if (py < L.yTab - L.rowGap / 2) return col < NCELL ? { kind: 'cell', i: col } : { kind: 'found', s: col - NCELL };
+  return { kind: 'col', col };
+}
+function destFromHit(hit) {
+  if (!hit) return null;
+  if (hit.kind === 'col') return { t: 'tab', col: hit.col };
+  if (hit.kind === 'cell') return { t: 'cell', i: hit.i };
+  if (hit.kind === 'found') return { t: 'found' };
+  if (hit.loc.t === 'tab') return { t: 'tab', col: hit.loc.col };
+  if (hit.loc.t === 'cell') return { t: 'cell', i: hit.loc.i };
+  return { t: 'found' };
+}
+function tap(hit) {
+  const hinted = HINT_MOVE;
+  clearHint();
+  if (!playing()) { if (G.status === 'won') toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
+  if (!hit) { if (SEL) { SEL = null; render(); } return; }
+  const src = hit.kind === 'card' ? srcFromLoc(hit.loc) : null;
+  // the hint highlights both the card and its place: a tap on the place (its top card) does the hinted move too
+  if (hinted && !SEL) {
+    const d = destFromHit(hit), top = hit.kind !== 'card' || hit.loc.t !== 'tab' || hit.loc.idx === G.tab[hit.loc.col].length - 1;
+    if (d && top && d.t === hinted.dest.t && d.col === hinted.dest.col && d.i === hinted.dest.i && !why(hinted.src, hinted.dest)) { doMove(hinted.src, hinted.dest); return; }
+  }
+
+  if (S.mode === 'select' && SEL) {
+    if (src && sameSrc(src, SEL)) { SEL = null; buzz(8); render(); return; }
+    const dest = destFromHit(hit);
+    const r = why(SEL, dest);
+    if (!r) { const s = SEL; SEL = null; doMove(s, dest); return; }
+    if (r === 'same') {
+      if (src) { SEL = src; buzz(8); render(); return; }
+      SEL = null; render(); return;
+    }
+    // on a card in the middle of a column or a card in a cell = select it instead
+    const isTop = hit.kind === 'card' && hit.loc.t === 'tab' && hit.loc.idx === G.tab[hit.loc.col].length - 1;
+    if (src && !isTop) { SEL = src; buzz(8); render(); return; }
+    shake(runOf(SEL));
+    toast(r);
+    return;
+  }
+
+  if (hit.kind === 'card') {
+    const l = hit.loc;
+    if (l.t === 'found') { toast('Karty z hromádek už zpátky nejdou. Pomůže tlačítko Zpět.'); return; }
+    if (!src) { shake([hit.c]); toast('Vzít jde poslední kartu ve sloupci, nebo řadu pod sebou seřazenou střídavě podle barvy', 4000); return; }
+    if (S.mode === 'tap') {
+      // any card of the hinted run (they all blink) does the hinted move
+      const h = hinted && hinted.src;
+      if (h && (sameSrc(src, h) || src.t === 'tab' && h.t === 'tab' && src.col === h.col && src.idx >= h.idx) && !why(h, hinted.dest)) { doMove(h, hinted.dest); return; }
+      autoMove(src);
+    }
+    else { SEL = src; buzz(8); render(); }
+    return;
+  }
+  if (hit.kind === 'col') toast(G.tab[hit.col].length ? 'Ťukni přímo na kartu, která se má přesunout' : 'Na prázdný sloupec jde jakákoli karta');
+  else if (hit.kind === 'cell') toast('Na volné políčko jde odložit jednu kartu');
+  else if (hit.kind === 'found' && !G.found[hit.s].length) toast(`Sem patří ${SYM[hit.s]}, nejdřív eso`);
+}
+
+let PD = null;
+// the cards fly to the foundations after Dokončit: a tap says so instead of doing nothing
+let finishing = false;
+const busyNote = () => { if (finishing) toast('Chvilku, karty se ještě skládají na hromádky'); };
+let dealUntil = 0;
+table.addEventListener('pointerdown', e => {
+  if (busy) { busyNote(); return; }
+  if (busy || PD || !G || (e.button !== undefined && e.button > 0)) return;
+  if (Date.now() < dealUntil) { toast('Chvilku, karty se ještě rozdávají'); return; }
+  const hit = hitAt(e);
+  PD = { id: e.pointerId, x0: e.clientX, y0: e.clientY, hit, drag: false };
+  if (hit && hit.kind === 'card' && playing()) {
+    const src = srcFromLoc(hit.loc);
+    if (src) { PD.src = src; PD.cards = runOf(src); }
+  }
+  try { table.setPointerCapture(e.pointerId); } catch (err) {}
+});
+table.addEventListener('pointermove', e => {
+  if (!PD || e.pointerId !== PD.id) return;
+  const dx = e.clientX - PD.x0, dy = e.clientY - PD.y0;
+  if (!PD.drag) {
+    if (!PD.src || Math.hypot(dx, dy) < 10) return;
+    PD.drag = true; clearHint();
+    if (SEL) { SEL = null; render(); }
+    PD.base = PD.cards.map(c => ({ x: EL[c]._x, y: EL[c]._y }));
+    PD.cards.forEach((c, i) => { const el = EL[c]; clearTimeout(el._t); el.classList.add('drag'); el.style.zIndex = 2000 + i; });
+  }
+  PD.cards.forEach((c, i) => { EL[c].style.transform = `translate(${PD.base[i].x + dx}px,${PD.base[i].y + dy}px)`; });
+});
+function endPointer(e, cancel) {
+  if (!PD || e.pointerId !== PD.id) return;
+  const pd = PD; PD = null;
+  if (!pd.drag) { if (!cancel) tap(pd.hit); return; }
+  if (cancel) { render(); return; }
+  const dx = e.clientX - pd.x0, dy = e.clientY - pd.y0;
+  const cx = pd.base[0].x + dx, cy = pd.base[0].y + dy;
+  const ov = (x, y, w, h) => Math.max(0, Math.min(cx + L.w, x + w) - Math.max(cx, x)) * Math.max(0, Math.min(cy + L.h, y + h) - Math.max(cy, y));
+  let best = null, bestA = 0;
+  for (let i = 0; i < NCELL; i++) { const a = ov(L.x[i], L.yTop, L.w, L.h); if (a > bestA) { bestA = a; best = { t: 'cell', i }; } }
+  for (let s = 0; s < 4; s++) { const a = ov(L.x[NCELL + s], L.yTop, L.w, L.h); if (a > bestA) { bestA = a; best = { t: 'found' }; } }
+  for (let col = 0; col < NCOL; col++) { const a = ov(L.x[col] - L.gap / 2, L.yTab - L.rowGap, L.w + L.gap, L.H); if (a > bestA) { bestA = a; best = { t: 'tab', col }; } }
+  if (best) {
+    const r = why(pd.src, best);
+    if (!r) { doMove(pd.src, best); return; }
+    if (r !== 'same') { toast(r); buzz(30); }
+  }
+  render();
+}
+table.addEventListener('pointerup', e => endPointer(e, false));
+table.addEventListener('pointercancel', e => endPointer(e, true));
+
+$('#tray').addEventListener('click', e => {
+  const b = e.target.closest('.act'); if (!b) return;
+  if (busy) { busyNote(); return; }
+  if (PD) return; // a card is being dragged
+  const a = b.dataset.a;
+  if (a === 'undo') undo();
+  else if (a === 'hint') hint();
+  else if (a === 'finish') finish();
+});
+
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + '<div class="mbtns">' + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('') + '</div>';
+  $('#modal').hidden = false;
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+}
+$('#btnNew').addEventListener('click', () => {
+  if (busy) { busyNote(); return; }
+  if (hasProgress()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>',
+      [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Začít tuto znovu', fn: restart }, { text: 'Hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+
+/* ---------- Settings ---------- */
+const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+// sample cards: ace ♥, 7 ♠, king ♦ (face colour, pictures and back per settings)
+const SAMPLE = [13 + 0, 6, 39 + 12];
+const minis = (pic, withBack) => `<span class="mini">${SAMPLE.slice(0, withBack ? 2 : 3).map(c => cardHTML(c, true, pic)).join('')}${withBack ? '<div class="cd"></div>' : ''}</span>`;
+
+function renderSettings() {
+  const tile = (act, on, inner, name) => `<button class="tile" data-act="${act}" aria-pressed="${on}">${inner}${name}</button>`;
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>FreeCell<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Ovládání</h3>
+      <div class="field">
+        ${opt('set:mode:tap', S.mode === 'tap', 'Ťuknout na kartu', 'Karta se sama přesune tam, kam patří. Když nemá kam, odloží se na volné políčko.')}
+        ${opt('set:mode:select', S.mode === 'select', 'Ťuknout na kartu, pak na místo', 'Vybraná karta se zvýrazní a čárkovaně se ukáže, kam může. Pak ťukni, kam ji dát.')}
+        <div class="fnote">Kartu jde vždy i přetáhnout prstem.</div>
+      </div>
+      ${toggleRow('auto', 'Samy na hromádky', 'Karty, které už ve sloupcích nebudou potřeba, se samy přesunou na hromádky nahoře.')}
+    </section>
+    ${CARDS.appearanceHTML(S, tile, minis, '--cw:56px;--ch:78px', toggleRow('vibrate', 'Vibrace'))}
+    <section class="card"><h3>Statistika</h3>
+      <p class="stats">Rozehrané hry: <b>${ST.played}</b><br>Vyhrané hry: <b>${ST.won}</b></p>
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, key, val] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'set') S[key] = val;
+  else if (act === 'toggle') S[key] = !S[key];
+  else if (['table', 'back', 'face', 'pic'].includes(act)) S[act] = key;
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S);
+  buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop;
+  renderSettings();
+  $('#screenSettings').scrollTop = y;
+});
+let autoAtOpen = false;
+function openSettings() { if (busy) { busyNote(); return; } autoAtOpen = S.auto; hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  SEL = null;
+  const s0 = G && snap(G);
+  if (playing() && S.auto && !autoAtOpen) { const before = snap(G); autoFound(); if (snap(G) !== before) { G.hist.push(before); } }
+  save(); render({ instant: true });
+  // "Dál to nejde" and "Dokončit" are said again only when the cards moved (Samy na hromádky), not after a look change
+  if (playing()) { if (snap(G) !== s0) { G.stuckAt = -1; G.finTold = false; } checkEnd(); }
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help ---------- */
+function renderHelp() {
+  const ico = id => `<span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[id]}</svg></span>`;
+  // 9♠, 8♥, 7♣
+  const demo = [8, 13 + 7, 26 + 6].map((c, i) => cardHTML(c, true, S.pic, `top:${i * 30}px`)).join('');
+  // cells: one occupied (5♦), three free
+  const cells = cardHTML(39 + 4, true, S.pic) + '<div class="slot cell"></div>'.repeat(3);
+  const how = S.mode === 'tap'
+    ? 'Ťukni na kartu a ona se sama přesune, kam patří. Když nemá kam, odloží se na volné políčko. Když nejde nikam, zatřese se.'
+    : 'Ťukni na kartu, zvýrazní se. Čárkovaně se ukáže, kam může. Pak ťukni na místo, kam má jít.';
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>FreeCell<small>Jak hrát</small></h2></div>
+    <section class="card help">
+      <ol>
+        <li><b>Cíl:</b> dostat všechny karty na čtyři hromádky vpravo nahoře. Každá barva (${SYM.join(' ')}) má svou hromádku a skládá se od <b>esa</b> po <b>krále</b>: A, 2, 3 … 10, J, Q, K.</li>
+        <li>Všechny karty leží lícem nahoru, nic se neotáčí. Hra před rozdáním ověří, že jde vyhrát.</li>
+        <li>Ve sloupcích se skládá <b>dolů o jedno nižší</b> karta <b>opačné barvy</b>: na černou devítku červená osmička, na ni černá sedmička.
+          <div class="demo-felt"><div class="demo" style="height:140px">${demo}</div></div></li>
+        <li><b>Čtyři volná políčka</b> vlevo nahoře jsou odkladiště. Na každé jde odložit jednu jakoukoli kartu a později ji zase vzít.
+          <div class="demo-felt"><div class="demo-cells">${cells}</div></div></li>
+        <li>Na <b>prázdný sloupec</b> jde jakákoli karta.</li>
+        <li>Celou řadu karet jde přesunout najednou: stačí vzít tu nejvyšší z nich. Kolik karet jde najednou, záleží na volných políčkách a prázdných sloupcích. Hra to spočítá sama a řekne, když je řada moc dlouhá.</li>
+        <li>${how} Kartu jde také přetáhnout prstem.</li>
+      </ol>
+    </section>
+    <section class="card help"><h3>Tlačítka</h3>
+      <div class="legend">${ico('undo')}<span><b>Zpět</b> vrátí poslední tah. Dá se ťukat opakovaně.</span></div>
+      <div class="legend">${ico('hint')}<span><b>Poradit</b> ukáže dobrý tah: karta i místo, kam patří, zablikají.</span></div>
+      <div class="legend">${ico('finish')}<span><b>Dokončit</b> jde, až žádná karta neleží na menší kartě. Karty se pak samy srovnají na hromádky.</span></div>
+      <p class="fnote">Na čas se nehraje. Vzhled stolu, karet a obrázky jdou změnit v nastavení ⚙.</p>
+    </section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { if (busy) { busyNote(); return; } hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// Persistent storage: the browser won't evict settings or the saved game on its own
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+// rule: only the known settings are taken over from the save
+const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+ST = validStats(saved && saved.stats);
+applyLook();
+buildTable();
+if (saved && validGame(saved.game)) {
+  G = saved.game;
+  render({ instant: true });
+} else { renderTray(); newGame(); }
+
+const relayout = () => { if (!G || PD) return; render({ instant: true }); };
+window.addEventListener('resize', relayout);
+if (window.visualViewport) visualViewport.addEventListener('resize', relayout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing
+window.FreeCell = { solve, nextMove, solvableDeck, dealFrom, svFromG, svPlay, svAuto, svWon, artSVG, doMove, autoMove, why, canFinish, maxMove, hint, undo, finish,
+  get state() { return { S, G, ST }; }, set game(g) { G = g; save(); render({ instant: true }); }, render: () => render() };
+})();
+</script>
+</body>
+</html>

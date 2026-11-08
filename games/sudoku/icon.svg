@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- papír -->
+  <rect width="512" height="512" fill="#efe7d8"/>
+  <!-- mřížka 9×9 -->
+  <rect x="40" y="40" width="432" height="432" fill="#fffbf2"/>
+  <!-- vybrané políčko -->
+  <rect x="232" y="232" width="48" height="48" fill="#ffe08a"/>
+  <g stroke="#cdbfa6" stroke-width="2">
+    <path d="M88 40v432M136 40v432M232 40v432M280 40v432M376 40v432M424 40v432"/>
+    <path d="M40 88h432M40 136h432M40 232h432M40 280h432M40 376h432M40 424h432"/>
+  </g>
+  <rect x="234.5" y="234.5" width="43" height="43" fill="none" stroke="#d97a1e" stroke-width="5"/>
+  <g stroke="#4b3c27" stroke-width="6">
+    <path d="M184 40v432M328 40v432M40 184h432M40 328h432"/>
+  </g>
+  <rect x="40" y="40" width="432" height="432" fill="none" stroke="#4b3c27" stroke-width="10"/>
+
+  <!-- zadaná čísla -->
+  <g font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="800" fill="#1d1810" text-anchor="middle">
+    <text x="64" y="77">5</text><text x="112" y="77">3</text><text x="256" y="77">7</text>
+    <text x="64" y="125">6</text><text x="208" y="125">1</text><text x="256" y="125">9</text><text x="304" y="125">5</text>
+    <text x="112" y="173">9</text><text x="160" y="173">8</text><text x="400" y="173">6</text>
+    <text x="64" y="221">8</text><text x="256" y="221">6</text><text x="448" y="221">3</text>
+    <text x="64" y="269">4</text><text x="208" y="269">8</text><text x="304" y="269">3</text><text x="448" y="269">1</text>
+    <text x="64" y="317">7</text><text x="256" y="317">2</text><text x="448" y="317">6</text>
+    <text x="112" y="365">6</text><text x="352" y="365">2</text><text x="400" y="365">8</text>
+    <text x="208" y="413">4</text><text x="256" y="413">1</text><text x="304" y="413">9</text><text x="448" y="413">5</text>
+    <text x="256" y="461">8</text><text x="400" y="461">7</text><text x="448" y="461">9</text>
+  </g>
+  <!-- doplněná čísla -->
+  <g font-family="Arial, Helvetica, sans-serif" font-size="38" font-weight="400" fill="#1f50b5" text-anchor="middle">
+    <text x="160" y="77">4</text><text x="112" y="125">7</text><text x="64" y="173">1</text><text x="112" y="221">5</text>
+    <text x="256" y="269">5</text>
+  </g>
+  <!-- poznámky tužkou v rohu políčka -->
+  <g font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#6e604a" text-anchor="middle">
+    <text x="208" y="54">2</text><text x="224" y="70">6</text>
+  </g>
+</svg>

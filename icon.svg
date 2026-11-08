@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Náchod castle on a hill, our black tortoiseshell cat and an orange die; colours from the "Vítkovy hry" poster -->
+  <rect width="512" height="512" fill="#a9d3ea"/>
+  <path d="M0 340C110 330 190 314 250 306c70-8 170-4 262-10V512H0z" fill="#6f9a4a"/>
+  <g>
+    <g transform="translate(0 32)"><rect x="316" y="96" width="30" height="80" fill="#f4ead2"/>
+    <rect x="340" y="96" width="6" height="80" fill="#e3d4b4"/>
+    <rect x="311" y="138" width="40" height="7" rx="2" fill="#d8c9a6"/>
+    <g fill="#154f5e"><path d="M320 136v-12a4 4 0 0 1 8 0v12zM334 136v-12a4 4 0 0 1 8 0v12z"/></g>
+    <rect x="311" y="114" width="40" height="7" rx="2" fill="#d8c9a6"/>
+    <rect x="319" y="84" width="24" height="32" fill="#f4ead2"/>
+    <path d="M327 110v-12a4 4 0 0 1 8 0v12z" fill="#154f5e"/>
+    <rect x="315" y="80" width="32" height="7" rx="2" fill="#d8c9a6"/>
+    <path d="M316 82h30c0-14-6-22-15-44-9 22-15 30-15 44z" fill="#b5452c"/>
+    <path d="M331 40V24" stroke="#154f5e" stroke-width="3" stroke-linecap="round"/>
+    <rect x="395" y="132" width="12" height="34" fill="#3a4047"/>
+    <ellipse cx="401" cy="130" rx="9" ry="10" fill="#3a4047"/>
+    <path d="M401 120v-18" stroke="#3a4047" stroke-width="3" stroke-linecap="round"/></g>
+    <rect x="234" y="252" width="44" height="54" fill="#f4ead2"/>
+    <g fill="#154f5e"><rect x="244" y="266" width="9" height="13" rx="1"/><rect x="260" y="266" width="9" height="13" rx="1"/></g>
+    <path d="M228 254l18-22h34v22z" fill="#b5452c"/>
+    <rect x="270" y="222" width="182" height="84" fill="#f4ead2"/>
+    <rect x="270" y="222" width="182" height="12" fill="url(#sg)"/>
+    <defs><pattern id="sg" width="14" height="12" patternUnits="userSpaceOnUse"><path d="M7 1l6 5-6 5-6-5z" fill="#e2d2b0"/></pattern></defs>
+    <g fill="#154f5e"><rect x="282" y="240" width="10" height="14" rx="1"/><rect x="306" y="240" width="10" height="14" rx="1"/><rect x="330" y="240" width="10" height="14" rx="1"/><rect x="354" y="240" width="10" height="14" rx="1"/><rect x="378" y="240" width="10" height="14" rx="1"/><rect x="402" y="240" width="10" height="14" rx="1"/><rect x="426" y="240" width="10" height="14" rx="1"/><rect x="282" y="268" width="10" height="14" rx="1"/><rect x="306" y="268" width="10" height="14" rx="1"/><rect x="330" y="268" width="10" height="14" rx="1"/><rect x="354" y="268" width="10" height="14" rx="1"/><rect x="378" y="268" width="10" height="14" rx="1"/><rect x="402" y="268" width="10" height="14" rx="1"/><rect x="426" y="268" width="10" height="14" rx="1"/></g>
+    <path d="M262 224h198l-20-34H282z" fill="#b5452c"/>
+    <path d="M226 352l8-48h236l8 48z" fill="#d8c9a6"/>
+    <path d="M230 326h244" stroke="#c2b089" stroke-width="3"/>
+    <rect x="270" y="294" width="120" height="24" fill="#d8c9a6"/>
+    <g fill="#154f5e"><path d="M282 318v-12a10 10 0 0 1 20 0v12zM314 318v-12a10 10 0 0 1 20 0v12zM346 318v-12a10 10 0 0 1 20 0v12z"/></g>
+  </g>
+  <circle cx="204" cy="318" r="28" fill="#6f9a4a"/><circle cx="238" cy="330" r="26" fill="#5d8a42"/><circle cx="276" cy="340" r="24" fill="#2c6e7a"/><circle cx="402" cy="336" r="26" fill="#6f9a4a"/><circle cx="440" cy="330" r="28" fill="#5d8a42"/><circle cx="478" cy="336" r="26" fill="#2c6e7a"/><circle cx="512" cy="326" r="28" fill="#6f9a4a"/><circle cx="186" cy="340" r="22" fill="#2c6e7a"/>
+  <path d="M0 392c80-30 200-58 300-48s160 30 212 20V512H0z" fill="#2c6e7a"/>
+  <path d="M0 452c120-30 300-40 512-10V512H0z" fill="#154f5e"/>
+  <g fill="#154f5e"><path d="M-10 64C60 54 130 34 220 -10" stroke="#154f5e" stroke-width="9" fill="none"/><path d="M0 0c18-22 52-24 76 0-24 24-58 22-76 0z" transform="translate(24 58) rotate(80) scale(1.35)"/><path d="M0 0c18-22 52-24 76 0-24 24-58 22-76 0z" transform="translate(52 54) rotate(130) scale(1.35)"/><path d="M0 0c18-22 52-24 76 0-24 24-58 22-76 0z" transform="translate(96 44) rotate(70) scale(1.35)"/><path d="M0 0c18-22 52-24 76 0-24 24-58 22-76 0z" transform="translate(126 34) rotate(115) scale(1.35)"/><path d="M0 0c18-22 52-24 76 0-24 24-58 22-76 0z" transform="translate(166 18) rotate(62) scale(1.35)"/><path d="M0 0c18-22 52-24 76 0-24 24-58 22-76 0z" transform="translate(190 6) rotate(108) scale(1.35)"/></g>
+  <g transform="rotate(-20 138 140)"><rect x="90.0" y="99.7" width="96" height="96" rx="21.1" fill="#7e3110"/><rect x="90.0" y="92.0" width="96" height="96" rx="21.1" fill="#e8701f" stroke="#154f5e" stroke-width="5"/><g fill="#fff"><circle cx="112.1" cy="114.1" r="9.6"/><circle cx="163.9" cy="114.1" r="9.6"/><circle cx="138.0" cy="140.0" r="9.6"/><circle cx="112.1" cy="165.9" r="9.6"/><circle cx="163.9" cy="165.9" r="9.6"/></g></g>
+  <g transform="translate(-20 0)"><g><defs><clipPath id="h1"><path d="M60 540C50 450 70 380 104 352L92 262l78 52c26-8 54-8 80 0l78-52-12 90c34 28 54 98 44 188z"/></clipPath></defs><path d="M60 540C50 450 70 380 104 352L92 262l78 52c26-8 54-8 80 0l78-52-12 90c34 28 54 98 44 188z" fill="#1d1916"/><g clip-path="url(#h1)" fill="#6b4020"><path d="M60 470c24-36 62-24 62 18-14 30-50 34-62-18z"/><path d="M276 316c24-12 50 10 40 36-20 10-42-4-40-36z"/><path d="M316 470c10-26 40-30 50-6l-6 60c-24 0-46-24-44-54z"/></g><path d="M196 322c-6 28 8 50 10 78 8-28 20-48 16-78-8-6-18-6-26 0z" fill="#b07a3a"/><path d="M110 290l8 52 34-22zM310 290l-8 52-34-22z" fill="#4a3328"/><g transform="rotate(10 152 404)"><ellipse cx="152" cy="404" rx="25" ry="17" fill="#cfc65a"/><ellipse cx="154" cy="404" rx="5" ry="15" fill="#0e0b09"/></g><g transform="rotate(-10 268 404)"><ellipse cx="268" cy="404" rx="25" ry="17" fill="#cfc65a"/><ellipse cx="266" cy="404" rx="5" ry="15" fill="#0e0b09"/></g><path d="M198 440h24l-12 14z" fill="#6a4a3e"/><path d="M210 454q-10 14-26 9M210 454q10 14 26 9" fill="none" stroke="#f4ead2" stroke-opacity=".7" stroke-width="5" stroke-linecap="round"/><path d="M150 452l-70-8M150 466l-66 14M270 452l70-8M270 466l66 14" stroke="#f4ead2" stroke-width="5" stroke-linecap="round"/><path d="M60 540C50 450 70 380 104 352L92 262l78 52c26-8 54-8 80 0l78-52-12 90c34 28 54 98 44 188z" fill="none" stroke="#f4ead2" stroke-width="8" stroke-linejoin="round"/></g></g>
+</svg>

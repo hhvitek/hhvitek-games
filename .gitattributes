@@ -1,0 +1,6 @@
+# Text files are stored and checked out with LF on every system (overrides core.autocrlf on Windows)
+* text=auto eol=lf
+# Binary files: never touch their bytes
+*.png binary
+*.webp binary
+*.jpg binary

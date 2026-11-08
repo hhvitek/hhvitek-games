@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="cs" data-theme="wood">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6a4325">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Padající tvary">
+<title>Padající tvary</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d2b52'/%3E%3Crect x='10' y='8' width='14' height='14' rx='3' fill='%239a55d4'/%3E%3Crect x='25' y='8' width='14' height='14' rx='3' fill='%239a55d4'/%3E%3Crect x='40' y='8' width='14' height='14' rx='3' fill='%239a55d4'/%3E%3Crect x='25' y='23' width='14' height='14' rx='3' fill='%239a55d4'/%3E%3Crect x='10' y='42' width='14' height='14' rx='3' fill='%23e8453c'/%3E%3Crect x='25' y='42' width='14' height='14' rx='3' fill='%23f5c518'/%3E%3Crect x='40' y='42' width='14' height='14' rx='3' fill='%2322b8cf'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes ---------- */
+[data-theme="night"]{--page:#0e1630;--bg:#1d2b52;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.07);--ink:#eef3ff;--soft:#b9c6e8;--frame:#111a36;--cell:#22315a;--cell-sh:.35;--accent:#ffd34d;--btn:#ffd34d;--btn-ink:#2a2000;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.3);--edge:rgba(0,0,0,.22);--chip:rgba(255,255,255,.14);--veil:rgba(8,14,32,.62)}
+[data-theme="wood"]{--page:#2a170b;--bg:#6a4325;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.07);--ink:#fbeedd;--soft:#e8cfae;--frame:#3b2414;--cell:#7b5033;--cell-sh:.45;--accent:#ffd77a;--btn:#f0c35a;--btn-ink:#2e1a06;--btn-sh:#93681a;--undo-bg:rgba(0,0,0,.28);--edge:rgba(0,0,0,.25);--chip:rgba(255,255,255,.14);--veil:rgba(30,15,5,.62)}
+[data-theme="paper"]{--page:#f4ebdf;--bg:#f4ebdf;--bar:rgba(122,69,32,.06);--line:#e6d8c6;--ink:#2b1a0e;--soft:#6f5a48;--frame:#b9a68f;--cell:#fff;--cell-sh:.12;--accent:#d35400;--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--undo-bg:rgba(122,69,32,.1);--edge:rgba(0,0,0,.28);--chip:#fff;--veil:rgba(63,34,14,.55)}
+[data-theme="green"]{--page:#10291b;--bg:#2f6b47;--bar:rgba(0,0,0,.2);--line:rgba(255,255,255,.07);--ink:#eaf7ee;--soft:#c3e3cf;--frame:#1c4630;--cell:#367352;--cell-sh:.4;--accent:#ffd66b;--btn:#ffd66b;--btn-ink:#2a2200;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.25);--edge:rgba(0,0,0,.25);--chip:rgba(255,255,255,.14);--veil:rgba(8,30,18,.62)}
+[data-theme="slate"]{--page:#161b20;--bg:#3d4852;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.06);--ink:#eef3f6;--soft:#c3cdd5;--frame:#242b33;--cell:#47525e;--cell-sh:.4;--accent:#ffcf6b;--btn:#e9eef2;--btn-ink:#1f262c;--btn-sh:#8c979f;--undo-bg:rgba(0,0,0,.28);--edge:rgba(0,0,0,.25);--chip:rgba(255,255,255,.14);--veil:rgba(15,19,23,.62)}
+[data-theme="contrast"]{--page:#000;--bg:#000;--bar:#000;--line:#555;--ink:#fff;--soft:#fff;--frame:#777;--cell:#161616;--cell-sh:0;--accent:#ffff00;--btn:#ffff00;--btn-ink:#000;--btn-sh:#8a8a00;--undo-bg:#222;--edge:#fff;--chip:#262626;--veil:rgba(0,0,0,.72)}
+
+/* ---------- Base ---------- */
+:root{--cs:28px;--gap:2px;--bpad:5px;--gut:12px} /* --gut: one side margin, bar buttons, board and bottom buttons line up (safe areas are on #app) */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+
+#app{height:100vh;height:100dvh;max-width:560px;margin:0 auto;display:flex;flex-direction:column;background:var(--bg);
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  box-shadow:0 0 40px rgba(0,0,0,.5)}
+
+/* Top bar */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round svg{width:28px;height:28px;fill:currentColor}
+a.round{text-decoration:none}
+.top-right{flex:none;display:flex;gap:8px}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar h1{flex:1;min-width:0;text-align:center;white-space:normal;overflow-wrap:normal;word-break:normal;font-weight:800;font-size:25px;line-height:1.05;letter-spacing:.02em;color:var(--ink)}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:20px} /* the name wraps between words (two lines fit the bar), never cut */
+/* narrow phones (360 px): less room between the bar buttons, so the name fits whole; the outer margin stays */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:19px;letter-spacing:0}
+}
+
+/* Score row: points, record, rows, next shape */
+.score{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px var(--gut) 0;line-height:1;white-space:nowrap}
+.sc-l{min-width:0;display:flex;flex-direction:column;gap:5px}
+.sc-top{display:flex;align-items:baseline;gap:14px}
+.score b{font-size:30px;font-weight:900;letter-spacing:.01em;font-variant-numeric:tabular-nums}
+.score b.bump{animation:bump .35s ease-out}
+@keyframes bump{40%{transform:scale(1.18)}}
+.rec,.sc-sub{font-size:18px;font-weight:700;color:var(--soft);font-variant-numeric:tabular-nums}
+.rec{display:flex;align-items:center;gap:4px}
+.rec svg{width:17px;height:17px;fill:var(--accent)}
+.score i{font-style:normal}
+.sc-next{flex:none;display:flex;align-items:center;gap:8px;font-size:18px;font-weight:700;color:var(--soft)}
+.nbox{width:62px;height:36px;display:grid;place-items:center;border-radius:10px;background:var(--frame)}
+
+/* Board */
+.play{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:12px var(--gut) 8px} /* at least 12 px between the board and the score row / the buttons (8 + the 4 px on top of .controls), on every screen */
+.bwrap{position:relative}
+.board{--s:var(--cs);display:grid;grid-template-columns:repeat(var(--w),var(--cs));grid-auto-rows:var(--cs);gap:var(--gap);padding:var(--bpad);background:var(--frame);border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+.cell{position:relative;border-radius:calc(var(--s) * .14);background:var(--cell);box-shadow:inset 0 1px 3px rgba(0,0,0,var(--cell-sh))}
+.blk,.cell.blk{border-radius:calc(var(--s) * .14);
+  background:linear-gradient(160deg,rgba(255,255,255,.4) 0,rgba(255,255,255,.1) 36%,rgba(0,0,0,.1) 100%),var(--c);
+  box-shadow:inset 0 calc(var(--s) * -.09) 0 rgba(0,0,0,.2),inset 0 calc(var(--s) * .06) 0 rgba(255,255,255,.25),inset 0 0 0 1.5px var(--edge)}
+.cell.gh{background:color-mix(in srgb,var(--c) 22%,var(--cell));box-shadow:inset 0 0 0 2px color-mix(in srgb,var(--c) 80%,transparent)}
+[data-theme="contrast"] .cell.gh{background:color-mix(in srgb,var(--c) 30%,#000);box-shadow:inset 0 0 0 3px var(--c)}
+.cell.flash{animation:flash .32s ease-in forwards}
+@keyframes flash{0%{filter:brightness(1)}40%{filter:brightness(1.9)}100%{filter:brightness(2.2);transform:scale(.2);opacity:.2}}
+.pc{display:grid;grid-template-columns:repeat(var(--w),var(--s));grid-template-rows:repeat(var(--h),var(--s));gap:2px}
+.nbox .pc{--s:13px}
+
+/* Pause veil over the board */
+#veil{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:16px;text-align:center;border-radius:10px;background:var(--veil)}
+#veil p{font-size:22px;font-weight:800;color:#fff;line-height:1.3;text-shadow:0 2px 6px rgba(0,0,0,.6)}
+#veil .big{width:auto;min-width:min(170px,100%);max-width:100%;padding:0 16px;display:flex;align-items:center;justify-content:center;gap:10px} /* a small board (short window) keeps the button inside it */
+#veil .big svg{width:26px;height:26px;fill:currentColor}
+
+/* Controls */
+.controls{flex:none;display:flex;flex-direction:column;gap:10px;padding:4px var(--gut) 12px}
+.row1{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.row2{display:flex;gap:10px}
+.row2>*{flex:1 1 0;min-width:0}
+.ctl{height:64px;border-radius:18px;background:var(--btn);color:var(--btn-ink);box-shadow:0 4px 0 var(--btn-sh);display:flex;align-items:center;justify-content:center;gap:8px;font-size:21px;font-weight:800;transition:transform .06s,box-shadow .06s,opacity .2s}
+.ctl:active{transform:translateY(3px);box-shadow:0 1px 0 var(--btn-sh)}
+.ctl svg{width:36px;height:36px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.row2 .ctl{height:58px}
+.row2 .ctl svg{width:26px;height:26px}
+.undo{display:flex;align-items:center;justify-content:center;gap:8px;height:58px;border-radius:16px;font-size:21px;font-weight:800;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 2px 5px rgba(0,0,0,.3),inset 0 0 0 2px var(--line);transition:opacity .2s,transform .06s}
+.undo svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.undo svg.solid{fill:currentColor;stroke:none}
+.undo:active{transform:scale(.98)}
+.ctl.dim,.undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+
+.big{display:block;width:100%;height:64px;border-radius:18px;font-size:24px;font-weight:800;background:var(--btn);color:var(--btn-ink);box-shadow:0 4px 0 var(--btn-sh);transition:transform .06s,box-shadow .06s}
+.big:active{transform:translateY(3px);box-shadow:0 1px 0 var(--btn-sh)}
+
+#praise{position:fixed;z-index:15;left:50%;top:40%;transform:translate(-50%,-50%);pointer-events:none;font-size:34px;font-weight:900;color:var(--accent);white-space:nowrap;text-shadow:0 2px 0 rgba(0,0,0,.45),0 0 12px rgba(0,0,0,.35);opacity:0}
+#praise.go{animation:praise 1.3s ease-out}
+@keyframes praise{0%{opacity:0;transform:translate(-50%,-30%) scale(.8)}15%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}70%{opacity:1}100%{opacity:0;transform:translate(-50%,-90%)}}
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;font-family:Georgia,serif;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.paper .big{background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh)}
+.paper .big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0;box-shadow:0 2px 6px rgba(60,30,10,.12)}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink);font-family:Georgia,serif}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:10px}
+.stepper{display:flex;align-items:center;gap:12px}
+.sbtn{flex:none;width:60px;height:60px;border-radius:50%;background:var(--pbtn);color:var(--pbtn-ink);font-size:36px;font-weight:700;line-height:1;display:grid;place-items:center;box-shadow:0 3px 0 var(--pbtn-sh)}
+.sbtn.off{background:var(--psw);box-shadow:none;color:var(--psoft)}
+.sval{flex:1;text-align:center;font-size:25px;font-weight:800}
+.fnote{font-size:18px;color:var(--psoft);margin-top:10px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{height:76px;border-radius:10px;display:grid;place-items:center;background:var(--bg);box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+.mini{--s:14px;display:grid;grid-template-columns:repeat(5,var(--s));grid-auto-rows:var(--s);gap:2px;padding:3px;border-radius:6px;background:var(--frame)}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.trow .flabel{margin:0}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.sw.off{opacity:.45}
+.field.off .flabel{opacity:.55}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:12px 0}
+.ico{display:inline-grid;place-items:center;vertical-align:middle;width:36px;height:30px;border-radius:9px;background:var(--btn);color:var(--btn-ink);margin:0 2px}
+.ico svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.demo{display:flex;flex-direction:column;align-items:center;gap:6px;margin:12px 0 4px}
+.demo .mini{--s:24px;grid-template-columns:repeat(6,var(--s));padding:4px;gap:3px;border-radius:8px}
+.demo .hl{outline:3px solid var(--accent);outline-offset:-1px}
+.demo span{font-size:18px;color:var(--psoft)}
+
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:pop .25s ease-out}
+@keyframes pop{from{transform:scale(.9);opacity:0}}
+.mcard h2{font-size:28px;font-family:Georgia,serif;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+.mcard .pts{font-size:44px;font-weight:900;margin:0 0 4px}
+.mbtns{display:flex;flex-direction:column;gap:14px;margin-top:8px}
+
+/* Shorter screens (e.g. with the browser bar visible) */
+@media (max-height:800px){
+  .topbar{height:52px}
+  .pill{height:42px}.round{width:42px;height:42px}
+  .score b{font-size:26px}
+  .ctl{height:58px}
+  .row2 .ctl,.undo{height:52px}
+  .controls{gap:8px;padding-bottom:10px}
+}
+#toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 66px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Padající tvary</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <div class="score">
+    <div class="sc-l">
+      <div class="sc-top"><b id="score">0</b><span class="rec"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v2h3v3a4.5 4.5 0 0 1-4.3 4.5A5 5 0 0 1 13 15.9V18h3.5v3h-9v-3H11v-2.1a5 5 0 0 1-3.7-3.4A4.5 4.5 0 0 1 3 8V5h3zm0 4H5v1a2.5 2.5 0 0 0 1.2 2.1A6 6 0 0 1 6 9zm12 0v2c0 .4 0 .8-.2 1.1A2.5 2.5 0 0 0 19 8V7z"/></svg>rekord <i id="best">0</i></span></div>
+      <div class="sc-sub">řady <i id="lines">0</i><span id="lvlWrap"> · rychlost <i id="level">1</i></span></div>
+    </div>
+    <div class="sc-next" id="nextWrap">Další<div class="nbox" id="next"></div></div>
+  </div>
+  <main class="play" id="play">
+    <div class="bwrap">
+      <div class="board" id="board"></div>
+      <div id="veil" hidden><p id="veilText">Hra stojí</p><button class="big" id="btnPlay2"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg>Hrát</button></div>
+    </div>
+  </main>
+  <footer class="controls">
+    <div class="row1">
+      <button class="ctl" data-act="left" aria-label="Doleva"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5"/><path d="m11 6-6 6 6 6"/></svg></button>
+      <button class="ctl" data-act="rot" aria-label="Otočit"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.6-5.7"/><path d="M19.5 3.5v5h-5"/></svg></button>
+      <button class="ctl" data-act="right" aria-label="Doprava"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></button>
+      <button class="ctl" data-act="down" aria-label="O řádek dolů"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14"/><path d="m6 13 6 6 6-6"/></svg></button>
+    </div>
+    <div class="row2">
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnPause" class="undo"></button>
+      <button id="btnAgain" class="undo" hidden>Nová hra</button>
+      <button class="ctl" data-act="drop"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v13"/><path d="m6.5 10.5 5.5 5.5 5.5-5.5"/><path d="M5 21h14"/></svg>Shodit</button>
+    </div>
+  </footer>
+</div>
+
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="praise"></div>
+<div id="toast" class="hide"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const GUT = 12; // side margin in px, the same as --gut in the CSS
+
+/* ---------- Constants ---------- */
+const COLORS = ['#e8453c', '#f39324', '#f5c518', '#43b649', '#22b8cf', '#3a78e0', '#9a55d4', '#ec5fa6'];
+// type: [box size, pattern of rotation 0, colour index]
+const SHAPE_DEFS = {
+  I:  [4, '0000/1111/0000/0000', 4],
+  O:  [2, '11/11', 2],
+  T:  [3, '010/111/000', 6],
+  L:  [3, '001/111/000', 1],
+  J:  [3, '100/111/000', 5],
+  S:  [3, '011/110/000', 3],
+  Z:  [3, '110/011/000', 0],
+  I3: [3, '000/111/000', 4],
+  V:  [2, '10/11', 7],
+};
+// One "bag" = every shape in it comes once, in random order (fair distribution)
+const BAGS = {
+  classic: ['I', 'O', 'T', 'L', 'J', 'S', 'Z'],
+  easy:    ['I', 'I', 'O', 'O', 'T', 'T', 'L', 'L', 'J', 'J', 'S', 'Z', 'I3', 'I3', 'V', 'V'],
+};
+const KICKS = [[0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0], [0, -1], [0, -2]]; // [0,-2]: a lying I turned upright on the floor
+const POINTS = [0, 10, 30, 50, 80];
+const SIZES = [
+  { id: '8x14',  w: 8,  h: 14 },
+  { id: '10x16', w: 10, h: 16 },
+  { id: '10x20', w: 10, h: 20 },
+];
+const DIFFS = [
+  { id: 'classic', name: 'Klasická', desc: 'Sedm tvarů ze čtyř čtverečků. Každý tvar přijde jednou za sedm.' },
+  { id: 'easy',    name: 'Snadná',   desc: 'Navíc malé tvary ze tří čtverečků a méně „schodů“, které se hůř skládají.' },
+];
+const SPEEDS = [
+  { id: 'veryslow', name: 'Velmi pomalu', desc: 'Tvar klesne o řádek zhruba každé 2 sekundy.', ms: 2000 },
+  { id: 'slow',     name: 'Pomalu',       desc: 'Tvar klesne o řádek každou sekundu.', ms: 1000 },
+  { id: 'manual',   name: 'Jen tlačítkem', desc: 'Tvary samy nepadají. Dolů se posunou jen tlačítkem. Žádný spěch.', ms: 0 },
+];
+const THEMES = [
+  { id: 'night',    name: 'Noc',             meta: '#1d2b52' },
+  { id: 'wood',     name: 'Dřevo',           meta: '#6a4325' },
+  { id: 'paper',    name: 'Papír',           meta: '#f4ebdf' },
+  { id: 'green',    name: 'Zelená plsť',     meta: '#2f6b47' },
+  { id: 'slate',    name: 'Břidlice',        meta: '#3d4852' },
+  { id: 'contrast', name: 'Vysoký kontrast', meta: '#000000' },
+];
+// defaults chosen by the user (see CLAUDE.md): theme Dřevo, shapes fall slowly and speed up gradually
+const DEFAULTS = { size: '10x16', diff: 'classic', speed: 'slow', accel: true, ghost: true, showNext: true, theme: 'wood', vibrate: true };
+// Saved state under the launcher's games.<id>.* prefix; OLD_KEY is the name used before (read once, then removed)
+const KEY = 'games.padajici-tvary.state', OLD_KEY = 'padajici-tvary.v1';
+const BADGE = 'games.padajici-tvary.inProgress';
+const HISTORY = 50;
+
+/* ---------- Shapes ---------- */
+const SHAPES = {}, COLOR = {};
+for (const [t, [n, pat, color]] of Object.entries(SHAPE_DEFS)) {
+  let cells = [];
+  pat.split('/').forEach((row, r) => [...row].forEach((ch, c) => { if (ch === '1') cells.push([r, c]); }));
+  const rots = [];
+  for (let k = 0; k < 4; k++) { rots.push(cells); cells = cells.map(([r, c]) => [c, n - 1 - r]); } // clockwise
+  SHAPES[t] = rots; COLOR[t] = color;
+}
+
+/* ---------- Game logic ---------- */
+function rnd(n) {
+  try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; }
+  catch (e) { return Math.floor(Math.random() * n); }
+}
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = rnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const sizeOf = id => SIZES.find(s => s.id === id);
+const dims = () => sizeOf(G.rules.size);
+// Random numbers from G.seed (saved with the game and with every Undo step): Undo and the same move again
+// give the same next pieces, so they cannot be rerolled for points
+function seededRnd(n) {
+  if (!G || !Number.isInteger(G.seed)) return rnd(n);
+  G.seed = (G.seed + 0x6D2B79F5) | 0; let t = G.seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+  return ((t ^ t >>> 14) >>> 0) % n;
+}
+function takeNext(g) {
+  if (!g.bag.length) { const a = BAGS[g.rules.diff].slice(); for (let i = a.length - 1; i > 0; i--) { const j = seededRnd(i + 1); [a[i], a[j]] = [a[j], a[i]]; } g.bag = a; }
+  return g.bag.pop();
+}
+function spawn(t, sz) {
+  const n = SHAPE_DEFS[t][0], minR = Math.min(...SHAPES[t][0].map(x => x[0]));
+  return { t, r: 0, x: Math.floor((sz.w - n) / 2), y: -minR };
+}
+// Cells above the board (row < 0) are allowed while falling
+function collides(b, sz, t, r, x, y) {
+  for (const [dr, dc] of SHAPES[t][r]) {
+    const R = y + dr, C = x + dc;
+    if (C < 0 || C >= sz.w || R >= sz.h) return true;
+    if (R >= 0 && b[R * sz.w + C] >= 0) return true;
+  }
+  return false;
+}
+const pieceHits = (g, p, dx = 0, dy = 0, r = p.r) => collides(g.board, sizeOf(g.rules.size), p.t, r, p.x + dx, p.y + dy);
+function dropDist() { let d = 0; while (!pieceHits(G, G.piece, 0, d + 1)) d++; return d; }
+const level = (lines = G.lines) => Math.floor(lines / 10) + 1;
+
+/* ---------- State and saving ---------- */
+let S, G, best = 0, bests = {}, running = false, timer = null, flash = null;
+// One record per variant: bests[rulesKey(rules)]; `best` is the record of the running game's variant
+const rulesKey = r => `${r.size}:${r.diff}`;
+const rulesOf = s => ({ size: s.size, diff: s.diff });
+const sameRules = (a, b) => a.size === b.size && a.diff === b.diff;
+const isFresh = () => G.score === 0 && G.history.length === 0;
+const gravity = () => S.speed !== 'manual';
+
+function normalize(s) {
+  if (!sizeOf(s.size)) s.size = DEFAULTS.size;
+  if (!DIFFS.some(d => d.id === s.diff)) s.diff = DEFAULTS.diff;
+  if (!SPEEDS.some(d => d.id === s.speed)) s.speed = DEFAULTS.speed;
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  for (const k of ['accel', 'ghost', 'showNext', 'vibrate']) s[k] = !!s[k];
+}
+function load() {
+  try {
+    let v = localStorage.getItem(KEY);
+    // move the state from the older key at once
+    if (v === null && (v = localStorage.getItem(OLD_KEY)) !== null) { localStorage.setItem(KEY, v); localStorage.removeItem(OLD_KEY); }
+    return JSON.parse(v);
+  } catch (e) { return null; }
+}
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, bests }));
+    // Launcher contract: unfinished game = "in progress" badge on the tile
+    if (G && G.status === 'playing' && !isFresh()) localStorage.setItem(BADGE, '1');
+    else localStorage.removeItem(BADGE);
+  } catch (e) {}
+}
+const okBoard = (b, sz) => Array.isArray(b) && b.length === sz.w * sz.h && b.every(v => Number.isInteger(v) && v >= -1 && v < COLORS.length);
+const okNum = v => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+function validGame(g) {
+  try {
+    if (g && !Number.isInteger(g.seed)) g.seed = rnd(2 ** 31);
+    const sz = sizeOf(g.rules.size);
+    if (!sz || !BAGS[g.rules.diff] || !okBoard(g.board, sz)) return false;
+    const okT = t => BAGS[g.rules.diff].includes(t);
+    if (!okNum(g.score) || !okNum(g.lines) || !['playing', 'over'].includes(g.status)) return false;
+    const p = g.piece;
+    if (!p || !okT(p.t) || ![0, 1, 2, 3].includes(p.r) || !Number.isInteger(p.x) || !Number.isInteger(p.y) || !okT(g.next)) return false;
+    if (!Array.isArray(g.bag) || !g.bag.every(okT)) g.bag = [];
+    if (!Array.isArray(g.history)) g.history = [];
+    g.history = g.history.filter(h => h && okBoard(h.b, sz) && okT(h.t) && okT(h.n) && okNum(h.s) && okNum(h.l) && Array.isArray(h.bag) && h.bag.every(okT)).slice(-HISTORY);
+    if (typeof g.bestAtStart !== 'number') g.bestAtStart = 0;
+    if (g.status === 'playing' && (p.y < -4 || pieceHits(g, p))) {
+      g.piece = spawn(p.t, sz);
+      if (pieceHits(g, g.piece)) g.status = 'over';
+    }
+    return true;
+  } catch (e) { return false; }
+}
+
+function newGame() {
+  stop();
+  const r = rulesOf(S), sz = sizeOf(r.size);
+  best = bests[rulesKey(r)] || 0;
+  G = { rules: r, board: new Array(sz.w * sz.h).fill(-1), bag: [], score: 0, lines: 0, history: [], status: 'playing', bestAtStart: best, seed: rnd(2 ** 31) };
+  G.piece = spawn(takeNext(G), sz);
+  G.next = takeNext(G);
+  flash = null;
+  save(); render();
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) { if (S.vibrate && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
+let toastT;
+function hideToast() { clearTimeout(toastT); $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  // just below the score row, never over it (the CSS top is the fallback)
+  const row = document.querySelector('.score').getBoundingClientRect(); if (row.height) t.style.top = Math.round(row.bottom + 8) + 'px';
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hide'), 2600);
+}
+const fmt = n => n.toLocaleString('cs-CZ');
+function pieceHTML(t) {
+  const cells = SHAPES[t][0], mr = Math.min(...cells.map(x => x[0])), mc = Math.min(...cells.map(x => x[1]));
+  const h = Math.max(...cells.map(x => x[0])) - mr + 1, w = Math.max(...cells.map(x => x[1])) - mc + 1;
+  return `<div class="pc" style="--w:${w};--h:${h}">` +
+    cells.map(([r, c]) => `<i class="blk" style="grid-area:${r - mr + 1}/${c - mc + 1};--c:${COLORS[COLOR[t]]}"></i>`).join('') + '</div>';
+}
+function praise(text) {
+  const el = $('#praise'), br = $('#board').getBoundingClientRect();
+  el.textContent = text; el.style.top = (br.top + br.height * .4) + 'px';
+  el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+}
+
+/* ---------- Falling (timer) ---------- */
+function interval() {
+  const base = SPEEDS.find(s => s.id === S.speed).ms;
+  return S.accel ? Math.max(base * 0.4, base * Math.pow(0.9, level() - 1)) : base;
+}
+function schedule() {
+  clearTimeout(timer); timer = null;
+  if (running && gravity() && G.status === 'playing' && !flash) timer = setTimeout(tick, interval());
+}
+function tick() {
+  timer = null;
+  if (!running || G.status !== 'playing' || flash) return;
+  // A landed piece is not locked at once: it stays movable for one whole extra step.
+  // Moving or turning it starts that grace step again (moved() clears `rest`).
+  if (pieceHits(G, G.piece, 0, 1)) {
+    // after "Tvar je dole" (rest = 'tap') the falling waits one more step for the second tap
+    if (G.piece.rest === true) { lock(0); return; }
+    G.piece.rest = true; schedule(); return;
+  }
+  G.piece.y++;
+  draw(); schedule(); // saved on lock, pause and when the page is hidden, not on every step
+}
+function stop() { running = false; clearTimeout(timer); timer = null; }
+function setRunning(v) {
+  running = !!v && gravity() && G.status === 'playing';
+  if (!running) save();
+  schedule(); render();
+}
+
+/* ---------- Moves ---------- */
+// rule: while full rows flash away, a tap explains itself
+const flashToast = () => toast('Chvilku, řady ještě mizí');
+function canAct() {
+  if (flash) { flashToast(); return false; }
+  if (G.status === 'over') { toast('Hra skončila – ťukni na Zpět nebo Nová hra'); return false; }
+  if (gravity() && !running) { toast('Hra stojí – ťukni na Hrát'); return false; }
+  return true;
+}
+function moved() { G.piece.rest = false; draw(); }
+function shift(dx) {
+  if (!canAct()) return;
+  if (pieceHits(G, G.piece, dx, 0)) { buzz(30); return; }
+  G.piece.x += dx; buzz(8); moved();
+}
+function rotate() {
+  if (!canAct()) return;
+  const p = G.piece, nr = (p.r + 1) % 4;
+  for (const [dx, dy] of KICKS) {
+    if (!pieceHits(G, p, dx, dy, nr)) { p.r = nr; p.x += dx; p.y += dy; buzz(8); moved(); return; }
+  }
+  buzz(30); toast('Tady se tvar nedá otočit');
+}
+function softDrop() {
+  if (!canAct()) return;
+  // a resting shape is not placed by surprise: the first tap says so, the second places it
+  if (pieceHits(G, G.piece, 0, 1)) {
+    if (G.piece.rest === 'tap') { lock(0); return; }
+    G.piece.rest = 'tap'; buzz(8); schedule(); toast('Tvar je dole. Ťukni ještě jednou a zůstane tam.'); return;
+  }
+  G.piece.y++; buzz(8); schedule(); moved();
+}
+let lastDrop = 0;
+function hardDrop() {
+  // the second tap of a double tap on Shodit (only after Shodit itself, not after a piece landed by itself)
+  if (Date.now() - lastDrop < 350) return;
+  if (!canAct()) return;
+  lastDrop = Date.now();
+  const d = dropDist(); G.piece.y += d; lock(d);
+}
+function lock(bonus) {
+  const sz = dims(), p = G.piece, color = COLOR[p.t], lvl0 = level();
+  // bb = the record before this move: Undo puts it back, so the record cannot be inflated by playing and undoing
+  G.history.push({ b: G.board.slice(), s: G.score, l: G.lines, t: p.t, n: G.next, bag: G.bag.slice(), bb: best, seed: G.seed });
+  if (G.history.length > HISTORY) G.history.shift();
+  const b = G.board.slice(); let out = false;
+  for (const [dr, dc] of SHAPES[p.t][p.r]) {
+    const R = p.y + dr; if (R < 0) { out = true; continue; }
+    b[R * sz.w + p.x + dc] = color;
+  }
+  const rows = [], keep = [];
+  for (let R = 0; R < sz.h; R++) {
+    const row = b.slice(R * sz.w, R * sz.w + sz.w);
+    if (row.every(v => v >= 0)) rows.push(R); else keep.push(row);
+  }
+  G.board = rows.length ? new Array(rows.length * sz.w).fill(-1).concat(...keep) : b;
+  G.lines += rows.length;
+  const pts = POINTS[rows.length] + bonus;
+  G.score += pts;
+  if (G.score > best) { best = G.score; bests[rulesKey(G.rules)] = best; }
+  G.piece = spawn(G.next, sz);
+  G.next = takeNext(G);
+  if (out || pieceHits(G, G.piece)) { G.status = 'over'; stop(); }
+  save();
+
+  // Effects (the state above is already final; the flash only delays the picture)
+  const sc = $('#score'); sc.classList.remove('bump'); void sc.offsetWidth; sc.classList.add('bump');
+  buzz(rows.length ? [30, 40, 30] : 15);
+  const after = () => {
+    if (G.status === 'over') { whenFree(G, 700, () => { if (G.status === 'over') showOver(); }); return; }
+    if (rows.length && gravity() && S.accel && level() > lvl0) toast('Tvary teď padají trochu rychleji');
+    schedule();
+  };
+  if (rows.length) {
+    flash = { board: b, rows };
+    render();
+    praise((rows.length >= 4 ? 'Skvělé! ' : rows.length >= 2 ? 'Výborně! ' : '') + '+' + fmt(POINTS[rows.length]));
+    setTimeout(() => { flash = null; render(); after(); }, 330);
+  } else { render(); after(); }
+}
+function undo() {
+  if (flash) { flashToast(); return; }
+  if (!G.history.length) { toast('Zatím není co vracet'); return; }
+  const h = G.history.pop(), wasOver = G.status === 'over';
+  G.board = h.b; G.score = h.s; G.lines = h.l; G.next = h.n; G.bag = h.bag;
+  if (Number.isInteger(h.seed)) G.seed = h.seed;
+  if (okNum(h.bb)) { best = Math.max(h.bb, G.bestAtStart || 0); bests[rulesKey(G.rules)] = best; }
+  G.piece = spawn(h.t, dims());
+  G.status = 'playing';
+  if (wasOver) stop();
+  $('#modal').hidden = true;
+  buzz(); save(); render(); schedule();
+}
+
+/* ---------- Rendering ---------- */
+let cellEls = [], builtKey = '';
+function applyLook() {
+  root.dataset.theme = S.theme;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+}
+function buildBoard() {
+  const sz = dims();
+  if (sz.id === builtKey) return;
+  builtKey = sz.id;
+  const bd = $('#board');
+  bd.style.setProperty('--w', sz.w);
+  bd.innerHTML = '<div class="cell"></div>'.repeat(sz.w * sz.h);
+  cellEls = [...bd.children];
+}
+function draw() {
+  const sz = dims(), N = sz.w * sz.h, src = flash ? flash.board : G.board;
+  const cls = new Array(N).fill(''), col = new Array(N).fill(-1);
+  for (let k = 0; k < N; k++) if (src[k] >= 0) { cls[k] = 'blk'; col[k] = src[k]; }
+  if (flash) {
+    for (const R of flash.rows) for (let c = 0; c < sz.w; c++) cls[R * sz.w + c] = 'blk flash';
+  } else if (G.status === 'playing') {
+    const p = G.piece, cells = SHAPES[p.t][p.r], c0 = COLOR[p.t];
+    if (S.ghost) {
+      const gy = p.y + dropDist();
+      for (const [dr, dc] of cells) { const R = gy + dr, k = R * sz.w + p.x + dc; if (R >= 0 && !cls[k]) { cls[k] = 'gh'; col[k] = c0; } }
+    }
+    for (const [dr, dc] of cells) { const R = p.y + dr; if (R >= 0) { const k = R * sz.w + p.x + dc; cls[k] = 'blk'; col[k] = c0; } }
+  }
+  for (let k = 0; k < N; k++) {
+    const el = cellEls[k], key = cls[k] + col[k];
+    if (el._k === key) continue;
+    el._k = key;
+    el.className = 'cell' + (cls[k] ? ' ' + cls[k] : '');
+    if (col[k] >= 0) el.style.setProperty('--c', COLORS[col[k]]); else el.style.removeProperty('--c');
+  }
+}
+const PLAY_ICON = '<svg class="solid" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z"/></svg>';
+const PAUSE_ICON = '<svg class="solid" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.5h4.2v15H6zM13.8 4.5H18v15h-4.2z"/></svg>';
+function render() {
+  applyLook();
+  buildBoard();
+  draw();
+  const over = G.status === 'over', grav = gravity();
+  $('#score').textContent = fmt(G.score);
+  $('#best').textContent = fmt(best);
+  $('#lines').textContent = fmt(G.lines);
+  $('#level').textContent = level();
+  $('#lvlWrap').hidden = !(grav && S.accel);
+  $('#nextWrap').hidden = !S.showNext;
+  $('#next').innerHTML = pieceHTML(G.next);
+
+  const act = !over && (!grav || running) && !flash;
+  document.querySelectorAll('.ctl').forEach(b => b.classList.toggle('dim', !act));
+  $('#btnUndo').classList.toggle('dim', !G.history.length);
+  const bp = $('#btnPause');
+  bp.hidden = !grav || over;
+  bp.innerHTML = running ? PAUSE_ICON + 'Pauza' : PLAY_ICON + 'Hrát';
+  $('#btnAgain').hidden = !over;
+  $('#veil').hidden = !(grav && !over && !running);
+  $('#veilText').textContent = isFresh() ? 'Ťukni na Hrát a tvary začnou padat' : 'Hra stojí';
+  layout();
+}
+
+function layout() {
+  if (!G) return;
+  // the room inside .play (flex:1, so its size does not depend on the board): GUT at the sides, 12 px above, 8 px below
+  // (+ 4 px of .controls); a short window shrinks the board instead of letting it touch the score row or the buttons
+  const play = $('#play'), W = play.clientWidth - 2 * GUT, H = play.clientHeight - 20;
+  const sz = dims(), gap = 2;
+  const byW = (W - 10 - (sz.w - 1) * gap) / sz.w;
+  const byH = (H - 10 - (sz.h - 1) * gap) / sz.h;
+  const cell = Math.max(6, Math.min(44, Math.floor(Math.min(byW, byH))));
+  // a board as wide as the screen allows: the frame (5 px) also takes the rounding remainder, so it ends exactly GUT from the sides
+  const bpad = byW <= Math.min(byH, 44) ? 5 + Math.max(0, Math.min((byW - cell) * sz.w, (byH - cell) * sz.h)) / 2 : 5;
+  root.style.setProperty('--cs', cell + 'px');
+  root.style.setProperty('--gap', gap + 'px');
+  root.style.setProperty('--bpad', bpad + 'px');
+}
+
+/* ---------- Controls ---------- */
+const ACTIONS = { left: () => shift(-1), right: () => shift(1), rot: rotate, down: softDrop, drop: hardDrop };
+$('.controls').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  b.blur();
+  ACTIONS[b.dataset.act]();
+});
+function togglePause() {
+  if (G.status === 'over') { toast('Hra skončila – ťukni na Zpět nebo Nová hra'); return; }
+  buzz(8); setRunning(!running);
+}
+$('#btnPause').addEventListener('click', e => { e.currentTarget.blur(); togglePause(); });
+$('#btnPlay2').addEventListener('click', () => { buzz(8); setRunning(true); });
+$('#btnUndo').addEventListener('click', e => { e.currentTarget.blur(); undo(); });
+$('#btnAgain').addEventListener('click', newGame);
+// Keyboard (for a computer): arrows, space = drop, P = pause
+document.addEventListener('keydown', e => {
+  if (!$('#screenSettings').hidden || !$('#screenHelp').hidden || !$('#modal').hidden) return;
+  const map = { ArrowLeft: ACTIONS.left, ArrowRight: ACTIONS.right, ArrowUp: rotate, ArrowDown: softDrop, ' ': hardDrop, p: togglePause, P: togglePause };
+  const fn = map[e.key]; if (!fn) return;
+  e.preventDefault(); fn();
+});
+document.addEventListener('visibilitychange', () => { if (!document.hidden) return; if (running) setRunning(false); save(); });
+addEventListener('pagehide', save); // also leaving through the home button
+
+/* ---------- Dialogs ---------- */
+// A dialog pauses the falling; dismissed without an action ("Ne, hrát dál", or Back) the game goes on again
+let resumeOnClose = false;
+function showModal(html, buttons) {
+  hideToast();
+  resumeOnClose = running;
+  if (running) setRunning(false);
+  const card = $('#modalCard');
+  card.innerHTML = html + '<div class="mbtns">' + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('') + '</div>';
+  $('#modal').hidden = false;
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    const fn = buttons[+b.dataset.i].fn;
+    if (fn) resumeOnClose = false;
+    $('#modal').hidden = true;
+    if (fn) fn();
+  };
+}
+new MutationObserver(() => {
+  if (!$('#modal').hidden || !resumeOnClose) return;
+  resumeOnClose = false;
+  if (G.status === 'playing' && $('#screenSettings').hidden && $('#screenHelp').hidden) setRunning(true);
+}).observe($('#modal'), { attributes: true, attributeFilter: ['hidden'] });
+function showOver() {
+  const rec = G.score >= best && G.score > G.bestAtStart && G.score > 0;
+  showModal(
+    `<h2>Konec hry</h2><p>Nový tvar se už nevejde.</p><p class="pts">${fmt(G.score)}</p><p>${rec ? '<b>Nový rekord! 🎉</b>' : `bodů · rekord ${fmt(best)}`}</p>`,
+    [{ text: 'Nová hra', fn: newGame }, { text: 'Vrátit tah', cls: 'alt', fn: undo }, { text: 'Prohlédnout desku', cls: 'alt' }]
+  );
+}
+$('#btnNew').addEventListener('click', () => {
+  if (G.status === 'playing' && !isFresh()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>',
+      [{ text: 'Ano, nová hra', fn: newGame }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+
+/* ---------- Settings ---------- */
+function toggleRow(key, label, off) {
+  return `<div class="field trow${off ? ' off' : ''}"><div class="flabel">${label}</div><button class="sw${off ? ' off' : ''}" data-act="toggle:${key}" aria-pressed="${S[key] && !off}">${S[key] && !off ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+}
+function opts(key, list) {
+  return list.map(m => `<button class="opt" data-act="${key}:${m.id}" aria-pressed="${S[key] === m.id}"><span class="radio"></span><span><b>${m.name}</b><span class="d">${m.desc}</span></span></button>`).join('');
+}
+function swatch(t) {
+  // A small board: a T falling above two filled rows
+  const fill = { 1: 6, 2: 6, 3: 6, 7: 6, 15: 1, 16: 4, 17: 4, 19: 0, 20: 1, 21: 1, 22: 3, 23: 5, 24: 0 };
+  let c = '';
+  for (let k = 0; k < 25; k++) c += fill[k] !== undefined ? `<i class="cell blk" style="--c:${COLORS[fill[k]]}"></i>` : '<i class="cell"></i>';
+  return `<span class="swatch" data-theme="${t.id}"><span class="mini">${c}</span></span>`;
+}
+function renderSettings() {
+  const si = SIZES.findIndex(s => s.id === S.size), sz = SIZES[si];
+  const pending = !sameRules(rulesOf(S), G.rules) && !isFresh()
+    ? '<div class="notice">Tahle změna potřebuje novou hru. Po návratu do hry začne <b>nová hra</b>.</div>' : '';
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Padající tvary<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Pravidla hry</h3>
+      <div class="field"><div class="flabel">Velikost hrací plochy</div><div class="stepper">
+        <button class="sbtn${si > 0 ? '' : ' off'}" data-act="size:-1" aria-label="Menší">−</button>
+        <div class="sval">${sz.w} × ${sz.h}</div>
+        <button class="sbtn${si < SIZES.length - 1 ? '' : ' off'}" data-act="size:1" aria-label="Větší">+</button>
+      </div><div class="fnote">Šířka × výška. Menší plocha má větší políčka.</div></div>
+      <div class="field"><div class="flabel">Tvary</div>${opts('diff', DIFFS)}</div>
+      ${pending}
+    </section>
+    <section class="card"><h3>Padání</h3>
+      ${opts('speed', SPEEDS)}
+      ${toggleRow('accel', 'Postupně zrychlovat', !gravity())}
+      <div class="fnote" style="margin-top:-6px">Každých 10 smazaných řad padají tvary trochu rychleji. Hru jde vždy zastavit tlačítkem Pauza.</div>
+    </section>
+    <section class="card"><h3>Pomocníci</h3>
+      ${toggleRow('ghost', 'Ukázat, kam tvar dopadne')}
+      ${toggleRow('showNext', 'Ukázat další tvar')}
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}">${swatch(t)}${t.name}</button>`).join('')}</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'size') {
+    const si = SIZES.findIndex(s => s.id === S.size) + +arg;
+    if (si < 0) { toast('Menší plocha už není'); return; }
+    if (si >= SIZES.length) { toast('Větší plocha už není'); return; }
+    S.size = SIZES[si].id;
+  } else if (act === 'toggle') {
+    if (arg === 'accel' && !gravity()) { toast('Když tvary padají jen tlačítkem, nemají co zrychlovat'); return; }
+    S[arg] = !S[arg];
+  } else if (act === 'diff') S.diff = arg;
+  else if (act === 'speed') S.speed = arg;
+  else if (act === 'theme') S.theme = arg;
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  buzz(8); applyLook(); save(); renderSettings();
+});
+function openSettings() { hideToast(); if (running) setRunning(false); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+// Settings apply immediately; a different board or shape set needs a new game.
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  if (!sameRules(rulesOf(S), G.rules)) {
+    const had = !isFresh(); // also after a finished game: it could still be revived by Undo
+    newGame();
+    if (had) toast('Začala nová hra s novým nastavením');
+    return;
+  }
+  render();
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help ---------- */
+const ico = name => `<span class="ico">${document.querySelector(`.ctl[data-act="${name}"] svg`).outerHTML}</span>`;
+function renderHelp() {
+  const fall = gravity()
+    ? `Tvary padají samy, pomalu. Tlačítko <b>Pauza</b> hru kdykoli zastaví, <b>Hrát</b> ji zase pustí.${S.accel ? ' Každých 10 smazaných řad padají trochu rychleji.' : ''} Rychlost jde změnit v Nastavení.`
+    : 'Tvary samy nepadají – dolů se posunou jen tlačítkem. Nikam se nespěchá.';
+  let demo = '';
+  const rows = [[-1, 6, -1, -1, -1, -1], [5, 5, 2, 2, 3, 0], [1, -1, -1, 4, 4, -1]];
+  rows.forEach((row, r) => row.forEach(v => {
+    demo += v < 0 ? '<i class="cell"></i>' : `<i class="cell blk${r === 1 ? ' hl' : ''}" style="--c:${COLORS[v]}"></i>`;
+  }));
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Padající tvary<small>Jak hrát</small></h2></div>
+    <section class="card help">
+      <ol>
+        <li>Shora přichází jeden tvar za druhým. Posouvej ho tlačítky ${ico('left')} a ${ico('right')}, tlačítko ${ico('rot')} ho otočí.</li>
+        <li>${ico('down')} posune tvar o řádek dolů. Když už je tvar dole, druhé ťuknutí ho tam nechá. <b>Shodit</b> ho pustí rovnou až na dno${S.ghost ? ' – tam, kam ukazuje světlý obrys' : ''}. Za každý řádek pádu je bod navíc.</li>
+        <li>Když je celý <b>řádek plný</b>, zmizí a všechno nad ním klesne.
+          <div class="demo"><span class="mini">${demo}</span><span>tenhle řádek je plný – zmizí</span></div></li>
+        <li>${fall}</li>
+        <li>Body: 10 za jeden řádek, 30 za dva, 50 za tři a 80 za čtyři naráz.${S.showNext ? ' Vpravo nahoře u slova <b>Další</b> je vidět, jaký tvar přijde potom.' : ''}</li>
+        <li>Hra končí, když se nový tvar už nevejde. <b>Zpět</b> vrátí poslední položený tvar – i na konci hry.</li>
+      </ol>
+    </section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); if (running) setRunning(false); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) { $('#screenHelp').hidden = true; render(); } });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+// rule: only the known settings are taken over from the save
+const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+if (saved && saved.bests && typeof saved.bests === 'object') for (const [k, v] of Object.entries(saved.bests)) if (okNum(v) && v > 0) bests[k] = v;
+const okGame = saved && validGame(saved.game);
+// older versions kept one record for all variants: it now belongs to the variant that was being played
+if (saved && okNum(saved.best) && saved.best > 0) { const k = rulesKey(okGame ? saved.game.rules : rulesOf(S)); bests[k] = Math.max(bests[k] || 0, saved.best); }
+if (okGame) { G = saved.game; best = bests[rulesKey(G.rules)] || 0; render(); }
+else newGame();
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// Launcher contract: opened from the menu (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing
+window.PadajiciTvary = {
+  SHAPES, collides, lock, undo, tick, newGame,
+  get state() { return { S, G, best, bests, running, flash }; },
+  setBoard(b) { G.board = b.slice(); G.status = 'playing'; save(); render(); },
+  setPiece(t, x, y, r = 0) { G.piece = { t, r, x, y }; save(); render(); },
+};
+})();
+</script>
+</body>
+</html>

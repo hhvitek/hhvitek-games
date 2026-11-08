@@ -1,0 +1,1014 @@
+<!doctype html>
+<html lang="cs" data-table="paper" data-back="nachod" data-face="white">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f4ebdf">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Prší">
+<title>Prší</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e7135'/%3E%3Crect x='9' y='16' width='26' height='38' rx='4' fill='%23fff' transform='rotate(-12 22 35)'/%3E%3Crect x='29' y='16' width='26' height='38' rx='4' fill='%23fff' transform='rotate(12 42 35)'/%3E%3Cpath d='M42 45c-7-5-11-9-11-14 0-3 2-5 5-5 2 0 4 1 6 3 2-2 4-3 6-3 3 0 5 2 5 5 0 5-4 9-11 14z' fill='%23d0101c'/%3E%3Cpath d='M14 4q3 5 0 7-3-2 0-7zM30 2q3 5 0 7-3-2 0-7zM48 5q3 5 0 7-3-2 0-7z' fill='%239fd3ff'/%3E%3C/svg%3E">
+<style>
+
+/* ---------- Base ---------- */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--tex),var(--grain,none),var(--tbl)}
+body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+
+#app{--gut:12px;height:100vh;height:100dvh;max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;line-height:1.05;font-weight:800;font-size:28px;color:var(--ink)} /* no nowrap/overflow: a long title wraps between words, never gets cut */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--btn);font-size:18px;font-weight:700;color:var(--btn-ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--btn);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--btn-ink);box-shadow:inset 0 0 0 2px var(--line)}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+a.round{text-decoration:none}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:clamp(18px,4.9vw,24px)}
+
+/* ---------- The win tally: one row under the top bar (who won how many games while the game is open) ---------- */
+/* a scoreboard, not buttons: one panel like the opponents' boxes, cells divided by lines, no fill or shadow of their own */
+#score{flex:none;display:grid;grid-template-columns:auto repeat(var(--n,3),minmax(0,1fr));margin:10px var(--gut) 0;border-radius:14px;background:var(--bar);border:2px solid var(--line);color:var(--ink);overflow:hidden}
+#score > span{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0;padding:4px 6px;white-space:nowrap}
+#score > span + span{border-left:2px solid var(--line)}
+#score .lbl{padding:0 12px;font-size:19px;font-weight:800}
+#score .who{font-size:18px;font-weight:600;line-height:1.2}
+#score .who.me{font-weight:800}
+#score .who b{font-size:26px;font-weight:900;line-height:1.05;color:var(--accent)}
+[data-table="sand"] #score .who b{color:var(--ink)}
+
+/* ---------- Opponents ---------- */
+#opps{flex:none;display:flex;gap:10px;padding:10px var(--gut) 0}
+.opp{flex:1 1 0;min-width:0;border-radius:14px;padding:6px 10px 6px;background:var(--bar);box-shadow:inset 0 0 0 2px var(--line);color:var(--ink);display:flex;flex-direction:column;--op-ava:36px;--op-name:21px;--op-ava-bg:var(--btn)}
+.opp.on{box-shadow:inset 0 0 0 3px var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--bar))}
+.opp.win{box-shadow:inset 0 0 0 3px var(--accent),0 0 14px var(--accent)}
+/* the head (avatar, name, play style) comes from games/_opponents/opponents.js; the card count sits next to the backs */
+.frow{display:flex;align-items:center;gap:8px;margin:auto 0 4px;padding-top:4px} /* at the bottom, so both boxes line up when a name wraps */
+.ocnt{flex:none;font-size:18px;font-weight:700;white-space:nowrap}
+.fan{position:relative;flex:1;min-width:0;height:36px;--cw:26px;--ch:36px}
+.fan .cd{transition:none;box-shadow:0 0 0 1px rgba(0,0,0,.3)}
+.ost{font-size:18px;line-height:1.3;min-height:23px;font-weight:600;white-space:nowrap;overflow:hidden}
+.ost svg,.isym{display:inline-block;width:20px;height:20px;vertical-align:-3px}
+
+/* ---------- Table: deck, pile, info and your hand ---------- */
+#mid{position:relative;flex:1;min-height:0;overflow:hidden}
+.stack{position:absolute;left:0;top:0;width:var(--cw);height:var(--ch)}
+.stack .cd{transition:none}
+#deck{cursor:pointer}
+#deck .slot{position:absolute;inset:0;border-radius:calc(var(--cw)*.1);border:2px dashed var(--slot);background:var(--slot-bg)}
+#deck .cnt{position:absolute;right:-8px;bottom:-8px;z-index:5;min-width:36px;height:36px;padding:0 6px;border-radius:18px;background:var(--accent);color:var(--accent-ink);font-size:19px;font-weight:800;display:grid;place-items:center;box-shadow:0 2px 5px rgba(0,0,0,.35)}
+#deck.can .cd:last-of-type{box-shadow:0 0 0 3px var(--accent),0 3px 8px rgba(0,0,0,.4)}
+#info{position:absolute;left:0;top:0;display:flex;flex-direction:column;justify-content:center;gap:8px;color:var(--ink)}
+#info .turn{font-size:20px;font-weight:800;line-height:1.2}
+.badge{display:flex;align-items:center;gap:6px;flex-wrap:wrap;border-radius:12px;padding:6px 10px;font-size:18px;font-weight:700;line-height:1.2;background:var(--bar);box-shadow:inset 0 0 0 2px var(--line)}
+.badge svg{flex:none;width:30px;height:30px}
+.badge.pen{background:var(--accent);color:var(--accent-ink);box-shadow:none;font-size:20px;font-weight:800}
+#hand{position:absolute;inset:0;pointer-events:none}
+#hand .cd{pointer-events:auto;transition:transform .2s ease;cursor:pointer}
+#hand .cd.ok{box-shadow:0 0 0 3px var(--accent),0 4px 10px rgba(0,0,0,.45)}
+#hand .cd.new{animation:deal .35s ease-out both}
+@keyframes deal{from{opacity:0;margin-top:-30px}}
+#hand .cd.no{animation:shake .36s}
+@keyframes shake{20%{margin-left:-7px}40%{margin-left:7px}60%{margin-left:-5px}80%{margin-left:4px}}
+.flyer{position:fixed;left:0;top:0;z-index:15;pointer-events:none;transform-origin:0 0;transition:transform .32s ease}
+.flyer .cd{transition:none}
+#mid.won #hand .cd{animation:hop .6s ease-in-out infinite alternate}
+@keyframes hop{to{margin-top:-8px}}
+
+/* ---------- Mariáš cards: drawn by games/_cards/marias.js (the frame, faces and backs come from games/_cards/cards.js) ---------- */
+
+/* Bottom buttons */
+.tray{flex:none;display:flex;flex-direction:column;gap:6px;padding:6px var(--gut) 10px;background:var(--bar);border-top:1px solid var(--line)}
+#hint{text-align:center;font-size:19px;line-height:1.3;min-height:50px;display:flex;align-items:center;justify-content:center;font-weight:600}
+.row{display:flex;gap:10px}
+.act{flex:1 1 0;min-width:0;height:64px;border-radius:14px;background:var(--btn);color:var(--btn-ink);display:flex;align-items:center;justify-content:center;gap:8px;font-size:21px;font-weight:800;box-shadow:inset 0 0 0 1px var(--line);transition:transform .06s;white-space:nowrap}
+.act:active{transform:scale(.97)}
+.act svg{flex:none;width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.act.go{flex-grow:1.6;background:var(--accent);color:var(--accent-ink);box-shadow:none}
+.act.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;font-family:Georgia,serif;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);transition:transform .06s}
+.big:active{transform:translateY(3px);box-shadow:0 1px 0 var(--pbtn-sh)}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0;box-shadow:0 2px 6px rgba(60,30,10,.12)}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink);font-family:Georgia,serif}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.fnote a{color:inherit;text-decoration:underline}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.trow .flabel{margin:0;flex:1;min-width:0}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{height:96px;border-radius:10px;display:flex;align-items:center;justify-content:center;gap:6px;background:var(--tex),var(--grain,none),var(--tbl);box-shadow:inset 0 0 0 1px rgba(0,0,0,.15)}
+.mini{--cw:46px;--ch:64px;display:flex;gap:5px;justify-content:center}
+.mini .cd{position:relative;transform:none;flex:none;transition:none}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.stats{font-size:20px;line-height:1.5}
+
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+.demo-felt{background:var(--tex),var(--grain,none),var(--tbl);border-radius:14px;padding:12px;margin:10px 0}
+.vals{display:grid;grid-template-columns:repeat(4,1fr);gap:12px 6px}
+.val{display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--ink);font-size:18px;font-weight:700;text-align:center;line-height:1.2}
+.val .mini{--cw:54px;--ch:76px}
+.legend{display:flex;align-items:center;gap:14px;margin:12px 0;font-size:20px;line-height:1.3}
+.legend .ico{flex:none;width:46px;height:46px;border-radius:12px;background:var(--psw);display:grid;place-items:center}
+.legend .ico svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:pop .25s ease-out}
+@keyframes pop{from{transform:scale(.9);opacity:0}}
+.mcard h2{font-size:28px;font-family:Georgia,serif;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+.mbtns{display:flex;flex-direction:column;gap:14px;margin-top:8px}
+.suits{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0 16px}
+.suitb{height:112px;border-radius:16px;border:3px solid var(--pline);background:var(--popt);color:var(--pink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:20px;font-weight:800;line-height:1.15}
+.suitb svg{width:44px;height:44px}
+.suitb small{font-size:18px;font-weight:600;color:var(--psoft)}
+.suitb.most{border-color:var(--pbtn);background:var(--popt-on)}
+
+@media (max-height:800px){
+  .topbar{height:52px}
+  .pill{height:42px}.round{width:42px;height:42px}
+  .topbar h1{font-size:25px}
+  #opps{padding-top:8px}
+  #score{margin-top:6px}
+  #score > span{padding:2px 6px}
+  #score .who{font-size:16px}
+  #score .who b{font-size:22px}
+  .opp{padding:4px 10px}
+  .opp{--op-ava:32px;--op-name:20px}
+  .frow{margin-bottom:2px;padding-top:2px}
+  .fan{height:30px;--cw:22px;--ch:30px}
+  .act{height:56px}
+  #hint{min-height:46px;font-size:18px}
+  .tray{padding:4px var(--gut) 8px;gap:4px}
+}
+/* Narrow phones (360 px wide): smaller gaps and a slimmer "Nová hra", so the title fits next to the home button (the 12 px outer margin stays) */
+@media (max-width:380px){
+  #score .lbl{padding:0 8px}
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 10px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:18px}
+}
+#toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:60;width:max-content;max-width:92vw;background:color-mix(in srgb,var(--ink) 94%,var(--tbl));color:var(--tbl);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--tbl) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+/* the opponent's badge (stars, play style) in the ink colour on the light sand table, where the orange accent is too faint */
+[data-table="sand"]{--op-accent:var(--ink)}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Prší</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <div id="score" aria-live="polite"></div>
+  <section id="opps" aria-live="polite"></section>
+  <main id="mid">
+    <div id="deck" class="stack" role="button" aria-label="Balíček"></div>
+    <div id="pile" class="stack" aria-label="Odhozené karty"></div>
+    <div id="info"></div>
+    <div id="hand"></div>
+  </main>
+  <footer class="tray">
+    <div id="hint" aria-live="polite"></div>
+    <div class="row">
+      <button id="btnUndo" class="act" data-a="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnMain" class="act go" data-a="main"></button>
+    </div>
+  </footer>
+</div>
+
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+
+<script src="../../images/sets.js"></script>
+<script src="../_cards/cards.js"></script>
+<script src="../_cards/marias.js"></script>
+<script src="../_opponents/opponents.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const GUT = 12; // side margin in px, the same as --gut in the CSS
+
+/* ---------- RULES (pure: no page access, tools can load this block on its own) ---------- */
+/* card = number 0–31; suit = c >> 3 (0 srdce, 1 zelené (listy), 2 kule, 3 žaludy), rank = c & 7:
+   0 sedma, 1 osma, 2 devítka, 3 desítka, 4 spodek, 5 svršek, 6 král, 7 eso */
+const SEVEN = 0, OBER = 5, ACE = 7;
+const suit = c => c >> 3, rank = c => c & 7;
+const HAND0 = 4; // cards dealt to each player
+// the opponents' play styles (seat 0 is always the player); who plays is drawn every game (G.foes, outside the rules)
+const STYLES = { attack: { trait: 'útočí' }, save: { trait: 'šetří karty' } };
+const OPPS = { both: ['attack', 'save'], attack: ['attack'], save: ['save'] };
+const OLD_OPP = { franta: 'attack', jarka: 'save' }; // the setting before the random names (Franta attacked, Jarka saved)
+const seatsOf = opp => ['you', ...OPPS[opp]];
+// the play style at each seat: with two opponents the order is random (G.swap: the one who saves cards sits first),
+// drawn with the opponents and kept while the win tally keeps them (user's wish)
+const stylesOf = g => { const s = seatsOf(g.opp); return g.swap && s.length === 3 ? [s[0], s[2], s[1]] : s; };
+
+// seeded random number in [0, 1); it moves g.seed on, so Undo + the same move gives the same result
+function rand(g) {
+  g.seed = (g.seed + 0x6D2B79F5) >>> 0;
+  let t = g.seed;
+  t = Math.imul(t ^ t >>> 15, t | 1);
+  t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+  return ((t ^ t >>> 14) >>> 0) / 4294967296;
+}
+function shuffleWith(a, r) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+// a new deal: 4 cards each, one card face up on the pile; the player starts and a starting 7 or eso applies to the player
+function deal(opp, seed) {
+  const g = { opp, seed: seed >>> 0, hands: [], deck: [], pile: [], suit: 0, seven: 0, ace: false, turn: 0, voids: [], last: [], lastSeat: -1 };
+  const n = seatsOf(opp).length;
+  g.deck = shuffleWith([...Array(32).keys()], () => rand(g));
+  for (let i = 0; i < n; i++) { g.hands.push([]); g.voids.push([false, false, false, false]); g.last.push(null); }
+  for (let k = 0; k < HAND0; k++) for (let i = 0; i < n; i++) g.hands[i].push(g.deck.pop());
+  const top = g.deck.pop();
+  g.pile.push(top);
+  g.suit = suit(top);
+  if (rank(top) === SEVEN) g.seven = 1;
+  if (rank(top) === ACE) g.ace = true;
+  return g;
+}
+const top = g => g.pile[g.pile.length - 1];
+function canPlay(g, c) {
+  if (g.seven) return rank(c) === SEVEN;
+  if (g.ace) return rank(c) === ACE;
+  return rank(c) === OBER || suit(c) === g.suit || rank(c) === rank(top(g));
+}
+const legal = (g, seat) => g.hands[seat].filter(c => canPlay(g, c));
+const drawCount = g => g.seven ? 2 * g.seven : 1;
+// cards that can still be drawn (the deck + the pile under its top card, which is reshuffled when the deck runs out)
+const drawable = g => g.deck.length + g.pile.length - 1;
+function drawOne(g) {
+  if (!g.deck.length) {
+    if (g.pile.length < 2) return -1;
+    const t = g.pile.pop();
+    g.deck = shuffleWith(g.pile, () => rand(g));
+    g.pile = [t];
+    g.reshuffled = true;
+  }
+  return g.deck.pop();
+}
+const winnerOf = g => g.hands.findIndex(h => !h.length);
+const statusOf = g => { const w = winnerOf(g); return w < 0 ? 'playing' : w === 0 ? 'won' : 'lost'; };
+// one move of seat: { t: 'play', c, suit? } | { t: 'draw' } | { t: 'stand' }; returns the drawn cards
+function applyMove(g, seat, mv) {
+  const h = g.hands[seat], n = g.hands.length;
+  let drawn = [];
+  g.reshuffled = false;
+  if (mv.t === 'play') {
+    h.splice(h.indexOf(mv.c), 1);
+    g.pile.push(mv.c);
+    const r = rank(mv.c);
+    g.suit = r === OBER ? mv.suit : suit(mv.c);
+    if (r === SEVEN) g.seven++;
+    if (r === ACE) g.ace = true;
+    if (r !== OBER) g.voids[seat][suit(mv.c)] = false; // a svršek says nothing about its own suit
+    g.last[seat] = r === OBER ? { t: 'play', c: mv.c, suit: mv.suit } : { t: 'play', c: mv.c };
+  } else if (mv.t === 'stand') {
+    g.ace = false;
+    g.last[seat] = { t: 'stand' };
+  } else {
+    const k = drawCount(g);
+    // new cards may bring any suit, so the old guesses are forgotten; drawing instead of playing (not under a 7)
+    // says that the hand probably had nothing in this suit
+    g.voids[seat] = [false, false, false, false];
+    if (!g.seven) g.voids[seat][g.suit] = true;
+    for (let i = 0; i < k; i++) { const c = drawOne(g); if (c < 0) break; h.push(c); drawn.push(c); }
+    g.seven = 0;
+    g.last[seat] = { t: 'draw', n: drawn.length };
+  }
+  g.lastSeat = seat;
+  if (h.length) g.turn = (seat + 1) % n;
+  return drawn;
+}
+
+/* The opponents. Both see the same things (their own hand, the counts of the others, the pile and who had to draw
+   on which suit), they only weigh them differently:
+   attack: 7 and eso at once, leads with suits the next player lacks;
+   save: ordinary cards first, keeps 7 and eso to answer attacks or for when the next player is about to finish.
+   Both keep svršek until nothing else fits (an early svršek only weakens a hand) and never call a suit they
+   have no card in while they hold other cards. */
+function chooseSuit(g, seat, rest, style) {
+  const next = (seat + 1) % g.hands.length, cnt = [0, 0, 0, 0];
+  for (const c of rest) if (rank(c) !== OBER) cnt[suit(c)]++;
+  let best = 0, bv = -1;
+  for (let s = 0; s < 4; s++) {
+    const v = cnt[s] * 3 + (g.voids[next][s] ? (style === 'attack' ? 4 : 2) : 0) + rand(g)
+      - (!cnt[s] && rest.some(c => rank(c) !== OBER) ? 10 : 0); // a suit of its own, so it can follow it next turn
+    if (v > bv) { bv = v; best = s; }
+  }
+  return best;
+}
+function aiChoose(g, seat) {
+  const L = legal(g, seat);
+  if (!L.length) return g.ace ? { t: 'stand' } : { t: 'draw' };
+  const style = stylesOf(g)[seat], hand = g.hands[seat], n = g.hands.length;
+  const next = (seat + 1) % n, danger = g.hands[next].length <= 2;
+  let best = L[0], bv = -1e9;
+  for (const c of L) {
+    const r = rank(c), rest = hand.filter(x => x !== c);
+    const same = rest.filter(x => suit(x) === suit(c) && rank(x) !== OBER).length;
+    let v;
+    if (g.seven || g.ace) v = 50;                                   // answer the attack (only 7s or esa are legal)
+    else if (r === SEVEN) v = style === 'attack' ? 34 : danger ? 40 : 8;
+    else if (r === ACE) v = style === 'attack' ? 30 : danger ? 38 : n === 2 && hand.length <= 3 ? 26 : 9;
+    else if (r === OBER) v = style === 'attack' ? 12 : 2;
+    else v = 20 + 2 * same + (g.voids[next][suit(c)] ? (style === 'attack' ? 8 : 3) : 0);
+    v += rand(g);
+    if (v > bv) { bv = v; best = c; }
+  }
+  if (rank(best) === OBER) return { t: 'play', c: best, suit: chooseSuit(g, seat, hand.filter(x => x !== best), style) };
+  return { t: 'play', c: best };
+}
+/* ---------- END RULES ---------- */
+
+/* ---------- Mariáš cards: names (the drawings come from games/_cards/marias.js) ---------- */
+const RNAME = ['sedma', 'osma', 'devítka', 'desítka', 'spodek', 'svršek', 'král', 'eso'];
+const RACC = ['sedmu', 'osmu', 'devítku', 'desítku', 'spodka', 'svrška', 'krále', 'eso'];
+const SNAME = ['srdce', 'zelené', 'kule', 'žaludy'];
+const STEM = ['srdcov', 'zelen', 'kulov', 'žaludov'];
+// "srdcová sedma", "zelený svršek", "kulové eso"; accusative "srdcovou sedmu", "zeleného svrška", "kulové eso"
+const cname = c => { const r = rank(c), s = STEM[suit(c)]; return `${s}${r <= 3 ? 'á' : r <= 6 ? 'ý' : 'é'} ${RNAME[r]}`; };
+const cacc = c => { const r = rank(c), s = STEM[suit(c)]; return `${s}${r <= 3 ? 'ou' : r <= 6 ? 'ého' : 'é'} ${RACC[r]}`; };
+const symSVG = MARIAS.symSVG; // a suit sign alone (badge, suit chooser, the last move)
+const cardHTML = (c, up, cls = '', style = '') => up
+  ? `<div class="cd up s${suit(c)}${cls}" data-c="${c}" role="img" aria-label="${cname(c)}"${style ? ` style="${style}"` : ''}>${MARIAS.faceHTML(c)}</div>`
+  : `<div class="cd${cls}" aria-hidden="true"${style ? ` style="${style}"` : ''}></div>`;
+
+/* ---------- Settings and storage ---------- */
+const ID = 'prsi';
+const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const { TABLES, BACKS, FACES, CASTLE, COAT } = CARDS;
+const SPEEDS = { slow: 1700, normal: 1100, fast: 600 };
+const DEFAULTS = { opp: 'both', speed: 'slow', show: false, table: 'paper', back: 'nachod', face: 'white', vibrate: true };
+const ICONS = {
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>',
+  draw: '<rect x="3" y="7" width="11" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5"/>',
+  stand: '<path d="M8 12V6a1.5 1.5 0 0 1 3 0v5M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V5.5a1.5 1.5 0 0 1 3 0V12M17 12V8.5a1.5 1.5 0 0 1 3 0V15a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-2.7L4.2 15a1.5 1.5 0 0 1 2.5-1.7L8 15"/>',
+};
+
+let S, G, ST, aiT = 0;
+const isFresh = () => !G.hist.length;
+const playing = () => G && G.status === 'playing';
+// the opponents: a random name and face every game (games/_opponents/opponents.js); G.foes[seat], seat 0 = null
+const O = OPPONENTS;
+const seatName = i => i === 0 ? 'Ty' : G.foes[i].name;
+function newFoes(opp, prev) {
+  const names = (prev || []).filter(Boolean).map(f => f.name), faces = [], out = [null];
+  for (let i = 1; i < seatsOf(opp).length; i++) {
+    const f = O.create(undefined, names, faces);
+    names.push(f.name); faces.push(f.face); out.push(f);
+  }
+  return out;
+}
+// a game saved before the random names keeps its Franta (attack) and Jarka (save)
+const OLD_FOES = { attack: { name: 'Franta', fem: false, face: 0 }, save: { name: 'Jarka', fem: true, face: 1 } };
+const validFoes = (f, n) => Array.isArray(f) && f.length === n && f[0] === null && f.slice(1).every(O.valid) && new Set(f.slice(1).map(x => x.name)).size === n - 1;
+function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+/* The win tally (user's decision): who won how many games while the game is open. It lives in sessionStorage, so
+   it survives a reload and a trip to the launcher and back, and starts from zero when the app is closed and opened
+   again. While it runs, every new game keeps the same opponents (names and faces); a change of "Soupeři" starts a
+   new tally with new opponents. A finished game counts once, at its first end (like the statistics); a game left
+   unfinished by "Nová hra" does not count. SER = { opp, wins: [you, seat 1, seat 2?] } */
+const SKEY = `games.${ID}.series`;
+let SER = null;
+const freshSeries = g => ({ opp: g.opp, wins: g.hands.map(() => 0) });
+function loadSeries(g) {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(SKEY));
+    if (v && v.opp === g.opp && Array.isArray(v.wins) && v.wins.length === g.hands.length && v.wins.every(n => Number.isInteger(n) && n >= 0)) return { opp: v.opp, wins: v.wins.slice() };
+  } catch (e) {}
+  return freshSeries(g);
+}
+function saveSeries() { try { sessionStorage.setItem(SKEY, JSON.stringify(SER)); } catch (e) {} }
+const tallyHTML = () => SER.wins.map((n, i) => `<span class="who${i ? '' : ' me'}">${seatName(i)}<b>${n}</b></span>`).join('');
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, stats: ST }));
+    if (G.status === 'playing' && !isFresh()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {} // rule: storage may be full or blocked; the game goes on
+}
+const snap = g => JSON.stringify({ hands: g.hands, deck: g.deck, pile: g.pile, suit: g.suit, seven: g.seven, ace: g.ace, turn: g.turn, seed: g.seed, voids: g.voids, last: g.last, lastSeat: g.lastSeat });
+const isCard = c => Number.isInteger(c) && c >= 0 && c < 32;
+const validLast = (v, n) => v === null || (v && typeof v === 'object' && (
+  (v.t === 'play' && isCard(v.c) && (rank(v.c) !== OBER || (Number.isInteger(v.suit) && v.suit >= 0 && v.suit < 4)))
+  || (v.t === 'draw' && Number.isInteger(v.n) && v.n >= 0 && v.n <= 32) || v.t === 'stand'));
+// every card exactly once, the effects match the top card; the parts that only describe the past are repaired
+function validState(g) {
+  try {
+    if (g && OLD_OPP[g.opp]) g.opp = OLD_OPP[g.opp];
+    if (!g || !OPPS[g.opp]) return false;
+    const n = seatsOf(g.opp).length;
+    if (!Array.isArray(g.hands) || g.hands.length !== n || !g.hands.every(Array.isArray) || !Array.isArray(g.deck) || !Array.isArray(g.pile) || !g.pile.length) return false;
+    const all = [...g.hands.flat(), ...g.deck, ...g.pile];
+    if (all.length !== 32 || new Set(all).size !== 32 || !all.every(isCard)) return false;
+    if (g.hands.filter(h => !h.length).length > 1) return false;
+    if (!Number.isInteger(g.suit) || g.suit < 0 || g.suit > 3 || !Number.isInteger(g.turn) || g.turn < 0 || g.turn >= n) return false;
+    if (!Number.isInteger(g.seven) || g.seven < 0 || g.seven > 4 || typeof g.ace !== 'boolean' || (g.seven && g.ace)) return false;
+    const t = top(g);
+    if ((g.seven && rank(t) !== SEVEN) || (g.ace && rank(t) !== ACE) || (rank(t) !== OBER && g.suit !== suit(t))) return false;
+    if (!Number.isInteger(g.seed) || g.seed < 0 || g.seed > 0xFFFFFFFF) return false;
+    if (!Array.isArray(g.voids) || g.voids.length !== n || !g.voids.every(v => Array.isArray(v) && v.length === 4 && v.every(x => typeof x === 'boolean'))) g.voids = g.hands.map(() => [false, false, false, false]);
+    if (!Array.isArray(g.last) || g.last.length !== n || !g.last.every(v => validLast(v, n))) g.last = g.hands.map(() => null);
+    if (!Number.isInteger(g.lastSeat) || g.lastSeat < -1 || g.lastSeat >= n) g.lastSeat = -1;
+    return true;
+  } catch (e) { return false; }
+}
+// a saved Undo snapshot, checked and repaired (as a snapshot string again), or null when it cannot be used
+function repairSnap(g, str) {
+  try {
+    const s = JSON.parse(str); if (!s || typeof s !== 'object') return null;
+    const m = Object.assign({}, g, s, { opp: g.opp });
+    return validState(m) && statusOf(m) === 'playing' ? snap(m) : null;
+  } catch (e) { return null; }
+}
+// rule: corrupted data never crashes the game; a broken history only loses Undo; the end comes from the hands
+function validGame(g) {
+  try {
+    if (!validState(g)) return false;
+    g.swap = g.swap === true && g.hands.length === 3;
+    if (!validFoes(g.foes, g.hands.length)) g.foes = stylesOf(g).map((st, i) => i ? Object.assign({}, OLD_FOES[st]) : null);
+    g.status = statusOf(g);
+    g.counted = g.counted === true || g.status !== 'playing';
+    // Undo uses the repaired snapshots, so a damaged one can never bring broken data back
+    const hist = Array.isArray(g.hist) ? g.hist.map(h => typeof h === 'string' ? repairSnap(g, h) : null) : [];
+    g.hist = hist.every(Boolean) ? hist : [];
+    return true;
+  } catch (e) { return false; }
+}
+// statistics per variant (who plays against you): each game counts once, at its first end
+function validStats(v) {
+  const n = x => Number.isInteger(x) && x >= 0 ? x : 0, out = {};
+  const old = k => Object.keys(OLD_OPP).find(o => OLD_OPP[o] === k);
+  for (const k of Object.keys(OPPS)) { const x = v && (v[k] || v[old(k)]), played = n(x && x.played); out[k] = { played, won: Math.min(n(x && x.won), played) }; }
+  return out;
+}
+function normalize(s) {
+  const pick = (k, list) => { if (!list.includes(s[k])) s[k] = DEFAULTS[k]; };
+  if (OLD_OPP[s.opp]) s.opp = OLD_OPP[s.opp];
+  pick('opp', Object.keys(OPPS)); pick('speed', Object.keys(SPEEDS));
+  CARDS.normalizeLook(s, DEFAULTS);
+  delete s.pic; // the French card pictures of the other card games do not apply here
+  s.show = !!s.show; s.vibrate = !!s.vibrate;
+}
+const rnd32 = () => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0]; } catch (e) { return Math.floor(Math.random() * 4294967296); } };
+function newGame(msg) {
+  clearTimeout(aiT);
+  // the tally goes on (same opponents) once a game of it was counted and the opponents setting is the same
+  const goOn = !!(G && SER && SER.opp === S.opp && G.opp === S.opp && SER.wins.some(n => n > 0));
+  G = Object.assign(deal(S.opp, rnd32()), { foes: goOn ? G.foes : newFoes(S.opp, G && G.foes), swap: goOn ? G.swap : S.opp === 'both' && rnd32() % 2 === 1, status: 'playing', counted: false, hist: [] });
+  if (!goOn) SER = freshSeries(G);
+  saveSeries(); save(); render({ deal: true });
+  if (msg) toast(msg);
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) {
+  // Chrome refuses vibration (with a console error) before the first real tap
+  if (!S.vibrate || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+  try { navigator.vibrate(ms); } catch (e) {}
+}
+let toastT;
+function toast(msg, ms = 3000) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  t.style.bottom = (innerHeight - $('.tray').getBoundingClientRect().top + 12) + 'px';
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + '<div class="mbtns">' + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('') + '</div>';
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+  $('#modal').hidden = false;
+}
+const nCards = n => `${n} ${n === 1 ? 'karta' : n >= 2 && n <= 4 ? 'karty' : 'karet'}`;
+const nCardsAcc = n => n === 1 ? 'kartu' : `${n} ${n <= 4 ? 'karty' : 'karet'}`;
+const nGames = n => `${n} ${n === 1 ? 'hry' : 'her'}`;
+const lastShort = v => !v ? '' : v.t === 'stand' ? 'stojí' : v.t === 'draw' ? (v.n ? `bere ${nCardsAcc(v.n)}` : 'nemá co líznout')
+  : rank(v.c) === OBER ? `mění na ${symSVG(v.suit)} ${SNAME[v.suit]}` : `hraje ${symSVG(suit(v.c))} ${RACC[rank(v.c)]}`;
+const lastLong = (seat, v) => { const nm = seatName(seat); return !v ? '' : v.t === 'stand' ? `${nm} stojí kvůli esu.` : v.t === 'draw' ? (v.n ? `${nm} bere ${nCardsAcc(v.n)}.` : `${nm} nemá co líznout.`)
+  : rank(v.c) === OBER ? `${nm} hraje ${cacc(v.c)} a mění na ${SNAME[v.suit]}.` : `${nm} hraje ${cacc(v.c)}.`; };
+
+/* ---------- Layout and rendering ---------- */
+let L = null;
+const reduced = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+// rule: the sizes come from the room that is left, so everything fits without scrolling; hand cards keep a visible
+// strip of at least 46 px (0.8 cm) and wrap into more rows when there are many
+function layout() {
+  const mid = $('#mid'), W0 = mid.clientWidth, H0 = mid.clientHeight;
+  if (!W0 || !H0) return false;
+  const W = W0 - 2 * GUT, H = H0 - 24, n = Math.max(1, G.hands[0].length), LIFT = 10, GAP = 14, STEP = 46;
+  let b = null;
+  for (let hw = 96; hw >= 40; hw -= 2) {
+    const hh = Math.round(hw * 1.4), per = Math.max(1, Math.floor((W - hw) / STEP) + 1), rows = Math.ceil(n / per);
+    const rowStep = Math.round(hh * .6), handH = hh + (rows - 1) * rowStep + LIFT;
+    let tw = Math.min(112, Math.round(hw * 1.2), Math.floor((W - 150) / 2));
+    const room = H - handH - GAP;
+    if (room < Math.round(tw * 1.4)) tw = Math.floor(room / 1.4);
+    b = { hw, hh, rows, rowStep, handH, tw, th: Math.round(tw * 1.4) };
+    if (tw >= Math.min(64, hw)) break;
+  }
+  // spare height: rows of the hand spread a little, the rest goes around the table
+  const spare = H - b.th - GAP - b.handH;
+  if (b.rows > 1 && spare > 0) b.rowStep = Math.min(b.hh + 6, b.rowStep + Math.floor(spare * .5 / (b.rows - 1)));
+  const handH = b.hh + (b.rows - 1) * b.rowStep + LIFT, extra = Math.max(0, H - b.th - GAP - handH);
+  const tableY = 12 + Math.round(extra * .35), handY = 12 + H - handH + LIFT - Math.round(extra * .1);
+  const infoW = Math.min(200, W - 2 * b.tw - 28), groupW = 2 * b.tw + 28 + infoW, x0 = GUT + Math.round((W - groupW) / 2);
+  // the hand: rows of almost equal length, each centred
+  const pos = [], base = Math.floor(n / b.rows), more = n % b.rows;
+  for (let r = 0, i = 0; r < b.rows; r++) {
+    const k = base + (r < more ? 1 : 0), step = k > 1 ? Math.min(b.hw + 6, (W - b.hw) / (k - 1)) : 0;
+    const rx = GUT + (W - (b.hw + (k - 1) * step)) / 2;
+    for (let j = 0; j < k; j++, i++) pos.push({ x: Math.round(rx + j * step), y: handY + r * b.rowStep });
+  }
+  L = { W0, H0, hw: b.hw, hh: b.hh, tw: b.tw, th: b.th, tableY, deckX: x0, pileX: x0 + b.tw + 14, infoX: x0 + 2 * b.tw + 28, infoW, pos };
+  return true;
+}
+// the pile shows its top card and the two under it, a little turned (the angle comes from the card)
+const tilt = (c, i) => i ? ((c * 37) % 13 - 6) : 0;
+function renderTable(o) {
+  const deck = $('#deck'), pile = $('#pile'), info = $('#info');
+  for (const el of [deck, pile]) { el.style.setProperty('--cw', L.tw + 'px'); el.style.setProperty('--ch', L.th + 'px'); }
+  deck.style.transform = `translate(${L.deckX}px,${L.tableY}px)`;
+  pile.style.transform = `translate(${L.pileX}px,${L.tableY}px)`;
+  const left = G.deck.length, my = playing() && G.turn === 0;
+  deck.innerHTML = left
+    ? [...Array(Math.min(3, left))].map((_, i, a) => cardHTML(0, false, '', `transform:translate(${(a.length - 1 - i) * 2}px,${(a.length - 1 - i) * 2}px)`)).join('') + `<span class="cnt">${left}</span>`
+    : `<div class="slot"></div><span class="cnt">0</span>`;
+  deck.classList.toggle('can', my && !G.ace && S.show && !legal(G, 0).length);
+  deck.setAttribute('aria-label', `Balíček, ${nCards(left)}`);
+  const shown = G.pile.slice(-3);
+  pile.innerHTML = shown.map((c, i) => cardHTML(c, true, '', `transform:rotate(${tilt(c, shown.length - 1 - i)}deg)`)).join('');
+  if (o.arrive && !reduced()) {
+    const t = pile.lastElementChild; t.style.visibility = 'hidden';
+    setTimeout(() => { t.style.visibility = ''; }, 330);
+  }
+  info.style.transform = `translate(${L.infoX}px,${L.tableY}px)`;
+  info.style.width = L.infoW + 'px'; info.style.height = L.th + 'px';
+  const t = top(G);
+  info.innerHTML = (G.status !== 'playing' ? `<div class="turn">${G.status === 'won' ? 'Vyhráváš!' : `${seatName(winnerOf(G))} vyhrává`}</div>`
+    : `<div class="turn">${G.turn === 0 ? 'Hraješ ty' : `Hraje ${seatName(G.turn)}`}</div>`)
+    + (rank(t) === OBER ? `<div class="badge">${symSVG(G.suit)}<span>Hraje se ${SNAME[G.suit]}</span></div>` : '')
+    + (G.seven ? `<div class="badge pen">Sedma: ber ${2 * G.seven}</div>` : G.ace ? '<div class="badge pen">Eso: stůj</div>' : '');
+}
+function renderOpps() {
+  const seats = stylesOf(G), box = $('#opps');
+  box.innerHTML = seats.slice(1).map((st, k) => {
+    const i = k + 1, h = G.hands[i], on = playing() && G.turn === i, win = G.status === 'lost' && winnerOf(G) === i;
+    const mood = win ? 'happy' : G.status !== 'playing' ? 'sad' : on ? 'think' : 'calm';
+    return `<div class="opp${on ? ' on' : ''}${win ? ' win' : ''}" data-seat="${i}">${O.head(G.foes[i], { mood, badge: O.traitBadge(STYLES[st].trait) })}`
+      + `<div class="frow"><div class="fan">${h.map(() => cardHTML(0, false)).join('')}</div><span class="ocnt">${nCards(h.length)}</span></div>`
+      + `<div class="ost">${on ? 'přemýšlí…' : win ? 'vyhrává!' : lastShort(G.last[i])}</div></div>`;
+  }).join('');
+  // the backs spread over the width of the box
+  for (const o of box.querySelectorAll('.opp')) {
+    const fan = o.querySelector('.fan'), cs = fan.querySelectorAll('.cd'), cw = parseFloat(getComputedStyle(fan).getPropertyValue('--cw')) || 26;
+    const step = cs.length > 1 ? Math.min(cw * .62, (fan.clientWidth - cw) / (cs.length - 1)) : 0;
+    cs.forEach((c, j) => { c.style.transform = `translateX(${Math.round(j * step)}px)`; });
+  }
+}
+function renderHand(o) {
+  const hand = $('#hand'), h = sortHand(G.hands[0]), my = playing() && G.turn === 0;
+  hand.style.setProperty('--cw', L.hw + 'px'); hand.style.setProperty('--ch', L.hh + 'px');
+  hand.innerHTML = h.map((c, i) => {
+    const p = L.pos[i], ok = my && S.show && canPlay(G, c), isNew = o.fresh && o.fresh.includes(c);
+    return cardHTML(c, true, (ok ? ' ok' : '') + (isNew ? ' new' : ''), `transform:translate(${p.x}px,${p.y - (ok ? 10 : 0)}px);z-index:${i + 1}${isNew ? `;animation-delay:${(o.fresh.indexOf(c)) * 90 + (o.deal ? 0 : 150)}ms` : ''}`);
+  }).join('');
+  $('#mid').classList.toggle('won', G.status === 'won');
+}
+const sortHand = h => [...h].sort((a, b) => suit(a) - suit(b) || rank(a) - rank(b));
+function renderTray() {
+  const my = playing() && G.turn === 0, m = $('#btnMain');
+  const [icon, label] = G.ace ? ['stand', 'Stojím'] : ['draw', G.seven ? `Líznout ${2 * G.seven}` : 'Líznout'];
+  m.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[icon]}</svg>${label}`;
+  m.classList.toggle('dim', !my);
+  $('#btnUndo').classList.toggle('dim', !G.hist.length);
+  let hint;
+  if (G.status === 'won') hint = 'Vyhráváš! Nemáš už žádnou kartu.';
+  else if (G.status === 'lost') hint = `${seatName(winnerOf(G))} už nemá žádnou kartu. Ťukni na Nová hra, nebo na Zpět.`;
+  else if (G.turn !== 0) hint = G.lastSeat > 0 ? lastLong(G.lastSeat, G.last[G.lastSeat]) : `Hraje ${seatName(G.turn)}…`;
+  else if (G.seven) hint = `Platí na tebe sedma: zahraj sedmu, nebo si lízni ${nCardsAcc(2 * G.seven)}.`;
+  else if (G.ace) hint = 'Platí na tebe eso: zahraj eso, nebo ťukni na Stojím.';
+  else if (legal(G, 0).length) hint = S.show ? 'Zahraj orámovanou kartu, nebo si lízni.' : 'Zahraj kartu stejné barvy nebo hodnoty, nebo si lízni.';
+  else hint = 'Nemáš kartu, která se hodí. Lízni si z balíčku.';
+  $('#hint').textContent = hint;
+}
+const renderScore = () => { const el = $('#score'); el.style.setProperty('--n', SER.wins.length); el.innerHTML = `<span class="lbl">Výhry</span>${tallyHTML()}`; };
+function render(o = {}) {
+  CARDS.applyLook(S);
+  renderScore();
+  renderOpps();
+  renderTray();
+  if (!layout()) return;
+  renderTable(o);
+  renderHand(Object.assign({ fresh: o.deal ? G.hands[0] : o.fresh }, o));
+}
+// a card flies from one place to another (only a picture; the state has already changed)
+function fly(from, to, html, w) {
+  if (!from || !to || reduced()) return;
+  const el = document.createElement('div'), h = Math.round(w * 1.4);
+  el.className = 'flyer'; el.innerHTML = html;
+  el.style.cssText = `--cw:${w}px;--ch:${h}px;width:${w}px;height:${h}px;transform:translate(${from.left}px,${from.top}px) scale(${from.width / w})`;
+  document.body.appendChild(el);
+  void el.offsetWidth;
+  el.style.transform = `translate(${to.left}px,${to.top}px) scale(${to.width / w})`;
+  setTimeout(() => el.remove(), 360);
+}
+const rectOf = el => el ? el.getBoundingClientRect() : null;
+const oppRect = seat => rectOf(document.querySelector(`.opp[data-seat="${seat}"] .fan`));
+
+/* ---------- Moves ---------- */
+// a move of the player: Undo snapshot first (rule: everything Undo needs is saved)
+function playerMove(mv) {
+  const before = snap(G), from = mv.t === 'play' ? rectOf(document.querySelector(`#hand .cd[data-c="${mv.c}"]`)) : null;
+  G.hist.push(before); if (G.hist.length > 300) G.hist.shift();
+  const drawn = applyMove(G, 0, mv);
+  G.status = statusOf(G);
+  buzz();
+  after(0, mv, drawn, from);
+}
+function after(seat, mv, drawn, from) {
+  save();
+  render({ arrive: mv.t === 'play', fresh: seat === 0 ? drawn : null });
+  if (mv.t === 'play') fly(from, rectOf($('#pile').lastElementChild), cardHTML(mv.c, true), L.tw);
+  else if (drawn.length) {
+    const to = seat === 0 ? rectOf($('#hand')) : oppRect(seat), d = rectOf($('#deck'));
+    if (to && d) drawn.slice(0, 3).forEach((c, i) => setTimeout(() => fly(d, seat === 0 ? new DOMRect(to.left + to.width / 2 - L.hw / 2, to.bottom - L.hh - 12, L.hw, L.hh) : new DOMRect(to.left, to.top, 26, 36), cardHTML(0, false), L.tw), i * 90));
+  }
+  if (G.reshuffled) toast('Balíček došel. Odehrané karty se zamíchaly a hraje se dál.');
+  if (G.status !== 'playing') { endGame(); return; }
+  if (G.turn !== 0) schedule();
+}
+// the opponents play one step at a time; they wait while Settings, Help or a dialog is open, and a new game or
+// Undo (a different G) stops them
+function schedule() {
+  clearTimeout(aiT);
+  const g0 = G;
+  aiT = setTimeout(function tick() {
+    if (G !== g0 || G.status !== 'playing' || G.turn === 0) return;
+    if (!nothingOpen()) { aiT = setTimeout(tick, 400); return; }
+    const seat = G.turn, mv = aiChoose(G, seat), from = mv.t === 'play' ? oppRect(seat) : null;
+    const drawn = applyMove(G, seat, mv);
+    G.status = statusOf(G);
+    after(seat, mv, drawn, from && new DOMRect(from.left, from.top, 26, 36));
+    if (G.status === 'playing' && G.turn === 0) buzz(20);
+  }, SPEEDS[S.speed]);
+}
+function endGame() {
+  if (!G.counted) {
+    G.counted = true;
+    const st = ST[G.opp]; st.played++; if (G.status === 'won') st.won++;
+    SER.wins[G.status === 'won' ? 0 : winnerOf(G)]++;
+    save(); saveSeries(); renderScore();
+  }
+  const g0 = G;
+  const line = `<p>Výhry zatím: ${SER.wins.map((n, i) => `${seatName(i)} <b>${n}</b>`).join(', ')}</p>`;
+  whenFree(g0, 1100, () => {
+    if (G.status === 'won') showModal(`<h2>Vyhráváš! 🎉</h2><p>Nemáš už žádnou kartu.</p>${line}`, [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]);
+    else {
+      const w = winnerOf(G), k = G.hands[0].length, nm = seatName(w);
+      showModal(`<h2>${nm} vyhrává</h2><p>${nm} už nemá žádnou kartu. Tobě ${k === 1 ? 'zbyla' : k <= 4 ? 'zbyly' : 'zbylo'} ${nCards(k)}.</p>${line}`,
+        [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Vrátit tah', cls: 'alt', fn: undo }, { text: 'Prohlédnout', cls: 'alt' }]);
+    }
+  });
+}
+function undo() {
+  if (!G.hist.length) { toast('Zatím není co vrátit'); return; }
+  clearTimeout(aiT);
+  // a new object: the opponents' timer and a waiting end dialog belong to the old one and stop
+  G = Object.assign({}, G, JSON.parse(G.hist.pop()), { status: 'playing' });
+  G.status = statusOf(G);
+  buzz(); save(); render();
+  if (G.status === 'playing' && G.turn !== 0) schedule();
+}
+const busyToast = () => toast(`Chvilku, hraje ${seatName(G.turn)}`);
+function whyNot(c) {
+  if (G.seven) return `Platí sedma: zahraj sedmu, nebo si lízni ${nCardsAcc(2 * G.seven)}.`;
+  if (G.ace) return 'Platí eso: zahraj eso, nebo ťukni na Stojím.';
+  return `Tahle karta se nehodí. Hraje se ${SNAME[G.suit]}${rank(top(G)) === OBER ? '' : `, nebo ${RNAME[rank(top(G))]}`}. Svršek jde vždycky.`;
+}
+function tapCard(c) {
+  if (!playing()) { toast(G.status === 'won' ? 'Hra je vyhraná. Ťukni na Nová hra.' : 'Hra skončila. Ťukni na Nová hra, nebo na Zpět.'); return; }
+  if (G.turn !== 0) { busyToast(); return; }
+  if (!canPlay(G, c)) {
+    const el = document.querySelector(`#hand .cd[data-c="${c}"]`);
+    if (el) { el.classList.remove('no'); void el.offsetWidth; el.classList.add('no'); }
+    toast(whyNot(c), 3600); return;
+  }
+  // a svršek as the last card wins at once: no suit to choose
+  if (rank(c) === OBER) { if (G.hands[0].length === 1) playerMove({ t: 'play', c, suit: suit(c) }); else pickSuit(c); return; }
+  playerMove({ t: 'play', c });
+}
+// svršek: the player chooses the suit; "Zrušit" (or Back) keeps the svršek in the hand
+function pickSuit(c) {
+  hideToast();
+  const rest = G.hands[0].filter(x => x !== c && rank(x) !== OBER), cnt = [0, 1, 2, 3].map(s => rest.filter(x => suit(x) === s).length), most = Math.max(...cnt);
+  const card = $('#modalCard');
+  card.innerHTML = `<h2>Vyber barvu</h2><p>Svrškem měníš barvu. Další hráč musí hrát vybranou barvu.</p><div class="suits">`
+    + [0, 1, 2, 3].map(s => `<button class="suitb${most && cnt[s] === most ? ' most' : ''}" data-suit="${s}">${symSVG(s)}${SNAME[s]}<small>${cnt[s] ? `máš ${nCards(cnt[s]).replace('karta', 'kartu')}` : 'nemáš žádnou'}</small></button>`).join('')
+    + '</div><button class="big alt" data-i="x">Zrušit</button>';
+  card.onclick = e => {
+    const b = e.target.closest('[data-suit],[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    if (b.dataset.suit !== undefined && playing() && G.turn === 0 && G.hands[0].includes(c)) playerMove({ t: 'play', c, suit: +b.dataset.suit });
+  };
+  $('#modal').hidden = false;
+}
+function mainAction() {
+  if (!playing()) { toast(G.status === 'won' ? 'Hra je vyhraná. Ťukni na Nová hra.' : 'Hra skončila. Ťukni na Nová hra, nebo na Zpět.'); return; }
+  if (G.turn !== 0) { busyToast(); return; }
+  if (G.ace) { playerMove({ t: 'stand' }); return; }
+  if (!drawable(G)) { toast('Není co líznout, všechny karty mají hráči v ruce. Tah přechází na dalšího.'); }
+  playerMove({ t: 'draw' });
+}
+
+/* ---------- Controls ---------- */
+$('#hand').addEventListener('click', e => { const cd = e.target.closest('.cd[data-c]'); if (cd) tapCard(+cd.dataset.c); });
+$('#deck').addEventListener('click', () => {
+  if (playing() && G.turn === 0 && G.ace) { toast('Platí eso: z balíčku se nebere. Zahraj eso, nebo ťukni na Stojím.'); return; }
+  mainAction();
+});
+$('#btnMain').addEventListener('click', mainAction);
+$('#btnUndo').addEventListener('click', undo);
+$('#opps').addEventListener('click', e => {
+  const o = e.target.closest('.opp'); if (!o) return;
+  const seat = +o.dataset.seat;
+  toast(`${seatName(seat)} ${STYLES[stylesOf(G)[seat]].trait}. Vidíš jen počet karet, ne jaké to jsou.`);
+});
+// rule: a new game in the middle of one asks first
+$('#btnNew').addEventListener('click', () => {
+  if (G.status === 'playing' && !isFresh()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+
+/* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
+const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+const tile = (act, on, inner, name) => `<button class="tile" data-act="${act}" aria-pressed="${on}">${inner}${name}</button>`;
+// sample cards: eso srdce, zelený svršek, kulová sedma (face colour and back follow the settings)
+const SAMPLE = [7, 13, 16];
+const minis = (cards, withBack) => `<span class="mini">${cards.map(c => cardHTML(c, true)).join('')}${withBack ? cardHTML(0, false) : ''}</span>`;
+const credit = (what, it) => `${what}: ${it.author}, ${it.license}, <a href="${it.source}" target="_blank" rel="noopener">zdroj</a>`;
+const OPP_TXT = {
+  both: ['Dva soupeři', 'Hrajete ve třech. Jeden útočí, druhý šetří karty.'],
+  attack: ['Jeden soupeř, který útočí', 'Sedmy a esa hraje hned, jak to jde, a rychle se zbavuje karet.'],
+  save: ['Jeden soupeř, který šetří karty', 'Sedmy, esa a svršky si nechává na později a vytáhne je, když jde do tuhého.'],
+};
+function renderSettings() {
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Prší<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Hra</h3>
+      <div class="field"><div class="flabel">Soupeři</div>
+        ${Object.keys(OPPS).map(k => opt('opp:' + k, S.opp === k, OPP_TXT[k][0], OPP_TXT[k][1])).join('')}
+        <div class="fnote">Dokud hru nezavřeš, hraješ pořád proti stejným soupeřům a nahoře se počítá, kdo kolikrát vyhrál. Po novém otevření hry přijdou noví soupeři a počítá se od nuly.</div>
+        ${S.opp !== G.opp && !isFresh() ? `<div class="notice">Po návratu do hry začne <b>nová hra</b> s novými soupeři a výhry se začnou počítat od nuly.${G.status === 'playing' ? ' Rozehraná hra se ztratí.' : ''}</div>` : ''}
+      </div>
+      <div class="field"><div class="flabel">Rychlost soupeřů</div>
+        ${opt('speed:slow', S.speed === 'slow', 'Pomalu', 'Na každý tah soupeře je dost času se podívat.')}
+        ${opt('speed:normal', S.speed === 'normal', 'Středně', '')}
+        ${opt('speed:fast', S.speed === 'fast', 'Rychle', '')}
+        <div class="fnote">Na tebe se nikdy nespěchá, hraješ, až chceš.</div>
+      </div>
+      ${toggleRow('show', 'Ukazovat, co můžeš zahrát', 'Karty, které jdou zahrát, jsou povytažené a orámované.')}
+    </section>
+    <section class="card"><h3>Stůl</h3>
+      <div class="tiles">${TABLES.map(t => tile('table:' + t.id, S.table === t.id, `<span class="swatch" data-table="${t.id}">${minis(SAMPLE.slice(0, 2), true)}</span>`, t.name)).join('')}</div>
+    </section>
+    <section class="card"><h3>Rub karet</h3>
+      <div class="tiles">${BACKS.map(b => tile('back:' + b.id, S.back === b.id, `<span class="swatch" data-back="${b.id}"><span class="mini">${cardHTML(0, false)}${cardHTML(0, false)}</span></span>`, b.name)).join('')}</div>
+      ${CASTLE || COAT ? `<div class="fnote">${[CASTLE && credit('Fotka zámku Náchod', CASTLE), COAT && credit('Erb Náchoda', COAT)].filter(Boolean).join('<br>')}<br>Obrázky jsou z Wikimedia Commons.</div>` : ''}
+    </section>
+    <section class="card"><h3>Barva líce</h3>
+      <div class="tiles">${FACES.map(f => tile('face:' + f.id, S.face === f.id, `<span class="swatch" data-face="${f.id}">${minis(SAMPLE)}</span>`, f.name)).join('')}</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <section class="card"><h3>Statistika</h3>
+      <p class="stats">${Object.keys(OPPS).map(k => `${OPP_TXT[k][0]}: vyhráno <b>${ST[k].won}</b> z ${nGames(ST[k].played)}`).join('<br>')}</p>
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (['opp', 'speed', 'table', 'back', 'face'].includes(act)) S[act] = arg;
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S); buzz(8); CARDS.applyLook(S); save();
+  const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
+});
+function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+// other opponents need a new game: it starts after returning, and says so when a game was played (rule)
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  if (S.opp !== G.opp) newGame(!isFresh() ? 'Začala nová hra s novými soupeři, výhry se počítají od nuly' : '');
+  else render();
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
+function renderHelp() {
+  const ico = id => `<span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[id]}</svg></span>`;
+  const vals = [0, 1, 2, 3, 4, 5, 6, 7].map(r => `<div class="val"><span class="mini">${cardHTML(r + 16, true)}</span>${RNAME[r]}</div>`).join('');
+  const suits = [0, 1, 2, 3].map(s => `<div class="val"><span class="mini">${cardHTML(s * 8 + 7, true)}</span>${SNAME[s]}</div>`).join('');
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Prší<small>Jak hrát</small></h2></div>
+    <section class="card help">
+      <ol>
+        <li><b>Cíl:</b> zbavit se všech karet dřív než soupeři. Kdo první nemá žádnou kartu, vyhrává.</li>
+        <li>Každý dostane 4 karty. Ty začínáš. Na vrchní kartu uprostřed zahraj kartu <b>stejné barvy</b>, nebo <b>stejné hodnoty</b> (třeba osmu na osmu). Stačí na ni ťuknout.${S.show ? ' Karty, které jdou zahrát, jsou povytažené a orámované.' : ''}</li>
+        <li>Když nemáš co zahrát, <b>lízni si</b> jednu kartu: tlačítko Líznout, nebo ťukni na balíček. Tím tah končí.</li>
+        <li><b>Sedma:</b> další hráč si lízne 2 karty. Může ale zahrát svou sedmu a pak bere ten po něm 4 karty, potom 6 a 8.</li>
+        <li><b>Eso:</b> další hráč stojí, tedy jedno kolo nehraje (tlačítko Stojím). Může ale zahrát svoje eso a stát musí ten po něm.</li>
+        <li><b>Svršek</b> jde zahrát skoro na cokoli, jen ne na sedmu nebo eso, které právě platí. Kdo ho zahraje, vybere barvu a v té se hraje dál.</li>
+        <li>Když balíček dojde, odehrané karty kromě vrchní se zamíchají a hraje se dál.</li>
+        <li>Na čas se nehraje. Soupeři hrají jeden po druhém, rychlost jde změnit v nastavení ⚙.</li>
+      </ol>
+    </section>
+    <section class="card help"><h3>Soupeři</h3>
+      <p>Teď hraješ proti: ${G.foes.slice(1).map((f, i) => `<b>${f.name}</b> (${STYLES[stylesOf(G)[i + 1]].trait})`).join(' a ')}.</p>
+      <p style="margin-top:10px"><b>Kdo útočí,</b> hraje sedmy a esa hned, jak to jde, a rychle se zbavuje karet.</p>
+      <p style="margin-top:10px"><b>Kdo šetří karty,</b> hraje nejdřív obyčejné karty. Sedmy a esa si nechává na obranu a svrška na konec.</p>
+      <p style="margin-top:10px"><b>Kdo kolikrát vyhrál,</b> je vidět nahoře pod lištou. Dokud hru nezavřeš, hraješ pořád proti stejným soupeřům; po novém otevření hry přijdou noví a počítá se od nuly.</p>
+      <p class="fnote">Jestli hraješ proti jednomu, nebo dvěma, vybereš v nastavení. Jak kdo hraje, je napsané u jména; ťuknutím na soupeře si to připomeneš.</p>
+    </section>
+    <section class="card help"><h3>Karty</h3>
+      <p>Mariášové karty, 32 kusů. Sedma až desítka mají v rohu římské číslo, spodka, svrška, krále a eso poznáš podle obrázku:</p>
+      <div class="demo-felt"><div class="vals">${vals}</div></div>
+      <p>Barvy jsou čtyři:</p>
+      <div class="demo-felt"><div class="vals">${suits}</div></div>
+    </section>
+    <section class="card help"><h3>Tlačítka</h3>
+      <div class="legend">${ico('undo')}<span><b>Zpět</b> vrátí tvůj poslední tah i tahy soupeřů po něm. Dá se ťukat opakovaně.</span></div>
+      <div class="legend">${ico('draw')}<span><b>Líznout</b> vezme kartu z balíčku (při sedmě všechny, které platí).</span></div>
+      <div class="legend">${ico('stand')}<span><b>Stojím</b> se objeví, když na tebe platí eso a nechceš nebo nemůžeš zahrát svoje eso.</span></div>
+    </section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Zrušit" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// rule: ask for persistent storage so the browser does not delete the saved game by itself
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+// rule: only the known settings are taken over from the save
+const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+ST = validStats(saved && saved.stats);
+CARDS.applyLook(S);
+if (saved && saved.game && typeof saved.game === 'object' && validGame(saved.game)) {
+  G = saved.game;
+  SER = loadSeries(G);
+  render();
+  if (G.status === 'playing' && G.turn !== 0) schedule(); // reloaded during the opponents' turn: they go on
+} else newGame();
+
+const relayout = () => { if (G) render(); };
+window.addEventListener('resize', relayout);
+if (window.visualViewport) visualViewport.addEventListener('resize', relayout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// contract: opened from the launcher (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing
+window.Prsi = { deal, legal, canPlay, applyMove, aiChoose, statusOf, cname, cacc, render: () => render(), undo, tapCard,
+  get state() { return { S, G, ST, SER, L }; } };
+})();
+</script>
+</body>
+</html>

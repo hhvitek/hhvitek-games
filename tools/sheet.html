@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Screenshot sheet</title>
+<!-- Used by tools/shots.js: puts the screenshots from .playwright-mcp/ side by side.
+     ?id=<game>      the five pictures of one game (start, after play, settings, help, short screen)
+     ?all=<a,b,c>    the start picture of several games -->
+<style>
+body{margin:0;background:#8a8a8a;font:15px system-ui,sans-serif;color:#fff}
+.row{display:flex;flex-wrap:wrap;gap:10px;padding:10px;align-items:flex-start}
+figure{margin:0;text-align:center}
+img{display:block;width:262px;border:1px solid #333;background:#fff}
+</style></head><body><div class="row" id="row"></div>
+<script>
+const q = new URLSearchParams(location.search), v = Date.now();
+const fig = (src, cap) => `<figure><img src="../.playwright-mcp/${src}.png?${v}" alt=""><figcaption>${cap}</figcaption></figure>`;
+document.getElementById('row').innerHTML = q.get('id')
+  ? ['1start', '2play', '3settings', '4help', '5short'].map(n => fig(`${q.get('id')}-${n}`, n)).join('')
+  : (q.get('all') || '').split(',').filter(Boolean).map(id => fig(`${id}-1start`, id)).join('');
+</script></body></html>

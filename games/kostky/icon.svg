@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#2a7346"/>
+  <rect x="24" y="24" width="464" height="464" rx="76" fill="none" stroke="#c8955a" stroke-width="22"/>
+  <!-- a die showing five (back) and a die showing one (front), as the scoring dice of the game -->
+  <g transform="rotate(-14 196 210)">
+    <rect x="86" y="100" width="220" height="220" rx="40" fill="#fbfaf6" stroke="#1c1c1c" stroke-opacity=".25" stroke-width="4"/>
+    <circle cx="140" cy="154" r="22" fill="#1c1c1c"/><circle cx="252" cy="154" r="22" fill="#1c1c1c"/>
+    <circle cx="196" cy="210" r="22" fill="#1c1c1c"/>
+    <circle cx="140" cy="266" r="22" fill="#1c1c1c"/><circle cx="252" cy="266" r="22" fill="#1c1c1c"/>
+  </g>
+  <g transform="rotate(12 330 330)">
+    <rect x="220" y="220" width="220" height="220" rx="40" fill="#fbfaf6" stroke="#1c1c1c" stroke-opacity=".25" stroke-width="4"/>
+    <circle cx="330" cy="330" r="30" fill="#c8402f"/>
+  </g>
+</svg>
