@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="cs" data-theme="maple">
+<html lang="cs" data-theme="classic">
 <head>
 <meta charset="utf-8">
 <script>
@@ -39,7 +39,7 @@
 </script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#c9a26b">
+<meta name="theme-color" content="#f2f2ef">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Logik">
@@ -71,8 +71,35 @@
 [data-theme="paper"] .pill,[data-theme="paper"] .round,[data-theme="paper"] .undo{background:#fff;box-shadow:inset 0 0 0 2px #e6d8c6}
 [data-theme="paper"] .tray{border-top-color:#e6d8c6;box-shadow:none}
 [data-theme="paper"] .row.active{background:rgba(232,163,23,.16)}
-[data-theme="paper"] .secret-box{background:rgba(122,69,32,.14);box-shadow:inset 0 2px 6px rgba(60,30,10,.35)}
-[data-theme="paper"] .lid{background:linear-gradient(180deg,rgba(255,255,255,.4) 0,rgba(255,255,255,0) 30%,rgba(90,50,20,.1) 100%),#e7d9c6;box-shadow:inset 0 0 0 2px #d8c6ad,0 3px 8px rgba(60,30,10,.25)}
+[data-theme="paper"] .secret .holes{background:rgba(122,69,32,.14);box-shadow:inset 0 2px 6px rgba(60,30,10,.35)}
+/* Klasika (the default): a soft natural light grey like the old Logik on a computer screen, light holes with a thin outline
+   (user's decision; the old photo's blue cast was the camera) */
+[data-theme="classic"]{--w1:#f2f2ef;--gd:0;--gl:0;--page:#f2f2ef;--ink:#1f1f1d;--num:#5a5a56;--accent:#8b8b84;--btn:#3a3a38;--btn-ink:#fff;--btn-sh:#1f1f1d;--hole-in:#fafaf8;--hole-out:#fafaf8;--bar:rgba(0,0,0,.035);--undo-bg:#fafaf8;--fut:1} /* a soft light grey, every row looks the same (none fades or darkens) */
+[data-theme="classic"] .topbar{border-bottom-color:#e0e0dc}
+[data-theme="classic"] .topbar h1{color:#1f1f1d;text-shadow:none}
+[data-theme="classic"] .pill,[data-theme="classic"] .round,[data-theme="classic"] .undo{background:#fafaf8;box-shadow:inset 0 0 0 1.5px #d2d2cd}
+[data-theme="classic"] .tray{border-top-color:#e0e0dc;box-shadow:none}
+[data-theme="classic"] .row.active{background:rgba(0,0,0,.045);box-shadow:inset 0 0 0 2px #a9a9a2} /* the row to play: a quiet grey frame, not a striking colour */
+[data-theme="classic"] .row:not(:last-child)::after{background:#e4e4e0}
+/* flat circles: a thin outline like the old game, hardly any shadow */
+[data-theme="classic"] .slot{box-shadow:0 0 0 1px #6e6e69}
+[data-theme="classic"] .slot .peg{width:100%;height:100%} /* the colour fills the hole up to its outline, no light ring between them */
+/* the feedback: an empty place is a small grey dot, the white peg is clearly white with a dark outline */
+[data-theme="classic"] .fbh{background:#d6d6d0;box-shadow:inset 0 1px 2px rgba(0,0,0,.2);transform:scale(.7)}
+[data-theme="classic"] .fbh.w{background:radial-gradient(circle at 35% 30%, #fff 0 40%, #d9d9d9 100%);box-shadow:0 0 0 1.5px #2b2b2b;transform:none}
+[data-theme="classic"] .fbh.b{background:#1a1a1a;box-shadow:0 0 0 1.5px #1a1a1a;transform:none}
+[data-theme="classic"] .peg{box-shadow:0 0 0 1.5px var(--rim,transparent),0 1px 2px rgba(0,0,0,.2); /* a softer edge */
+  background:radial-gradient(circle at 34% 28%, rgba(255,255,255,.75) 0, rgba(255,255,255,.25) 14%, transparent 32%),
+             radial-gradient(circle at 50% 55%, var(--c) 0 65%, color-mix(in srgb, var(--c) 82%, #000) 100%)}
+[data-theme="classic"] .cap{box-shadow:0 1px 2px rgba(0,0,0,.2)}
+[data-theme="classic"] .secret .holes{background:#e6e6e2;box-shadow:none}
+[data-theme="classic"] .big{box-shadow:0 2px 0 var(--btn-sh)}
+:root[data-theme="classic"]{--cap:#33363d;--cap-ink:#fff}
+/* the covers of the secret code: dark, with a light question mark, on the light themes too */
+:root[data-theme="paper"]{--cap:#3a2414;--cap-ink:#f4ebdf}
+:root[data-theme="maple"]{--cap:#3b2208;--cap-ink:#fff6e6}
+:root[data-theme="marble"]{--cap:#2b2925;--cap-ink:#fff}
+:root[data-theme="light-wood"]{--cap:#2e1a0a;--cap-ink:#fff3df}
 /* Night */
 [data-theme="night"]{--w1:#1e2126;--gd:0;--gl:.015;--page:#0b0c0e;--ink:#e6e8eb;--num:#9aa1aa;--accent:#6fb7ff;--btn:#6fb7ff;--btn-ink:#0a1a2a;--btn-sh:#2e6aa3;--hole-in:#0b0c0e;--hole-out:#15181c;--bar:rgba(0,0,0,.35)}
 
@@ -82,7 +109,7 @@
   var(--w1);}
 
 /* ---------- Base ---------- */
-:root{--hole:48px;--pal:60px;--palc:6;--fbc:2;--gut:12px} /* --gut: one side margin; top-bar buttons, the code box, the board rows and the bottom buttons line up */
+:root{--hole:48px;--rowh:55px;--pal:60px;--palc:6;--fbc:2;--gut:12px;--side:58px;--cap:#0c0c0e;--cap-ink:var(--accent)} /* --gut: one side margin; top-bar buttons, the code box, the board rows and the bottom buttons line up */
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overscroll-behavior:none}
 html{background:var(--page)}
@@ -112,42 +139,32 @@ a.round{text-decoration:none}
   .pill{padding:0 8px}
 }
 
-/* Secret code */
-/* Secret code: full-row-width compartment covered by a lid */
-.secret{flex:none;padding:12px var(--gut) 4px} /* the code box is the top of the board: 12 px below the top bar */
-.secret-box{position:relative;border-radius:14px;padding:3px 0;background:rgba(0,0,0,.3);box-shadow:inset 0 3px 8px rgba(0,0,0,.6),0 1px 0 rgba(255,255,255,.08);overflow:hidden}
-.secret-row::after{display:none}
-.secret-row .fb{visibility:hidden}
-.lid{position:absolute;inset:0;border-radius:14px;padding:3px 0;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.16) 0, rgba(255,255,255,0) 28%, rgba(0,0,0,.28) 100%),
-    repeating-linear-gradient(0deg, rgba(0,0,0,var(--gd)) 0 1px, transparent 1px 5px, rgba(255,255,255,var(--gl)) 5px 6px, transparent 6px 11px),
-    repeating-linear-gradient(1.2deg, transparent 0 14px, rgba(0,0,0,calc(var(--gd)*.8)) 14px 15px, transparent 15px 33px),
-    var(--w1);
-  box-shadow:inset 0 0 0 2px rgba(0,0,0,.35),inset 0 2px 0 rgba(255,255,255,.15),0 4px 10px rgba(0,0,0,.55);
-  transition:transform .8s cubic-bezier(.5,0,.3,1)}
-.lid-row::after{display:none}
-.lid-row .fb{visibility:hidden}
-/* raised "bumps" over each hole – translucent shading lets the lid's wood show through, so it fits every theme */
-.bump{flex:none;width:var(--hole);height:var(--hole);border-radius:50%;
-  background:radial-gradient(circle at 38% 30%, rgba(255,255,255,.26) 0, rgba(255,255,255,.07) 32%, transparent 56%),
-             radial-gradient(circle at 50% 50%, transparent 55%, rgba(0,0,0,.3) 100%);
-  box-shadow:0 3px 4px rgba(0,0,0,.45),0 -1px 0 rgba(255,255,255,.1)}
-.revealed .lid{transform:translateY(-110%)}
+/* Secret code: a row of dark covers with a question mark (darker than the holes), opened when the game ends */
+.secret{flex:none;margin-bottom:6px;cursor:pointer}
+/* the box hugs the covers only, right above the columns of holes (the padding is taken back by the margin) */
+.secret .holes{--sp:calc(var(--hole)*.1);padding:var(--sp);margin:calc(var(--sp) * -1);border-radius:calc(var(--hole)*.3);background:rgba(0,0,0,.3);box-shadow:inset 0 3px 8px rgba(0,0,0,.6),0 1px 0 rgba(255,255,255,.08)}
+.secret .row::after{display:none}
+.secret .fb{visibility:hidden}
+.cap{flex:none;width:var(--hole);height:var(--hole);border-radius:50%;display:grid;place-items:center;color:var(--cap-ink);
+  background:radial-gradient(circle at 35% 30%, color-mix(in srgb,var(--cap) 72%,#fff) 0, var(--cap) 42%, color-mix(in srgb,var(--cap) 70%,#000) 100%);
+  box-shadow:0 0 0 2px color-mix(in srgb,var(--cap-ink) 55%,transparent),0 3px 5px rgba(0,0,0,.55)}
+.cap b{font-size:calc(var(--hole)*.52);font-weight:900;line-height:1}
+.secret.open .slot .peg{animation:flip .45s ease-out both;animation-delay:calc(var(--k) * .18s)}
+@keyframes flip{from{transform:rotateY(90deg) scale(.7)}}
 
 /* Board */
-.board{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;padding:4px var(--gut) 12px;scrollbar-width:none} /* 12 px above the tray; layout() sizes the rows so they fit */
+.play{flex:1;min-height:0;display:flex;gap:10px;padding:12px var(--gut)} /* 12 px below the top bar and above the tray */
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.board{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;scrollbar-width:none} /* layout() sizes the rows so they fit */
 .board::-webkit-scrollbar{display:none}
 .rows{margin:auto 0;display:flex;flex-direction:column}
-.row{position:relative;display:flex;align-items:center;justify-content:space-between;gap:calc(var(--hole)*.18);height:calc(var(--hole)*1.14);padding:0 8px;border-radius:14px}
+.row{position:relative;flex:none;display:flex;align-items:center;justify-content:flex-start;gap:calc(var(--hole)*.3);height:var(--rowh);padding:0 8px 0 var(--rowpad,8px);border-radius:14px} /* the black/white feedback on the left, no row numbers */
 .row:not(:last-child)::after{content:"";position:absolute;left:6%;right:6%;bottom:-1px;height:2px;background:linear-gradient(rgba(0,0,0,.35),rgba(255,255,255,.07));pointer-events:none}
-.row.active{background:rgba(255,255,255,.13);box-shadow:0 0 0 3px var(--accent)}
+.row.active{background:rgba(255,255,255,.13);box-shadow:inset 0 0 0 3px var(--accent)} /* inset: the board clips anything outside its sides */
 .row.active::after,.row:has(+ .row.active)::after{display:none}
 .row.future{opacity:var(--fut,.55)}
 [data-theme="light-wood"]{--fut:.8}
-.num{flex:none;width:calc(var(--hole)*.8);text-align:center;font-weight:800;font-size:calc(var(--hole)*.42);color:var(--num)}
-.row.active .num{color:var(--accent)}
-.holes{display:flex;gap:calc(var(--hole)*.22);justify-content:center}
+.holes{display:flex;gap:calc(var(--hole)*.2);justify-content:center}
 .slot{flex:none;position:relative;width:var(--hole);height:var(--hole);border-radius:50%;display:grid;place-items:center;font-size:calc(var(--hole)*.42);
   background:radial-gradient(circle at 50% 42%, var(--hole-in) 0 50%, var(--hole-out) 78%);
   box-shadow:inset 0 3px 6px rgba(0,0,0,.65), 0 1px 0 rgba(255,255,255,.14)}
@@ -166,14 +183,16 @@ a.round{text-decoration:none}
 .peg{display:grid;place-items:center;border-radius:50%;
   background:radial-gradient(circle at 34% 28%, rgba(255,255,255,.9) 0, rgba(255,255,255,.35) 14%, transparent 34%),
              radial-gradient(circle at 50% 55%, var(--c) 0 50%, color-mix(in srgb, var(--c) 55%, #000) 100%);
-  box-shadow:0 3px 5px rgba(0,0,0,.55), inset 0 -2px 4px rgba(0,0,0,.25)}
+  box-shadow:0 0 0 1.5px var(--rim,transparent), 0 3px 5px rgba(0,0,0,.55), inset 0 -2px 4px rgba(0,0,0,.25)} /* --rim: the white and the black peg stay visible on every theme */
 .peg b{display:none;color:var(--ct);font-weight:900;line-height:1;text-shadow:0 0 3px rgba(255,255,255,.25)}
 .show-nums .peg b{display:block}
 
-/* Bottom tray */
+/* Bottom tray: the hint and the colours, spread from the left margin to the right one */
 .tray{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px var(--gut) 12px;background:var(--bar);box-shadow:inset 0 4px 8px rgba(0,0,0,.35);border-top:1px solid rgba(255,255,255,.07)}
 .hint{text-align:center;font-size:19px;font-weight:600;min-height:25px;line-height:25px;color:var(--ink)}
-.palette{display:grid;grid-template-columns:repeat(var(--palc),var(--pal));justify-content:center;gap:10px 12px}
+.palette{display:grid;grid-template-columns:repeat(var(--palc),var(--pal));justify-content:space-between;gap:10px}
+.palette.aligned{display:block;position:relative;height:var(--pal)} /* alignPalette(): each colour under its column of holes */
+.palette.aligned .pbtn{position:absolute;top:0}
 .pbtn{width:var(--pal);height:var(--pal);border-radius:50%;padding:0;font-size:calc(var(--pal)*.42);transition:transform .08s}
 .pbtn .peg{width:100%;height:100%}
 .pbtn:active{transform:scale(.92)}
@@ -181,17 +200,24 @@ a.round{text-decoration:none}
 .big{display:block;width:100%;height:64px;border-radius:18px;font-size:24px;font-weight:800;background:var(--btn);color:var(--btn-ink);box-shadow:0 4px 0 var(--btn-sh);transition:transform .06s, box-shadow .06s, opacity .2s}
 .big:active{transform:translateY(3px);box-shadow:0 1px 0 var(--btn-sh)}
 .big.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
-.actions{display:flex;gap:10px}
-.actions .big{flex:1 1 0;width:auto;min-width:0;font-size:min(24px,6vw)}
-.act-left{flex:1 1 0;min-width:0;display:flex;gap:8px}
-.undo{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:16px;font-size:21px;font-weight:800;color:var(--ink);background:var(--undo-bg,rgba(0,0,0,.32));box-shadow:inset 0 2px 5px rgba(0,0,0,.35),inset 0 0 0 2px rgba(255,255,255,.1);transition:opacity .2s,transform .06s}
-.undo svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.undo{display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:16px;font-size:21px;font-weight:800;color:var(--ink);background:var(--undo-bg,rgba(0,0,0,.32));box-shadow:inset 0 2px 5px rgba(0,0,0,.35),inset 0 0 0 2px rgba(255,255,255,.1);transition:opacity .2s,transform .06s}
 .undo:active{transform:scale(.98)}
-/* Zpět and Vzdát se share the left half: icon above the label, like the card games' buttons */
-.act-left .undo{flex-direction:column;gap:2px;padding:0 2px;font-size:18px;line-height:1.1;white-space:nowrap}
-.act-left .undo svg{width:24px;height:24px}
-.undo.giveup svg{fill:currentColor;stroke:none}
 .undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px}
+/* Right column: Vzdát se at the secret code, Zpět and Zkontrolovat at the bottom; pictures only (user's decision) */
+.side{flex:none;width:var(--side);display:flex;flex-direction:column;gap:10px}
+.side .undo{flex:none;width:100%;height:58px;padding:0}
+#btnGiveUp{height:max(46px, min(var(--rowh), 64px))} /* as tall as the secret row: centred next to it */
+.side .big{flex:none;height:84px;display:grid;place-items:center;padding:0}
+.side svg{width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.side .big svg{width:42px;height:42px;stroke-width:3}
+.side .giveup svg{fill:currentColor;stroke:none}
+.side-mid{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
+.side.grid{position:relative} /* alignSide(): each button sits on its rows of the board */
+.side.grid > button,.side.grid > .side-mid{position:absolute;left:0;width:100%}
+.side-mid .palette.aligned{width:100%;height:100%}
+/* "Barvy ve sloupci vpravo": the colours in the right column, the tray keeps only the hint */
+.pal-right .side-mid .palette{justify-content:center;align-content:center;gap:8px 6px}
+.pal-right .tray{gap:0}
 
 #ghost{position:fixed;z-index:50;pointer-events:none;transform:translate(-50%,-50%);width:calc(var(--hole)*1.15);height:calc(var(--hole)*1.15);font-size:calc(var(--hole)*.45);filter:drop-shadow(0 6px 6px rgba(0,0,0,.5))}
 #ghost .peg{width:100%;height:100%}
@@ -240,6 +266,9 @@ a.round{text-decoration:none}
 .help li{margin:10px 0}
 .legend{display:flex;align-items:center;gap:14px;margin:12px 0;font-size:20px;line-height:1.3}
 .legend .fbh{flex:none;width:30px;height:30px}
+.hicon{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:10px;background:var(--psw);vertical-align:middle}
+.hicon svg{width:24px;height:24px;fill:none;stroke:var(--pink);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.hicon svg.fill{fill:var(--pink);stroke:none}
 
 .modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
 .mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5);animation:pop .25s ease-out}
@@ -255,11 +284,12 @@ a.round{text-decoration:none}
   .topbar{height:52px}
   .pill{height:42px}.round{width:42px;height:42px}
   .topbar h1{font-size:25px}
-  .secret{padding:12px var(--gut) 2px}
   .tray{gap:6px;padding:6px var(--gut) 10px}
   .hint{font-size:18px}
   .big{height:58px;font-size:23px}
-  .undo{height:58px}
+  .undo,.side .undo{height:52px}
+  #btnGiveUp{height:max(46px, var(--rowh))}
+  .side .big{height:72px}
 }
 #toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 66px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--w1));color:var(--w1);font-size:19px;font-weight:600;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
 #toast.hide{opacity:0}
@@ -290,21 +320,23 @@ a.round{text-decoration:none}
       <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
-  <section class="secret" id="secret"><div class="secret-box" id="secretBox">
-    <div class="row secret-row"><div class="num"></div><div class="holes" id="secretHoles"></div><div class="fb" id="secretFb"></div></div>
-    <div class="lid" aria-label="Schovaný tajný kód"><div class="row lid-row"><div class="num"></div><div class="holes" id="lidBumps"></div><div class="fb" id="lidFb"></div></div></div>
-  </div></section>
-  <main class="board" id="board"><div class="rows" id="rows"></div></main>
+  <div class="play" id="play">
+    <div class="main">
+      <section class="secret" id="secret" role="button" aria-label="Schovaný tajný kód – ťuknutí ukáže kód a hra skončí">
+        <div class="row secret-row"><div class="fb" id="secretFb"></div><div class="holes" id="secretHoles"></div></div>
+      </section>
+      <main class="board" id="board"><div class="rows" id="rows"></div></main>
+    </div>
+    <aside class="side" id="side">
+      <button id="btnGiveUp" class="undo giveup" aria-label="Vzdát se a ukázat tajný kód"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2.5h2V22H5z"/><path d="M8 3.5h11.5l-3 4.75 3 4.75H8z"/></svg></button>
+      <div class="side-mid" id="sideMid"></div>
+      <button id="btnUndo" class="undo" aria-label="Zpět"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+      <button id="btnCheck" class="big" aria-label="Zkontrolovat"></button>
+    </aside>
+  </div>
   <footer class="tray" id="tray">
     <div class="hint" id="hint"></div>
     <div class="palette" id="palette"></div>
-    <div class="actions">
-    <div class="act-left">
-    <button id="btnGiveUp" class="undo giveup" aria-label="Vzdát se a ukázat tajný kód"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2.5h2V22H5z"/><path d="M8 3.5h11.5l-3 4.75 3 4.75H8z"/></svg>Vzdát se</button>
-    <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
-    </div>
-    <button id="btnCheck" class="big">Zkontrolovat</button>
-    </div>
   </footer>
 </div>
 
@@ -352,17 +384,24 @@ const $ = s => document.querySelector(s);
 const root = document.documentElement;
 
 /* ---------- Constants ---------- */
+// the first six in the order of the old Logik the player knows (user's decision); rim: an outline for the white and the black
 const COLORS = [
-  { name: 'červená',   c: '#e0302a', t: '#fff' },
-  { name: 'žlutá',     c: '#ffd31a', t: '#3a2a00' },
-  { name: 'zelená',    c: '#2fa84f', t: '#fff' },
-  { name: 'modrá',     c: '#1f5fd6', t: '#fff' },
-  { name: 'oranžová',  c: '#ff8a1c', t: '#3a1a00' },
-  { name: 'fialová',   c: '#8e3bc4', t: '#fff' },
-  { name: 'tyrkysová', c: '#22c3d6', t: '#003a40' },
-  { name: 'růžová',    c: '#ff6fb1', t: '#4a0026' },
+  { name: 'červená',  c: '#e0302a', t: '#fff' },
+  { name: 'bílá',     c: '#f2f2f0', t: '#2b2b2b', rim: 'rgba(0,0,0,.45)' },
+  { name: 'zelená',   c: '#2fa84f', t: '#fff' },
+  { name: 'černá',    c: '#262c3a', t: '#fff', rim: 'rgba(255,255,255,.55)' },
+  { name: 'modrá',    c: '#3d8ef0', t: '#062246' },
+  { name: 'žlutá',    c: '#ffd31a', t: '#3a2a00' },
+  { name: 'oranžová', c: '#ff8a1c', t: '#3a1a00' },
+  { name: 'fialová',  c: '#8e3bc4', t: '#fff' },
 ];
+// the pictures of the right-column buttons (also shown in the help)
+const ICON_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"/></svg>';
+const ICON_NEW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 3.5v4.5H15"/></svg>';
+const ICON_UNDO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
+const ICON_FLAG = '<svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M5 2.5h2V22H5z"/><path d="M8 3.5h11.5l-3 4.75 3 4.75H8z"/></svg>';
 const THEMES = [
+  { id: 'classic',    name: 'Klasika', meta: '#f2f2ef' }, // the default: the look of the old Logik
   // wood
   { id: 'dark-wood',  name: 'Tmavé dřevo', meta: '#2f1a0c' },
   { id: 'walnut',     name: 'Ořech', meta: '#4a2e1a' },
@@ -391,7 +430,9 @@ const MODES = [
 const LIMITS = { colors: [4, 8], pegs: [4, 6], attempts: [6, 12] };
 // maxRepeat: 1 = no colour twice in the code, 0 = unlimited
 // drag is the default and Ovládání comes first in settings (user's decision, see CLAUDE.md)
-const DEFAULTS = { colors: 6, pegs: 4, maxRepeat: 1, attempts: 10, mode: 'drag', theme: 'maple', nums: false, vibrate: true };
+// palRight: the colours in the right column instead of the bottom tray
+// look: 2 = the save already knows Klasika is the default (older saves with an old default, Tmavé dřevo or Javor, switch once)
+const DEFAULTS = { colors: 6, pegs: 4, maxRepeat: 1, attempts: 10, mode: 'drag', theme: 'classic', nums: false, vibrate: true, palRight: false, look: 2 };
 // Saved state under the launcher's games.<id>.* prefix; OLD_KEY is the name used before (read once, then removed)
 const KEY = 'games.logik.state', OLD_KEY = 'logik.v1';
 
@@ -434,7 +475,7 @@ function normalize(s) {
   s.maxRepeat = Math.max(0, +s.maxRepeat || 0);
   if (!MODES.some(m => m.id === s.mode)) s.mode = DEFAULTS.mode;
   if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
-  s.nums = !!s.nums; s.vibrate = !!s.vibrate;
+  s.nums = !!s.nums; s.vibrate = !!s.vibrate; s.palRight = !!s.palRight; s.look = 2;
   let adjusted = false;
   if (s.maxRepeat >= s.pegs) s.maxRepeat = 0;
   const m = minRepeat(s.colors, s.pegs);
@@ -446,7 +487,7 @@ const sameCodeRules = (a, b) => a.colors === b.colors && a.pegs === b.pegs && a.
 const sameRules = (a, b) => a.colors === b.colors && a.pegs === b.pegs && a.maxRepeat === b.maxRepeat && a.attempts === b.attempts;
 
 /* ---------- State and saving ---------- */
-let S, G, sel = null, drag = null, scrollToActive = true;
+let S, G, sel = null, drag = null, scrollToActive = true, opened = null, relayout = false; // opened: the ended game whose code already turned over
 
 function load() {
   try {
@@ -498,7 +539,7 @@ function newGame() {
 /* ---------- Helpers ---------- */
 function pegHTML(c) {
   const col = COLORS[c];
-  return `<span class="peg" style="--c:${col.c};--ct:${col.t}" aria-label="${col.name}"><b>${c + 1}</b></span>`;
+  return `<span class="peg" style="--c:${col.c};--ct:${col.t}${col.rim ? ';--rim:' + col.rim : ''}" aria-label="${col.name}"><b>${c + 1}</b></span>`;
 }
 function buzz(ms = 12) { if (S.vibrate && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
 let toastT;
@@ -547,6 +588,9 @@ function applyLook() {
   root.dataset.theme = S.theme;
   root.classList.toggle('show-nums', S.nums);
   root.classList.toggle('mode-drag', S.mode === 'drag');
+  root.classList.toggle('pal-right', S.palRight);
+  const host = S.palRight ? $('#sideMid') : $('#tray');
+  if ($('#palette').parentElement !== host) host.appendChild($('#palette'));
   const th = THEMES.find(t => t.id === S.theme);
   document.querySelector('meta[name="theme-color"]').content = th.meta;
 }
@@ -570,7 +614,7 @@ function rowHTML(i) {
     if (done) { const { b, w } = G.guesses[i]; cls = k < b ? ' b' : k < b + w ? ' w' : ''; }
     fb += `<i class="fbh${cls}"></i>`;
   }
-  return `<div class="row ${done ? 'done' : active ? 'active' : 'future'}" data-r="${i}"><div class="num">${i + 1}</div><div class="holes">${slots}</div><div class="fb">${fb}</div></div>`;
+  return `<div class="row ${done ? 'done' : active ? 'active' : 'future'}" data-r="${i}"><div class="fb">${fb}</div><div class="holes">${slots}</div></div>`;
 }
 
 function render() {
@@ -579,12 +623,15 @@ function render() {
   if (S.mode === 'slot' && G.status === 'playing' && sel === null) { const f = G.current.indexOf(null); sel = f < 0 ? null : f; }
   if (S.mode !== 'slot') sel = null;
 
-  // Secret code
+  // Secret code: dark covers while playing, the colours once the game ended (they turn over once, at the end)
   const ended = G.status !== 'playing';
-  $('#secretHoles').innerHTML = G.code.map(c => `<div class="slot">${ended ? pegHTML(c) : ''}</div>`).join('');
-  $('#secretFb').innerHTML = $('#lidFb').innerHTML = '<i class="fbh"></i>'.repeat(r.pegs);
-  $('#lidBumps').innerHTML = '<div class="bump"></div>'.repeat(r.pegs);
-  $('#secretBox').classList.toggle('revealed', ended);
+  $('#secretHoles').innerHTML = ended
+    ? G.code.map((c, k) => `<div class="slot" style="--k:${k}">${pegHTML(c)}</div>`).join('')
+    : '<div class="cap" aria-hidden="true"><b>?</b></div>'.repeat(r.pegs);
+  $('#secretFb').innerHTML = '<i class="fbh"></i>'.repeat(r.pegs);
+  $('#secret').classList.toggle('open', ended && opened !== G);
+  if (ended) opened = G;
+  $('#secret').setAttribute('aria-label', ended ? 'Tajný kód' : 'Schovaný tajný kód – ťuknutí ukáže kód a hra skončí');
 
   // Board: rows from bottom to top
   let html = '';
@@ -600,13 +647,16 @@ function render() {
   const full = G.current.every(x => x !== null);
   const btn = $('#btnCheck');
   let hint;
-  if (G.status === 'won') { hint = 'Vyřešeno! 🎉'; btn.textContent = 'Nová hra'; btn.classList.remove('dim'); }
-  else if (G.status === 'lost') { hint = G.gaveUp ? 'Tajný kód je odkrytý' : 'Konec hry'; btn.textContent = 'Nová hra'; btn.classList.remove('dim'); }
+  // the button shows a picture only: a tick to check, round arrows for a new game after the end
+  const icon = ended ? ICON_NEW : ICON_CHECK, label = ended ? 'Nová hra' : 'Zkontrolovat';
+  if (btn.dataset.icon !== label) { btn.innerHTML = icon; btn.setAttribute('aria-label', label); btn.dataset.icon = label; }
+  if (G.status === 'won') { hint = 'Vyřešeno! 🎉'; btn.classList.remove('dim'); }
+  else if (G.status === 'lost') { hint = G.gaveUp ? 'Tajný kód je odkrytý' : 'Konec hry'; btn.classList.remove('dim'); }
   else {
-    btn.textContent = 'Zkontrolovat'; btn.classList.toggle('dim', !full);
+    btn.classList.toggle('dim', !full);
     const left = G.current.filter(x => x === null).length;
-    if (full) hint = 'Hotovo? Ťukni na Zkontrolovat';
-    else if (S.mode === 'tap') hint = left === r.pegs ? 'Ťukni na barvy dole' : `Vyber ještě ${left} ${left === 1 ? 'barvu' : 'barvy'}`;
+    if (full) hint = 'Hotovo? Ťukni na fajfku vpravo';
+    else if (S.mode === 'tap') hint = left === r.pegs ? `Ťukni na barvy ${S.palRight ? 'vpravo' : 'dole'}` : `Vyber ještě ${left} ${left === 1 ? 'barvu' : left <= 4 ? 'barvy' : 'barev'}`;
     else if (S.mode === 'slot') hint = 'Vyber barvu pro označenou jamku';
     else hint = 'Přetáhni barvy do jamek';
   }
@@ -619,32 +669,129 @@ function render() {
 
 function layout() {
   if (!$('#app') || !G) return;
-  const r = G.rules, p = r.pegs, n = r.attempts, fbc = Math.ceil(p / 2);
-  const ts = getComputedStyle($('#tray')), W = $('#tray').clientWidth - parseFloat(ts.paddingLeft) - parseFloat(ts.paddingRight);
-  const k = r.colors <= 6 ? r.colors : Math.ceil(r.colors / 2);
-  const pal = Math.max(44, Math.min(r.colors <= 6 ? 68 : 58, (W - (k - 1) * 12) / k));
-  root.style.setProperty('--pal', pal.toFixed(1) + 'px');
-  root.style.setProperty('--palc', k);
+  const r = G.rules, p = r.pegs, n = r.attempts, fbc = Math.ceil(p / 2), c = r.colors;
   root.style.setProperty('--fbc', fbc);
-  const board = $('#board');
-  // The secret row has the same holes as the board; board + compartment height is constant,
-  // so it is computed as n+1 rows (+ compartment margins).
-  const secret = $('#secret');
-  const secretExtra = secret.offsetHeight - $('.secret-row').offsetHeight;
-  const bs = getComputedStyle(board);
-  // the board's content box (12 px above the tray) + the secret row: every row fits, also in a short window
-  const H = board.clientHeight - parseFloat(bs.paddingTop) - parseFloat(bs.paddingBottom) + secret.offsetHeight - secretExtra - 1;
-  const BW = board.clientWidth - parseFloat(bs.paddingLeft) - parseFloat(bs.paddingRight) - 16;   // without the side margin and the row's own padding
-  // row width in multiples of hole size: number + gaps + holes + feedback
-  const units = 0.8 + 0.18 * 2 + p + (p - 1) * 0.22 + fbc * 0.38 + (fbc - 1) * 0.1 + 0.1;
-  // the rows shrink rather than overflow (a short window must never hide a row under the code box)
-  const hole = Math.max(16, Math.floor(Math.min(BW / units, H / (n + 1) / 1.14, 64) * 10) / 10);
+  const px = (el, k) => parseFloat(getComputedStyle(el)[k]) || 0;
+  if (S.palRight) {
+    // the colours in the right column, one per row from the top (alignSide); only when there are fewer free rows
+    // than colours do they get smaller, and when one column would make them too small, two columns
+    // one or two columns: alignSide() decides from the real rows and lays out again when it changes
+    const cols = +getComputedStyle(root).getPropertyValue('--palc') === 2 ? 2 : 1;
+    root.style.setProperty('--palc', cols);
+    root.style.setProperty('--side', (cols === 1 ? 58 : 2 * 48 + 6) + 'px');
+  } else {
+    // the colours in the tray: the first at the left margin, the last at the right one (space-between)
+    const tray = $('#tray'), W = tray.clientWidth - px(tray, 'paddingLeft') - px(tray, 'paddingRight');
+    const k = c <= 6 ? c : Math.ceil(c / 2);
+    const pal = Math.max(44, Math.min(c <= 6 ? 64 : 58, (W - (k - 1) * 12) / k));
+    root.style.setProperty('--pal', pal.toFixed(1) + 'px');
+    root.style.setProperty('--palc', k);
+    root.style.setProperty('--side', '58px');
+  }
+  // the rows: the secret row + n rows fill the height left of the right column; the holes are as big as the
+  // width allows, the rows spread over the height (never overflow: a short window shrinks the holes)
+  const main = $('.main'), board = $('#board');
+  const H = main.clientHeight - px($('#secret'), 'marginBottom') - 1;
+  const BW = main.clientWidth - 16; // the row's own padding
+  // row width in multiples of the hole size: feedback grid + gap + holes with their gaps
+  const units = fbc * 0.38 + (fbc - 1) * 0.1 + 0.3 + p + (p - 1) * 0.2;
+  let hole = Math.min(BW / units, H / (n + 1) / 1.1, 64);
+  // the holes in the middle of the screen need room on both sides of the centre: a little smaller holes (at most
+  // 10 %) keep the board symmetric, otherwise the row is centred in its own space
+  const ar = $('#app').getBoundingClientRect(), mr = main.getBoundingClientRect(), cx = ar.left + ar.width / 2;
+  const hu = p + (p - 1) * 0.2, fu = fbc * 0.38 + (fbc - 1) * 0.1 + 0.3;
+  const centred = Math.min((mr.right - 8 - cx) / (hu / 2), (cx - mr.left - 8) / (hu / 2 + fu));
+  const symmetric = centred >= hole * 0.9;
+  if (symmetric) hole = Math.min(hole, centred);
+  hole = Math.max(16, Math.floor(hole * 10) / 10);
+  const rowh = Math.floor(Math.min(H / (n + 1), hole * 1.45) * 10) / 10;
   root.style.setProperty('--hole', hole + 'px');
+  root.style.setProperty('--rowh', rowh + 'px');
+  // the holes sit in the middle of the screen (the colours below line up with them); the small pegs stay on
+  // their left; where the column on the right leaves no room, the row is centred in its own space
+  const contentW = (fu + hu) * hole, want = cx - (hu / 2 + fu) * hole - mr.left;
+  root.style.setProperty('--rowpad', (symmetric ? want : Math.max(8, (mr.width - contentW) / 2)).toFixed(1) + 'px');
+  alignPalette();
+  alignSide();
   if (scrollToActive) {
     scrollToActive = false;
     const a = $('.row.active');
     if (a && board.scrollHeight > board.clientHeight + 2) a.scrollIntoView({ block: 'center' });
   }
+}
+// The right column follows the rows of the board (user's decision): Vzdát se next to the secret code and Zpět
+// one row high, Zkontrolovat over the two bottom rows, one free row between Zpět and Zkontrolovat; each button
+// is centred on its rows. With the colours in the column (palRight) Zpět sits right above Zkontrolovat, and the
+// colours sit at the bottom, one free row above Zpět, as big as the holes and close together; only when they do not fit
+// above Zpět do they get smaller, and in two columns when one would be under 44 px.
+function alignSide() {
+  const side = $('#side'), mid = $('#sideMid'), pal = $('#palette'), rows = [...document.querySelectorAll('#rows .row')];
+  const btns = ['#btnGiveUp', '#btnUndo', '#btnCheck'].map(s => $(s));
+  side.classList.remove('grid');
+  btns.forEach(b => { b.style.top = ''; b.style.height = ''; });
+  mid.style.top = ''; mid.style.height = '';
+  if (S.palRight) { pal.classList.remove('aligned'); [...pal.children].forEach(b => { b.style.top = ''; b.style.left = ''; }); }
+  if (rows.length < 4) return;
+  const st = side.getBoundingClientRect().top, gap = 6, min = 46;
+  const place = (b, top, bottom) => {
+    const m = (top + bottom) / 2, h = Math.max(min, bottom - top - gap);
+    b.style.top = (m - h / 2 - st).toFixed(1) + 'px'; b.style.height = h.toFixed(1) + 'px';
+  };
+  const r = el => el.getBoundingClientRect(), last = rows.length - 1;
+  const sec = r($('#secret .row'));
+  place(btns[0], sec.top, sec.bottom);
+  const undoRow = rows[S.palRight ? last - 2 : last - 3];
+  place(btns[1], r(undoRow).top, r(undoRow).bottom);
+  place(btns[2], r(rows[last - 1]).top, r(rows[last]).bottom);
+  side.classList.add('grid');
+  if (!S.palRight) return;
+  // the colours: at the bottom, one free row above Zpět (as high up as under Vzdát se)
+  const top = btns[0].getBoundingClientRect().bottom + gap, bottom = btns[1].getBoundingClientRect().top - r(rows[0]).height, cs = [...pal.children], c = cs.length;
+  mid.style.top = (top - st).toFixed(1) + 'px'; mid.style.height = (bottom - top).toFixed(1) + 'px';
+  const W = side.clientWidth, H = bottom - top, cg = 6, hole = parseFloat(getComputedStyle(root).getPropertyValue('--hole')) || 48;
+  const big = Math.max(hole, 44), fit = n => (H - (n - 1) * cg) / n; // size of each when n go one under another
+  // one column while each colour gets at least 44 px (a finger), otherwise two columns (a wider right column)
+  const want = fit(c) >= 44 ? 1 : 2;
+  const cols = +getComputedStyle(root).getPropertyValue('--palc') === 2 ? 2 : 1;
+  if (want !== cols && !relayout) {
+    root.style.setProperty('--palc', want);
+    relayout = true; try { layout(); } finally { relayout = false; }
+    return;
+  }
+  const per = Math.ceil(c / cols);
+  // as big as the holes, never below a finger's 44 px and never more than the room it has
+  const sz = Math.min(big, fit(per), cols === 1 ? 60 : (W - cg) / 2);
+  root.style.setProperty('--pal', sz.toFixed(1) + 'px');
+  pal.classList.add('aligned');
+  cs.forEach((b, i) => {
+    const col = cols === 1 ? 0 : Math.floor(i / per), k = cols === 1 ? i : i % per;
+    const x = cols === 1 ? (W - sz) / 2 : col * (W - sz);
+    b.style.left = x.toFixed(1) + 'px'; b.style.top = (H - (per - k) * sz - (per - 1 - k) * cg).toFixed(1) + 'px';
+  });
+}
+// The colours in the tray line up with the columns of holes, all with the same spacing as the holes (user's
+// decision): with 6 colours and 4 holes the middle four sit under the holes and one more on each side. When the
+// holes are too close for a big enough colour, or the row would not fit, they are spread evenly from margin to margin.
+function alignPalette() {
+  const pal = $('#palette'), btns = [...pal.children];
+  if (S.palRight) return; // alignSide() places them
+  pal.classList.remove('aligned');
+  btns.forEach(b => { b.style.left = ''; b.style.top = ''; });
+  const row = $('#rows .row');
+  if (!row) return;
+  const p = G.rules.pegs, c = btns.length;
+  if (c < p) return;
+  const size = parseFloat(getComputedStyle(root).getPropertyValue('--pal')) || 50;
+  const holes = [...row.querySelectorAll('.slot')].map(s => { const r = s.getBoundingClientRect(); return r.left + r.width / 2; });
+  if (holes.length < 2) return;
+  const step = holes[1] - holes[0], sz = Math.min(size, step - 8);
+  if (sz < 44) return;
+  const pr = pal.getBoundingClientRect(), k = Math.floor((c - p) / 2); // k colours left of the first hole
+  const lefts = btns.map((b, i) => holes[0] + (i - k) * step - sz / 2 - pr.left);
+  if (lefts[0] < -0.5 || lefts[c - 1] + sz > pr.width + 0.5) return; // would reach over the side margin
+  root.style.setProperty('--pal', sz.toFixed(1) + 'px');
+  pal.classList.add('aligned');
+  btns.forEach((b, i) => { b.style.left = lefts[i].toFixed(1) + 'px'; });
 }
 
 /* ---------- Controls: tapping ---------- */
@@ -656,7 +803,7 @@ function placeColor(c) {
     sel = nextEmpty(sel);
   } else {
     const i = G.current.indexOf(null);
-    if (i < 0) { toast('Řádek je plný – ťukni na Zkontrolovat'); return; }
+    if (i < 0) { toast('Řádek je plný – ťukni na fajfku vpravo'); return; }
     setSlot(i, c);
   }
   buzz(); commit();
@@ -681,7 +828,7 @@ function holeSize() { return parseFloat(getComputedStyle(root).getPropertyValue(
 window.addEventListener('pointerdown', e => {
   if (S.mode !== 'drag' || drag) return;
   if (!$('#modal').hidden || !$('#screenSettings').hidden || !$('#screenHelp').hidden) return;
-  if (G.status !== 'playing') { if (e.target.closest('.pbtn, .slot')) toast('Hra skončila – ťukni na Nová hra'); return; }
+  if (G.status !== 'playing') { if (e.target.closest('.pbtn, #rows .slot')) toast('Hra skončila – ťukni na Nová hra'); return; }
   const pb = e.target.closest('#palette .pbtn');
   const sl = e.target.closest('.slot.act');
   let color, from = null;
@@ -738,7 +885,7 @@ function endSoon() { const g = G; clearTimeout(endT); endT = setTimeout(() => { 
 $('#btnCheck').addEventListener('click', () => {
   if (G.status !== 'playing') { if (endT) toast('Chvilku, hned ukážu výsledek'); else newGame(); return; }
   const missing = G.current.filter(x => x === null).length;
-  if (missing) { toast(missing === 1 ? 'Chybí ještě 1 barva' : `Chybí ještě ${missing} barvy`); return; }
+  if (missing) { toast(missing === 1 ? 'Chybí ještě 1 barva' : `Chybí ještě ${missing} ${missing <= 4 ? 'barvy' : 'barev'}`); return; }
   const { black, white } = evaluate(G.current, G.code);
   G.guesses.push({ g: G.current.slice(), b: black, w: white });
   G.current = new Array(G.rules.pegs).fill(null); G.order = [];
@@ -781,10 +928,16 @@ function giveUp() {
   sel = null; buzz(20); commit();
   endSoon();
 }
-$('#btnGiveUp').addEventListener('click', () => {
+function askGiveUp() {
   if (G.status !== 'playing') { toast('Hra už skončila – ťukni na Nová hra'); return; }
   showModal('<h2>Vzdát se?</h2><p>Ukáže se tajný kód a tahle hra skončí.</p>',
     [{ text: 'Ano, ukázat kód', fn: giveUp }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+}
+$('#btnGiveUp').addEventListener('click', askGiveUp);
+// a tap on the hidden code does the same as the flag (user's decision)
+$('#secret').addEventListener('click', () => {
+  if (G.status !== 'playing') { toast(endT ? 'Chvilku, hned ukážu výsledek' : 'Tajný kód už je odkrytý'); return; }
+  askGiveUp();
 });
 
 $('#btnNew').addEventListener('click', () => {
@@ -829,6 +982,9 @@ function renderSettings() {
     <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Logik<small>Nastavení</small></h2></div>
     <section class="card"><h3>Ovládání</h3>
       ${MODES.map(m => `<button class="opt" data-act="mode:${m.id}" aria-pressed="${S.mode === m.id}"><span class="radio"></span><span><b>${m.name}</b><span class="d">${m.desc}</span></span></button>`).join('')}
+      <div style="height:10px"></div>
+      ${toggleRow('palRight', 'Barvy ve sloupci vpravo')}
+      <div class="fnote" style="margin-top:-6px">${S.palRight ? 'Barvy jsou vpravo pod sebou, stejně velké jako jamky.' : 'Barvy jsou dole pod hrací deskou.'}</div>
     </section>
     <section class="card"><h3>Pravidla hry</h3>
       ${stepper('colors', 'Počet barev', S.colors,
@@ -847,7 +1003,7 @@ function renderSettings() {
       ${pending}
     </section>
     <section class="card"><h3>Vzhled</h3>
-      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch wood" data-theme="${t.id}"><span class="slot">${pegHTML(0)}</span><span class="slot">${pegHTML(3)}</span><span class="slot"></span></span>${t.name}</button>`).join('')}</div>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch wood" data-theme="${t.id}"><span class="slot">${pegHTML(0)}</span><span class="slot">${pegHTML(4)}</span><span class="slot"></span></span>${t.name}</button>`).join('')}</div>
       ${toggleRow('nums', 'Čísla na kolíčcích')}
       <div class="fnote" style="margin-top:-6px">Pomůže, když se barvy špatně rozlišují.</div>
       ${toggleRow('vibrate', 'Vibrace')}
@@ -907,25 +1063,28 @@ $('#btnSettings').addEventListener('click', openSettings);
 /* ---------- Help ---------- */
 function renderHelp() {
   const r = G && G.rules ? G.rules : rulesOf(S); // the rules of the game in progress (changed settings apply to the next one)
+  const where = S.palRight ? 'vpravo' : 'dole';
   const how = {
-    tap: 'ťukej na barevná tlačítka dole – barvy se postupně vloží do řádku. Při chybě ťukni na kolíček v řádku a zmizí.',
-    slot: 'ťukni na jamku v řádku a potom na barvu dole.',
-    drag: 'přetáhni barvy prstem z dolní řady do jamek v řádku.',
+    tap: `ťukej na barevná tlačítka ${where} – barvy se postupně vloží do řádku. Při chybě ťukni na kolíček v řádku a zmizí.`,
+    slot: `ťukni na jamku v řádku a potom na barvu ${where}.`,
+    drag: `přetáhni barvy prstem ${S.palRight ? 'z pravého sloupce' : 'z dolní řady'} do jamek v řádku.`,
   }[S.mode];
+  const ic = svg => `<span class="hicon">${svg}</span>`;
   const rep = r.maxRepeat === 1 ? 'Každá barva je v kódu nejvýš jednou.' : 'Barvy se v kódu mohou opakovat.';
   $('#helpIn').innerHTML = `
     <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Logik<small>Jak hrát</small></h2></div>
     <section class="card help">
       <ol>
-        <li>Počítač schoval tajný kód z <b>${r.pegs} barevných kolíčků</b>. Je nahoře pod víčkem. ${rep}</li>
-        <li>Zkus kód uhodnout: ${how} Tlačítko <b>Zpět</b> vrátí naposledy položenou barvu.</li>
-        <li>Pak ťukni na <b>Zkontrolovat</b>.</li>
-        <li>Vedle řádku se objeví malé kolíčky:
+        <li>Počítač schoval tajný kód z <b>${r.pegs} barevných kolíčků</b>. Je nahoře pod tmavými víčky s otazníkem. ${rep}</li>
+        <li>Zkus kód uhodnout: ${how} Šipka ${ic(ICON_UNDO)} vpravo vrátí naposledy položenou barvu.</li>
+        <li>Pak ťukni na fajfku ${ic(ICON_CHECK)} vpravo dole – řádek se zkontroluje.</li>
+        <li>Vlevo od řádku se objeví malé kolíčky:
           <div class="legend"><i class="fbh b"></i><span><b>černý</b> = správná barva na správném místě</span></div>
           <div class="legend"><i class="fbh w"></i><span><b>bílý</b> = správná barva, ale na jiném místě</span></div>
           Na pořadí malých kolíčků nezáleží.</li>
         <li>Na uhodnutí je <b>${r.attempts} pokusů</b>. Hodně štěstí!</li>
-        <li>Když už to dál nejde, ťukni dole na <b>Vzdát se</b> – ukáže se tajný kód.</li>
+        <li>Když už to dál nejde, ťukni na vlajku ${ic(ICON_FLAG)} vpravo nahoře (nebo na víčka) – ukáže se tajný kód. Po konci hry začne kruhová šipka ${ic(ICON_NEW)} novou hru.</li>
+        <li>Barvy mohou být dole, nebo ve sloupci vpravo: v Nastavení „Barvy ve sloupci vpravo“.</li>
       </ol>
     </section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;
@@ -968,6 +1127,8 @@ const saved = load();
 const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
 S = Object.assign({}, DEFAULTS);
 for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+// Klasika became the default (user's decision): a save from before still holding an old default (Tmavé dřevo, later Javor) switches once
+if (savedSettings.look !== 2 && (S.theme === 'dark-wood' || S.theme === 'maple')) S.theme = 'classic';
 normalize(S);
 if (saved && validGame(saved.game)) { G = saved.game; render(); }
 else newGame();
