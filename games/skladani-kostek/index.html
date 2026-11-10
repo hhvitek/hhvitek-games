@@ -171,8 +171,8 @@ a.round{text-decoration:none}
 .trow .flabel{margin:0}
 .sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
 .sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
-.sw.off{opacity:.45}
-.field.off .flabel{opacity:.55}
+.sw.off{background:transparent;color:var(--psoft);outline:2px dashed color-mix(in srgb,var(--pink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+.field.off .flabel{color:var(--psoft)}
 .notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
 .link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
 
@@ -768,8 +768,10 @@ $('#board').addEventListener('click', e => {
   if (G.status === 'over') { toast('Už se nic nevejde – ťukni na Zpět nebo Nová hra'); return; }
   if (sel === null) { toast('Přetáhni kostku zespodu na desku, nebo na ni nejdřív ťukni'); return; }
   const N = G.rules.size, k = +cell.dataset.k, r0 = k / N | 0, c0 = k % N, p = PIECES[G.tray[sel]];
-  if (pv && pv.ok && p.cells.some(([dr, dc]) => pv.r + dr === r0 && pv.c + dc === c0)) { doPlace(sel, pv.r, pv.c); return; }
-  pv = tapPos(p, r0, c0);
+  // the second tap: on the preview, or on the very cell tapped before (a shape with an empty corner, e.g. the
+  // big L, is centred on the tapped cell, which may be its empty corner)
+  if (pv && pv.ok && (pv.k === k || p.cells.some(([dr, dc]) => pv.r + dr === r0 && pv.c + dc === c0))) { doPlace(sel, pv.r, pv.c); return; }
+  pv = tapPos(p, r0, c0); pv.k = k;
   buzz(8); render();
 });
 $('#btnPlace').addEventListener('click', () => {

@@ -178,8 +178,8 @@ a.round{text-decoration:none}
 .trow .flabel{margin:0}
 .sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
 .sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
-.sw.off{opacity:.45}
-.field.off .flabel{opacity:.55}
+.sw.off{background:transparent;color:var(--psoft);outline:2px dashed color-mix(in srgb,var(--pink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+.field.off .flabel{color:var(--psoft)}
 .notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
 .link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
 
@@ -407,6 +407,7 @@ function collides(b, sz, t, r, x, y) {
 const pieceHits = (g, p, dx = 0, dy = 0, r = p.r) => collides(g.board, sizeOf(g.rules.size), p.t, r, p.x + dx, p.y + dy);
 function dropDist() { let d = 0; while (!pieceHits(G, G.piece, 0, d + 1)) d++; return d; }
 const level = (lines = G.lines) => Math.floor(lines / 10) + 1;
+const TOP_LEVEL = 10; // interval() stops getting shorter here (40 % of the base), so the shown speed and its toast stop too
 
 /* ---------- State and saving ---------- */
 let S, G, best = 0, bests = {}, running = false, timer = null, flash = null;
@@ -544,7 +545,7 @@ function canAct() {
   if (gravity() && !running) { toast('Hra stojí – ťukni na Hrát'); return false; }
   return true;
 }
-function moved() { G.piece.rest = false; draw(); }
+function moved() { G.piece.rest = false; G.piece.tapped = false; draw(); }
 function shift(dx) {
   if (!canAct()) return;
   if (pieceHits(G, G.piece, dx, 0)) { buzz(30); return; }
@@ -562,8 +563,9 @@ function softDrop() {
   if (!canAct()) return;
   // a resting shape is not placed by surprise: the first tap says so, the second places it
   if (pieceHits(G, G.piece, 0, 1)) {
-    if (G.piece.rest === 'tap') { lock(0); return; }
-    G.piece.rest = 'tap'; buzz(8); schedule(); toast('Tvar je dole. Ťukni ještě jednou a zůstane tam.'); return;
+    // `tapped` stays until the shape moves: the falling steps change `rest`, and the second tap may come slowly
+    if (G.piece.tapped) { lock(0); return; }
+    G.piece.tapped = true; G.piece.rest = 'tap'; buzz(8); schedule(); toast('Tvar je dole. Ťukni ještě jednou a zůstane tam.'); return;
   }
   G.piece.y++; buzz(8); schedule(); moved();
 }
@@ -605,7 +607,7 @@ function lock(bonus) {
   buzz(rows.length ? [30, 40, 30] : 15);
   const after = () => {
     if (G.status === 'over') { whenFree(G, 700, () => { if (G.status === 'over') showOver(); }); return; }
-    if (rows.length && gravity() && S.accel && level() > lvl0) toast('Tvary teď padají trochu rychleji');
+    if (rows.length && gravity() && S.accel && level() > lvl0 && level() <= TOP_LEVEL) toast('Tvary teď padají trochu rychleji');
     schedule();
   };
   if (rows.length) {
@@ -676,7 +678,7 @@ function render() {
   $('#score').textContent = fmt(G.score);
   $('#best').textContent = fmt(best);
   $('#lines').textContent = fmt(G.lines);
-  $('#level').textContent = level();
+  $('#level').textContent = Math.min(TOP_LEVEL, level());
   $('#lvlWrap').hidden = !(grav && S.accel);
   $('#nextWrap').hidden = !S.showNext;
   $('#next').innerHTML = pieceHTML(G.next);
@@ -918,8 +920,11 @@ if (saved && okNum(saved.best) && saved.best > 0) { const k = rulesKey(okGame ? 
 if (okGame) { G = saved.game; best = bests[rulesKey(G.rules)] || 0; render(); }
 else newGame();
 
-window.addEventListener('resize', layout);
-if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+// a phone turned sideways shows the rotate notice over the game ("Hra počká"): the falling stops, as for a hidden page
+const sideways = matchMedia('(orientation:landscape) and (max-height:500px)');
+const relayout = () => { if (running && sideways.matches) setRunning(false); layout(); };
+window.addEventListener('resize', relayout);
+if (window.visualViewport) visualViewport.addEventListener('resize', relayout);
 document.addEventListener('contextmenu', e => e.preventDefault());
 
 // Launcher contract: opened from the menu (?menu) = show the home button

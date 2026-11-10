@@ -121,7 +121,7 @@ a.round{text-decoration:none}
 .key:active{transform:translateY(2px);box-shadow:0 1px 0 var(--key-sh),inset 0 0 0 1px var(--line)}
 .key small{position:absolute;right:7px;bottom:3px;font-size:18px;font-weight:700;opacity:.75;line-height:1}
 .key.held{background:var(--accent);color:var(--accent-ink)}
-.key.dim{opacity:.38}
+.key.dim{background:transparent;box-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* a number that is all placed: readable, no fill, a dashed outline (not only opacity) */
 /* Dragging a number from the keypad onto a cell: the number follows the finger (above it, so the finger does not
    hide it) and the cell it would land on is outlined */
 .key{touch-action:none}
@@ -1018,7 +1018,7 @@ function openSettings() { if (busy) return; hideToast(); renderSettings(); $('#s
 function closeSettings() {
   $('#screenSettings').hidden = true;
   if (S.size !== G.size || S.diff !== G.diff) {
-    const had = G.status === 'playing' && hasProgress();
+    const had = hasProgress(); // also after a solved sudoku (rule): the new game says that it started
     newGame(had ? 'Začala nová hra s novým nastavením' : '');
     return;
   }

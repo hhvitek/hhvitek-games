@@ -528,7 +528,9 @@ const full = h => oko(h) || sum(h) === 21;
 function autoStand() {
   if (G.phase !== 'you' || !full(G.hands[0])) return;
   const g0 = G;
-  setTimeout(() => { if (G === g0 && G.phase === 'you' && !busy && full(G.hands[0])) stand(); }, 800);
+  // the bottom row changes by itself here (Stačí may become Další kolo): taps are ignored for a moment after it,
+  // as after a tap, so a tap meant for Stačí does not start the next round and skip the result
+  setTimeout(() => { if (G === g0 && G.phase === 'you' && !busy && full(G.hands[0])) { lastTray = Date.now() + 600; stand(); } }, 800);
 }
 // user's decision: after Stačí the computer plays at once (no extra tap), or the round is judged when it already played
 function stand() {
@@ -737,7 +739,8 @@ $('#table').addEventListener('click', e => {
 $('#btnNew').addEventListener('click', () => {
   if (hasProgress()) {
     showModal('<h2>Začít novou hru?</h2><p>Rozehraný zápas se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
-  } else newGame();
+  } else if (endDue === G) showEnd(); // the result dialog of the finished match has not been shown yet: it comes first
+  else newGame();
 });
 
 /* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */

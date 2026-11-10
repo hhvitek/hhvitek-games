@@ -458,7 +458,8 @@ const savedSettings = saved && saved.settings && typeof saved.settings === 'obje
 S = Object.assign({}, DEFAULTS);
 for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
 normalize(S);
-if (saved && validGame(saved.game)) { G = saved.game; render(); }
+// rule: a size chosen just before the app was closed (Settings still open) is applied now, as closing Settings would
+if (saved && validGame(saved.game)) { G = saved.game; if (S.size !== G.n) closeSettings(); else render(); }
 else newGame();
 
 window.addEventListener('resize', layout);

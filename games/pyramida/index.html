@@ -446,6 +446,9 @@ let S, G = null, ST, busy = false, SEL = null;
 // rule: while something runs, a tap explains itself instead of doing nothing
 const busyToast = () => toast('Chvilku, míchám karty…', 60000);
 const playing = () => G && G.status === 'playing';
+// the deal the game was asked for: a "solvable" deal that could not be verified in time is played as random
+// (deal: 'rand'), but it is not a change of the setting
+const dealOf = g => g.asked === 'solv' || g.asked === 'rand' ? g.asked : g.deal;
 const hasProgress = () => playing() && G.moves > 0;
 const left = () => leftOf(G, G.passes);
 function load() {
@@ -530,7 +533,7 @@ function newGame(msg) {
   setTimeout(async () => {
     const r = S.deal === 'solv' ? await solvableDeck(S.passes) : { deck: shuffle([...Array(52).keys()]), ok: true };
     // a deal that could not be verified in time counts as random, and the player is told
-    G = Object.assign(dealFrom(r.deck), { deal: r.ok ? S.deal : 'rand', passes: S.passes, hist: [], status: 'playing', moves: 0, counted: false, stuckAt: -1 });
+    G = Object.assign(dealFrom(r.deck), { deal: r.ok ? S.deal : 'rand', asked: S.deal, passes: S.passes, hist: [], status: 'playing', moves: 0, counted: false, stuckAt: -1 });
     G.init = snap(G);
     busy = false;
     hideToast();
@@ -641,8 +644,16 @@ function hasUseful() {
   const F = freeIdx(G.gone), v = F.map(i => rank(G.pyr[i]));
   if (v.includes(13)) return true;
   for (let x = 0; x < v.length; x++) for (let y = x + 1; y < v.length; y++) if (v[x] + v[y] === 13) return true;
-  const reach = left() > 0 ? G.waste.concat(G.stock) : G.stock.concat(G.waste.slice(-1));
-  if (reach.some(c => rank(c) === 13)) return true; // a king goes away by itself
+  // Cards of the stock and the waste that can still come up. A king there goes away by itself, but that frees
+  // nothing in the pyramid, so it does not count (the game was never called stuck while a king was left).
+  // Only without another redeal does it matter: the waste cards under kings on its top come up once they are tapped away.
+  let reach;
+  if (left() > 0) reach = G.waste.concat(G.stock);
+  else {
+    let k = G.waste.length - 1;
+    while (k > 0 && rank(G.waste[k]) === 13) k--;
+    reach = G.stock.concat(G.waste.slice(Math.max(0, k)));
+  }
   return reach.some(c => v.includes(13 - rank(c)));
 }
 function checkEnd() {
@@ -681,6 +692,7 @@ function clearHint() {
 }
 // some move that can be made right away (when the solver finds nothing)
 function anyMove() {
+  if (!hasUseful()) return null; // nothing can be removed any more: no advice to draw or to tap a king
   const F = freeIdx(G.gone);
   for (const i of F) if (rank(G.pyr[i]) === 13) return { k: 'K', i };
   for (let x = 0; x < F.length; x++) for (let y = x + 1; y < F.length; y++)
@@ -690,7 +702,6 @@ function anyMove() {
     if (w === 13) return { k: 'WK' };
     for (const a of F) if (rank(G.pyr[a]) + w === 13) return { k: 'W', a };
   }
-  if (!hasUseful()) return null;
   return G.stock.length ? { k: 'D' } : left() > 0 ? { k: 'R' } : null;
 }
 function hint() {
@@ -985,12 +996,12 @@ function renderSettings() {
         ${opt('set:passes:0', S.passes === 0, 'Neomezeně', 'Když balíček dojde, jde ho otočit znovu, kolikrát je potřeba. Nejsnazší.')}
         ${opt('set:passes:3', S.passes === 3, 'Třikrát', 'Balíčkem jde projít třikrát. Těžší.')}
         ${opt('set:passes:1', S.passes === 1, 'Jen jednou', 'Balíček se neotáčí, každá karta přijde jen jednou. Nejtěžší.')}
-        ${G && S.passes !== G.passes ? '<div class="notice">Otáčení balíčku se změní od <b>příští hry</b>. Rozehraná hra zůstává.</div>' : ''}
+        ${G && S.passes !== G.passes ? (G.moves ? `<div class="notice">Otáčení balíčku se změní od <b>příští hry</b>.${playing() ? ' Rozehraná hra zůstává.' : ''}</div>` : '<div class="notice">Po návratu do hry se rozdá <b>nová hra</b>.</div>') : ''}
       </div>
       <div class="field"><div class="flabel">Rozdání karet</div>
         ${opt('set:deal:solv', S.deal === 'solv', 'Vždy řešitelné', 'Každá hra jde vyhrát, hra to před rozdáním ověří. Přemýšlet je ale pořád potřeba.')}
         ${opt('set:deal:rand', S.deal === 'rand', 'Úplně náhodné', 'Karty se zamíchají jen tak. Mnoho her vyhrát nejde.')}
-        ${G && S.deal !== G.deal ? '<div class="notice">Rozdání se změní od <b>příští hry</b>. Rozehraná hra zůstává.</div>' : ''}
+        ${G && S.deal !== dealOf(G) ? (G.moves ? `<div class="notice">Rozdání se změní od <b>příští hry</b>.${playing() ? ' Rozehraná hra zůstává.' : ''}</div>` : '<div class="notice">Po návratu do hry se rozdá <b>nová hra</b>.</div>') : ''}
       </div>
     </section>
     <section class="card"><h3>Pomůcky</h3>
@@ -1022,6 +1033,8 @@ function openSettings() { if (busy) { busyToast(); return; } hideToast(); render
 function closeSettings() {
   $('#screenSettings').hidden = true;
   SEL = null;
+  // passes and deal belong to the game (rule): they change from the next game, at once only when nothing was played yet
+  if (G && !G.moves && (S.passes !== G.passes || S.deal !== dealOf(G))) { newGame(); return; }
   save(); render({ instant: true });
   if (playing()) checkEnd(); // the cards did not move: "Dál to nejde" is not said again
 }
@@ -1096,7 +1109,9 @@ normalize(S);
 ST = validStats(saved && saved.stats, statKey(S));
 applyLook();
 buildTable();
-if (saved && validGame(saved.game)) {
+// rules chosen just before the app was closed (Settings still open) with nothing played yet: dealt now, as closing
+// Settings would
+if (saved && validGame(saved.game) && !(!saved.game.moves && (S.passes !== saved.game.passes || S.deal !== dealOf(saved.game)))) {
   G = saved.game;
   render({ instant: true });
 } else { renderTray(); newGame(); }

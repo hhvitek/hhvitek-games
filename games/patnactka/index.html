@@ -563,7 +563,8 @@ $('#well').addEventListener('click', e => {
   else if (h) tryMove(G.board.indexOf(0));
 });
 $('#board').addEventListener('click', e => { if (goalShown && !e.target.closest('#well')) hideGoal(); });
-$('#btnUndo').addEventListener('click', undo);
+// while the goal is shown, Zpět only closes it (like a tap on the board), it does not take a move back too
+$('#btnUndo').addEventListener('click', () => { if (goalShown) { hideGoal(); return; } undo(); });
 // keyboard arrows (desktop): the tile next to the gap moves in the arrow's direction
 document.addEventListener('keydown', e => {
   const d = { ArrowUp: [1, 0], ArrowDown: [-1, 0], ArrowLeft: [0, 1], ArrowRight: [0, -1] }[e.key];

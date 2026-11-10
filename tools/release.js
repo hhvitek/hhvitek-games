@@ -26,7 +26,7 @@ const UNRELEASED = 'Nevydáno';
 const RELEASE_TITLE = /^(\d+\.\d+\.\d+) – (\d{4}-\d{2}-\d{2})$/;
 const VERSION_LINE = /^globalThis\.APP_VERSION = \{ version: '(\d+\.\d+\.\d+)', date: '(\d{4}-\d{2}-\d{2})' \};\r?$/m; // \r?: a copy saved with Windows line ends
 // Files the player never gets (tools/release.js asks for at least one other changed file since the last tag)
-const NOT_FOR_PLAYERS = [/^(tools|docs|\.claude|\.github|\.playwright-mcp|games\/_template)\//, /\.md$/, /^\.git/, /^LICENSE$/];
+const NOT_FOR_PLAYERS = [/^(tools|docs|\.claude|\.github|\.playwright-mcp|games\/_template)\//, /\.md$/, /^\.git/, /^LICENSE$/, /^\.mcp\.json$/];
 
 function readVersion() {
   const m = VERSION_LINE.exec(read('version.js'));

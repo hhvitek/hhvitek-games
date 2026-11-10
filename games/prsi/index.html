@@ -489,14 +489,15 @@ function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e
    it survives a reload and a trip to the launcher and back, and starts from zero when the app is closed and opened
    again. While it runs, every new game keeps the same opponents (names and faces); a change of "Soupeři" starts a
    new tally with new opponents. A finished game counts once, at its first end (like the statistics); a game left
-   unfinished by "Nová hra" does not count. SER = { opp, wins: [you, seat 1, seat 2?] } */
+   unfinished by "Nová hra" does not count. SER = { opp, wins: [you, seat 1, seat 2?], carry? }; carry = the tally
+   of a game left from an earlier opening: it is played out with its opponents, the next game brings new ones. */
 const SKEY = `games.${ID}.series`;
 let SER = null;
 const freshSeries = g => ({ opp: g.opp, wins: g.hands.map(() => 0) });
 function loadSeries(g) {
   try {
     const v = JSON.parse(sessionStorage.getItem(SKEY));
-    if (v && v.opp === g.opp && Array.isArray(v.wins) && v.wins.length === g.hands.length && v.wins.every(n => Number.isInteger(n) && n >= 0)) return { opp: v.opp, wins: v.wins.slice() };
+    if (v && v.opp === g.opp && Array.isArray(v.wins) && v.wins.length === g.hands.length && v.wins.every(n => Number.isInteger(n) && n >= 0)) return { opp: v.opp, wins: v.wins.slice(), carry: !!v.carry };
   } catch (e) {}
   return freshSeries(g);
 }
@@ -575,7 +576,7 @@ const rnd32 = () => { try { const a = new Uint32Array(1); crypto.getRandomValues
 function newGame(msg) {
   clearTimeout(aiT);
   // the tally goes on (same opponents) once a game of it was counted and the opponents setting is the same
-  const goOn = !!(G && SER && SER.opp === S.opp && G.opp === S.opp && SER.wins.some(n => n > 0));
+  const goOn = !!(G && SER && !SER.carry && SER.opp === S.opp && G.opp === S.opp && SER.wins.some(n => n > 0));
   G = Object.assign(deal(S.opp, rnd32()), { foes: goOn ? G.foes : newFoes(S.opp, G && G.foes), swap: goOn ? G.swap : S.opp === 'both' && rnd32() % 2 === 1, status: 'playing', counted: false, hist: [] });
   if (!goOn) SER = freshSeries(G);
   saveSeries(); save(); render({ deal: true });
@@ -682,7 +683,7 @@ function renderTable(o) {
   const t = top(G);
   info.innerHTML = (G.status !== 'playing' ? `<div class="turn">${G.status === 'won' ? 'Vyhráváš!' : `${seatName(winnerOf(G))} vyhrává`}</div>`
     : `<div class="turn">${G.turn === 0 ? 'Hraješ ty' : `Hraje ${seatName(G.turn)}`}</div>`)
-    + (rank(t) === OBER ? `<div class="badge">${symSVG(G.suit)}<span>Hraje se ${SNAME[G.suit]}</span></div>` : '')
+    + (rank(t) === OBER ? `<div class="badge">${symSVG(G.suit)}<span>Hrají se ${SNAME[G.suit]}</span></div>` : '')
     + (G.seven ? `<div class="badge pen">Sedma: ber ${2 * G.seven}</div>` : G.ace ? '<div class="badge pen">Eso: stůj</div>' : '');
 }
 function renderOpps() {
@@ -819,7 +820,7 @@ const busyToast = () => toast(`Chvilku, hraje ${seatName(G.turn)}`);
 function whyNot(c) {
   if (G.seven) return `Platí sedma: zahraj sedmu, nebo si lízni ${nCardsAcc(2 * G.seven)}.`;
   if (G.ace) return 'Platí eso: zahraj eso, nebo ťukni na Stojím.';
-  return `Tahle karta se nehodí. Hraje se ${SNAME[G.suit]}${rank(top(G)) === OBER ? '' : `, nebo ${RNAME[rank(top(G))]}`}. Svršek jde vždycky.`;
+  return `Tahle karta se nehodí. Hrají se ${SNAME[G.suit]}${rank(top(G)) === OBER ? '' : `, nebo ${RNAME[rank(top(G))]}`}. Svršek jde vždycky.`;
 }
 function tapCard(c) {
   if (!playing()) { toast(G.status === 'won' ? 'Hra je vyhraná. Ťukni na Nová hra.' : 'Hra skončila. Ťukni na Nová hra, nebo na Zpět.'); return; }
@@ -1023,9 +1024,17 @@ ST = validStats(saved && saved.stats);
 CARDS.applyLook(S);
 if (saved && saved.game && typeof saved.game === 'object' && validGame(saved.game)) {
   G = saved.game;
+  // The game opened again (no tally in sessionStorage yet): new opponents come, as Settings and Help say. An
+  // untouched deal is replaced at once; a game in progress is played out with its opponents first (carry).
+  let reopened = false;
+  try { reopened = sessionStorage.getItem(SKEY) === null; } catch (e) {}
   SER = loadSeries(G);
-  render();
-  if (G.status === 'playing' && G.turn !== 0) schedule(); // reloaded during the opponents' turn: they go on
+  if (reopened && isFresh() && G.status === 'playing') { SER = null; newGame(); }
+  else {
+    if (reopened) { SER.carry = true; saveSeries(); }
+    render();
+    if (G.status === 'playing' && G.turn !== 0) schedule(); // reloaded during the opponents' turn: they go on
+  }
 } else newGame();
 
 const relayout = () => { if (G) render(); };

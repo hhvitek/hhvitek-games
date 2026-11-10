@@ -64,7 +64,10 @@ const PIPS = [
   [...pairs([36, 61, 86, 111]), [PC, 73.5]],
   [...pairs([36, 61, 86, 111]), [PC, 48.5], [PC, 98.5]],
 ];
-const pipArt = (s, r) => `<text class="rn rn${s}" x="6" y="29">${ROMAN[r]}</text>` + PIPS[r].map(([x, y]) => sign(s, x, y, PW)).join('');
+// VII and VIII are set a little narrower, to a fixed width whatever the device's serif font is: in an overlapped
+// hand (Prší) about half of a card shows, and the third stroke of VIII was hidden there, so an osma read as "VII"
+const ROMAN_W = [30, 39, 0, 0];
+const pipArt = (s, r) => `<text class="rn rn${s}" x="6" y="29"${ROMAN_W[r] ? ` textLength="${ROMAN_W[r]}" lengthAdjust="spacingAndGlyphs"` : ''}>${ROMAN[r]}</text>` + PIPS[r].map(([x, y]) => sign(s, x, y, PW)).join('');
 
 /* ---------- Figures ---------- */
 const f1 = v => Math.round(v * 10) / 10;

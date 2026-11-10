@@ -524,7 +524,14 @@ $('#felt').addEventListener('click', () => {
   else toast(`Kostky už jsou hozené – vyber destičky se součtem ${sum(G.roll)}`);
 });
 $('#rails').addEventListener('click', e => {
-  const p = e.target.closest('.plate'); if (!p) return;
+  let p = e.target.closest('.plate');
+  // a closed plate lies flat (turned around its bottom edge): only a thin strip of it is drawn, but its whole
+  // place answers a tap
+  if (!p) p = [...document.querySelectorAll('#rails .plate.down')].find(el => {
+    const r = el.getBoundingClientRect(), x = (r.left + r.right) / 2, w = el.offsetWidth, h = el.offsetHeight;
+    return e.clientX >= x - w / 2 && e.clientX <= x + w / 2 && e.clientY >= r.bottom - h && e.clientY <= r.bottom;
+  });
+  if (!p) return;
   if (busy) { toast('Chvilku, kostky se ještě kutálejí'); return; }
   if (G.status !== 'playing') { ended(); return; }
   const n = +p.dataset.n;
@@ -706,7 +713,11 @@ normalize(S);
 if (saved && saved.stats && typeof saved.stats === 'object') {
   for (const [k, v] of Object.entries(saved.stats)) if (/^(9|10|12)-[12]$/.test(k) && validStat(v)) stats[k] = { played: v.played, shut: v.shut, best: v.best };
 }
-if (saved && validGame(saved.game)) { G = saved.game; render(); }
+if (saved && validGame(saved.game)) {
+  G = saved.game;
+  // a rule chosen just before the app was closed (Settings still open): applied now, as closing Settings would
+  if (S.tiles !== G.rules.tiles || (S.oneDie !== G.rules.oneDie && !inProgress())) closeSettings(); else render();
+}
 else newGame();
 
 window.addEventListener('resize', layout);

@@ -728,7 +728,7 @@ function renderSettings() {
     <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Přelévání<small>Nastavení</small></h2></div>
     <section class="card"><h3>Obtížnost</h3>
       ${stepper('level', 'Úroveň', level, level > LIMITS.level[0], level < LIMITS.level[1],
-        `<div class="fnote">Na této úrovni je ${c} ${plural(c, 'barva', 'barvy', 'barev')}. Po každé vyřešené hře se úroveň zvýší o jednu a barvy pomalu přibývají.</div>${dotsHTML(c)}`)}
+        `<div class="fnote">Na této úrovni ${plural(c, 'je', 'jsou', 'je')} ${c} ${plural(c, 'barva', 'barvy', 'barev')}. Po každé vyřešené hře se úroveň zvýší o jednu a barvy pomalu přibývají.</div>${dotsHTML(c)}`)}
       ${stepper('maxColors', 'Nejvíc barev', S.maxColors, S.maxColors > LIMITS.maxColors[0], S.maxColors < LIMITS.maxColors[1],
         '<div class="fnote">Víc barev už se nepřidá, ani na vyšších úrovních.</div>')}
       ${pending}

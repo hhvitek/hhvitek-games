@@ -157,12 +157,14 @@ async (page) => {
     await page.goto(`${BASE}games/${id}/index.html?menu&v=${Date.now()}`); // never the launcher: it installs the service worker
     await page.evaluate(() => localStorage.clear()); await page.reload(); await wait(START_WAIT[id] || 1200);
   };
+  // margins that differ on purpose (CLAUDE.md, "Decisions for single games"): Logik's colours sit under the holes
+  const MARGIN_OK = { logik: ['trayL', 'trayR'] };
   for (const id of ids) {
     await open(id, 393, 873);
     await page.screenshot({ path: `${OUT}${id}-1start.png` });
     // one side margin everywhere: top-bar buttons, the board and the bottom buttons start 12 px from the edges
     const m = await page.evaluate(GUTTER);
-    const bad = Object.entries(m).filter(([k, v]) => v >= 0 && (k.startsWith('board') ? v < 11 : Math.abs(v - 12) > 1));
+    const bad = Object.entries(m).filter(([k, v]) => !(MARGIN_OK[id] || []).includes(k) && v >= 0 && (k.startsWith('board') ? v < 11 : Math.abs(v - 12) > 1));
     if (bad.length) errors.push(`${id}: side margins should be 12 px: ${bad.map(([k, v]) => `${k} ${v}`).join(', ')}`);
     await (play[id] ? play[id]() : fallback(id));
     await page.screenshot({ path: `${OUT}${id}-2play.png` });

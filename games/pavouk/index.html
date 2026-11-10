@@ -308,8 +308,9 @@ function dealRow(g) { for (let col = 0; col < COLS; col++) g.tab[col].push(g.sto
 const cloneG = g => ({ tab: g.tab.map(a => a.slice()), down: g.down.slice(), stock: g.stock.slice(), done: g.done.map(a => a.slice()) });
 const snap = g => JSON.stringify({ tab: g.tab, down: g.down, stock: g.stock, done: g.done });
 
-// All sensible moves, sorted best first (sc = how much the move helps)
-function listMoves(g) {
+// All sensible moves, sorted best first (sc = how much the move helps); all = also the legal moves that help
+// nothing by themselves (sc 0: a run lying on a one-higher card goes to another such card), see sideMove()
+function listMoves(g, all) {
   const M = [];
   for (let col = 0; col < COLS; col++) {
     const a = g.tab[col]; if (!a.length) continue;
@@ -337,7 +338,7 @@ function listMoves(g) {
             if (rank(a[a.length - 1]) === 1 && t.length - runStart(t, g.down[to]) + len >= 13) sc = 200; // completes a full run
           } else if (!onSucc) sc += 8;
         }
-        if (sc > 0) M.push({ col, idx, to, sc });
+        if (sc > 0 || all) M.push({ col, idx, to, sc });
       }
     }
   }
@@ -347,6 +348,20 @@ function listMoves(g) {
 function freshMoves(g) {
   const seen = new Set(g.hist); seen.add(snap(g));
   return listMoves(g).filter(m => { const s = cloneG(g); moveRun(s, m.col, m.idx, m.to); collect(s); return !seen.has(snap(s)); });
+}
+// With 2 and 4 suits a move that helps nothing by itself can free the card under it (8♠ from 9♥ to 9♦, then
+// 9♥ goes on 10♥). Looked at one move ahead, so the game and Poradit do not give up while such a move is left:
+// the first sideways move to a new position after which a useful new move exists.
+function sideMove(g) {
+  const seen = new Set(g.hist); seen.add(snap(g));
+  for (const m of listMoves(g, true)) {
+    if (m.sc > 0) continue;
+    const s = cloneG(g); moveRun(s, m.col, m.idx, m.to); collect(s);
+    if (seen.has(snap(s))) continue;
+    const after = listMoves(s).some(x => { const t = cloneG(s); moveRun(t, x.col, x.idx, x.to); collect(t); return !seen.has(snap(t)); });
+    if (after) return m;
+  }
+  return null;
 }
 
 /* ---------- State and saving ---------- */
@@ -572,7 +587,7 @@ function checkEnd() {
     });
     return;
   }
-  if (G.stuckAt !== G.moves && !G.stock.length && !freshMoves(G).length) {
+  if (G.stuckAt !== G.moves && !G.stock.length && !freshMoves(G).length && !sideMove(G)) {
     G.stuckAt = G.moves; save();
     const g0 = G, h0 = G.hist.length;
     whenFree(g0, 500, () => {
@@ -594,10 +609,10 @@ function hint() {
   if (busy) { busyToast(); return; }
   if (!playing()) { toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
   SEL = null; clearHint();
-  const M = freshMoves(G), m = M[0];
+  const M = freshMoves(G), side = M.length ? null : sideMove(G), m = M[0] || side; // side: a move that frees the next one
   const empty = G.tab.map((a, i) => a.length ? -1 : i).filter(i => i >= 0);
   let els = [], msg;
-  if (m && (m.sc >= 8 || empty.length || !G.stock.length)) {
+  if (m && (side || m.sc >= 8 || empty.length || !G.stock.length)) {
     const run = G.tab[m.col].slice(m.idx), c = run[0], t = G.tab[m.to];
     var hintMove = { col: m.col, idx: m.idx, to: m.to };
     run.forEach(x => els.push(EL[x]));
@@ -1043,7 +1058,10 @@ for (const n of [1, 2, 4]) {
 NS = S.suits;
 applyLook();
 buildTable();
-if (saved && validGame(saved.game)) {
+// a number of suits chosen just before the app was closed (Settings still open) with nothing played yet: dealt now,
+// as closing Settings would
+const keep = saved && validGame(saved.game) && !(S.suits !== saved.game.suits && !saved.game.moves);
+if (keep) {
   G = saved.game; NS = G.suits;
   if (playing() && collect(G)) { save(); setTimeout(checkEnd, 0); } // a completed run that did not get to fly away
   render({ instant: true });

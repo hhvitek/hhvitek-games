@@ -683,7 +683,7 @@ function canFinish() {
 function finish() {
   if (busy) return;
   if (!playing()) { toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
-  if (!canFinish()) { toast('Ještě to nejde. Dokončit jde, až žádná karta nebude ležet na menší kartě.', 4000); return; }
+  if (!canFinish()) { toast('Ještě to nejde. Dokončit jde, až všechny karty půjdou rovnou na hromádky.', 4000); return; }
   pushHist(); busy = finishing = true; SEL = null; clearHint();
   const step = () => {
     const m = finishStep(svFromG(G));
@@ -1152,7 +1152,7 @@ function renderHelp() {
     <section class="card help"><h3>Tlačítka</h3>
       <div class="legend">${ico('undo')}<span><b>Zpět</b> vrátí poslední tah. Dá se ťukat opakovaně.</span></div>
       <div class="legend">${ico('hint')}<span><b>Poradit</b> ukáže dobrý tah: karta i místo, kam patří, zablikají.</span></div>
-      <div class="legend">${ico('finish')}<span><b>Dokončit</b> jde, až žádná karta neleží na menší kartě. Karty se pak samy srovnají na hromádky.</span></div>
+      <div class="legend">${ico('finish')}<span><b>Dokončit</b> jde, až všechny karty můžou jít rovnou na hromádky. Karty se pak samy srovnají.</span></div>
       <p class="fnote">Na čas se nehraje. Vzhled stolu, karet a obrázky jdou změnit v nastavení ⚙.</p>
     </section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;

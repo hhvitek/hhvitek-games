@@ -602,7 +602,9 @@ function stand() {
 function autoStand() {
   if (G.phase !== 'you' || total(G, 0) !== TOP) return;
   const g0 = G;
-  setTimeout(() => { if (G === g0 && G.phase === 'you' && !busy && total(G, 0) === TOP) stand(); }, 900);
+  // the bottom row changes by itself here (Stačí may become Další kolo): taps are ignored for a moment after it,
+  // as after a tap, so a tap meant for Stačí does not start the next round and skip the result
+  setTimeout(() => { if (G === g0 && G.phase === 'you' && !busy && total(G, 0) === TOP) { lastTray = Date.now() + 600; stand(); } }, 900);
 }
 function undo() {
   const v = G.mods[0].pop(); G.undo.pop();
@@ -790,7 +792,7 @@ function layout() {
 }
 
 /* ---------- Controls ---------- */
-let lastTray = 0; // the time of the last tap on the bottom row
+let lastTray = 0, lastChip = 0; // the time of the last tap on the bottom row / on a plus or minus card
 $('#tray').addEventListener('click', e => {
   const b = e.target.closest('.act'); if (!b) return;
   // a shaky double tap: the row is redrawn at once, so the second tap would hit the next button (Další kolo, Hrát znovu, Ještě kartu)
@@ -809,7 +811,7 @@ $('#tray').addEventListener('click', e => {
   if (a === 'take') {
     if (G.phase !== 'you') return;
     const t = total(G, 0);
-    if (t > TOP) { toast(rescue(G, 0) !== null ? 'Máš přes 21. Zahraj kartu mínus, nebo ťukni na Stačí.' : `Máš přes 21. Zpět vrátí kartu ${sgn(G.mods[0][0])}.`); return; }
+    if (t > TOP) { toast(rescue(G, 0) !== null ? 'Máš přes 21. Zahraj kartu mínus, nebo ťukni na Stačí.' : `Máš přes 21. Zpět vrátí kartu ${sgn(G.mods[0][G.mods[0].length - 1])}.`); return; }
     if (t === TOP) { toast('Máš 21, víc už nejde. Ťukni na Stačí.'); return; }
     takeCard();
   }
@@ -829,6 +831,10 @@ $('#chipsYou').addEventListener('click', e => {
   if (busy || G.phase === 'cpu') { busyToast(); return; }
   if (G.status === 'over') { toast('Zápas skončil. Ťukni na Hrát znovu.'); return; }
   if (G.phase === 'done') { toast('Kolo skončilo. Karta plus nebo mínus ti zůstane na další kolo.'); return; }
+  // a shaky double tap: the row of plus/minus cards is redrawn and centred again at once, so the second tap
+  // would land on a neighbouring card and play it too (these cards are scarce for the whole match)
+  if (Date.now() - lastChip < 450) return;
+  lastChip = Date.now();
   playMod(+b.dataset.i);
 });
 $('#table').addEventListener('click', e => {
@@ -840,7 +846,8 @@ $('#table').addEventListener('click', e => {
 $('#btnNew').addEventListener('click', () => {
   if (hasProgress()) {
     showModal('<h2>Začít novou hru?</h2><p>Rozehraný zápas se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
-  } else newGame();
+  } else if (endDue === G) showEnd(); // the result dialog of the finished match has not been shown yet: it comes first
+  else newGame();
 });
 
 /* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */

@@ -530,7 +530,8 @@ function validGame(g) {
     return true;
   } catch (e) { return false; }
 }
-const isFresh = () => G.guesses.length === 0 && G.current.every(x => x === null);
+// a game given up before the first check is finished, not fresh (its code is shown)
+const isFresh = () => G.status === 'playing' && G.guesses.length === 0 && G.current.every(x => x === null);
 
 function newGame() {
   clearTimeout(endT); endT = 0;
@@ -680,12 +681,16 @@ function layout() {
   if (S.palRight) {
     // the colours in the right column, one per row from the top (alignSide); only when there are fewer free rows
     // than colours do they get smaller, and when one column would make them too small, two columns
-    // one or two columns: alignSide() decides from the real rows and lays out again when it changes
-    const cols = +getComputedStyle(root).getPropertyValue('--palc') === 2 ? 2 : 1;
+    // one or two columns: alignSide() decides from the real rows of the one-column layout and lays out again
+    // for two. Every layout starts from one column: starting from what the last layout left made the two
+    // answers disagree, and the columns and holes then changed with every move
+    const cols = relayout && +getComputedStyle(root).getPropertyValue('--palc') === 2 ? 2 : 1;
     root.style.setProperty('--palc', cols);
     root.style.setProperty('--side', (cols === 1 ? 58 : 2 * 48 + 6) + 'px');
   } else {
-    // the colours in the tray: the first at the left margin, the last at the right one (space-between)
+    // the colours in the tray: the first at the left margin, the last at the right one (space-between);
+    // measured without the last alignment (7–8 colours take two rows then), so every layout gives the same holes
+    $('#palette').classList.remove('aligned');
     const tray = $('#tray'), W = tray.clientWidth - px(tray, 'paddingLeft') - px(tray, 'paddingRight');
     const k = c <= 6 ? c : Math.ceil(c / 2);
     const pal = Math.max(44, Math.min(c <= 6 ? 64 : 58, (W - (k - 1) * 12) / k));
@@ -991,7 +996,7 @@ function renderSettings() {
       ${toggleRow('palRight', 'Barvy ve sloupci vpravo')}
       <div class="fnote" style="margin-top:-6px">${S.palRight ? 'Barvy jsou vpravo pod sebou, stejně velké jako jamky.' : 'Barvy jsou dole pod hrací deskou.'}</div>
       ${toggleRow('hints', 'Řádek s nápovědou')}
-      <div class="fnote" style="margin-top:-6px">Nad barvami krátce napíše, co udělat dál, třeba „Přetáhni barvy do jamek“.</div>
+      <div class="fnote" style="margin-top:-6px">${S.palRight ? 'Dole pod deskou' : 'Nad barvami'} krátce napíše, co udělat dál, třeba „Přetáhni barvy do jamek“.</div>
     </section>
     <section class="card"><h3>Pravidla hry</h3>
       ${stepper('colors', 'Počet barev', S.colors,

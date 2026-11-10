@@ -308,6 +308,10 @@ const GOALS = [
   { id: 2048, name: '2048', desc: 'Klasický cíl, chce trpělivost.' },
 ];
 const SIZES = [3, 4, 5, 6];
+// On the 3 × 3 grid the goals are a quarter (128 / 256 / 512): nine cells can never hold the tiles 2048 needs
+// (the largest tile possible there is 1024, and only with a perfect board)
+const goalFor = size => size === 3 ? S.goal / 4 : S.goal;
+const goal = () => goalFor(G ? G.n : S.size); // the goal of the game on the board
 const IMG = globalThis.IMAGE_SETS || {}, IMG_BASE = '../../images/';
 const PIC_LEVELS = 17; // pictures for 2 … 131072
 const TILESETS = [{ id: 'numbers', name: 'Čísla' }].concat(Object.keys(IMG).map(id => ({ id, name: IMG[id].name })));
@@ -514,7 +518,7 @@ function render(fx) {
   renderTiles(fx);
   $('#score').textContent = fmt(G.score);
   $('#best').textContent = fmt(best);
-  $('#goal').textContent = S.goal;
+  $('#goal').textContent = goal();
   $('#btnUndo').classList.toggle('dim', !G.history.length);
   document.querySelectorAll('.arrow').forEach(b => b.classList.toggle('dim', G.status === 'over'));
 }
@@ -535,7 +539,7 @@ function layout() {
 }
 
 /* ---------- Moving ---------- */
-let anim = null, modalT = null;
+let anim = null, modalT = null, winDue = null; // winDue: the game whose "Výborně!" dialog is still to come
 function finishAnim() {
   if (!anim) return;
   clearTimeout(anim.t);
@@ -556,7 +560,7 @@ function move(dir) {
   if (G.score > best) best = G.score;
   const spawned = spawn(G.board, G);
   let win = false;
-  if (!G.won && maxTile(G.board) >= S.goal) { G.won = true; win = true; }
+  if (!G.won && maxTile(G.board) >= goal()) { G.won = true; win = true; winDue = G; }
   if (!canMove(G.board, N)) G.status = 'over';
   save();
 
@@ -576,7 +580,9 @@ function move(dir) {
   buzz(res.merges.length ? 20 : 8);
   clearTimeout(modalT);
   const g0 = G, h0 = G.history.length; // an Undo meanwhile cancels the dialog (clearTimeout(modalT) and the history check)
-  if (win) modalT = setTimeout(() => whenFree(g0, 0, () => { if (G.history.length === h0) showWin(); }), 450);
+  // winDue: the goal was reached and its dialog has not been shown yet; a quick next move (within the 0.45 s)
+  // starts the wait again instead of losing the dialog for good
+  if (winDue === G) modalT = setTimeout(() => whenFree(g0, 0, () => { if (winDue === g0 && G.won) { winDue = null; showWin(); } }), 450);
   else if (G.status === 'over') modalT = setTimeout(() => whenFree(g0, 0, () => { if (G.status === 'over' && G.history.length === h0) showOver(); }), 700);
 }
 function undo() {
@@ -584,7 +590,8 @@ function undo() {
   if (!G.history.length) { toast(G.capped ? 'Dál už se vrátit nedá' : 'Zatím není co vracet'); return; }
   const h = G.history.pop();
   // the goal may have been raised since that move: it is reached only when the board has it
-  G.board = h.b; G.score = h.s; G.won = !!h.w && maxTile(h.b) >= S.goal; G.status = 'playing';
+  G.board = h.b; G.score = h.s; G.won = !!h.w && maxTile(h.b) >= goal(); G.status = 'playing';
+  if (!G.won) winDue = null;
   if (typeof h.bb === 'number' && isFinite(h.bb)) best = Math.max(h.bb, G.bestAtStart || 0);
   if (Number.isInteger(h.seed)) G.seed = h.seed; // the same move again gives the same new tile
   $('#modal').hidden = true;
@@ -680,8 +687,8 @@ function renderSettings() {
         <div class="sval">${S.size} × ${S.size}</div>
         <button class="sbtn${si < SIZES.length - 1 ? '' : ' off'}" data-act="size:1" aria-label="Větší">+</button>
       </div><div class="fnote">Větší mřížka je snazší (víc místa), menší je těžší. Každá velikost má svůj rekord.</div>${pending}</div>
-      <div class="field"><div class="flabel">Cíl hry</div>${GOALS.map(g => `<button class="opt" data-act="goal:${g.id}" aria-pressed="${S.goal === g.id}"><span class="radio"></span><span><b>${g.name}</b><span class="d">${g.desc}</span></span></button>`).join('')}
-        <div class="fnote">Cíl platí hned. Po dosažení cíle se dá hrát dál.</div></div>
+      <div class="field"><div class="flabel">Cíl hry</div>${GOALS.map(g => `<button class="opt" data-act="goal:${g.id}" aria-pressed="${S.goal === g.id}"><span class="radio"></span><span><b>${S.size === 3 ? g.id / 4 : g.name}</b><span class="d">${g.desc}</span></span></button>`).join('')}
+        <div class="fnote">Cíl platí hned. Po dosažení cíle se dá hrát dál.${S.size === 3 ? ' Na mřížce 3 × 3 jsou cíle menší, větší čísla se na ni nevejdou.' : ''}</div></div>
     </section>
     <section class="card"><h3>Ovládání</h3>
       ${toggleRow('swipe', 'Posouvat i tahem prstem po desce')}
@@ -724,10 +731,10 @@ function closeSettings() {
     if (had) toast('Začala nová hra s mřížkou ' + S.size + ' × ' + S.size);
     return;
   }
-  if (G.won && maxTile(G.board) < S.goal) { G.won = false; save(); } // a higher goal: its win comes when it is reached
+  if (G.won && maxTile(G.board) < goal()) { G.won = false; winDue = null; save(); } // a higher goal: its win comes when it is reached
   render();
   // A lower goal may already be reached
-  if (!G.won && G.status === 'playing' && maxTile(G.board) >= S.goal) { G.won = true; save(); showWin(); }
+  if (!G.won && G.status === 'playing' && maxTile(G.board) >= goal()) { G.won = true; save(); showWin(); }
 }
 $('#btnSettings').addEventListener('click', openSettings);
 
@@ -757,7 +764,7 @@ function renderHelp() {
           <div class="demo">${t(2)}${t(2)}<span>→</span>${t(4)}</div>
           <div class="demo">${t(8)}${t(8)}<span>→</span>${t(16)}</div></li>
         <li>Po každém tahu přibude na prázdném místě nová dvojka (občas čtyřka).</li>
-        <li>Cílem je poskládat číslo <b>${S.goal}</b>. Potom se dá hrát dál.</li>
+        <li>Cílem je poskládat číslo <b>${goal()}</b>. Potom se dá hrát dál.</li>
         <li>Body přibývají za každé spojení. Nikam se nespěchá.</li>
         <li>Hra končí, když je deska plná a nic se nedá spojit. Tlačítko <b>Zpět</b> vrátí poslední tah – i na konci hry.</li>
         <li>Rada: drž největší číslo v jednom rohu a posouvej hlavně dvěma směry.</li>

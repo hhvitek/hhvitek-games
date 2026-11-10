@@ -287,8 +287,8 @@ const SETS = [
   { id: 'classic',   name: 'Klasické',   desc: 'Kruhy, bambusy, znaky, větry a draci. Číslo v rohu pomáhá kameny rozlišit.', groups: ['Květiny', 'Roční období'], sample: [4, 13, 21, 31] },
   { id: 'pics',      name: 'Obrázky',    desc: 'Ovoce, zvířata a věci. Snadno se rozeznají.', groups: ['Květiny', 'Roční období'], sample: [4, 13, 21, 31] },
   { id: 'cats',      name: 'Kočky',      desc: 'Fotky koček různých plemen a barev.', img: 'photo', groups: groupsOf('cats'), sample: [0, 7, 13, 34] },
-  { id: 'nachod',    name: 'Náchodsko',  desc: 'Zámky, kostely, skály a místa z Náchodska a pár slavných míst z kraje. Zámek Náchod je v každé hře.', img: 'photo', groups: groupsOf('nachod'), must: [0], sample: [0, 12, 20, 35] },
-  { id: 'coats',     name: 'Znaky obcí', desc: 'Znaky měst a obcí z okresu Náchod. Náchod je v každé hře.', img: 'coat', groups: groupsOf('coats'), must: [0], sample: [0, 3, 22, 34] },
+  { id: 'nachod',    name: 'Náchodsko',  desc: 'Zámky, kostely, skály a místa z Náchodska a pár slavných míst z kraje. Zámek Náchod je v každé nové hře.', img: 'photo', groups: groupsOf('nachod'), must: [0], sample: [0, 12, 20, 35] },
+  { id: 'coats',     name: 'Znaky obcí', desc: 'Znaky měst a obcí z okresu Náchod a okresních měst kraje. Náchod je v každé nové hře.', img: 'coat', groups: groupsOf('coats'), must: [0], sample: [0, 3, 22, 34] },
   { id: 'mushrooms', name: 'Houby',      desc: 'Kreslené houby z našich lesů, jedlé i jedovaté.', img: 'drawing', groups: groupsOf('mushrooms'), sample: [0, 2, 3, 38] },
   { id: 'birds',     name: 'Ptáci',      desc: 'Kreslení ptáci ze zahrad, polí a lesů.', img: 'drawing', groups: groupsOf('birds'), sample: [0, 1, 5, 34] },
   { id: 'produce',   name: 'Ovoce a zelenina', desc: 'Kreslené ovoce a zelenina ze zahrady.', img: 'drawing', groups: groupsOf('produce'), sample: [0, 3, 4, 34] },
@@ -939,7 +939,8 @@ function openSettings() { if (busy) { busyToast(); return; } hideToast(); render
 // Settings apply immediately; a different board size needs a new game.
 function closeSettings() {
   $('#screenSettings').hidden = true;
-  if (S.size !== G.size) { newGame(hasProgress() ? 'Začala nová hra s novou velikostí plánu' : ''); return; }
+  // also after a finished game (rule): only an untouched plan is replaced without a word
+  if (S.size !== G.size) { newGame(G.hist.length ? 'Začala nová hra s novou velikostí plánu' : ''); return; }
   save(); render();
 }
 $('#btnSettings').addEventListener('click', openSettings);
@@ -970,7 +971,10 @@ function renderHelp() {
     <button class="big" data-act="close">Rozumím, hrát</button>`;
   // demo: a row of three tiles and a tile lying on two others
   const dg = { pos: [[0, 0, 0], [2, 0, 0], [4, 0, 0], [8, 0, 0], [10, 0, 0], [9, 0, 1]], n: 6, order: [0, 1, 2, 3, 4, 5] };
-  const L = place(dg, dg.order, 46), demo = $('#demoBoard'), faces = [4, 13, 22, 31, 27, 31];
+  // the picture is six tiles wide: on a narrow phone the tiles get smaller so it stays inside its box (the help is
+  // drawn while its screen is still hidden, so the room comes from the window: screen 16 + card 16 + list 26 + box 14)
+  const room = Math.min(innerWidth - 32, 560) - 32 - 26 - 28;
+  const L = place(dg, dg.order, Math.max(30, Math.min(46, Math.floor((room - 6) / 6)))), demo = $('#demoBoard'), faces = [4, 13, 22, 31, 27, 31];
   setTileVars(demo, L);
   let h = '';
   for (const i of dg.order) {

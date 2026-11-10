@@ -3,14 +3,9 @@
 Things left to do, roughly in order of importance. Delete an item when it is done (git keeps the history).
 The user's decisions on how things should be are in CLAUDE.md ("Decisions…" sections), not here.
 
-## Publishing
-
-- [ ] Turn on GitHub Pages (the user, in the browser): Settings → Pages → Build and deployment → Source: **GitHub Actions**.
-- [ ] Settings → Environments → `github-pages` → Deployment branches and tags → add a rule for the tag pattern `v*` (by default only master may deploy, and the release tags would be refused).
-- [ ] First release `1.0.0` when the user says so (`node tools/release.js`, see Deployment in CLAUDE.md), then check the Actions run and `https://hhvitek.github.io/hhvitek-games/`.
-
 ## Testing on the real phone
 
+- [ ] Brave on Android (the Samsung S25 of the report): check that the bottom buttons are no longer cut off in the app installed by Brave; Nastavení → "Údaje o obrazovce" in the launcher shows what the last game measured. By the table in CLAUDE.md ("Visible height") Brave reports the same height for `visualViewport` as for `100dvh`, so the 1.0.4 rule alone may not be enough. When it is settled, remove both TEMPORARY parts: the card in `index.html` and the `games.launcher.diag` write in every game and the template.
 - [ ] Open the launcher on the target phone (Xiaomi 13T/14T/15T), add it to the home screen and play each game once.
 - [ ] Turn on airplane mode and check that all games and the image sets (Mahjong: Kočky, Náchodsko, Znaky obcí, Houby, Ptáci, Ovoce a zelenina) still load offline.
 - [ ] Check that an old game in progress survives the update (old `hry.*.rozehrano` and `<id>.v1` keys are migrated).
@@ -22,6 +17,8 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
   they are small), and Logik holes go down to about 0.75 cm on short screens with 10–12 attempts. Keep, drop the
   largest board / the most attempts, or make the boards scroll?
 - [ ] Zavři čísla: the dice come from the saved seed, so after a roll the player can press Zpět, close other tiles and see the same dice again; repeated, this shows the coming rolls. Keep it, or allow Undo only within the current roll?
+
+- [ ] Spojování čísel: on the 3 × 3 grid the goals are now a quarter (128 / 256 / 512 instead of 512 / 1024 / 2048), because nine cells can hold at most 1024. Chosen by the agent while fixing the review findings (2026-11-10): keep, or other goals?
 
 ## Ideas
 

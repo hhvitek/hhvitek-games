@@ -161,9 +161,9 @@ for (const id of ids) {
   need(rules.some(r => r.sel.split(',').some(s => s.trim() === `[${attr}="paper"]`) && /#f4ebdf/.test(r.body) && /#2b1a0e/.test(r.body)), `[${attr}="paper"] uses the launcher's colours (#f4ebdf, ink #2b1a0e)`);
   // an unavailable button keeps readable text: no fill and a dashed outline, never only opacity
   for (const r of rules) {
-    if (!/\.(undo|act|big|go|tbtn|arrow|ctl)\.dim\b|(^|[\s,])\.dim\s*($|,)/.test(r.sel)) continue;
+    if (!/\.(undo|act|big|go|tbtn|arrow|ctl|key)\.dim\b|(^|[\s,])\.dim\s*($|,)|\.(sw|sbtn)\.off\b/.test(r.sel)) continue;
     const op = /(?:^|;)\s*opacity:\s*([\d.]+)/.exec(r.body);
-    if (op && +op[1] < 1) P.push(`dimmed button only made transparent (${r.sel}): copy the .undo.dim rule from the template`);
+    if (op && +op[1] < 1) P.push(`dimmed button only made transparent (${r.sel}): copy the .undo.dim rule from the template (a paper switch: .sw.off in skladani-kostek)`);
   }
 
   // one self-contained file: only images/, the shared card look, the mariáš cards and the computer opponents may be loaded

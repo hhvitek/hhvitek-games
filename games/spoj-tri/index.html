@@ -1103,7 +1103,10 @@ normalize(S);
 if (saved && saved.records && typeof saved.records === 'object')
   for (const [k, v] of Object.entries(saved.records)) if (/^\d-\d-\d+-[01]$/.test(k) && Number.isFinite(v) && v > 0) R[k] = v;
 G = saved && typeof saved === 'object' ? restoreGame(saved.game) : null;
-if (G) { ensurePics(); layout(); rebuild(); render(); save(); }
+if (G) {
+  ensurePics(); layout(); rebuild(); render(); save();
+  if (rulesDiffer()) closeSettings(); // rules chosen just before the app was closed (Settings still open): applied now
+}
 else newGame();
 
 window.addEventListener('resize', layout);

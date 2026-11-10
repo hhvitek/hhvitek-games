@@ -358,8 +358,9 @@ function svKey(s, n) {
 }
 const svWon = s => s.f[0] + s.f[1] + s.f[2] + s.f[3] === 52;
 // Finds a win within the node limit. Returns the first move of the solution, null = not found.
-function solve(s0, n, limit) {
-  const seen = new Set();
+// avoid: keys of positions that count as dead ends (the ones already played, see showHint).
+function solve(s0, n, limit, avoid) {
+  const seen = new Set(avoid || []);
   let nodes = 0, aborted = false;
   const rec = s => {
     for (let m; (m = svSafeMove(s, n));) svPlay(s, m);
@@ -412,6 +413,9 @@ async function solvableDeck(n, ms = 10000) {
 /* ---------- State and saving ---------- */
 let S, G = null, ST, busy = false, SEL = null;
 const playing = () => G && G.status === 'playing';
+// the deal the game was asked for: a "solvable" deal that could not be verified in time is played as random
+// (deal: 'rand'), but it is not a change of the setting
+const dealOf = g => g.asked === 'solv' || g.asked === 'rand' ? g.asked : g.deal;
 const hasProgress = () => playing() && G.moves > 0;
 function load() {
   try {
@@ -490,7 +494,7 @@ function newGame(msg) {
   setTimeout(async () => {
     const r = S.deal === 'solv' ? await solvableDeck(S.draw) : { deck: shuffle([...Array(52).keys()]), ok: true };
     // a deal that could not be verified in time counts as random, and the player is told
-    G = Object.assign(dealFrom(r.deck), { deal: r.ok ? S.deal : 'rand', draw: S.draw, hist: [], status: 'playing', moves: 0, counted: false, stuckAt: -1, finTold: false });
+    G = Object.assign(dealFrom(r.deck), { deal: r.ok ? S.deal : 'rand', asked: S.deal, draw: S.draw, hist: [], status: 'playing', moves: 0, counted: false, stuckAt: -1, finTold: false });
     G.init = snap(G);
     busy = false;
     hideToast();
@@ -743,7 +747,14 @@ function hint() {
 function showHint() {
   const s = svFromPiles(G);
   // the same search as the check of a solvable deal, so following the hints never loses a solvable game
-  const m = solve(s, G.draw, G.draw === 1 ? 30000 : 20000) || svMoves(s, G.draw).find(x => x.sc > 5);
+  // Each hint is a fresh search: two of them could send one card there and back forever (A → B, then B → A).
+  // So the positions already played in this game count as dead ends first; only when no win avoids them
+  // (a wrong move has to be taken back) does the plain search decide.
+  const lim = G.draw === 1 ? 30000 : 20000;
+  const played = G.hist.map(h => {
+    try { const t = svFromPiles(JSON.parse(h)); for (let x; (x = svSafeMove(t, G.draw));) svPlay(t, x); return svKey(t, G.draw); } catch (e) { return ''; }
+  });
+  const m = (played.length && solve(s, G.draw, lim, played)) || solve(s, G.draw, lim) || svMoves(s, G.draw).find(x => x.sc > 5);
   if (!m) { render(); toast('Žádný užitečný tah už nevidím. Zkus Zpět nebo novou hru.'); return; }
   const els = [];
   let msg;
@@ -1095,12 +1106,12 @@ function renderSettings() {
       <div class="field"><div class="flabel">Lízání z balíčku</div>
         ${opt('set:draw:1', S.draw === 1, 'Po jedné kartě', 'Snazší. Z balíčku se otočí vždy jedna karta.')}
         ${opt('set:draw:3', S.draw === 3, 'Po třech kartách', 'Jako v klasických Windows. Otočí se tři karty a hrát jde jen s tou horní. Těžší.')}
-        ${G && S.draw !== G.draw ? '<div class="notice">Lízání se změní od <b>příští hry</b>. Rozehraná hra zůstává.</div>' : ''}
+        ${G && S.draw !== G.draw ? (G.moves ? `<div class="notice">Lízání se změní od <b>příští hry</b>.${playing() ? ' Rozehraná hra zůstává.' : ''}</div>` : '<div class="notice">Po návratu do hry se rozdá <b>nová hra</b>.</div>') : ''}
       </div>
       <div class="field"><div class="flabel">Rozdání karet</div>
         ${opt('set:deal:solv', S.deal === 'solv', 'Vždy řešitelné', 'Každá hra jde vyhrát, hra to před rozdáním ověří. Přemýšlet je ale pořád potřeba.')}
         ${opt('set:deal:rand', S.deal === 'rand', 'Úplně náhodné', 'Karty se zamíchají jen tak. Některé hry vyhrát nejdou.')}
-        ${G && S.deal !== G.deal ? '<div class="notice">Rozdání se změní od <b>příští hry</b>. Rozehraná hra zůstává.</div>' : ''}
+        ${G && S.deal !== dealOf(G) ? (G.moves ? `<div class="notice">Rozdání se změní od <b>příští hry</b>.${playing() ? ' Rozehraná hra zůstává.' : ''}</div>` : '<div class="notice">Po návratu do hry se rozdá <b>nová hra</b>.</div>') : ''}
       </div>
     </section>
     <section class="card"><h3>Ovládání</h3>
@@ -1137,6 +1148,8 @@ function openSettings() { if (busy) { busyNote(); return; } autoAtOpen = S.auto;
 function closeSettings() {
   $('#screenSettings').hidden = true;
   SEL = null;
+  // draw and deal belong to the game (rule): they change from the next game, at once only when nothing was played yet
+  if (G && !G.moves && (S.draw !== G.draw || S.deal !== dealOf(G))) { newGame(); return; }
   const s0 = G && snap(G);
   if (playing() && S.auto && !autoAtOpen) { const before = snap(G); autoFound(); if (snap(G) !== before) G.hist.push(before); }
   save(); render({ instant: true });
@@ -1216,7 +1229,9 @@ normalize(S);
 ST = validStats(saved && saved.stats, statKey(S));
 applyLook();
 buildTable();
-if (saved && validGame(saved.game)) {
+// rules chosen just before the app was closed (Settings still open) with nothing played yet: dealt now, as closing
+// Settings would
+if (saved && validGame(saved.game) && !(!saved.game.moves && (S.draw !== saved.game.draw || S.deal !== dealOf(saved.game)))) {
   G = saved.game;
   render({ instant: true });
 } else { renderTray(); newGame(); }

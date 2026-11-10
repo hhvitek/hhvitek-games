@@ -41,7 +41,7 @@ jobs:
       - name: Assemble the site
         run: |
           rsync -a ./ _site/ \
-            --exclude '.git*' --exclude '.github/' --exclude '.claude/' --exclude '.playwright-mcp/' --exclude '.idea/' \
+            --exclude '.git*' --exclude '.github/' --exclude '.claude/' --exclude '.playwright-mcp/' --exclude '.idea/' --exclude '.mcp.json' \
             --exclude 'tools/' --exclude 'docs/' --exclude 'games/_template/' --exclude '*.md' --exclude '_site/'
           echo "Files: $(find _site -type f | wc -l)"
 

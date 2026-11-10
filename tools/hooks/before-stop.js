@@ -2,7 +2,8 @@
 // Stop hook (.claude/settings.json): before the agent ends its turn, look at the games changed in the working tree
 // (git status, so edits made by scripts count too):
 //  1. tools/check.js must pass for them,
-//  2. each changed game needs screenshots newer than its last change (tools/shots.js), so somebody has looked at it.
+//  2. each changed game needs screenshots newer than its last change (tools/shots.js), so somebody has looked at it
+//     (.playwright-mcp/<id>-1start.png: the pictures stay there until the change is committed).
 // Otherwise the turn goes on once with the reason (exit code 2, text on stderr). The second time
 // (stop_hook_active) it lets the agent stop, so it is a reminder, never a loop.
 'use strict';
@@ -42,7 +43,7 @@ process.stdin.on('end', () => {
   // the next version); same list of files the players never get as in tools/release.js
   const all = spawnSync('git', ['-c', 'core.quotePath=false', 'status', '--porcelain', '--untracked-files=all'], { cwd: ROOT, encoding: 'utf8' });
   const changed = (all.stdout || '').split('\n').filter(Boolean).map(l => l.slice(3).trim().replace(/^"|"$/g, '').replace(/^.* -> /, ''));
-  const forPlayers = changed.filter(f => !/^(tools|docs|\.claude|\.github|\.playwright-mcp|games\/_template)\//.test(f) && !/\.md$/.test(f) && !/^\.git/.test(f) && f !== 'LICENSE');
+  const forPlayers = changed.filter(f => !/^(tools|docs|\.claude|\.github|\.playwright-mcp|games\/_template)\//.test(f) && !/\.md$/.test(f) && !/^\.git/.test(f) && f !== 'LICENSE' && f !== '.mcp.json');
   if (forPlayers.length && !changed.includes('CHANGELOG.md')) reasons.push(
     `Players will get changes (${forPlayers.slice(0, 4).join(', ')}${forPlayers.length > 4 ? ', …' : ''}) but CHANGELOG.md has no new line: ` +
     'add a short Czech line under "## Nevydáno", or say in your answer why it is not needed.');
@@ -65,9 +66,10 @@ process.stdin.on('end', () => {
     return !fs.existsSync(shot) || fs.statSync(shot).mtimeMs < fs.statSync(path.join(ROOT, 'games', id, 'index.html')).mtimeMs;
   });
   if (stale.length) reasons.push(
-    `Not looked at since the last change: ${stale.join(', ')}. Run tools/shots.js for them (a headless Playwright MCP only, see Testing in CLAUDE.md; browser_run_code_unsafe ` +
-    `with filename tools/shots.js after setting globalThis.SHOT_IDS = ${JSON.stringify(stale)}; a local server on port 8765) and look at ` +
-    `.playwright-mcp/sheet-<id>.png, or say in your answer why it is not needed (e.g. a comment-only change).`);
+    `Not looked at since the last change: ${stale.join(', ')}. Run tools/shots.js for them (a headless Playwright MCP only, see Testing in CLAUDE.md: ` +
+    `write .playwright-mcp/shots.json = ${JSON.stringify({ ids: stale })}, a local server on port 8765, browser_run_code_unsafe with filename tools/shots.js) and look at ` +
+    `.playwright-mcp/sheet-<id>.png; keep the pictures until the change is committed (this check reads their time). ` +
+    `Or say in your answer why it is not needed (e.g. a comment-only change).`);
 
   if (!reasons.length) process.exit(0);
   process.stderr.write(reasons.join('\n') + '\n');

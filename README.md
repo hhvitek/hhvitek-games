@@ -38,7 +38,7 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | FreeCell        | `games/freecell/`        | Solitér se čtyřmi volnými políčky                                                                                         |
 | Pyramida        | `games/pyramida/`        | Odebírej dvojice karet se součtem 13                                                                                      |
 | Pavouk          | `games/pavouk/`          | Pavouk (Spider)                                                                                                           |
-| Oko bere        | `games/oko-bere/`        | Česká karetní hra do 21 s mariášovými kartami proti počítači; body za kola do 5, soupeř s náhodným jménem, mírný ★☆ nebo chytrý ★★                |
+| Oko bere        | `games/oko-bere/`        | Česká karetní hra do 21 s mariášovými kartami proti počítači; body za kola do 3 nebo 5, soupeř s náhodným jménem, mírný ★☆ nebo chytrý ★★                |
 | Oko bere plus mínus | `games/oko-bere-plus-minus/` | Do 21 proti počítači s kartami od esa do desítky a čtyřmi kartami plus a mínus, které upraví součet; do 3 vyhraných kol |
 | Prší            | `games/prsi/`            | Klasické české prší s mariášovými kartami proti jednomu nebo dvěma soupeřům (jeden útočí, druhý šetří karty); sedma, eso, svršek mění barvu, Zpět |
 
