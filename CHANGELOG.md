@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.9 – 2026-11-10
+
 - Padající tvary: když otočíš telefon na šířku, hra se zastaví a počká. Druhé ťuknutí na šipku dolů tvar položí, i když chvilku počkáš.
 - Logik: s barvami ve sloupci vpravo se hrací deska po každém tahu už nemění. Na tabletu a počítači se 7 a 8 barvami je hraný řádek vždy celý vidět.
 - Solitér: Poradit už neposílá jednu kartu pořád tam a zpět.
