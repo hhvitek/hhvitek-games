@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Logik: zmizel řádek s nápovědou nad barvami („Přetáhni barvy do jamek“), takže hrací deska je zase o kousek větší.
+
 ## 1.0.7 – 2026-11-10
 
 - Logik: nové rozložení jako ve staré počítačové hře. Hrací deska je větší, čísla řádků zmizela, černé a bílé kolíčky jsou vlevo od řádku a prázdné místo je jen malá šedá tečka, takže bílý kolíček nejde splést.

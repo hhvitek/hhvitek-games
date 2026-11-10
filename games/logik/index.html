@@ -187,9 +187,8 @@ a.round{text-decoration:none}
 .peg b{display:none;color:var(--ct);font-weight:900;line-height:1;text-shadow:0 0 3px rgba(255,255,255,.25)}
 .show-nums .peg b{display:block}
 
-/* Bottom tray: the hint and the colours, spread from the left margin to the right one */
-.tray{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px var(--gut) 12px;background:var(--bar);box-shadow:inset 0 4px 8px rgba(0,0,0,.35);border-top:1px solid rgba(255,255,255,.07)}
-.hint{text-align:center;font-size:19px;font-weight:600;min-height:25px;line-height:25px;color:var(--ink)}
+/* Bottom tray: only the colours, no status line (user's decision: it took room and said nothing new) */
+.tray{flex:none;display:flex;flex-direction:column;padding:12px var(--gut);background:var(--bar);box-shadow:inset 0 4px 8px rgba(0,0,0,.35);border-top:1px solid rgba(255,255,255,.07)}
 .palette{display:grid;grid-template-columns:repeat(var(--palc),var(--pal));justify-content:space-between;gap:10px}
 .palette.aligned{display:block;position:relative;height:var(--pal)} /* alignPalette(): each colour under its column of holes */
 .palette.aligned .pbtn{position:absolute;top:0}
@@ -215,9 +214,9 @@ a.round{text-decoration:none}
 .side.grid{position:relative} /* alignSide(): each button sits on its rows of the board */
 .side.grid > button,.side.grid > .side-mid{position:absolute;left:0;width:100%}
 .side-mid .palette.aligned{width:100%;height:100%}
-/* "Barvy ve sloupci vpravo": the colours in the right column, the tray keeps only the hint */
+/* "Barvy ve sloupci vpravo": the colours in the right column, the tray is not needed at all */
 .pal-right .side-mid .palette{justify-content:center;align-content:center;gap:8px 6px}
-.pal-right .tray{gap:0}
+.pal-right .tray{display:none}
 
 #ghost{position:fixed;z-index:50;pointer-events:none;transform:translate(-50%,-50%);width:calc(var(--hole)*1.15);height:calc(var(--hole)*1.15);font-size:calc(var(--hole)*.45);filter:drop-shadow(0 6px 6px rgba(0,0,0,.5))}
 #ghost .peg{width:100%;height:100%}
@@ -284,8 +283,7 @@ a.round{text-decoration:none}
   .topbar{height:52px}
   .pill{height:42px}.round{width:42px;height:42px}
   .topbar h1{font-size:25px}
-  .tray{gap:6px;padding:6px var(--gut) 10px}
-  .hint{font-size:18px}
+  .tray{padding:10px var(--gut)}
   .big{height:58px;font-size:23px}
   .undo,.side .undo{height:52px}
   #btnGiveUp{height:max(46px, var(--rowh))}
@@ -335,7 +333,6 @@ a.round{text-decoration:none}
     </aside>
   </div>
   <footer class="tray" id="tray">
-    <div class="hint" id="hint"></div>
     <div class="palette" id="palette"></div>
   </footer>
 </div>
@@ -643,24 +640,13 @@ function render() {
   for (let c = 0; c < r.colors; c++) pal += `<button class="pbtn" data-c="${c}" aria-label="${COLORS[c].name}">${pegHTML(c)}</button>`;
   $('#palette').innerHTML = pal;
 
-  // Hint and button
+  // The tick button
   const full = G.current.every(x => x !== null);
   const btn = $('#btnCheck');
-  let hint;
   // the button shows a picture only: a tick to check, round arrows for a new game after the end
   const icon = ended ? ICON_NEW : ICON_CHECK, label = ended ? 'Nová hra' : 'Zkontrolovat';
   if (btn.dataset.icon !== label) { btn.innerHTML = icon; btn.setAttribute('aria-label', label); btn.dataset.icon = label; }
-  if (G.status === 'won') { hint = 'Vyřešeno! 🎉'; btn.classList.remove('dim'); }
-  else if (G.status === 'lost') { hint = G.gaveUp ? 'Tajný kód je odkrytý' : 'Konec hry'; btn.classList.remove('dim'); }
-  else {
-    btn.classList.toggle('dim', !full);
-    const left = G.current.filter(x => x === null).length;
-    if (full) hint = 'Hotovo? Ťukni na fajfku vpravo';
-    else if (S.mode === 'tap') hint = left === r.pegs ? `Ťukni na barvy ${S.palRight ? 'vpravo' : 'dole'}` : `Vyber ještě ${left} ${left === 1 ? 'barvu' : left <= 4 ? 'barvy' : 'barev'}`;
-    else if (S.mode === 'slot') hint = 'Vyber barvu pro označenou jamku';
-    else hint = 'Přetáhni barvy do jamek';
-  }
-  $('#hint').textContent = hint;
+  btn.classList.toggle('dim', !ended && !full);
   $('#btnGiveUp').classList.toggle('dim', G.status !== 'playing');
   $('#btnUndo').classList.toggle('dim', G.status !== 'playing' || G.current.every(x => x === null));
 
