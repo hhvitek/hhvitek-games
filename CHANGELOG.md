@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.7 – 2026-11-10
+
 - Logik: nové rozložení jako ve staré počítačové hře. Hrací deska je větší, čísla řádků zmizela, černé a bílé kolíčky jsou vlevo od řádku a prázdné místo je jen malá šedá tečka, takže bílý kolíček nejde splést.
 - Logik: tlačítka Vzdát se (vlajka), Zpět (šipka) a Zkontrolovat (fajfka) jsou vpravo jen jako obrázky. Tajný kód schovávají tmavá víčka s otazníkem a ťuknutí na ně je totéž jako vlajka.
 - Logik: barvy jsou v pořadí červená, bílá, zelená, černá, modrá, žlutá a dole leží přesně pod jamkami. V Nastavení je jde přesunout do sloupce vpravo („Barvy ve sloupci vpravo“).
