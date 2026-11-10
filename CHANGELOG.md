@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.8 – 2026-11-10
+
 - Logik: řádek s nápovědou nad barvami („Přetáhni barvy do jamek“) je teď schovaný, takže hrací deska je o kousek větší. Kdo ho chce, zapne ho v Nastavení („Řádek s nápovědou“).
 
 ## 1.0.7 – 2026-11-10
