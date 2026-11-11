@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.11 – 2026-11-11
+
 - Sudoku: větší čísla poznámek psaných tužkou. Zvýraznění stejných čísel a počet zbývajících čísel na klávesách jsou teď zapnuté od začátku (jdou vypnout v nastavení).
 
 ## 1.0.10 – 2026-11-11

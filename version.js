@@ -1,7 +1,14 @@
 // The app version, shown in the launcher's Nastavení and used by sw.js to name its cache.
 // Written by tools/release.js from CHANGELOG.md: never edit by hand.
-globalThis.APP_VERSION = { version: '1.0.10', date: '2026-11-11' };
+globalThis.APP_VERSION = { version: '1.0.11', date: '2026-11-11' };
 globalThis.APP_CHANGES = [
+  {
+    "version": "1.0.11",
+    "date": "2026-11-11",
+    "items": [
+      "Sudoku: větší čísla poznámek psaných tužkou. Zvýraznění stejných čísel a počet zbývajících čísel na klávesách jsou teď zapnuté od začátku (jdou vypnout v nastavení)."
+    ]
+  },
   {
     "version": "1.0.10",
     "date": "2026-11-11",
