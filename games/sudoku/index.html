@@ -99,13 +99,13 @@ a.round{text-decoration:none}
 .cell.sel{background:var(--sel-bg);box-shadow:inset 0 0 0 3px var(--sel-ring)}
 .cell.err{background:var(--err-bg)}
 .cell.err .v{color:var(--err)}
-.nt{position:absolute;inset:1px;display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(var(--nr),1fr);place-items:center;font-size:calc(var(--cell)*.3);line-height:1;font-weight:700;color:var(--note)}
+.nt{position:absolute;inset:1px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(var(--nr),minmax(0,1fr));place-items:center;font-size:calc(var(--cell)*.36);line-height:1;font-weight:700;color:var(--note)}
 .nt i{font-style:normal}
 .nt i.h{color:var(--accent);font-weight:900}
-.nt.wide{display:flex;flex-wrap:wrap;align-content:center;justify-content:center;font-size:calc(var(--cell)*.3)}
+.nt.wide{display:flex;flex-wrap:wrap;align-content:center;justify-content:center;font-size:calc(var(--cell)*.34)}
 .nt.wide i{width:33%;text-align:center}
-.nt.wide.k1,.nt.wide.k2{font-size:calc(var(--cell)*.44)}
-.nt.wide.k3,.nt.wide.k4{font-size:calc(var(--cell)*.37)}
+.nt.wide.k1,.nt.wide.k2{font-size:calc(var(--cell)*.5)}
+.nt.wide.k3,.nt.wide.k4{font-size:calc(var(--cell)*.42)}
 .nt.wide.k1 i,.nt.wide.k2 i,.nt.wide.k3 i,.nt.wide.k4 i{width:50%}
 .won .board{box-shadow:0 0 0 3px var(--accent)}
 
@@ -315,9 +315,10 @@ const ACTS = [
 ];
 const DEFAULTS = {
   size: 9, diff: 'medium', mode: 'cell', keypad: 'rows', errors: 'none',
-  hlPeers: false, hlSame: false, counter: false, autoClean: false,
+  hlPeers: false, hlSame: true, counter: true, autoClean: false,
   pencilBtn: true, noteStyle: 'corner', fillBtn: false, hintBtn: true, checkBtn: false,
   theme: 'paper', vibrate: true,
+  aids: 1, // 1 = the save knows that "Stejná čísla" and the counter are on by default (switched on once for older saves)
 };
 // Saved state under the launcher's games.<id>.* prefix; OLD_KEY is the name used before (read once, then removed)
 const KEY = 'games.sudoku.state', OLD_KEY = 'sudoku.v1';
@@ -545,6 +546,7 @@ function normalize(s) {
   pick('diff', DIFFS.map(d => d.id)); pick('mode', ['cell', 'digit']); pick('keypad', ['rows', 'phone']);
   pick('errors', ERRORS.map(e => e.id)); pick('noteStyle', ['corner', 'big']); pick('theme', THEMES.map(t => t.id));
   for (const k of ['hlPeers', 'hlSame', 'counter', 'autoClean', 'pencilBtn', 'fillBtn', 'hintBtn', 'checkBtn', 'vibrate']) s[k] = !!s[k];
+  s.aids = s.aids === 1 ? 1 : 0;
 }
 
 function makeGame(N, diff) {
@@ -1054,7 +1056,7 @@ function renderHelp() {
       </ol>
     </section>
     <section class="card help"><h3>Tlačítka</h3>${legend}
-      <p class="fnote">Další pomůcky (zvýraznění, upozornění na chyby, počítadlo čísel) jdou zapnout v nastavení ⚙. Na čas se nehraje.</p>
+      <p class="fnote">Pomůcky (zvýraznění, upozornění na chyby, počítadlo čísel) jdou zapnout i vypnout v nastavení ⚙. Na čas se nehraje.</p>
     </section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;
 }
@@ -1095,6 +1097,8 @@ const saved = load();
 const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
 S = Object.assign({}, DEFAULTS);
 for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+// Older saves had "Stejná čísla" and the counter off by default: switch them on once (user's decision 2026-11-11)
+if (savedSettings.aids !== 1) { S.hlSame = true; S.counter = true; S.aids = 1; }
 normalize(S);
 // No saved game: generate in the background so "Připravuji sudoku…" shows first (hard 9×9 can take a moment)
 if (saved && validGame(saved.game)) { G = saved.game; render(); }

@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Sudoku: větší čísla poznámek psaných tužkou. Zvýraznění stejných čísel a počet zbývajících čísel na klávesách jsou teď zapnuté od začátku (jdou vypnout v nastavení).
+
 ## 1.0.10 – 2026-11-11
 
 - Výběr her: po instalaci aplikace hláška poradí, co dělat, když se ikona na ploše neobjeví (telefony Xiaomi, Redmi a POCO).
