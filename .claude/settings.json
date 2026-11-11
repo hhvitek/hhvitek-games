@@ -11,5 +11,10 @@
         "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/tools/hooks/before-stop.js\"" }]
       }
     ]
+  },
+  "enabledPlugins": {
+    "playwright@claude-plugins-official": false,
+    "code-review@claude-plugins-official": false,
+    "context7@claude-plugins-official": false
   }
 }
