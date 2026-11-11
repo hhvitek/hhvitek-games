@@ -623,9 +623,13 @@ btnInstall.addEventListener('click', async () => {
   btnInstall.hidden = true;
   try { await p.prompt(); await p.userChoice; } catch (e) {}
 });
+// appinstalled only means the browser accepted the install, not that the launcher placed the icon: MIUI / HyperOS
+// (Xiaomi, Redmi, POCO) silently drops it while the browser lacks its "Home screen shortcuts" permission, so the
+// message does not promise the icon and says what to do when it is missing.
 window.addEventListener('appinstalled', () => {
   installPrompt = null; btnInstall.hidden = true;
-  showModal('<h2>Aplikace je nainstalovaná</h2><p>Na ploše je teď ikona „Vítkovy hry“. Příště hry otevři rovnou z ní, fungují i bez internetu.</p>',
+  showModal('<h2>Hotovo</h2><p>Na ploše by teď měla být ikona „Vítkovy hry“. Příště hry otevři rovnou z ní, fungují i bez internetu.</p>' +
+    '<p>Pokud tam ikona není (stává se u telefonů Xiaomi, Redmi a POCO), povol v Nastavení telefonu → Aplikace → Chrome → Další oprávnění položku „Zástupci na ploše“ a zkus to znovu.</p>',
     [{ text: 'Rozumím', cls: 'keep' }]);
 });
 

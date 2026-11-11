@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Výběr her: po instalaci aplikace hláška poradí, co dělat, když se ikona na ploše neobjeví (telefony Xiaomi, Redmi a POCO).
+
 ## 1.0.9 – 2026-11-10
 
 - Padající tvary: když otočíš telefon na šířku, hra se zastaví a počká. Druhé ťuknutí na šipku dolů tvar položí, i když chvilku počkáš.
