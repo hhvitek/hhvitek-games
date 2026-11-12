@@ -1,7 +1,18 @@
 // The app version, shown in the launcher's Nastavení and used by sw.js to name its cache.
 // Written by tools/release.js from CHANGELOG.md: never edit by hand.
-globalThis.APP_VERSION = { version: '1.0.13', date: '2026-11-12' };
+globalThis.APP_VERSION = { version: '1.0.14', date: '2026-11-12' };
 globalThis.APP_CHANGES = [
+  {
+    "version": "1.0.14",
+    "date": "2026-11-12",
+    "items": [
+      "Nová hra Kočka: starej se o kočku Koxu podle skutečných hodin. Hlaď ji prstem, krm ji, hraj si s ní, vezmi si ji na klín, pěstuj zahrádku a pouštěj ji na toulky; obchůdek, minihry, výcvik triků a návštěvy sousedovic koček.",
+      "Výběr her: v Nastavení jde zapnout „Koxa a ostatní hry“ – za každou jinou hru dostane Koxa pamlsek a nahoře je vidět, jak se má.",
+      "Nová hra Spojování obrázků: spojuj dvojice stejných kamenů čárou, která se zalomí nejvýš dvakrát; stejné kameny a obrázky jako Mahjong, každé rozdání jde dohrát.",
+      "Nová hra Piškvorky: pět v řadě proti počítači na malé, střední nebo velké ploše; soupeř Běžný hráč nebo Mistr, který hraje, jak nejlépe umí. Poradit, Zpět, přiblížení plochy a potvrzování tahu proti překlepu.",
+      "Výběr her: Kostky jsou nově hned před karetními hrami (hry, které často hraješ, se dál řadí podle počtu hraní)."
+    ]
+  },
   {
     "version": "1.0.13",
     "date": "2026-11-12",
