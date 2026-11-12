@@ -22,6 +22,7 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Kočka           | `games/kocka/`           | Starej se o kočku Koxu podle skutečných hodin: krm ji, hlaď prstem, hraj si s ní, pěstuj zahrádku; když se o ni nikdo nestará, zhubne a může onemocnět |
 | Logik           | `games/logik/`           | Uhodni tajný barevný kód                                                                                                  |
 | Sudoku          | `games/sudoku/`          | Klasické sudoku 9×9 (nebo 6×6) s poznámkami a nápovědou                                                                   |
+| Malované křížovky | `games/malovane-krizovky/` | Čísla u řádků a sloupců říkají, kolik políček vybarvit; z vyluštěné křížovky je barevný obrázek; 36 obrázků 5 × 5 až 15 × 15 |
 | Skládání kostek | `games/skladani-kostek/` | Skládačka: přetahuj tvary do mřížky a plň celé řady                                                                       |
 | Padající tvary  | `games/padajici-tvary/`  | Tvary ovládané tlačítky místo gest; pomalu padají a postupně zrychlují, hru jde kdykoli zastavit tlačítkem Pauza; v nastavení jde padání vypnout |
 | Barevné kostky  | `games/barevne-kostky/`  | SameGame: ťukej na skupiny stejně barevných kostek, zbytek spadne dolů; volitelně vždy řešitelné hrací plochy             |

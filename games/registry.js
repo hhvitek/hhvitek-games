@@ -5,6 +5,7 @@
 globalThis.GAMES = [
   { id: 'logik', name: 'Logik', description: 'Uhodni tajný barevný kód' },
   { id: 'sudoku', name: 'Sudoku', description: 'Doplň čísla do mřížky' },
+  { id: 'malovane-krizovky', name: 'Malované křížovky', description: 'Vybarvi políčka podle čísel a odhal obrázek' },
   { id: 'skladani-kostek', name: 'Skládání kostek', description: 'Skládej tvary do mřížky' },
   { id: 'padajici-tvary', name: 'Padající tvary', description: 'Otáčej padající tvary a plň řady' },
   { id: 'barevne-kostky', name: 'Barevné kostky', description: 'Odebírej skupiny stejných barev' },

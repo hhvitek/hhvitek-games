@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- paper -->
+  <rect width="512" height="512" fill="#f4ebdf"/>
+  <rect x="182" y="182" width="290" height="290" fill="#fffdf8"/>
+  <rect x="240" y="182" width="58" height="58" fill="#d0452f"/>
+  <rect x="356" y="182" width="58" height="58" fill="#d0452f"/>
+  <rect x="182" y="240" width="58" height="58" fill="#d0452f"/>
+  <rect x="240" y="240" width="58" height="58" fill="#d0452f"/>
+  <rect x="298" y="240" width="58" height="58" fill="#d0452f"/>
+  <rect x="356" y="240" width="58" height="58" fill="#d0452f"/>
+  <rect x="414" y="240" width="58" height="58" fill="#d0452f"/>
+  <rect x="182" y="298" width="58" height="58" fill="#d0452f"/>
+  <rect x="240" y="298" width="58" height="58" fill="#d0452f"/>
+  <rect x="298" y="298" width="58" height="58" fill="#d0452f"/>
+  <rect x="356" y="298" width="58" height="58" fill="#d0452f"/>
+  <rect x="414" y="298" width="58" height="58" fill="#d0452f"/>
+  <rect x="240" y="356" width="58" height="58" fill="#d0452f"/>
+  <rect x="298" y="356" width="58" height="58" fill="#d0452f"/>
+  <g stroke="#b59c80" stroke-width="7" stroke-linecap="round">
+    <path d="M199 199L223 223M223 199L199 223"/>
+    <path d="M315 199L339 223M339 199L315 223"/>
+    <path d="M431 199L455 223M455 199L431 223"/>
+    <path d="M199 373L223 397M223 373L199 397"/>
+    <path d="M199 431L223 455M223 431L199 455"/>
+    <path d="M257 431L281 455M281 431L257 455"/>
+  </g>
+  <path d="M240 182v290 M298 182v290 M356 182v290 M414 182v290 M182 240h290 M182 298h290 M182 356h290 M182 414h290" stroke="#c9b49a" stroke-width="3"/>
+  <rect x="182" y="182" width="290" height="290" fill="none" stroke="#5a3214" stroke-width="8"/>
+  <g font-family="Roboto, Arial, Helvetica, sans-serif" font-size="46" font-weight="800" fill="#2b1a0e" text-anchor="middle">
+    <text x="152" y="227">1</text>
+    <text x="106" y="227">1</text>
+    <text x="152" y="285">5</text>
+    <text x="152" y="343">5</text>
+    <text x="152" y="401">3</text>
+    <text x="152" y="459">1</text>
+    <text x="211" y="160">2</text>
+    <text x="269" y="160">4</text>
+    <text x="327" y="160">4</text>
+    <text x="385" y="160">4</text>
+    <text x="443" y="160">2</text>
+  </g>
+  <g transform="translate(96 96) rotate(-45)">
+    <rect x="-22" y="-62" width="44" height="96" rx="8" fill="#e8892b"/>
+    <rect x="-22" y="-62" width="44" height="22" rx="8" fill="#7a4520"/>
+    <path d="M-22 34h44l-22 40z" fill="#f2d3a8"/>
+    <path d="M-8 60h16l-8 14z" fill="#2b1a0e"/>
+  </g>
+</svg>

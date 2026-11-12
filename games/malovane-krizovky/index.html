@@ -1,0 +1,1544 @@
+<!doctype html>
+<!--
+  Malované křížovky (nonograms): the numbers beside every row and above every column give the runs of filled cells
+  in order; filling the right cells reveals a picture, shown in colour once it is solved.
+  The puzzles and the line logic are in the Engine block (no DOM there; tools/krizovky-test.js tests it in Node).
+-->
+<html lang="cs" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f4ebdf">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Malované křížovky">
+<title>Malované křížovky</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f4ebdf'/%3E%3Cpath d='M14 14h12v12H14zM26 26h12v12H26zM38 14h12v12H38zM14 38h12v12H14zM38 38h12v12H38z' fill='%23d0452f'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
+[data-theme="paper"]{--page:#f4ebdf;--bar:rgba(122,69,32,.06);--line:#e6d8c6;--ink:#2b1a0e;--soft:#6f5a48;--accent:#7a4520;--chip:#fff;--chip-line:#e6d8c6;--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--undo-bg:rgba(122,69,32,.1);--on:#7a4520;--on-ink:#fff;
+  --sheet:#fffdf8;--gl:#e6d8c6;--gl5:#a98d70;--frame:#5a3214;--fill:#3a2414;--cross:#a48a72;--bad:#d23a2a;--hintc:#e0791c;--lit:rgba(224,121,28,.14);--clue:#2b1a0e;--strip:rgba(122,69,32,.07)}
+[data-theme="night"]{--page:#16233f;--bar:rgba(0,0,0,.25);--line:rgba(255,255,255,.08);--ink:#eef3fb;--soft:#b9c6dc;--accent:#ffd166;--chip:rgba(255,255,255,.12);--chip-line:rgba(255,255,255,.2);--btn:#ffd166;--btn-ink:#2a2000;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.28);--on:#ffd166;--on-ink:#2a2000;
+  --sheet:#1e3054;--gl:#2f4573;--gl5:#7088b8;--frame:#a9bbdd;--fill:#eef3fb;--cross:#8095bd;--bad:#ff6b5b;--hintc:#ffd166;--lit:rgba(255,209,102,.16);--clue:#eef3fb;--strip:rgba(255,255,255,.06)}
+[data-theme="slate"]{--page:#dde2e7;--bar:rgba(30,45,60,.06);--line:#c5cdd5;--ink:#1f2b37;--soft:#52606d;--accent:#2f5d7c;--chip:#f5f7f9;--chip-line:#c5cdd5;--btn:#2f5d7c;--btn-ink:#fff;--btn-sh:#1b3a50;--undo-bg:rgba(30,45,60,.08);--on:#2f5d7c;--on-ink:#fff;
+  --sheet:#f8fafb;--gl:#d3dae1;--gl5:#8796a5;--frame:#34495e;--fill:#2c3e50;--cross:#8a99a8;--bad:#d23a2a;--hintc:#e0791c;--lit:rgba(47,93,124,.13);--clue:#1f2b37;--strip:rgba(30,45,60,.06)}
+
+/* ---------- Base ---------- */
+:root{--gut:12px} /* one side margin: bar buttons, board and bottom buttons line up (the safe areas are on #app) */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{background:var(--page);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+/* rule: 100dvh + safe areas, the board is sized from the room that is left (see layout()) */
+#app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings) ---------- */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line);text-decoration:none}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+.topbar h1{font-size:22px}
+.topbar:has(#btnHome:not([hidden])){gap:6px}
+.topbar:has(#btnHome:not([hidden])) .pill{padding:0 12px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:19px}
+/* narrow phones (360 px): less room between the bar buttons, so the name fits whole at 18 px; the outer margin stays */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill,.topbar:has(#btnHome:not([hidden])) .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:18px;letter-spacing:0}
+}
+
+/* ---------- Info row: which puzzle (its name once solved) and the zoom button ---------- */
+.info{flex:none;height:46px;display:flex;align-items:center;justify-content:center;gap:12px;padding:6px var(--gut) 0;font-size:19px;font-weight:700;color:var(--soft);white-space:nowrap}
+.info b{color:var(--ink)}
+.zoom{flex:none;display:flex;align-items:center;gap:6px;height:38px;padding:0 14px;border-radius:19px;background:var(--chip);box-shadow:inset 0 0 0 2px var(--chip-line);font-size:17px;font-weight:800;color:var(--ink)}
+.zoom svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round}
+
+/* ---------- Board: column clues above, row clues on the left, the grid (it can be zoomed inside #view) ---------- */
+#board{flex:1;min-height:0;display:grid;place-items:center;padding:12px var(--gut)} /* rule: at least 12 px between the board and the rows above and below, on every screen */
+#puz{display:grid;grid-template-columns:var(--rw,40px) var(--vw,200px);grid-template-rows:var(--ch,40px) var(--vh,200px)}
+#corner{display:grid;place-items:center;color:var(--fill)}
+#corner svg{display:block;width:var(--mini,0px);height:var(--mini,0px);background:var(--sheet);box-shadow:0 0 0 1px var(--gl5)}
+.strip{position:relative;overflow:hidden}
+#cc{position:absolute;left:0;bottom:0;display:flex}
+#rc{position:absolute;right:0;top:0;display:flex;flex-direction:column}
+.cl{color:var(--clue);font-size:var(--cf,14px);font-weight:700;line-height:1.12;transition:opacity .3s}
+.cl.c{width:var(--cz);height:var(--ch);display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding-bottom:calc(var(--cf,14px) * .3)}
+.cl.r{height:var(--cz);width:var(--rw);display:flex;justify-content:flex-end;align-items:center;gap:calc(var(--cf,14px) * .38);padding-right:calc(var(--cf,14px) * .4)}
+.cl.alt{background:var(--strip)}
+.cl.ok>span{opacity:.32}
+.cl.lit,.cl.hline{background:var(--lit)}
+.cl.hline{color:var(--hintc)}
+#view{position:relative;overflow:hidden;background:var(--sheet);box-shadow:0 0 0 2px var(--frame);touch-action:none}
+#grid{position:absolute;left:0;top:0;display:grid;grid-template-columns:repeat(var(--n,5),var(--cz));grid-auto-rows:var(--cz);transform-origin:0 0}
+.cell{position:relative;background-color:var(--sheet);border-right:1px solid var(--gl);border-bottom:1px solid var(--gl)}
+.cell.e5r{border-right:2px solid var(--gl5)}
+.cell.e5b{border-bottom:2px solid var(--gl5)}
+.cell.er{border-right:0}
+.cell.eb{border-bottom:0}
+.cell.lit,.cell.hline{background-image:linear-gradient(var(--lit),var(--lit))}
+.cell.f{background-color:var(--fill);background-image:none}
+.cell.x::before,.cell.x::after{content:"";position:absolute;left:50%;top:50%;width:60%;height:max(2px,9%);border-radius:2px;background:var(--cross);transform:translate(-50%,-50%) rotate(45deg)}
+.cell.x::after{transform:translate(-50%,-50%) rotate(-45deg)}
+.cell.bad.f{background-color:var(--bad)}
+.cell.bad.x::before,.cell.bad.x::after{background:var(--bad)}
+.cell.hint{z-index:1;box-shadow:inset 0 0 0 max(3px,calc(var(--cz) * .13)) var(--hintc);animation:pulse 1.1s ease-in-out infinite alternate}
+.cell.hint.f{box-shadow:inset 0 0 0 max(3px,calc(var(--cz) * .13)) var(--hintc),inset 0 0 0 calc(max(3px,calc(var(--cz) * .13)) + 2px) var(--sheet)}
+@keyframes pulse{to{box-shadow:inset 0 0 0 max(2px,calc(var(--cz) * .07)) var(--hintc)}}
+/* solved: the crosses and grid lines go, the cells take the picture's colours (set inline), the clues fade */
+#puz.won .cell{border-color:transparent;transition:background-color .9s ease,border-color .9s ease}
+#puz.won .cl{opacity:.28}
+#puz.won #view{box-shadow:0 0 0 2px var(--frame),0 6px 18px rgba(0,0,0,.18)}
+#bubble{position:fixed;z-index:30;left:0;top:0;min-width:44px;padding:4px 12px;border-radius:14px;background:var(--ink);color:var(--page);font-size:22px;font-weight:800;text-align:center;pointer-events:none;transform:translate(-50%,-100%);opacity:0;transition:opacity .12s}
+#bubble.show{opacity:.92}
+
+/* ---------- Bottom buttons ---------- */
+.tray{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px var(--gut) 12px;background:var(--bar);border-top:1px solid var(--line)}
+#hint{text-align:center;font-size:19px;line-height:1.3;color:var(--soft);min-height:25px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row{display:flex;gap:8px}
+.undo{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;height:64px;border-radius:16px;font-size:19px;font-weight:800;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.undo svg{flex:none;width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+/* an unavailable action is only dimmed and explains itself when tapped */
+.undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+/* the mode switch: two joined buttons, the active one filled */
+.modes{flex:2.1 1 0;min-width:0;display:flex;height:64px;border-radius:16px;box-shadow:inset 0 0 0 2px var(--chip-line);background:var(--undo-bg)}
+.mode{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border-radius:16px;font-size:17px;font-weight:800;color:var(--ink)}
+.mode[aria-pressed="true"]{background:var(--on);color:var(--on-ink);box-shadow:0 3px 0 var(--btn-sh)}
+.mode i{display:block;width:18px;height:18px;position:relative}
+.mode i.sq{background:currentColor;border-radius:2px}
+.mode i.xx::before,.mode i.xx::after{content:"";position:absolute;left:-2px;right:-2px;top:50%;height:3px;margin-top:-1.5px;border-radius:2px;background:currentColor;transform:rotate(45deg)}
+.mode i.xx::after{transform:rotate(-45deg)}
+#btnHint{flex:1.15 1 0}
+@media (max-height:800px){
+  .topbar{height:56px}
+  .round{width:42px;height:42px}
+  .pill{height:42px}
+  .info{height:42px;padding-top:4px}
+  .undo,.modes{height:56px}
+  .tray{gap:6px;padding:6px var(--gut) 10px}
+}
+@media (max-width:380px){ .undo{font-size:17px;gap:4px} .undo svg{width:18px;height:18px} .mode{font-size:16px} #hint{font-size:17px} .info{font-size:18px} }
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+/* rule: the head with Zpět and the game name stays at the top while scrolling */
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);margin-top:16px}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink)}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{height:56px;border-radius:10px;background:var(--page);box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);display:grid;place-items:center}
+.swatch i{display:block;width:40px;height:22px;background:linear-gradient(90deg,var(--fill) 0 25%,var(--sheet) 25% 50%,var(--fill) 50% 75%,var(--sheet) 75%);box-shadow:0 0 0 2px var(--frame)}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+.ex{display:flex;align-items:center;gap:10px;margin:10px 0;font-size:20px;font-weight:800}
+.ex b{flex:none;width:44px;text-align:right}
+.ex span{display:flex}
+.ex i{display:block;width:26px;height:26px;border:1px solid #c9b49a;margin-left:-1px;background:#fffdf8}
+.ex i.f{background:#3a2414}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;max-height:100%;overflow-y:auto;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.mcard h2{font-size:28px;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+.wpic{width:min(200px,50vw);margin:4px auto 12px}
+.wpic svg{display:block;width:100%;height:auto;border-radius:6px;box-shadow:0 0 0 2px var(--pline)}
+.star{color:#b8740f;font-weight:800}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 160px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+#toast[style*="top"]{bottom:auto}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* ---------- The puzzle list (a paper screen) ---------- */
+.lsub{font-size:18px;color:var(--psoft);margin-bottom:10px}
+.ltiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px} /* 3 per row: the longest names (Slunečnice) fit whole */
+.lt{display:flex;flex-direction:column;align-items:center;gap:5px;padding:6px 4px 8px;border-radius:14px;border:3px solid var(--pline);background:var(--popt);color:var(--pink);min-width:0}
+.lt.cur{border-color:var(--pbtn);background:var(--popt-on)}
+.lt .th{position:relative;width:100%;aspect-ratio:1;display:grid;place-items:center;border-radius:8px;overflow:hidden}
+.lt .th svg{display:block;width:100%;height:100%}
+.lt.todo .th{border:2px dashed var(--pline);font-size:26px;font-weight:800;color:var(--psoft)}
+.lt.part .th{background:#fffdf8;box-shadow:inset 0 0 0 1px var(--pline);color:#c9b49a}
+.lt.part .th b{position:absolute;font-size:24px;font-weight:800;color:var(--pink);text-shadow:0 0 4px #fff,0 0 4px #fff}
+.lt.done .th{box-shadow:inset 0 0 0 1px var(--pline)}
+.lt .nm{width:100%;font-size:15px;font-weight:700;line-height:1.15;text-align:center;hyphens:manual;overflow-wrap:normal;min-height:2.3em;display:flex;align-items:center;justify-content:center}
+.lt .nm.soft{color:var(--psoft);font-weight:600}
+.lt .th .s{position:absolute;top:3px;right:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 0 0 1px var(--pline);display:grid;place-items:center;font-size:16px;line-height:1;color:#b8740f}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Malované křížovky</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <div class="info"><span id="info"></span><button id="btnZoom" class="zoom" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/><path id="zoomPlus" d="M10.5 7.5v6M7.5 10.5h6"/></svg><span id="zoomLabel">Zvětšit</span></button></div>
+  <main id="board">
+    <div id="puz">
+      <div id="corner"></div>
+      <div id="ccWrap" class="strip"><div id="cc"></div></div>
+      <div id="rcWrap" class="strip"><div id="rc"></div></div>
+      <div id="view"><div id="grid"></div></div>
+    </div>
+  </main>
+  <footer class="tray">
+    <div id="hint"></div>
+    <div class="row">
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <div class="modes" role="group" aria-label="Co kreslíš">
+        <button id="mFill" class="mode" aria-pressed="true"><i class="sq"></i>Vyplnit</button>
+        <button id="mCross" class="mode" aria-pressed="false"><i class="xx"></i>Křížek</button>
+      </div>
+      <button id="btnHint" class="undo">Poradit</button>
+    </div>
+  </footer>
+</div>
+<div id="bubble"></div>
+<!-- Every layer is shown and hidden only through its hidden attribute; every screen has a [data-act="close"] button (Back button contract) -->
+<div id="screenList" class="screen paper" hidden><div class="screen-in" id="listIn"></div></div>
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+<script>
+/* ---------- Visible height ---------- */
+// The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
+// enough: some browsers report it taller than what is visible (the app installed by Brave on Android counted the
+// status and navigation bars too and hid the bottom buttons). visualViewport follows what is shown; it is measured
+// again on every change and shortly after loading (a browser bar that hides itself may change it without an event),
+// and a changed height makes the game lay itself out again through a resize event.
+(() => {
+  const root = document.documentElement;
+  let last = 0;
+  const measure = () => {
+    const vv = window.visualViewport;
+    const h = Math.round(vv ? vv.height * vv.scale : innerHeight);
+    if (!(h > 0) || h === last) return;
+    const first = !last; last = h;
+    root.style.setProperty('--app-h', h + 'px');
+    if (!first) dispatchEvent(new Event('resize'));
+  };
+  measure();
+  addEventListener('resize', measure);
+  if (window.visualViewport) visualViewport.addEventListener('resize', measure);
+  addEventListener('pageshow', measure);
+  [100, 500, 1500].forEach(ms => setTimeout(measure, ms));
+  // TEMPORARY (2026-11-08): what this page measured, shown in the launcher's Nastavení → "Údaje o obrazovce"
+  setTimeout(() => { try {
+    const p = document.createElement('div'); p.style.cssText = 'position:absolute;left:-50px;top:0;width:1px;height:100dvh;padding-bottom:env(safe-area-inset-bottom)';
+    document.body.appendChild(p); const dvh = Math.round(p.getBoundingClientRect().height - parseFloat(getComputedStyle(p).paddingBottom)), sb = Math.round(parseFloat(getComputedStyle(p).paddingBottom)); p.remove();
+    const vv = window.visualViewport;
+    localStorage.setItem('games.launcher.diag', JSON.stringify({ page: location.pathname.split('/').slice(-2, -1)[0], vv: vv ? Math.round(vv.height) : null, inner: innerHeight, client: root.clientHeight, dvh, sb, appH: last, app: Math.round(document.getElementById('app').getBoundingClientRect().height) }));
+  } catch (e) {} }, 2000);
+})();
+</script>
+<script>
+/* ---------- Engine ---------- */
+// Malované křížovky: the pictures and the line logic. No DOM; tools/krizovky-test.js runs this block in Node.
+// A picture row is a string: '.' empty, a letter = a filled cell in the colour pal[letter].
+// Cell codes everywhere: 0 unknown, 1 filled, 2 crossed (known empty).
+function KrizovkyEngine() {
+  'use strict';
+  // In play order: 5 x 5, 10 x 10, 15 x 15, each group from the easiest. Ids are stable forever (saves use them).
+  var PUZZLES = [
+    { id: 'p01', name: 'Kostka', w: 5, h: 5, pal: { a: '#e8701f' }, rows: [
+      'aaaaa',
+      'a.a.a',
+      'aa.aa',
+      'a.a.a',
+      'aaaaa'] },
+    { id: 'p02', name: 'Muchomůrka', w: 5, h: 5, pal: { a: '#d6332b', b: '#d9c49b' }, rows: [
+      '.aaa.',
+      'aa.aa',
+      'aaaaa',
+      '..b..',
+      '.bbb.'] },
+    { id: 'p03', name: 'Kočička', w: 5, h: 5, pal: { a: '#26201c', b: '#d9822b', c: '#b5c934' }, rows: [
+      'aa.aa',
+      'aaaab',
+      'acaca',
+      'baaaa',
+      '.aaa.'] },
+    { id: 'p04', name: 'Stromek', w: 5, h: 5, pal: { a: '#3f8a3a', b: '#7a4b25' }, rows: [
+      '..a..',
+      '.aaa.',
+      '.aaa.',
+      'aaaaa',
+      '..b..'] },
+    { id: 'p05', name: 'Jablíčko', w: 5, h: 5, pal: { a: '#d93a3a', b: '#7a4b25', c: '#4f9a3c' }, rows: [
+      '..bc.',
+      'aaaaa',
+      'aaaaa',
+      'aaaaa',
+      '.aaa.'] },
+    { id: 'p06', name: 'Domeček', w: 5, h: 5, pal: { a: '#b5452c', b: '#e0b25a', c: '#6b4226' }, rows: [
+      '..a..',
+      '.aaa.',
+      'aaaaa',
+      '.bbb.',
+      '.bcb.'] },
+    { id: 'p07', name: 'Srdce', w: 5, h: 5, pal: { a: '#d93a3a' }, rows: [
+      '.a.a.',
+      'aaaaa',
+      'aaaaa',
+      '.aaa.',
+      '..a..'] },
+    { id: 'p08', name: 'Hvězda', w: 5, h: 5, pal: { a: '#f2b630' }, rows: [
+      '..a..',
+      'aaaaa',
+      '.aaa.',
+      '.a.a.',
+      'a...a'] },
+    { id: 'p09', name: 'Šnek', w: 10, h: 10, pal: { a: '#d9a05a', b: '#9aa36a', d: '#8a4b22', e: '#5f9a3c' }, rows: [
+      '..........',
+      '.....ddd..',
+      '....daaad.',
+      'b.bdadddad',
+      '.b.dadadad',
+      'bbbdadaaad',
+      'bbb.daddd.',
+      '.bb..ddd..',
+      'bbbbbbbbbb',
+      'eeeeeeeeee'] },
+    { id: 'p10', name: 'Hrnek', w: 10, h: 10, pal: { a: '#9aa3ab', b: '#3e7cc4', c: '#d93a3a' }, rows: [
+      '...a..a...',
+      '..a..a....',
+      '...a..a...',
+      '..........',
+      'bbbbbbbb..',
+      'ccccccccbb',
+      'bbbbbbbb.b',
+      'bbbbbbbbbb',
+      'bbbbbbbb..',
+      '.bbbbbb...'] },
+    { id: 'p11', name: 'Hřib', w: 10, h: 10, pal: { a: '#8a4b22', b: '#e6d3a8', c: '#d8b56a', d: '#5f9a3c' }, rows: [
+      '...aaaa...',
+      '.aaaaaaaa.',
+      'aaaaaaaaaa',
+      'aaaaaaaaaa',
+      '.cccccccc.',
+      '...bbbb...',
+      '...bbbbb..',
+      '..bbbbbb..',
+      '..bbbbbb..',
+      'dddddddddd'] },
+    { id: 'p12', name: 'Loďka', w: 10, h: 10, bg: '#e4f2fa', pal: { a: '#6b4226', b: '#f2ead0', c: '#e0662e', d: '#3e7cc4', e: '#7cc0e0' }, rows: [
+      '....a.....',
+      '....ab....',
+      '...cabb...',
+      '...cabbb..',
+      '..ccabbbb.',
+      '.cccabbbbb',
+      '....a.....',
+      'dddddddddd',
+      '.dddddddd.',
+      'e.ee.ee.ee'] },
+    { id: 'p13', name: 'Konvice', w: 10, h: 10, pal: { a: '#3e7cc4', b: '#26201c' }, rows: [
+      '....bb....',
+      '...aaaa...',
+      '..........',
+      '..aaaaaa..',
+      'a.aaaaaaaa',
+      'aaaaaaaa.a',
+      '.aaaaaaa.a',
+      '..aaaaaaaa',
+      '..aaaaaa..',
+      '...aaaa...'] },
+    { id: 'p14', name: 'Mrkev', w: 10, h: 10, pal: { a: '#ec7a1c', b: '#4f9a3c', c: '#c95f12' }, rows: [
+      '..b.bb.b..',
+      '...bbbb...',
+      '....bb....',
+      '..aaaaaa..',
+      '..caaaaa..',
+      '...aaca...',
+      '...aaaa...',
+      '....ca....',
+      '....aa....',
+      '....a.....'] },
+    { id: 'p15', name: 'Slunce', w: 10, h: 10, pal: { a: '#ec7a1c', b: '#f2c230' }, rows: [
+      'aa..aa..aa',
+      'a........a',
+      '...bbbb...',
+      '..bbbbbb..',
+      'aabbbbbbaa',
+      'aabbbbbbaa',
+      '..bbbbbb..',
+      '...bbbb...',
+      'a........a',
+      'aa..aa..aa'] },
+    { id: 'p16', name: 'Hruška', w: 10, h: 10, pal: { a: '#6b4226', b: '#4f9a3c', c: '#c4c43a' }, rows: [
+      '....a.....',
+      '....abb...',
+      '...ccc....',
+      '...ccc....',
+      '..ccccc...',
+      '.ccccccc..',
+      'ccccccccc.',
+      'ccccccccc.',
+      'ccccccccc.',
+      '.ccccccc..'] },
+    { id: 'p17', name: 'Sova', w: 10, h: 10, pal: { a: '#8a5a36', b: '#f2c230', c: '#1d1916', d: '#e8701f', e: '#c9a27a' }, rows: [
+      '.a......a.',
+      '.aaaaaaaa.',
+      'abbbaabbba',
+      'abcbaabcba',
+      'abbbddbbba',
+      '.aaaddaaa.',
+      '.aeaaaaea.',
+      '.aaeaaeaa.',
+      '..aaaaaa..',
+      '..dd..dd..'] },
+    { id: 'p18', name: 'Rybka', w: 10, h: 10, pal: { a: '#e8a21f', b: '#7cc0e0', c: '#e0662e', e: '#1d1916' }, rows: [
+      '..........',
+      '.b..cc....',
+      '...aaaa...',
+      '..aaaaaa.c',
+      '.aeaaaaacc',
+      'aaaaaaaacc',
+      '.aaaaaaa.c',
+      '..aaaaa...',
+      '....cc....',
+      '..........'] },
+    { id: 'p19', name: 'Deštník', w: 10, h: 10, pal: { a: '#d93a3a', b: '#6b4226', d: '#f2c230' }, rows: [
+      '....a.....',
+      '..adada...',
+      '.adadada..',
+      'adadadada.',
+      'adadadada.',
+      'a.a.b.a.a.',
+      '....b.....',
+      '....b.....',
+      '..b.b.....',
+      '...b......'] },
+    { id: 'p20', name: 'Jahoda', w: 10, h: 10, pal: { a: '#d6332b', b: '#4f9a3c', c: '#f2d23a' }, rows: [
+      '..b.bb.b..',
+      '..bbbbbb..',
+      '.aaabbaaa.',
+      'aacaaaacaa',
+      'aaaaaaaaaa',
+      '.aacaacaa.',
+      '.aaaaaaaa.',
+      '..acaaca..',
+      '...aaaa...',
+      '....aa....'] },
+    { id: 'p21', name: 'Autíčko', w: 10, h: 10, pal: { a: '#d93a3a', b: '#9fd0ea', c: '#26201c', d: '#f2c230' }, rows: [
+      '..........',
+      '..........',
+      '..aaaaa...',
+      '.abbabba..',
+      'abbbabbbaa',
+      'aaaaaaaaad',
+      'aaaaaaaaaa',
+      'aacaaaacaa',
+      '.ccc..ccc.',
+      '..c....c..'] },
+    { id: 'p22', name: 'Třešně', w: 10, h: 10, pal: { a: '#6b4226', b: '#4f9a3c', c: '#c8202f' }, rows: [
+      '......bbb.',
+      '.....abb..',
+      '....aaa...',
+      '...a...a..',
+      '..a....a..',
+      '.cc...cc..',
+      'cccc.cccc.',
+      'cccc.cccc.',
+      '.cc...cc..',
+      '..........'] },
+    { id: 'p23', name: 'Motýl', w: 10, h: 10, pal: { a: '#e8701f', b: '#f2c230', c: '#26201c', d: '#d6332b' }, rows: [
+      '...c..c...',
+      'aa..cc..aa',
+      'aaa.cc.aaa',
+      'abaaccaaba',
+      'aaaaccaaaa',
+      '.aaaccaaa.',
+      '..aaccaa..',
+      '.ddaccadd.',
+      '.dd.cc.dd.',
+      '..........'] },
+    { id: 'p24', name: 'Červenka', w: 10, h: 10, pal: { a: '#8a5a36', b: '#1d1916', c: '#e8a21f', d: '#e0662e', e: '#5a3a24' }, rows: [
+      '..........',
+      '..aaa.....',
+      '.aaba.....',
+      'caaaaa....',
+      '.dddaaa..a',
+      '.ddddaaaaa',
+      '.ddddaaaa.',
+      '..dddaaa..',
+      '....e.e...',
+      '...ee.ee..'] },
+    { id: 'p25', name: 'Náchodský zámek', w: 15, h: 15, bg: '#dceef8', pal: { a: '#b5452c', b: '#e6d6b0', c: '#3a4047', d: '#154f5e', e: '#6f9a4a' }, rows: [
+      '...a...........',
+      '...a...........',
+      '..aaa..........',
+      '..aaa......c...',
+      '.aaaaa....ccc..',
+      '.bbbbb....ccc..',
+      '.bdbdb.aaaaaaaa',
+      '.bbbbbaaaaaaaaa',
+      '.bdbdbbbbbbbbbb',
+      '.bbbbbbdbdbdbdb',
+      '.bbbbbbbbbbbbbb',
+      '.bbbbbbdbdbdbdb',
+      'eebbbbbbbbbbbbb',
+      'eeeeeeeeeeeeeee',
+      'eeeeeeeeeeeeeee'] },
+    { id: 'p26', name: 'Kostel', w: 15, h: 15, pal: { a: '#b5452c', b: '#e6c36a', c: '#3a4047', d: '#6b4226', e: '#6f9a4a' }, rows: [
+      '...c...........',
+      '..ccc..........',
+      '...c...........',
+      '...a...........',
+      '..aaa..........',
+      '..aaa..........',
+      '.aaaaa.........',
+      '.bbbbb..aaaaaa.',
+      '.bb.bb.aaaaaaaa',
+      '.bb.bbaaaaaaaaa',
+      '.bbbbbbbbbbbbbb',
+      '.bbbbbb.bb.bb.b',
+      '.bbddbb.bb.bb.b',
+      '.bbddbbbbbbbbbb',
+      'eeeeeeeeeeeeeee'] },
+    { id: 'p27', name: 'Lokomotiva', w: 15, h: 15, pal: { a: '#26201c', b: '#d6332b', c: '#3e7cc4', d: '#4a4f57', e: '#b8bec4', f: '#f2c230' }, rows: [
+      '..ee...........',
+      '.eeee..........',
+      '..ee.....bbbbbb',
+      '.aaaa.....ccccc',
+      '..aa......c..cc',
+      '..aa..a...c..cc',
+      'ccccccccccccccc',
+      'fcccccccccccccc',
+      'ccccccccccccccc',
+      'ccccccccccccccc',
+      'bbbbbbbbbbbbbbb',
+      '.ddd.ddd..ddd..',
+      '.ddd.ddd.ddddd.',
+      '.ddd.ddd..ddd..',
+      'aaaaaaaaaaaaaaa'] },
+    { id: 'p28', name: 'Chaloupka', w: 15, h: 15, pal: { a: '#b5452c', b: '#e6c36a', c: '#6b4226', d: '#8a3a2a', e: '#9aa3ab', f: '#6f9a4a' }, rows: [
+      '............e..',
+      '...........e...',
+      '............e..',
+      '.......a...dd..',
+      '......aaa..dd..',
+      '.....aaaaa.dd..',
+      '....aaaaaaadd..',
+      '...aaaaaaaaaa..',
+      '..aaaaaaaaaaa..',
+      '.aaaaaaaaaaaaa.',
+      '..bbbbbbbbbbb..',
+      '..b..bcccb..b..',
+      '..b..bcccb..b..',
+      '..bbbbcccbbbb..',
+      'fffffffffffffff'] },
+    { id: 'p29', name: 'Jabloň', w: 15, h: 15, pal: { a: '#4f9a3c', b: '#d6332b', c: '#6b4226', d: '#8cc05a' }, rows: [
+      '.....aaaaa.....',
+      '...aaaaaaaaa...',
+      '..aaaaabaaaaa..',
+      '.aabaaaaaaabaa.',
+      '.aaaaaaaaaaaaa.',
+      'aaaaaabaaaaaaaa',
+      'aaabaaaaaaabaaa',
+      '.aaaaaaaaaaaaa.',
+      '..aaaaabaaaaa..',
+      '...aaaacaaaa...',
+      '......ccc......',
+      '......ccc......',
+      '......ccc......',
+      '.....ccccc.....',
+      '...ddddddddd...'] },
+    { id: 'p30', name: 'Kočka', w: 15, h: 15, pal: { a: '#26201c', b: '#d9822b', c: '#b5c934', d: '#e89a9a' }, rows: [
+      '..a.....a......',
+      '..aa...aa......',
+      '..abaaaaa......',
+      '.abbaaaaaa.....',
+      '.abcaaacaa.....',
+      '.abaadaaaa.....',
+      '..aaaaaaa......',
+      '...aaaaa.......',
+      '..aaaaaaa......',
+      '.aaaaaaabb..a..',
+      '.aaaaaabba...a.',
+      'aaaaaaaaaaa..a.',
+      'aabaaaaaaaa..a.',
+      'abbaaaaaaaaaaa.',
+      'aaa.aa.aa.aaa..'] },
+    { id: 'p31', name: 'Hrací kostka', w: 15, h: 15, pal: { a: '#e8701f', b: '#f4a259', c: '#b8561b' }, rows: [
+      '.....bbbbbbbbbb',
+      '....bbbbbbbbbbc',
+      '...bbbb..bbbbcc',
+      '..bbbbbbbbbbccc',
+      '.bbbbbbbbbbcccc',
+      'aaaaaaaaaaccccc',
+      'a..aaaa..acc.cc',
+      'a..aaaa..accccc',
+      'aaaaaaaaaaccccc',
+      'aaaa..aaaacc.cc',
+      'aaaa..aaaacccc.',
+      'aaaaaaaaaaccc..',
+      'a..aaaa..acc...',
+      'a..aaaa..ac....',
+      'aaaaaaaaaa.....'] },
+    { id: 'p32', name: 'Veverka', w: 15, h: 15, pal: { a: '#b5562a', b: '#1d1916', d: '#6b4226', e: '#d9873e' }, rows: [
+      '.........eeee..',
+      '........eeeeeee',
+      '.......eeeeeeee',
+      '.......eeee.eee',
+      '.a.....eeee..ee',
+      '.aa...eeeee....',
+      'aaaa..eeeee....',
+      'abaaa.eeeee....',
+      'aaaaa.eeeee....',
+      '.aaaaaeeeee....',
+      '.daaaaaeeee....',
+      'ddaaaaaeeee....',
+      'dd.aaaaaee.....',
+      '...aaaaaa......',
+      '.aaaa.aaa......'] },
+    { id: 'p33', name: 'Kachnička', w: 15, h: 15, pal: { a: '#f2c230', b: '#1d1916', c: '#e8701f', d: '#d99a1f', f: '#5ba8d6' }, rows: [
+      '...aaa.........',
+      '..aaaaa........',
+      '..abaaa........',
+      'ccaaaaa........',
+      '..aaaaa........',
+      '...aaa.......a.',
+      '...aaa......aa.',
+      '..aaaaaaaaaaaa.',
+      '.aaaaaaaaaaaaa.',
+      '.aaaaddddaaaaa.',
+      '.aaaaaddddaaaa.',
+      '..aaaaaaaaaaa..',
+      '...aaaaaaaaa...',
+      'ff.ff.ff.ff.ff.',
+      '.ff.ff.ff.ff.ff'] },
+    { id: 'p34', name: 'Ježek', w: 15, h: 15, pal: { a: '#5a3a24', b: '#d8b48a', c: '#1d1916', e: '#6f9a4a' }, rows: [
+      '......a...a....',
+      '...a..aa.aaa.a.',
+      '....aaaaaaaaaa.',
+      '..aaaaaaaaaaaaa',
+      '...aaaaaaaaaaaa',
+      '.aaaaaaaaaaaaaa',
+      '..aaaaaaaaaaaaa',
+      '...bbaaaaaaaaaa',
+      '..bcbbaaaaaaaaa',
+      '.bbbbbaaaaaaaa.',
+      'cbbbbbbaaaaaa..',
+      '..bbbbbbbbbbb..',
+      '...bb.....bb...',
+      '...............',
+      'eeeeeeeeeeeeeee'] },
+    { id: 'p35', name: 'Kohout', w: 15, h: 15, pal: { a: '#d6332b', b: '#c77a2e', c: '#2f5d50', d: '#1d1916', e: '#f2c230' }, rows: [
+      '...a...........',
+      '..aaa.......c..',
+      '..bbb......cc..',
+      '.bdbb.....ccc..',
+      'ebbbb....cccc..',
+      '.abbb...ccccc..',
+      '.abbbb.cccccc..',
+      '...bbbbbbbbcc..',
+      '...bbbbbbbbbc..',
+      '...bbbbbbbbb...',
+      '....bbbbbbb....',
+      '.....bbbbb.....',
+      '.......e.e.....',
+      '.......e.e.....',
+      '......ee.ee....'] },
+    { id: 'p36', name: 'Slunečnice', w: 15, h: 15, pal: { a: '#f2c230', b: '#6b4226', c: '#4f9a3c', d: '#3f7a32' }, rows: [
+      '.....a...a.....',
+      '..a.aaa.aaa.a..',
+      '..aaaabbbaaaa..',
+      '...aabbbbbaa...',
+      '.aaabbbbbbbaaa.',
+      '..aabbbbbbbaa..',
+      '.aaabbbbbbbaaa.',
+      '...aabbbbbaa...',
+      '..aaaabbbaaaa..',
+      '..a.aaacaaa.a..',
+      '.....a.c.a.....',
+      '.ddd...c...ddd.',
+      '..dddd.c.dddd..',
+      '....ddcccdd....',
+      '.......c.......'] }
+  ];
+  var SIZES = [5, 10, 15];
+
+  // The clues of a picture: runs of filled cells (any char but '.') in every row and column
+  function runs(get, n) {
+    var out = [], run = 0;
+    for (var i = 0; i < n; i++) {
+      if (get(i)) run++;
+      else if (run) { out.push(run); run = 0; }
+    }
+    if (run) out.push(run);
+    return out;
+  }
+  function cluesOf(p) {
+    var rows = [], cols = [], r, c;
+    for (r = 0; r < p.h; r++) rows.push(runs(function (i) { return p.rows[r].charAt(i) !== '.'; }, p.w));
+    for (c = 0; c < p.w; c++) cols.push(runs(function (i) { return p.rows[i].charAt(c) !== '.'; }, p.h));
+    return { rows: rows, cols: cols };
+  }
+
+  // One line: cells 0 unknown, 1 filled, 2 empty. Returns a new array with every cell that is the same in all
+  // arrangements of the clue consistent with the known cells, or null when no arrangement fits.
+  // pre[j][i]: cells [0, i) can hold runs 0..j-1 exactly; suf[j][i]: cells [i, n) can hold runs j..k-1 exactly.
+  function solveLine(clue, cells) {
+    var n = cells.length, k = clue.length, i, j, s, L;
+    // blocked[i] = number of known empty cells in [0, i), to test "no 2 in a range" at once
+    var empt = [0], full = [0];
+    for (i = 0; i < n; i++) {
+      empt.push(empt[i] + (cells[i] === 2 ? 1 : 0));
+      full.push(full[i] + (cells[i] === 1 ? 1 : 0));
+    }
+    var noEmpty = function (a, b) { return empt[b] - empt[a] === 0; };
+    var noFull = function (a, b) { return full[b] - full[a] === 0; };
+    var pre = [], suf = [];
+    for (j = 0; j <= k; j++) { pre.push(new Array(n + 1).fill(false)); suf.push(new Array(n + 2).fill(false)); }
+    for (i = 0; i <= n; i++) pre[0][i] = noFull(0, i);
+    for (j = 1; j <= k; j++) {
+      L = clue[j - 1];
+      for (i = 1; i <= n; i++) {
+        var v = cells[i - 1] !== 1 && pre[j][i - 1];
+        if (!v && i >= L && noEmpty(i - L, i)) {
+          s = i - L;
+          v = s === 0 ? j === 1 : (cells[s - 1] !== 1 && pre[j - 1][s - 1]);
+        }
+        pre[j][i] = v;
+      }
+    }
+    if (!pre[k][n]) return null;
+    for (i = n; i >= 0; i--) suf[k][i] = noFull(i, n);
+    suf[k][n + 1] = true;
+    for (j = k - 1; j >= 0; j--) {
+      L = clue[j];
+      for (i = n - 1; i >= 0; i--) {
+        var w = cells[i] !== 1 && suf[j][i + 1];
+        if (!w && i + L <= n && noEmpty(i, i + L)) {
+          var e = i + L;
+          w = e === n ? j === k - 1 : (cells[e] !== 1 && suf[j + 1][e + 1]);
+        }
+        suf[j][i] = w;
+      }
+      suf[j][n + 1] = false;
+    }
+    var canFill = new Array(n).fill(false), canEmpty = new Array(n).fill(false);
+    // a cell can be empty when the runs split around it
+    for (i = 0; i < n; i++) {
+      if (cells[i] === 1) continue;
+      for (j = 0; j <= k; j++) if (pre[j][i] && suf[j][i + 1]) { canEmpty[i] = true; break; }
+    }
+    // a cell can be filled when some run j covers it in a consistent placement
+    var diff = new Array(n + 1).fill(0);
+    for (j = 0; j < k; j++) {
+      L = clue[j];
+      for (s = 0; s + L <= n; s++) {
+        if (!noEmpty(s, s + L)) continue;
+        var left = s === 0 ? j === 0 : (cells[s - 1] !== 1 && pre[j][s - 1]);
+        if (!left) continue;
+        var right = s + L === n ? j === k - 1 : (cells[s + L] !== 1 && suf[j + 1][s + L + 1]);
+        if (!right) continue;
+        diff[s]++; diff[s + L]--;
+      }
+    }
+    var out = cells.slice(), acc = 0;
+    for (i = 0; i < n; i++) {
+      acc += diff[i];
+      canFill[i] = acc > 0;
+      if (canFill[i] && !canEmpty[i]) out[i] = 1;
+      else if (!canFill[i] && canEmpty[i]) out[i] = 2;
+      else if (!canFill[i] && !canEmpty[i]) return null;
+    }
+    return out;
+  }
+
+  function getLine(cells, w, h, isRow, k) {
+    var out = [], n = isRow ? w : h, i;
+    for (i = 0; i < n; i++) out.push(cells[isRow ? k * w + i : i * w + k]);
+    return out;
+  }
+
+  // Line propagation over the rows and columns until nothing changes.
+  // passes = sweeps (all dirty rows, then all dirty columns) that changed something; solves = line solves that did.
+  function solveGrid(clues, w, h, start) {
+    var cells = start ? start.slice() : new Array(w * h).fill(0);
+    var dirtyR = new Array(h).fill(true), dirtyC = new Array(w).fill(true);
+    var passes = 0, solves = 0, changed = true, r, c, i;
+    while (changed) {
+      changed = false;
+      for (var side = 0; side < 2; side++) {
+        var isRow = side === 0, n = isRow ? h : w, dirty = isRow ? dirtyR : dirtyC, other = isRow ? dirtyC : dirtyR;
+        var any = false;
+        for (var k = 0; k < n; k++) {
+          if (!dirty[k]) continue;
+          dirty[k] = false;
+          var line = getLine(cells, w, h, isRow, k);
+          var res = solveLine(isRow ? clues.rows[k] : clues.cols[k], line);
+          if (!res) return { cells: cells, done: false, ok: false, passes: passes, solves: solves };
+          var hit = false;
+          for (i = 0; i < res.length; i++) {
+            if (res[i] !== line[i]) {
+              cells[isRow ? k * w + i : i * w + k] = res[i];
+              other[i] = true; hit = true;
+            }
+          }
+          if (hit) { solves++; any = true; }
+        }
+        if (any) { passes++; changed = true; }
+      }
+    }
+    var done = cells.indexOf(0) < 0;
+    return { cells: cells, done: done, ok: true, passes: passes, solves: solves };
+  }
+
+  // A cell that one row or column forces, assuming the given marks are right. Prefers a filled cell and the line
+  // that forces the most cells; ties go to rows before columns and to lower indexes, so it is deterministic.
+  function hintCell(clues, w, h, cells) {
+    var best = null, bestScore = -1;
+    for (var side = 0; side < 2; side++) {
+      var isRow = side === 0, n = isRow ? h : w;
+      for (var k = 0; k < n; k++) {
+        var line = getLine(cells, w, h, isRow, k);
+        var res = solveLine(isRow ? clues.rows[k] : clues.cols[k], line);
+        if (!res) continue;
+        var fill = -1, cross = -1, nf = 0, nc = 0;
+        for (var i = 0; i < res.length; i++) {
+          if (line[i] !== 0 || res[i] === 0) continue;
+          if (res[i] === 1) { nf++; if (fill < 0) fill = i; } else { nc++; if (cross < 0) cross = i; }
+        }
+        if (!nf && !nc) continue;
+        var score = nf ? 1000 + nf * 20 + nc : nc;
+        if (score > bestScore) {
+          bestScore = score;
+          var at = nf ? fill : cross;
+          best = { i: isRow ? k * w + at : at * w + k, v: nf ? 1 : 2, line: isRow ? 'r' : 'c', k: k };
+        }
+      }
+    }
+    return best;
+  }
+
+  // How hard a picture is for line logic: sweeps needed and line solves that found something
+  function difficulty(p) {
+    var r = solveGrid(cluesOf(p), p.w, p.h);
+    return r.passes * 100 + r.solves;
+  }
+
+  return { PUZZLES: PUZZLES, SIZES: SIZES, cluesOf: cluesOf, solveLine: solveLine, solveGrid: solveGrid, hintCell: hintCell, difficulty: difficulty };
+}
+/* ---------- Engine end ---------- */
+</script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const GUT = 12; // side margin in px, the same as --gut in the CSS
+const E = KrizovkyEngine();
+
+/* ---------- Settings and storage ---------- */
+const ID = 'malovane-krizovky';                           // = the folder name
+const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const THEMES = [
+  { id: 'paper', name: 'Papír', meta: '#f4ebdf' },
+  { id: 'night', name: 'Noc', meta: '#16233f' },
+  { id: 'slate', name: 'Břidlice', meta: '#dde2e7' },
+];
+const DEFAULTS = { theme: 'paper', mistakes: false, autoCross: false, mode: 'fill', vibrate: true };
+const MODES = ['fill', 'cross'];
+
+/* ---------- The puzzles (from the Engine) ---------- */
+const PZ = E.PUZZLES;
+const BYID = new Map(PZ.map((p, i) => [p.id, { p, i }]));
+const CACHE = new Map();
+// clues and the solution (1 = filled in the drawing) of a puzzle, computed once
+function info(p) {
+  if (!CACHE.has(p.id)) CACHE.set(p.id, { cl: E.cluesOf(p), sol: p.rows.join('').split('').map(ch => ch === '.' ? 0 : 1) });
+  return CACHE.get(p.id);
+}
+const numOf = p => BYID.get(p.id).i + 1;
+const sizeName = p => `${p.w} × ${p.h}`;
+const GROUP_NAMES = { 5: 'Malé', 10: 'Střední', 15: 'Velké' };
+// the runs of filled cells in a line of cell codes
+function runsOf(line) { const out = []; let k = 0; for (const v of line) { if (v === 1) k++; else if (k) { out.push(k); k = 0; } } if (k) out.push(k); return out; }
+const sameRuns = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+const rowLine = (cells, p, r) => cells.slice(r * p.w, r * p.w + p.w);
+const colLine = (cells, p, c) => { const out = []; for (let r = 0; r < p.h; r++) out.push(cells[r * p.w + c]); return out; };
+const solved = g => { const s = info(BYID.get(g.id).p).sol; return g.cells.every((v, i) => (v === 1) === (s[i] === 1)); };
+const hasMarks = g => g.cells.some(v => v);
+
+/* ---------- State ---------- */
+// S settings, G the open puzzle, D = { prog: { id: '0120…' (+ '!' when a hint or the mistake warning was used) }, done: { id: { clean } } }
+let S, G, D = { prog: {}, done: {} };
+let P = null;      // the open puzzle (from PZ)
+let hint = null;   // the cell Poradit shows: { i, v, line, k } or { i, wrong: true }; not saved
+const isFresh = () => !hasMarks(G);
+function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, prog: D.prog, done: D.done, game: G }));
+    if (G.status === 'playing' && !isFresh()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {} // rule: storage may be full or blocked; the game goes on
+}
+const isCode = v => v === 0 || v === 1 || v === 2;
+// rule: corrupted data never crashes the game; a broken history only loses Undo
+function validGame(g) {
+  try {
+    if (!g || typeof g !== 'object' || !BYID.has(g.id)) return false;
+    const p = BYID.get(g.id).p, N = p.w * p.h;
+    if (!Array.isArray(g.cells) || g.cells.length !== N || !g.cells.every(isCode)) return false;
+    // every history entry is a list of [cell, before, after]; undoing them all from the board must fit exactly
+    let ok = Array.isArray(g.history) && g.history.every(e => Array.isArray(e) && e.length > 0 && e.every(c => Array.isArray(c) && c.length === 3
+      && Number.isInteger(c[0]) && c[0] >= 0 && c[0] < N && isCode(c[1]) && isCode(c[2])));
+    if (ok) {
+      const t = g.cells.slice();
+      for (let k = g.history.length - 1; k >= 0 && ok; k--) for (let j = g.history[k].length - 1; j >= 0; j--) {
+        const [i, before, after] = g.history[k][j];
+        if (t[i] !== after) { ok = false; break; }
+        t[i] = before;
+      }
+    }
+    if (!ok) g.history = [];
+    g.hints = Number.isInteger(g.hints) && g.hints >= 0 ? g.hints : 0;
+    g.warned = g.warned === true;
+    g.counted = g.counted === true;
+    g.status = solved(g) ? 'won' : 'playing'; // rule: the end comes from the board, the saved status is never trusted
+    if (g.status === 'won') g.history = [];
+    return true;
+  } catch (e) { return false; }
+}
+function validProg(o) {
+  const out = {};
+  if (o && typeof o === 'object') for (const [id, v] of Object.entries(o)) {
+    const b = BYID.get(id);
+    if (b && typeof v === 'string' && /^[012]+!?$/.test(v) && v.replace('!', '').length === b.p.w * b.p.h && /[12]/.test(v)) out[id] = v;
+  }
+  return out;
+}
+function validDone(o) {
+  const out = {};
+  if (o && typeof o === 'object') for (const [id, v] of Object.entries(o)) if (BYID.has(id) && v && typeof v === 'object') out[id] = { clean: v.clean === true };
+  return out;
+}
+function normalize(s) {
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  if (!MODES.includes(s.mode)) s.mode = DEFAULTS.mode;
+  s.mistakes = !!s.mistakes; s.autoCross = !!s.autoCross; s.vibrate = !!s.vibrate;
+}
+// the open puzzle goes to prog when it has marks and is not solved (no Undo history is kept there)
+function stash() {
+  if (!G) return;
+  if (G.status === 'playing' && hasMarks(G)) D.prog[G.id] = G.cells.join('') + (G.hints || G.warned ? '!' : '');
+  else delete D.prog[G.id];
+}
+// open a puzzle: continue its progress, or start it empty (fresh, or a solved one)
+function openPuzzle(id, fresh) {
+  stash();
+  const p = BYID.get(id).p, N = p.w * p.h, pr = !fresh && D.prog[id];
+  G = { id, cells: pr ? pr.slice(0, N).split('').map(Number) : new Array(N).fill(0), history: [], hints: pr && pr.endsWith('!') ? 1 : 0, warned: S.mistakes, counted: false, status: 'playing' };
+  delete D.prog[id];
+  hint = null; zoom = 1; tx = 0; ty = 0;
+  save(); buildBoard(); render();
+}
+const firstOpen = () => (PZ.find(p => !D.done[p.id]) || PZ[0]).id;
+// after a win: the next unsolved puzzle after this one, otherwise simply the next one
+function nextId() {
+  const i = BYID.get(G.id).i;
+  for (let k = 1; k <= PZ.length; k++) { const q = PZ[(i + k) % PZ.length]; if (!D.done[q.id]) return q.id; }
+  return PZ[(i + 1) % PZ.length].id;
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) {
+  // Chrome refuses vibration (with a console error) before the first real tap
+  if (!S.vibrate || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+  try { navigator.vibrate(ms); } catch (e) {}
+}
+let toastT;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide'); t.style.top = '';
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+// a toast that would cover the given cell moves up, just below the info row (never over the top bar or the info row)
+function keepVisible(i) {
+  const t = $('#toast'), c = cellEls[i] && cellEls[i].getBoundingClientRect(), r = t.getBoundingClientRect();
+  if (c && c.bottom > r.top - 6 && c.top < r.bottom + 6) t.style.top = Math.round($('.info').getBoundingClientRect().bottom + 6) + 'px';
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits', '#screenList'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('');
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+  $('#modal').hidden = false;
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+// a picture as one small SVG: the coloured drawing (cells = null) or the filled cells of a board in currentColor
+function picSVG(p, cells) {
+  const paths = {};
+  for (let r = 0; r < p.h; r++) for (let c = 0; c < p.w; c++) {
+    const ch = p.rows[r][c], key = cells ? (cells[r * p.w + c] === 1 ? 'k' : '') : (ch === '.' ? '' : ch);
+    if (key) paths[key] = (paths[key] || '') + `M${c} ${r}h1v1h-1z`;
+  }
+  const bg = cells ? '' : `<rect width="${p.w}" height="${p.h}" fill="${p.bg || '#fffdf8'}"/>`;
+  return `<svg viewBox="0 0 ${p.w} ${p.h}" shape-rendering="crispEdges" aria-hidden="true">${bg}${Object.entries(paths).map(([k, d]) => `<path d="${d}" fill="${cells ? 'currentColor' : p.pal[k]}"/>`).join('')}</svg>`;
+}
+
+/* ---------- Board ---------- */
+let cellEls = [], rowEls = [], colEls = [], base = [];
+let cs = 20;              // cell size without zoom (px)
+let lit = -1;             // the cell under the finger: its row and column are highlighted
+// the board for the open puzzle (once per puzzle); paint() updates it
+function buildBoard() {
+  P = BYID.get(G.id).p;
+  const { cl } = info(P);
+  base = [];
+  let h = '';
+  for (let r = 0; r < P.h; r++) for (let c = 0; c < P.w; c++) {
+    const b = 'cell' + (c === P.w - 1 ? ' er' : c % 5 === 4 ? ' e5r' : '') + (r === P.h - 1 ? ' eb' : r % 5 === 4 ? ' e5b' : '');
+    base.push(b); h += `<div class="${b}"></div>`;
+  }
+  const grid = $('#grid'); grid.innerHTML = h; grid.style.setProperty('--n', P.w);
+  cellEls = [...grid.children];
+  const nums = list => (list.length ? list : [0]).map(n => `<span>${n}</span>`).join('');
+  $('#cc').innerHTML = cl.cols.map((x, c) => `<div class="cl c${Math.floor(c / 5) % 2 ? ' alt' : ''}">${nums(x)}</div>`).join('');
+  $('#rc').innerHTML = cl.rows.map((x, r) => `<div class="cl r${Math.floor(r / 5) % 2 ? ' alt' : ''}">${nums(x)}</div>`).join('');
+  colEls = [...$('#cc').children]; rowEls = [...$('#rc').children];
+}
+function paint() {
+  const won = G.status === 'won', { cl, sol } = info(P), w = P.w;
+  $('#puz').classList.toggle('won', won);
+  const lr = lit >= 0 ? Math.floor(lit / w) : -1, lc = lit >= 0 ? lit % w : -1;
+  const hr = hint && hint.line === 'r' ? hint.k : -1, hc = hint && hint.line === 'c' ? hint.k : -1;
+  G.cells.forEach((v, i) => {
+    const el = cellEls[i], r = Math.floor(i / w), c = i % w;
+    let cls = base[i];
+    if (won) {
+      const ch = P.rows[r][c];
+      el.style.backgroundColor = ch === '.' ? (P.bg || '#fffdf8') : P.pal[ch];
+    } else {
+      if (el.style.backgroundColor) el.style.backgroundColor = '';
+      if (v === 1) cls += ' f'; else if (v === 2) cls += ' x';
+      if (S.mistakes && ((v === 1 && !sol[i]) || (v === 2 && sol[i]))) cls += ' bad';
+      if (r === lr || c === lc) cls += ' lit';
+      if (hint && hint.i === i) cls += ' hint';
+      else if (r === hr || c === hc) cls += ' hline';
+    }
+    if (el.className !== cls) el.className = cls;
+  });
+  rowEls.forEach((el, r) => {
+    const cls = el.className.replace(/ (ok|lit|hline)/g, '') + (sameRuns(runsOf(rowLine(G.cells, P, r)), cl.rows[r]) ? ' ok' : '') + (!won && r === lr ? ' lit' : '') + (!won && r === hr ? ' hline' : '');
+    if (el.className !== cls) el.className = cls;
+  });
+  colEls.forEach((el, c) => {
+    const cls = el.className.replace(/ (ok|lit|hline)/g, '') + (sameRuns(runsOf(colLine(G.cells, P, c)), cl.cols[c]) ? ' ok' : '') + (!won && c === lc ? ' lit' : '') + (!won && c === hc ? ' hline' : '');
+    if (el.className !== cls) el.className = cls;
+  });
+  // the small picture in the corner: what is filled so far
+  const corner = $('#corner');
+  corner.innerHTML = won ? picSVG(P) : picSVG(P, G.cells);
+}
+
+/* ---------- Rendering ---------- */
+function applyLook() {
+  root.dataset.theme = S.theme;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+}
+const zoomable = () => P && P.w >= 15;
+function render() {
+  applyLook();
+  const won = G.status === 'won';
+  $('#info').innerHTML = won ? `<b>${esc(P.name)}</b> · ${sizeName(P)}${D.done[P.id] && D.done[P.id].clean ? ' ★' : ''}` : `Křížovka <b>${numOf(P)}</b> · ${sizeName(P)}`;
+  $('#btnZoom').hidden = !zoomable() || won;
+  $('#zoomLabel').textContent = zoom > 1 ? 'Zmenšit' : 'Zvětšit';
+  $('#zoomPlus').setAttribute('d', zoom > 1 ? 'M7.5 10.5h6' : 'M10.5 7.5v6M7.5 10.5h6');
+  $('#mFill').setAttribute('aria-pressed', S.mode === 'fill');
+  $('#mCross').setAttribute('aria-pressed', S.mode === 'cross');
+  $('#btnUndo').classList.toggle('dim', won || !G.history.length);
+  $('#btnHint').classList.toggle('dim', won);
+  $('#hint').textContent = won ? 'Hotovo! Další vybereš přes Nová hra' : S.mode === 'fill' ? 'Vybarvuj políčka podle čísel' : 'Křížkem označ prázdná políčka';
+  layout();
+  paint();
+}
+// rule: the board size comes from the room that is left, so it fits without scrolling
+function layout() {
+  if (!G || !P) return;
+  const b = $('#board'), { cl } = info(P);
+  const W = b.clientWidth - 2 * GUT, H = b.clientHeight - 24; // inside #board's padding (GUT at the sides, 12 px above and below)
+  // room for the clue numbers at font size f (a digit is about .6 of the font size wide)
+  const rowW = f => Math.max(...cl.rows.map(x => { const t = x.length ? x : [0]; return t.reduce((s, n) => s + String(n).length * .6 * f, 0) + (t.length - 1) * .38 * f; })) + .9 * f;
+  const colH = f => Math.max(...cl.cols.map(x => Math.max(1, x.length))) * 1.12 * f + .4 * f;
+  let c = Math.min(W / P.w, H / P.h), f = 14;
+  for (let k = 0; k < 6; k++) {
+    f = Math.max(11, Math.min(22, Math.round(c * .58)));
+    c = Math.max(8, Math.min(64, Math.floor(Math.min((W - rowW(f)) / P.w, (H - colH(f)) / P.h))));
+  }
+  if (c !== cs) { cs = c; zoom = 1; tx = 0; ty = 0; }
+  const rw = Math.ceil(rowW(f)), ch = Math.ceil(colH(f)), st = $('#puz').style;
+  st.setProperty('--cf', f + 'px'); st.setProperty('--rw', rw + 'px'); st.setProperty('--ch', ch + 'px');
+  st.setProperty('--vw', P.w * cs + 'px'); st.setProperty('--vh', P.h * cs + 'px');
+  const mini = Math.min(rw, ch) - 10;
+  st.setProperty('--mini', (mini >= 22 ? Math.min(mini, 90) : 0) + 'px');
+  applyZoom();
+}
+
+/* ---------- Zoom: the Zvětšit button or two fingers; two fingers also move a zoomed grid ---------- */
+let zoom = 1, tx = 0, ty = 0;
+function clampPan() {
+  const vw = P.w * cs, vh = P.h * cs;
+  tx = Math.min(0, Math.max(vw - vw * zoom, tx)); ty = Math.min(0, Math.max(vh - vh * zoom, ty));
+}
+function applyZoom() {
+  clampPan();
+  $('#puz').style.setProperty('--cz', cs * zoom + 'px');
+  $('#grid').style.transform = `translate(${tx}px,${ty}px)`;
+  $('#cc').style.transform = `translateX(${tx}px)`;
+  $('#rc').style.transform = `translateY(${ty}px)`;
+}
+// zoom so that the board point (bx, by) in unzoomed pixels sits at (vx, vy) in the view
+function zoomTo(z, bx, by, vx, vy) { zoom = Math.min(3, Math.max(1, z)); tx = vx - bx * zoom; ty = vy - by * zoom; applyZoom(); }
+// a cell outside the zoomed view (a hint): move the view to it
+function showCell(i) {
+  if (zoom <= 1) return;
+  const cz = cs * zoom, x = (i % P.w + .5) * cz + tx, y = (Math.floor(i / P.w) + .5) * cz + ty, vw = P.w * cs, vh = P.h * cs;
+  if (x < cz || y < cz || x > vw - cz || y > vh - cz) zoomTo(zoom, (i % P.w + .5) * cs, (Math.floor(i / P.w) + .5) * cs, vw / 2, vh / 2);
+}
+$('#btnZoom').addEventListener('click', () => {
+  if (zoom > 1) { zoom = 1; tx = 0; ty = 0; applyZoom(); }
+  else {
+    // around the last change, or the middle of the grid
+    const last = G.history.length ? G.history[G.history.length - 1][0][0] : Math.floor(P.h / 2) * P.w + Math.floor(P.w / 2);
+    zoomTo(2, (last % P.w + .5) * cs, (Math.floor(last / P.w) + .5) * cs, P.w * cs / 2, P.h * cs / 2);
+  }
+  buzz(8); render();
+});
+
+/* ---------- Drawing: a tap or a drag along a row or a column; one stroke = one Zpět step ---------- */
+let stroke = null; // { pid, start, cur, axis, snap, mark, erase }
+function cellAt(x, y, clamp) {
+  const r = $('#view').getBoundingClientRect(), cz = cs * zoom;
+  let c = Math.floor((x - r.left - tx) / cz), rr = Math.floor((y - r.top - ty) / cz);
+  if (clamp) { c = Math.max(0, Math.min(P.w - 1, c)); rr = Math.max(0, Math.min(P.h - 1, rr)); }
+  else if (c < 0 || rr < 0 || c >= P.w || rr >= P.h) return -1;
+  return rr * P.w + c;
+}
+function strokeCells() {
+  const { start, cur, axis } = stroke, w = P.w, out = [];
+  if (!axis) return [start];
+  const a = axis === 'r' ? start % w : Math.floor(start / w), b = axis === 'r' ? cur % w : Math.floor(cur / w), step = a <= b ? 1 : -1;
+  for (let j = a; j !== b + step; j += step) out.push(axis === 'r' ? Math.floor(start / w) * w + j : j * w + start % w);
+  return out;
+}
+function applyStroke() {
+  const { start, snap, mark, erase } = stroke;
+  for (let i = 0; i < snap.length; i++) G.cells[i] = snap[i];
+  for (const i of strokeCells()) {
+    if (erase) { if (snap[i] === mark) G.cells[i] = 0; }
+    else if (i === start || snap[i] === 0) G.cells[i] = mark;
+  }
+}
+function beginStroke(i, pid) {
+  if (G.status !== 'playing') { toast('Křížovka je hotová. Další vybereš přes Nová hra.'); return; }
+  const v = G.cells[i];
+  let mark, erase;
+  if (hint && hint.i === i) { mark = hint.wrong ? v : hint.v; erase = !!hint.wrong; } // a tap on the hinted cell does what the hint said
+  else { mark = S.mode === 'cross' ? 2 : 1; erase = v === mark; }
+  stroke = { pid, start: i, cur: i, axis: null, snap: G.cells.slice(), mark, erase };
+  lit = i; applyStroke(); buzz(8); paint();
+}
+function moveStroke(x, y) {
+  const i = cellAt(x, y, true), w = P.w;
+  if (!stroke.axis) {
+    if (i === stroke.start) return;
+    const dr = Math.abs(Math.floor(i / w) - Math.floor(stroke.start / w)), dc = Math.abs(i % w - stroke.start % w);
+    stroke.axis = dc >= dr ? 'r' : 'c';
+  }
+  const cur = stroke.axis === 'r' ? Math.floor(stroke.start / w) * w + i % w : Math.floor(i / w) * w + stroke.start % w;
+  if (cur === stroke.cur) return;
+  stroke.cur = cur; lit = cur;
+  applyStroke(); buzz(6); paint();
+  const n = strokeCells().length, bub = $('#bubble');
+  bub.textContent = n; bub.style.left = x + 'px'; bub.style.top = (y - 34) + 'px'; bub.classList.toggle('show', n > 1);
+}
+function cancelStroke() {
+  if (!stroke) return;
+  for (let i = 0; i < stroke.snap.length; i++) G.cells[i] = stroke.snap[i];
+  stroke = null; lit = -1; $('#bubble').classList.remove('show'); paint();
+}
+function endStroke() {
+  const snap = stroke.snap, touched = strokeCells();
+  stroke = null; lit = -1; $('#bubble').classList.remove('show');
+  commit(snap, touched);
+}
+// "Doplňovat křížky": a row or column of the stroke that has exactly its clue filled gets crosses in its other cells
+function autoCross(touched) {
+  const { cl } = info(P), w = P.w, rows = new Set(touched.map(i => Math.floor(i / w))), cols = new Set(touched.map(i => i % w));
+  for (const r of rows) if (sameRuns(runsOf(rowLine(G.cells, P, r)), cl.rows[r])) for (let c = 0; c < w; c++) if (!G.cells[r * w + c]) G.cells[r * w + c] = 2;
+  for (const c of cols) if (sameRuns(runsOf(colLine(G.cells, P, c)), cl.cols[c])) for (let r = 0; r < P.h; r++) if (!G.cells[r * w + c]) G.cells[r * w + c] = 2;
+}
+// after a stroke (or the test solve): one history entry with every changed cell, then the win check
+function commit(snap, touched) {
+  if (S.autoCross) autoCross(touched);
+  const entry = [];
+  G.cells.forEach((v, i) => { if (v !== snap[i]) entry.push([i, snap[i], v]); });
+  if (!entry.length) { paint(); return; }
+  G.history.push(entry);
+  if (S.mistakes) G.warned = true;
+  hint = null;
+  if (solved(G)) win();
+  save(); render();
+}
+function win() {
+  G.status = 'won'; G.history = [];
+  const clean = G.hints === 0 && !G.warned;
+  if (!G.counted) {
+    G.counted = true; // the first win of this puzzle counts once
+    D.done[G.id] = { clean: clean || !!(D.done[G.id] && D.done[G.id].clean) };
+    delete D.prog[G.id];
+  }
+  zoom = 1; tx = 0; ty = 0;
+  buzz(30);
+  // rule: an end dialog only for the game that ended, never over Settings or Help (whenFree)
+  whenFree(G, 1200, () => {
+    const next = nextId();
+    showModal(`<h2>Hotovo!</h2><div class="wpic">${picSVG(P)}</div><p><b>${esc(P.name)}</b></p>${clean ? '<p class="star">★ Vyřešeno bez nápovědy</p>' : ''}`, [
+      { text: 'Další křížovka', fn: () => openPuzzle(next) },
+      { text: 'Vybrat jinou', cls: 'alt', fn: openList },
+      { text: 'Prohlédnout', cls: 'alt' },
+    ]);
+  });
+}
+(() => {
+  const view = $('#view'), pts = new Map();
+  let pinch = null;
+  const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
+  const midp = () => { const [a, b] = [...pts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+  view.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return; // only the main mouse button draws
+    if (pts.size >= 2) return;
+    try { view.setPointerCapture(e.pointerId); } catch (er) {}
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) {
+      const i = cellAt(e.clientX, e.clientY, false);
+      if (i >= 0) beginStroke(i, e.pointerId);
+    } else if (zoomable() && G.status === 'playing') {
+      // a second finger: the stroke is undone, the two fingers zoom and move the grid
+      cancelStroke();
+      const r = view.getBoundingClientRect(), m = midp();
+      pinch = { d: dist(), z: zoom, bx: (m.x - r.left - tx) / zoom, by: (m.y - r.top - ty) / zoom };
+    } else pts.delete(e.pointerId); // without zoom a second finger does nothing
+  });
+  view.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pts.size >= 2) {
+      const r = view.getBoundingClientRect(), m = midp(), was = zoom > 1;
+      zoomTo(pinch.z * dist() / pinch.d, pinch.bx, pinch.by, m.x - r.left, m.y - r.top);
+      if (was !== zoom > 1) render();
+      return;
+    }
+    if (stroke && stroke.pid === e.pointerId) moveStroke(e.clientX, e.clientY);
+  });
+  const end = e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.delete(e.pointerId);
+    if (pinch) { if (!pts.size) { pinch = null; render(); } return; }
+    if (stroke && stroke.pid === e.pointerId) endStroke();
+  };
+  view.addEventListener('pointerup', end);
+  view.addEventListener('pointercancel', end);
+})();
+
+/* ---------- Controls ---------- */
+function setMode(m) { if (S.mode !== m) { S.mode = m; buzz(8); save(); } render(); }
+$('#mFill').addEventListener('click', () => setMode('fill'));
+$('#mCross').addEventListener('click', () => setMode('cross'));
+// Zpět undoes the last tap or drag (unlimited); after the win the picture is finished
+$('#btnUndo').addEventListener('click', () => {
+  if (G.status !== 'playing') { toast('Křížovka je hotová, není co vracet'); return; }
+  if (!G.history.length) { toast('Zatím není co vrátit'); return; }
+  const e = G.history.pop();
+  for (let j = e.length - 1; j >= 0; j--) G.cells[e[j][0]] = e[j][1];
+  hint = null; buzz(); save(); render();
+});
+// Poradit: first a wrong mark, otherwise a cell that one row or column decides
+$('#btnHint').addEventListener('click', () => {
+  if (G.status !== 'playing') { toast('Křížovka je hotová'); return; }
+  const { cl, sol } = info(P);
+  const wrong = G.cells.findIndex((v, i) => (v === 1 && !sol[i]) || (v === 2 && sol[i]));
+  if (!hint || (hint.wrong && wrong !== hint.i) || (!hint.wrong && G.cells[hint.i])) {
+    G.hints++;
+    if (wrong >= 0) hint = { i: wrong, wrong: true };
+    else {
+      hint = E.hintCell(cl, P.w, P.h, G.cells);
+      // no cell decided by one line alone (not for our puzzles): any cell of the solution
+      if (!hint) { const i = G.cells.findIndex(v => !v); hint = { i, v: sol[i] ? 1 : 2, line: null, k: -1 }; }
+    }
+  }
+  const where = hint.line === 'r' ? `u ${hint.k + 1}. řádku` : `u ${hint.k + 1}. sloupce`;
+  toast(hint.wrong ? 'Tady je chyba. Ťukni na políčko a smaže se.'
+    : !hint.line ? (hint.v === 1 ? 'Tohle políčko má být vybarvené. Ťukni na něj.' : 'Tohle políčko zůstane prázdné. Ťukni na něj.')
+    : hint.v === 1 ? `Podle čísel ${where} musí být tohle políčko vybarvené` : `Podle čísel ${where} musí tohle políčko zůstat prázdné`, 4000);
+  showCell(hint.i);
+  buzz(); save(); render();
+  keepVisible(hint.i);
+});
+$('#btnNew').addEventListener('click', openList);
+
+/* ---------- The puzzle list (Nová hra): nothing is lost when switching, so no question ---------- */
+function tileHTML(p) {
+  const cur = G.id === p.id, done = D.done[p.id];
+  const cells = cur ? (G.status === 'playing' && hasMarks(G) ? G.cells : null) : D.prog[p.id] ? D.prog[p.id].replace('!', '').split('').map(Number) : null;
+  const n = numOf(p);
+  let kind, th, nm;
+  if (done) { kind = 'done'; th = picSVG(p) + (done.clean ? '<span class="s" aria-hidden="true">★</span>' : ''); nm = esc(p.name); }
+  else if (cells) { kind = 'part'; th = picSVG(p, cells) + `<b>${n}</b>`; nm = '<span>rozpraco&shy;váno</span>'; }
+  else { kind = 'todo'; th = n; nm = ''; }
+  const label = done ? `Křížovka ${n}, vyřešeno: ${p.name}${done.clean ? ', bez nápovědy' : ''}` : cells ? `Křížovka ${n}, rozpracováno` : `Křížovka ${n}`;
+  return `<button class="lt ${kind}${cur ? ' cur' : ''}" data-open="${p.id}" aria-label="${esc(label)}"><span class="th">${th}</span><span class="nm${kind === 'part' ? ' soft' : ''}">${nm}</span></button>`;
+}
+function renderList() {
+  const groups = [...new Set(PZ.map(p => p.w))].sort((a, b) => a - b);
+  $('#listIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Malované křížovky<small>Křížovky</small></h2></div>
+    ${G.status === 'playing' && hasMarks(G) ? '<button class="big alt" data-act="restart">Začít tuhle křížovku znovu</button>' : ''}
+    ${groups.map(n => {
+      const ps = PZ.filter(p => p.w === n), k = ps.filter(p => D.done[p.id]).length;
+      return `<section class="card"><h3>${GROUP_NAMES[n] || ''} ${n} × ${n}</h3><div class="lsub">vyřešeno ${k} z ${ps.length}</div><div class="ltiles">${ps.map(tileHTML).join('')}</div></section>`;
+    }).join('')}
+    <button class="big" data-act="close">Zpět ke křížovce</button>`;
+}
+function openList() { hideToast(); renderList(); $('#screenList').hidden = false; $('#screenList').scrollTop = 0; }
+$('#listIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act], [data-open]'); if (!b) return;
+  if (b.dataset.act === 'close') { $('#screenList').hidden = true; return; }
+  if (b.dataset.act === 'restart') {
+    showModal('<h2>Začít znovu?</h2><p>Všechny značky v této křížovce se smažou.</p>', [
+      { text: 'Ano, začít znovu', fn: () => { $('#screenList').hidden = true; openPuzzle(G.id, true); toast('Křížovka začíná znovu'); } },
+      { text: 'Ne', cls: 'alt' },
+    ]);
+    return;
+  }
+  const id = b.dataset.open;
+  if (!BYID.has(id)) return;
+  $('#screenList').hidden = true;
+  if (id === G.id && G.status === 'playing') return; // the open one: just back to it
+  const again = !!D.done[id] && !D.prog[id];
+  openPuzzle(id, again);
+  buzz(8);
+  toast(`Křížovka ${numOf(P)} · ${sizeName(P)}${again ? ' – znovu od začátku' : ''}`);
+});
+
+/* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+function renderSettings() {
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Malované křížovky<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Hra</h3>
+      ${toggleRow('mistakes', 'Upozorňovat na chyby', 'Políčko vybarvené nebo označené křížkem špatně se hned zbarví červeně. Křížovka vyřešená s touhle pomocí nedostane hvězdičku.')}
+      ${toggleRow('autoCross', 'Doplňovat křížky', 'Když má řádek nebo sloupec vybarvené přesně podle svých čísel, zbytek se sám označí křížky.')}
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch" data-theme="${t.id}"><i></i></span>${t.name}</button>`).join('')}</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'theme') S.theme = arg;
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S);
+  buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
+});
+function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+// no setting needs a new puzzle: every change applies at once
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  if (S.mistakes && G.status === 'playing') G.warned = true; // the warnings can be seen on this puzzle now: no star
+  save();
+  render();
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
+function renderHelp() {
+  const ex = s => `<span>${s.split('').map(ch => `<i${ch === '#' ? ' class="f"' : ''}></i>`).join('')}</span>`;
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Malované křížovky<small>Jak hrát</small></h2></div>
+    <section class="card help">
+      <p>Ve mřížce je schovaný obrázek. Čísla vlevo od řádku a nad sloupcem říkají, kolik políček je v něm vybarvených vedle sebe, a to v tomhle pořadí.</p>
+      <div class="ex"><b>3 1</b>${ex('###.#..')}</div>
+      <div class="ex"><b>3 1</b>${ex('.###..#')}</div>
+      <p>Obě řady patří k číslům 3 1: nejdřív tři vybarvená políčka vedle sebe, potom jedno samotné.</p>
+      <p>Mezi dvěma skupinami je vždycky aspoň jedno prázdné políčko. Kde přesně skupiny leží, zjistíš z čísel řádků i sloupců dohromady.</p>
+    </section>
+    <section class="card help"><ol>
+      <li><b>Vyplnit</b>: ťuknutí políčko vybarví, další ťuknutí ho zase vymaže.</li>
+      <li><b>Křížek</b>: označí políčko, o kterém víš, že zůstane prázdné. Křížky ti pomáhají, do výsledku se nepočítají.</li>
+      <li>Táhnutím prstem po řádku nebo sloupci kreslíš víc políček najednou; bublina ukazuje, kolik jich je. Když začneš na políčku, které už má stejnou značku, tah ji naopak maže.</li>
+      <li>Číslo, které už má svůj řádek nebo sloupec vybarvený přesně, zešedne.</li>
+      <li><b>Zpět</b> vrátí poslední ťuknutí nebo tah, kolikrát chceš.</li>
+      <li><b>Poradit</b> ukáže chybu, nebo políčko, které jde z čísel jednoho řádku či sloupce poznat. Ťuknutím na něj ho rovnou vyplníš.</li>
+      <li>V Nastavení jde zapnout <b>Upozorňovat na chyby</b> (špatné značky zčervenají) a <b>Doplňovat křížky</b>.</li>
+      <li>Velké křížovky přiblížíš tlačítkem <b>Zvětšit</b> nebo roztažením dvěma prsty; dvěma prsty pak mřížkou i posouváš. Jedním prstem se kreslí.</li>
+      <li><b>Nová hra</b> otevře seznam křížovek. Rozpracované křížovky zůstanou tak, jak jsou, takže můžeš přecházet mezi nimi.</li>
+      <li>Vyřešená křížovka se ukáže v barvách. Když ji vyřešíš bez Poradit a bez upozorňování na chyby, dostane v seznamu <b>★</b>.</li>
+    </ol></section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings', '#screenList']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// rule: ask for persistent storage so the browser does not delete the saved game by itself
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+const savedSettings = saved && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+if (saved && typeof saved === 'object') D = { prog: validProg(saved.prog), done: validDone(saved.done) };
+if (saved && validGame(saved.game)) {
+  G = saved.game;
+  delete D.prog[G.id];
+  if (G.status === 'won' && !G.counted) { G.counted = true; D.done[G.id] = { clean: (G.hints === 0 && !G.warned) || !!(D.done[G.id] && D.done[G.id].clean) }; }
+  if (S.mistakes && G.status === 'playing') G.warned = true;
+  buildBoard(); render(); save();
+}
+else openPuzzle(firstOpen());
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// contract: opened from the launcher (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing: solve() fills the drawing as one stroke (a win), open(id) opens a puzzle
+window.Krizovky = {
+  E,
+  solve() { if (G.status !== 'playing') return; const snap = G.cells.slice(); info(P).sol.forEach((v, i) => { G.cells[i] = v ? 1 : (G.cells[i] === 2 ? 2 : 0); }); commit(snap, []); },
+  open(id) { if (BYID.has(id)) openPuzzle(id); },
+  get state() { return { S, G, D, hint }; },
+};
+})();
+</script>
+</body>
+</html>

@@ -115,6 +115,8 @@ async (page) => {
       await tapButton(/Zkontrolovat/); await wait(600);
     },
     'sudoku': async () => { await tapButton(/Poradit/); await wait(800); },
+    // a filled cell, a cross in another cell, Poradit (a mistake or a cell one line decides), a tap on it, Poradit again
+    'malovane-krizovky': async () => { await tap('#grid .cell'); await wait(300); await tap('#mCross'); await wait(200); await tap('#grid .cell:nth-child(7)'); await wait(300); await tap('#btnHint'); await wait(800); await tap('#grid .hint'); await wait(600); await tap('#btnHint'); await wait(800); },
     'skladani-kostek': async () => { await tap('#tray .piece, #tray [data-i], .tray > *'); await wait(300); await page.locator('#board > *, #board .cell').nth(27).click({ force: true }).catch(() => {}); await wait(600); },
     'padajici-tvary': async () => { await tapButton(/^Hrát$/); await wait(500); await tapButton(/Shodit/); await wait(1500); },
     'barevne-kostky': async () => { const b = await page.locator('#board, #field, .board').first().boundingBox(); if (b) await page.mouse.click(b.x + b.width / 2, b.y + b.height - 20); await wait(900); },
