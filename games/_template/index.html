@@ -70,7 +70,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 #app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 
-/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings; touch targets ≥ 45 px) ---------- */
+/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings) ---------- */
 .topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
 .topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
 .pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
@@ -103,7 +103,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 .row{display:flex;gap:10px}
 .undo{flex:1 1 0;display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:16px;font-size:21px;font-weight:800;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 0 0 2px var(--chip-line)}
 .undo svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
-/* rule: an unavailable action is only dimmed and explains itself when tapped */
+/* an unavailable action: dimmed, explains itself when tapped (the old senior look, kept as the default) */
 .undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
 
 /* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
@@ -341,7 +341,7 @@ function layout() {
   if (!G) return;
   const b = $('#board'), n = G.n, gap = n >= 5 ? 8 : 10;
   const room = Math.min(b.clientWidth - 2 * GUT, b.clientHeight - 24); // inside #board's padding (GUT at the sides, 12 px above and below): a short window shrinks the board
-  const cs = Math.max(45, Math.min(110, Math.floor((room - gap * (n - 1)) / n))); // rule: ≥ 45 px (0.8 cm)
+  const cs = Math.max(45, Math.min(110, Math.floor((room - gap * (n - 1)) / n))); // comfortable to tap
   root.style.setProperty('--cs', cs + 'px'); root.style.setProperty('--gap', gap + 'px');
 }
 
@@ -355,7 +355,7 @@ $('#grid').addEventListener('click', e => {
   if (won(G)) { G.status = 'won'; whenFree(G, 300, () => showModal(`<h2>Výborně! 🎉</h2><p>Všechno svítí. Tahy: <b>${G.history.length}</b></p>`, [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }])); }
   buzz(); save(); render();
 });
-// rule: Undo ("Zpět") wherever it makes sense; when unavailable it says why.
+// Undo ("Zpět"): optional; when unavailable it says why.
 // Here Undo ends with the win (the puzzle is solved). Games with a score usually keep Undo after the end
 // ("Vrátit tah" in the end dialog) - decide per game.
 $('#btnUndo').addEventListener('click', () => {

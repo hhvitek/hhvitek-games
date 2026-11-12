@@ -1,6 +1,6 @@
-# Games for a senior
+# Vítkovy hry
 
-A collection of simple mobile games for seniors. A launcher (`index.html`) and separate games in `games/`.
+A collection of mobile games. A launcher (`index.html`) and separate games in `games/`.
 Main target devices: Xiaomi 13T / 14T / 15T in portrait (CSS viewport about 393×873 to 412×915, about 393×760 with the browser bar).
 
 ## Before you finish a change to a game
@@ -15,7 +15,7 @@ Main target devices: Xiaomi 13T / 14T / 15T in portrait (CSS viewport about 393�
 
 - **Code is English:** identifiers, comments, file and folder names, storage keys, commit messages. All generated code must be English.
 - **`README.md` is Czech** and is for players and visitors only: what the games are, how to use them, images, contact, license. No developer or agent instructions there (adding a game, project structure, conventions): those belong in this file.
-- **Everything the player sees is Czech** (labels, messages, help, settings, aria-labels). See the senior rules below.
+- **Everything the player sees is Czech** (labels, messages, help, settings, aria-labels).
 - Exception: a game's folder (= its id and URL) is the game's Czech name without diacritics in kebab-case, e.g. `games/skladani-kostek/`, `games/pavouk/`, `games/soliter/`.
 - Talk to the user in Czech.
 
@@ -98,17 +98,18 @@ says which game to copy each pattern from, adds the game to `tools/shots.js`, an
 - **One HTML file per game:** HTML + CSS + JS inline, no external libraries or fonts. The only shared files allowed are those in `images/` and, for the card games (Solitér, FreeCell, Pyramida, Pavouk, Oko bere, Oko bere plus mínus, Prší), `games/_cards/cards.js` (loaded after `images/sets.js`; a change there affects all of them, test them all; Oko bere and Prší use only its tables, backs and faces; their mariáš cards come from `games/_cards/marias.js`, loaded after `cards.js`: a change there affects both, test both), and for the games with a computer opponent (Kostky, Dáma, Oko bere, Oko bere plus mínus, Prší) `games/_opponents/opponents.js` (loaded after `cards.js`; a change there affects all of them, test them all). It must work when opened from disk (`file://`).
 - **Own look:** each game has its own styles and themes as it needs (contrast differs between games).
 - **Game name in the top bar:** a visible `<h1>` with the game's Czech name between "Nová hra" and the "?"/settings buttons (it may wrap to two lines when the home button is shown). Scores or other info go on their own row below the bar, not in place of the name.
-- **For a senior:**
-  - Czech, informal "ty" only in the imperative (gender-neutral: not "uhodla jsi"),
-  - touch targets at least 0.8 cm (about 45 CSS px), main buttons larger, font from 18–20 px (only labels drawn inside game pieces, e.g. card indices or numbers on pegs and tiles, may be smaller),
-  - no time pressure, no long presses or hidden gestures, no "advanced" things on the game screen,
-  - an unavailable action is only dimmed and explains itself with a message when tapped (not `disabled` without feedback); dimmed means readable text without fill and a dashed outline in the theme's ink (copy `.undo.dim` from the template, checked), never only opacity,
-  - an **Undo** button (Czech label "Zpět") wherever it makes sense,
-  - help only behind the "?" button, never opens by itself,
-  - settings on a separate screen without a Save button: they apply immediately (a change that needs a new game starts it after returning to the game and says so),
+- **No senior constraints** (user's decision 2026-11-12): the games used to follow strict rules for a senior player
+  (touch targets ≥ 0.8 cm, text ≥ 18 px, no time pressure, no long presses or hidden gestures, nothing "advanced" on
+  the game screen, a dashed "dimmed" look for every unavailable action, Zpět everywhere). Those rules are gone: a game
+  may use any controls (swipes, long presses, multi-touch, drag, tilt), time pressure, smaller text and targets and
+  advanced options, as fits the game. Existing games keep how they work until they are changed on purpose.
+- **Behaviour every game keeps:**
+  - Czech, informal "ty", gender-neutral where it talks about the player (not "uhodla jsi"),
+  - help behind the "?" button; settings on their own screen, applied at once (a change that needs a new game starts it after returning to the game and says so),
+  - an **Undo** button ("Zpět") where the game wants one (not required),
   - settings and the game in progress are saved to `localStorage` under the game's own key (`games.<id>.state`), all in `try/catch`, and survive closing and restarts; corrupted or invalid data must never crash the game (fall back to defaults),
   - on start the game asks for persistent storage so the browser doesn't delete data by itself: `navigator.storage.persist()` (in `try/catch`; the launcher does it too),
-  - starting a new game in the middle of one asks for confirmation.
+  - starting a new game in the middle of one asks for confirmation,
   - the phone's Back (gesture or button) closes the topmost screen or dialog, like its own Zpět, instead of leaving the game: copy the "Back button" block from any game. It works because every layer (`#screenSettings`, `#screenHelp`, `#screenCredits`, `#modal`) is shown and hidden only through its `hidden` attribute and every screen has a `[data-act="close"]` button.
 - **Themes:** a solid colour (or a subtle texture), no colour bands. All elements of the game screen including details and the toast follow the theme, no exceptions in other colours.
 Every game also offers the theme "Papír" (`id: 'paper'`, meta `#f4ebdf`; the card games as the paper table in `games/_cards/cards.js`) with exactly the launcher's colours: background `#f4ebdf`, ink `#2b1a0e`, soft text `#6f5a48`, lines `#e6d8c6`, buttons `#7a4520` / `#fff` / shadow `#3f220e` (checked). It is an option, not the default (Sudoku, Skládání kostek, Přelévání, Hanojské věže, Pexeso, Kostky, Oko bere, Oko bere plus mínus and Prší start in it). A renamed theme id is mapped to the new one when the settings load (e.g. `cream` → `paper`).
@@ -122,7 +123,6 @@ Every game also offers the theme "Papír" (`id: 'paper'`, meta `#f4ebdf`; the ca
 
 The user chose these; keep them:
 - **Settings, help and dialogs** have one light look in every game and in the launcher, not the game theme (see Themes).
-- **Short screens** (`@media (max-height:800px)`, e.g. 393×760): top-bar buttons may be 42 px and score labels 16 px; such phones are very old. `tools/check.js` allows smaller text only there.
 - **Game title font:** the `<h1>` in a game's top bar uses the system font (`system-ui`, Roboto on Android) at weight 800, not a serif (Georgia does not exist on Android). The paper screens keep their Georgia headings.
 - **App name:** "Vítkovy hry" (manifest `name` and `short_name`, the launcher's `<title>` and its Nastavení heading, README).
 - **App icon:** a scene after the user's "Vítkovy hry" poster and colours: Náchod castle on a hill (round tower rising from the roof, a dark turret, two rows of windows), the user's black tortoiseshell cat (yellow-green eyes, ginger patches and blaze) in front, leaves and the orange die in the top left corner; no text (the home screen shows the name below it). The previous icon, a tilted orange die on black-aubergine, is commit 7d2c260.
@@ -139,7 +139,7 @@ The user chose these; keep them when changing a game:
   The layout follows the old Logik the player knows: no row numbers, the black/white feedback on the left of each row, Vzdát se (flag), Zpět and Zkontrolovat (tick; round arrows = Nová hra after the end) in a column on the right as pictures only, without labels (a deliberate exception: the player learns them; the help shows them). The column follows the rows (`alignSide()`): the flag is one row high next to the secret code, Zpět one row high, one free row, then Zkontrolovat over the two bottom rows. The secret code is a row of dark covers with a question mark; a tap on it does the same as the flag. The status line ("Přetáhni barvy do jamek" etc.) is off by default and turned on in settings ("Řádek s nápovědou", `hints`); without it the bottom tray holds only the colours, and with the colours on the right there is no tray. The default theme is "Klasika" (`theme: 'classic'`) (it replaced "Javor"; older saves still holding an old default, Tmavé dřevo or Javor, switch to it once, `look: 2` marks a save that knows), a soft natural light grey with flat light holes, a thin outline and hardly any shadows, like the old game on a computer screen (the blue in the old photo was the camera; plain white was too harsh); a colour fills its hole up to the outline, and in the feedback an empty place is a small grey dot so the white peg (white, dark outline) is unmistakable; the row to play has a quiet grey frame, not a blue one. The colours are by default in the bottom tray, lined up with the columns of holes and all with the same spacing as the holes (`alignPalette()`: with 6 colours and 4 holes the middle four sit under the holes and one more on each side); the holes sit in the middle of the screen (slightly smaller holes are fine for that), so the colours have equal margins on both sides (wider than 12 px: a deliberate exception). Where the holes are too close (e.g. 360 px wide) the colours are spread evenly from margin to margin. The secret-code box hugs the covers only, and the flag is centred next to it; "Barvy ve sloupci vpravo" (`palRight`) moves them into the right column: Zpět right above Zkontrolovat (no free row), the colours at the bottom of the column with one free row above Zpět, as big as the holes and close together, not one per row; smaller only when they do not fit (two columns when one would be under 44 px). The first six colours keep this order: červená, bílá, zelená, černá, modrá, žlutá.
 - **Sudoku:** "Stejná čísla" (`hlSame`) and "Kolik kterého čísla zbývá" (`counter`) are on by default (user's decision 2026-11-11); older saves switch them on once (`aids: 1` marks a save that knows), after that a player who turns them off keeps them off. Pencil notes are drawn large (`.36` of the cell in fixed rows of a third, `minmax(0,1fr)`, so 7 8 9 are never cut; more when the cell has few notes in "Větší, vedle sebe").
 - **Skládání kostek:** the default theme is "Papír" (`theme: 'paper'`).
-- **Padající tvary:** the default theme is "Dřevo" (`theme: 'wood'`); by default the shapes fall by themselves "Pomalu" (`speed: 'slow'`) with "Postupně zrychlovat" on (`accel: true`). This is a deliberate exception to "no time pressure": the Pauza button and "Jen tlačítkem" in settings stay.
+- **Padající tvary:** the default theme is "Dřevo" (`theme: 'wood'`); by default the shapes fall by themselves "Pomalu" (`speed: 'slow'`) with "Postupně zrychlovat" on (`accel: true`). The Pauza button and "Jen tlačítkem" in settings stay.
 - **Mahjong:** the default theme is "Dřevo" (`theme: 'wood'`).
 - **Přelévání, Hanojské věže, Pexeso:** the default theme is "Papír" (`theme: 'paper'`).
 - **Pexeso:** one player only (no two-player mode). It starts with the "Kočky" pictures and 10 pairs (`set: 'cats'`, `pairs: 10`). Two different cards stay face up until the next tap (never turned back by a timer). Zpět is only for a card turned by mistake: it turns the last open card back, the try still counts (`tries = ceil(flips / 2)`, `flips` never goes down) and a found pair cannot be undone. The default card back is the photo of Náchod castle with a white edge, as in the card games (`back: 'castle'`; "Barva podle vzhledu" is the other choice), so that photo is never a picture in the Náchodsko set (`skip: [0]`).

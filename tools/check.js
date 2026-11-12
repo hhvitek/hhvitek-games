@@ -31,9 +31,6 @@ const cardsCss = exists('games/_cards/cards.js') ? (read('games/_cards/cards.js'
 const PAPER = '.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}';
 const ERRLOG = (read('games/_template/index.html').match(/<script>\n\/\* ---------- Error log ---------- \*\/[\s\S]*?<\/script>/) || [])[0] || '';
 
-// CSS selectors whose small text is allowed: labels drawn inside game pieces (see CLAUDE.md)
-const SMALL_TEXT_OK = [/\.peg\b/, /\.num\b/, /\.ix\b/];
-
 // All rules of a CSS text as { sel, body, media } (nested @media blocks handled, comments removed)
 function cssRules(css, media = '') {
   css = css.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -70,7 +67,6 @@ function timeouts(code) {
   }
   return out;
 }
-const pxBelow18 = v => { const m = /(^|[^\d.])(\d+(?:\.\d+)?)px/.exec(v); return m && +m[2] < 18; };
 
 let failed = 0;
 const report = (id, problems) => {
@@ -118,14 +114,13 @@ for (const id of ids) {
   need(/#app\{[^}]*height:var\(--app-h,100dvh\)/.test(html) && /\/\* ---------- Visible height ---------- \*\//.test(html), 'the game is as tall as the visible window: #app height:var(--app-h,100dvh) and the "Visible height" block from the template');
   need(!/viewport-fit=cover/.test(html), 'no viewport-fit=cover in the viewport meta: the installed app then draws under the navigation bar and hides the bottom buttons');
 
-  // storage and the senior rules
+  // storage, dialogs and screens
   need(/navigator\.storage\.persist\(\)/.test(html), 'navigator.storage.persist() on start');
   const lines = html.split('\n');
   lines.forEach((l, i) => {
     if (!/localStorage\.(get|set|remove)Item/.test(l)) return;
     if (!/try\s*\{/.test(lines.slice(Math.max(0, i - 8), i + 1).join('\n'))) P.push(`localStorage outside try/catch (line ${i + 1})`);
   });
-  need(!/\sdisabled[\s>=]|\.disabled\s*=|setAttribute\(\s*['"]disabled|toggleAttribute\(\s*['"]disabled/.test(html.replace(/:disabled/g, '')), 'no `disabled` without feedback: dim the action and explain it with a toast');
   need(!/(^|[^.\w])(alert|confirm|prompt)\(/m.test(html), 'no alert()/confirm()/prompt(): use the game dialog (#modal)');
   need(/Back button ----/.test(html) && /addEventListener\('popstate'/.test(html), 'the "Back button" block (Android Back closes the open screen)');
   const layers = ((html.match(/const LAYERS = \[([^\]]*)\]/) || [])[1] || '');
@@ -133,10 +128,9 @@ for (const id of ids) {
   for (const scr of ['screenSettings', 'screenHelp']) need(html.includes(`id="${scr}"`), `#${scr} layer`);
   need((html.match(/data-act="close"/g) || []).length >= 2, 'every screen needs a [data-act="close"] button');
   need(/class="screen-head"[^`]*<h2>[^<]+<small>/.test(html), 'screen head shows the game name with the screen name in <small>');
-  need(/id="btnUndo"|data-a="undo"|id: 'undo'/.test(html), 'an Undo button ("Zpět")');
   need(/100dvh/.test(html) && /env\(safe-area-inset-/.test(html), 'layout uses 100dvh and env(safe-area-inset-*)');
 
-  // CSS: theming of settings/help/dialogs/toast, fonts, external resources
+  // CSS: theming of settings/help/dialogs/toast, external resources
   const styles = [...html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n');
   const usesCards = html.includes('<script src="../_cards/cards.js"></script>');
   const rules = cssRules(styles + (usesCards ? '\n' + cardsCss : ''));
@@ -145,13 +139,6 @@ for (const id of ids) {
     const bg = (/background(?:-color)?:([^;]+)/.exec(r.body) || [])[1] || '';
     if (bg && !/var\(|color-mix\(/.test(bg)) P.push('the toast colour comes from the theme, not a fixed colour');
   }
-  for (const r of rules) {
-    if (/max-height:\s*800px/.test(r.media)) continue; // short screens: smaller text allowed (user's decision)
-    for (const m of r.body.matchAll(/font(?:-size)?:([^;]+)/g)) {
-      if (pxBelow18(m[1]) && !SMALL_TEXT_OK.some(re => re.test(r.sel))) P.push(`font below 18 px: ${r.sel}`);
-    }
-  }
-  for (const m of html.matchAll(/style="[^"]*font-size:\s*(\d+)px/g)) if (+m[1] < 18) P.push(`inline font below 18 px: ${m[0].slice(0, 60)}`);
   // a phone turned sideways shows the notice "Otoč telefon na výšku" (copy the #rotate block from the template)
   need(/<div id="rotate" class="paper"[^>]*>[\s\S]*?Otoč telefon na výšku/.test(html) && rules.some(r => r.sel === '#rotate' && /orientation:\s*landscape/.test(r.media)), 'the rotate notice for a phone turned sideways (#rotate from the template)');
   // every game offers the theme "Papír" with the launcher's colours (card games: the paper table in cards.js)
@@ -159,12 +146,6 @@ for (const id of ids) {
   const attr = usesCards ? 'data-table' : 'data-theme';
   need(/\{\s*id:\s*'paper',\s*name:\s*'Papír',\s*meta:\s*'#f4ebdf'/.test(themeSrc), `a theme { id: 'paper', name: 'Papír', meta: '#f4ebdf' } (the launcher's look)`);
   need(rules.some(r => r.sel.split(',').some(s => s.trim() === `[${attr}="paper"]`) && /#f4ebdf/.test(r.body) && /#2b1a0e/.test(r.body)), `[${attr}="paper"] uses the launcher's colours (#f4ebdf, ink #2b1a0e)`);
-  // an unavailable button keeps readable text: no fill and a dashed outline, never only opacity
-  for (const r of rules) {
-    if (!/\.(undo|act|big|go|tbtn|arrow|ctl|key)\.dim\b|(^|[\s,])\.dim\s*($|,)|\.(sw|sbtn)\.off\b/.test(r.sel)) continue;
-    const op = /(?:^|;)\s*opacity:\s*([\d.]+)/.exec(r.body);
-    if (op && +op[1] < 1) P.push(`dimmed button only made transparent (${r.sel}): copy the .undo.dim rule from the template (a paper switch: .sw.off in skladani-kostek)`);
-  }
 
   // one self-contained file: only images/, the shared card look, the mariáš cards and the computer opponents may be loaded
   for (const m of html.matchAll(/<(?:script|link|img|iframe|audio|video|source)\b[^>]*\s(?:src|href)=["']([^"']+)["']/g)) {

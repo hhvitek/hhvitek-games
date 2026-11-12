@@ -17,11 +17,7 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 ## Open questions for the user
 
 - [ ] Dáma: is the default opponent "Běžný hráč" about right for the players (not too easy, not frustrating)? It looks two half-moves ahead with noise and sometimes plays the second best move; tune it after playing on the phone.
-- [ ] Dáma: on 360 px wide phones the squares are about 42 px (0.75 cm), just under the 0.8 cm rule (like Logik on short screens). Keep?
 
-- [ ] Small targets: Barevné kostky at 10 × 14 has stones of about 0.6 cm (under the 0.8 cm rule; the settings note says
-  they are small), and Logik holes go down to about 0.75 cm on short screens with 10–12 attempts. Keep, drop the
-  largest board / the most attempts, or make the boards scroll?
 - [ ] Zavři čísla: the dice come from the saved seed, so after a roll the player can press Zpět, close other tiles and see the same dice again; repeated, this shows the coming rolls. Keep it, or allow Undo only within the current roll?
 
 - [ ] Spojování čísel: on the 3 × 3 grid the goals are now a quarter (128 / 256 / 512 instead of 512 / 1024 / 2048), because nine cells can hold at most 1024. Chosen by the agent while fixing the review findings (2026-11-10): keep, or other goals?

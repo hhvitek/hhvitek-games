@@ -1,6 +1,6 @@
 ---
 name: new-game
-description: Procedure for making a new game in this project (games for seniors) or for a bigger rebuild of an existing game. Use it whenever the user asks for a new game ("udělej novou hru", "přidej hru", "nová hra", "hra jako …") or for a large change of a game's layout, rules or controls. It makes sure the CLAUDE.md rules, the patterns, the screenshot check and the independent review are not forgotten.
+description: Procedure for making a new game in this project (mobile games) or for a bigger rebuild of an existing game. Use it whenever the user asks for a new game ("udělej novou hru", "přidej hru", "nová hra", "hra jako …") or for a large change of a game's layout, rules or controls. It makes sure the CLAUDE.md rules, the patterns, the screenshot check and the independent review are not forgotten.
 ---
 
 # New game (or a bigger rebuild)
@@ -33,8 +33,9 @@ CLAUDE.md is the source of the rules; this file only says what to do when.
 | `#app` as tall as the visible window (`height:var(--app-h,100dvh)` + the "Visible height" block, checked; see "Visible height" in CLAUDE.md) | template |
 | a computer opponent: own AI and `LEVELS`, the name, face, stars and head from `games/_opponents/opponents.js` (never drawn again in the game) | `games/oko-bere/` (small head), `games/kostky/` (big panel), `games/prsi/` (play styles, two opponents) |
 
-Senior rules to keep in mind while writing: Czech, "ty" only in the imperative, no time pressure (unless the user
-decided otherwise), targets ≥ 45 px, text ≥ 18 px, unavailable actions dimmed + a toast, Zpět, help only behind "?".
+Keep in mind while writing: Czech player texts (informal "ty", gender-neutral), help behind "?", settings applied at
+once. Any controls are allowed (gestures, long presses, multi-touch, time pressure; the senior rules were dropped on
+2026-11-12); explain them in the help.
 
 ## 4. Teach the screenshot pass the game
 Add an entry for `<id>` to `play` in `tools/shots.js`: a move, the hint (if any), a tap on the hinted piece and on its place.
@@ -49,7 +50,7 @@ Add an entry for `<id>` to `play` in `tools/shots.js`: a move, the hint (if any)
 ## 6. Look at the pictures (do not skip: scripts miss layout problems)
 Open `.playwright-mcp/sheet-<id>.png` with the Read tool and check:
 - big empty areas or one part far too large; everything sized to the screen at 393×873 and at 393×760 (picture 5short),
-- anything too small to see or hit: dice pips, labels, numbers, targets under 45 px,
+- anything too small to see or hit comfortably on the phone: dice pips, labels, numbers, targets,
 - overlaps, text cut off, a toast or dialog over Settings/Help,
 - after play (picture 2play): the move happened, the hint shows clearly what to do,
 - settings and help: the light shared look, readable, the game name on top.
