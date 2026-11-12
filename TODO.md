@@ -5,6 +5,8 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 
 ## Testing on the real phone
 
+- [ ] Dáma: how long the Mistr thinks on the Xiaomi (on a computer about 0.5 s on average, 2.7 s at most; it stops at 20 s at the latest (8 s without a worker), and only then could the same position give a different move after Zpět).
+
 - [ ] Brave on Android (the Samsung S25 of the report): check that the bottom buttons are no longer cut off in the app installed by Brave; Nastavení → "Údaje o obrazovce" in the launcher shows what the last game measured. By the table in CLAUDE.md ("Visible height") Brave reports the same height for `visualViewport` as for `100dvh`, so the 1.0.4 rule alone may not be enough. When it is settled, remove both TEMPORARY parts: the card in `index.html` and the `games.launcher.diag` write in every game and the template.
 - [ ] Open the launcher on the target phone (Xiaomi 13T/14T/15T), add it to the home screen and play each game once.
 - [ ] Turn on airplane mode and check that all games and the image sets (Mahjong: Kočky, Náchodsko, Znaky obcí, Houby, Ptáci, Ovoce a zelenina) still load offline.
@@ -12,6 +14,9 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 - [ ] Open a game straight from disk once (double-click `games/<id>/index.html`): the Playwright MCP blocks `file:///`, so this is not tested automatically.
 
 ## Open questions for the user
+
+- [ ] Dáma: is the default opponent "Běžný hráč" about right for the players (not too easy, not frustrating)? It looks two half-moves ahead with noise and sometimes plays the second best move; tune it after playing on the phone.
+- [ ] Dáma: on 360 px wide phones the squares are about 42 px (0.75 cm), just under the 0.8 cm rule (like Logik on short screens). Keep?
 
 - [ ] Small targets: Barevné kostky at 10 × 14 has stones of about 0.6 cm (under the 0.8 cm rule; the settings note says
   they are small), and Logik holes go down to about 0.75 cm on short screens with 10–12 attempts. Keep, drop the

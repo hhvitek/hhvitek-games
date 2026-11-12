@@ -34,6 +34,7 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Patnáctka       | `games/patnactka/`       | Posuvná skládačka: seřaď čísla posouváním na prázdné místo; desky 3 × 3, 4 × 4 a 5 × 5, mírné až úplné zamíchání, Zpět    |
 | Zavři čísla     | `games/zavri-cisla/`     | Kostková hra (Shut the Box): hoď kostkami a zavři destičky se stejným součtem; 9, 10 nebo 12 destiček, statistika         |
 | Kostky          | `games/kostky/`          | Klasické kostky (jedničky a pětky) se šesti kostkami proti počítači: házej, dokud se nebojíš, a body si zapiš; tři soupeři od začátečníka po mistra, hra do 3 000, 5 000 nebo 10 000 |
+| Dáma            | `games/dama/`            | Klasická česká dáma proti počítači: dlouhá dáma, braní je povinné; soupeř běžný hráč nebo mistr, Poradit a Zpět            |
 | Solitér         | `games/soliter/`         | Klasický solitér (Klondike)                                                                                               |
 | FreeCell        | `games/freecell/`        | Solitér se čtyřmi volnými políčky                                                                                         |
 | Pyramida        | `games/pyramida/`        | Odebírej dvojice karet se součtem 13                                                                                      |

@@ -119,6 +119,8 @@ async (page) => {
     'cesta-ven': async () => { await tap('#btnGo'); await wait(500); await tap(HINTED); await wait(800); await tap('#btnGo'); await wait(500); },
     'patnactka': async () => { await page.evaluate(() => { const P = window.Patnactka, G = P.state.G, n = G.rules.n, z = G.board.indexOf(0); P.tryMove(z % n ? z - 1 : z + 1); }); await wait(500); },
     'kostky': async () => { await tap('#btnRoll'); await wait(1200); await tap('#roll .die:not(.dead)'); await wait(400); },
+    // the advised move (its piece, then its square), the opponent's reply, then the next advice and its piece chosen
+    'dama': async () => { await tap('#btnHint'); await wait(1200); await tap('.sq.hint:has(.pc)'); await wait(300); await tap('.sq.hint.to'); await wait(4000); await tap('#btnHint'); await wait(1200); await tap('.sq.hint:has(.pc)'); await wait(300); },
     'zavri-cisla': async () => { await tapButton(/Hodit kostk/); await wait(1800); await tap('#rails .plate:not(.dim):not(.down)'); await wait(400); },
     'soliter': async () => { await tap('[data-a="hint"]'); await wait(900); await tap('.cd.hint'); await wait(800); },
     'freecell': async () => { await tap('[data-a="hint"]'); await wait(900); await tap('.cd.hint'); await wait(800); },

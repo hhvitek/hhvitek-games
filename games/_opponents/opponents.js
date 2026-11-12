@@ -1,7 +1,7 @@
 // Shared computer opponents: who the opponent is (a random Czech name, its gender and a drawn face with a mood)
 // and how it is shown (a round avatar, the name and a badge: stars for the level or a short trait).
 // Every game keeps its own AI and its own levels, LEVELS = [{ title, desc }] from the weakest to the strongest;
-// this file only shows them. Kostky, Oko bere, Oko bere plus mínus and Prší use it.
+// this file only shows them. Kostky, Dáma, Oko bere, Oko bere plus mínus and Prší use it.
 // Load it with  <script src="../_opponents/opponents.js"></script>  (after images/sets.js and _cards/cards.js).
 // It prepends its CSS (.op…) to <head>, so the game's own rules win, and sets globalThis.OPPONENTS.
 // Sizes and colours come from the game's variables: --op-ava (avatar size), --op-ava-bg, --op-name (name size),

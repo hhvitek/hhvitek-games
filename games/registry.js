@@ -18,6 +18,8 @@ globalThis.GAMES = [
   { id: 'patnactka', name: 'Patnáctka', description: 'Posouvej čísla, až budou po řadě' },
   { id: 'zavri-cisla', name: 'Zavři čísla', description: 'Házej kostkami a zavírej čísla' },
   { id: 'kostky', name: 'Kostky', description: 'Házej kostkami proti soupeři' },
+  // Board games against the computer.
+  { id: 'dama', name: 'Dáma', description: 'Klasická dáma proti počítači' },
   // Card solitaires last.
   { id: 'soliter', name: 'Solitér', description: 'Skládej karty od esa po krále' },
   { id: 'freecell', name: 'FreeCell', description: 'Solitér se čtyřmi volnými políčky' },

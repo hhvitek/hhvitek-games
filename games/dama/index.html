@@ -1,0 +1,1352 @@
+<!doctype html>
+<html lang="cs" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f4ebdf">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Dáma">
+<title>Dáma</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23b98d62'/%3E%3Ccircle cx='32' cy='32' r='18' fill='%232b1a0e'/%3E%3Ccircle cx='32' cy='32' r='12' fill='none' stroke='%23f4ebdf' stroke-width='3'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes: a solid colour; everything below reads these variables (rule) ----------
+   --light/--dark: the squares, --pw/--pb: white and black pieces with their rims and crowns, --sel: the chosen piece and
+   where it can go, --last: the opponent's last move, --hint: the advice */
+[data-theme="paper"]{--page:#f4ebdf;--bar:rgba(122,69,32,.06);--line:#e6d8c6;--ink:#2b1a0e;--soft:#6f5a48;--accent:#7a4520;--accent-ink:#fff;--chip:#fff;--chip-line:#e6d8c6;--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--undo-bg:rgba(122,69,32,.1);
+  --frame:#7a4520;--light:#fbf6ee;--dark:#c19a72;--pw:#fffdf8;--pw-rim:#8a7058;--pw-crown:#7a4520;--pb:#2b1a0e;--pb-rim:#000;--pb-crown:#f2c46d;--sel:#1f7a4a;--last:#c0392b;--hint:#1f5fbf}
+[data-theme="wood"]{--page:#4a2f1b;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.1);--ink:#fbefd9;--soft:#e2cfb0;--accent:#f0b45c;--accent-ink:#2a1a08;--chip:rgba(255,255,255,.12);--chip-line:rgba(255,255,255,.22);--btn:#f0b45c;--btn-ink:#2a1a08;--btn-sh:#a06b22;--undo-bg:rgba(0,0,0,.25);
+  --frame:#2a190d;--light:#ecd1a4;--dark:#9b6436;--pw:#fff6e4;--pw-rim:#8c6a44;--pw-crown:#9b6436;--pb:#1e130b;--pb-rim:#000;--pb-crown:#f0b45c;--sel:#2fbf6a;--last:#ff5a3c;--hint:#5ab4ff}
+[data-theme="green"]{--page:#23402a;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.1);--ink:#eef6e8;--soft:#cfe2c6;--accent:#ffd66b;--accent-ink:#2a2200;--chip:rgba(255,255,255,.12);--chip-line:rgba(255,255,255,.22);--btn:#ffd66b;--btn-ink:#2a2200;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.25);
+  --frame:#13261a;--light:#eeeed2;--dark:#6f9a52;--pw:#ffffff;--pw-rim:#6b6b6b;--pw-crown:#3f6a2e;--pb:#1a1a1a;--pb-rim:#000;--pb-crown:#ffd66b;--sel:#ffd400;--last:#ff4d4d;--hint:#2fa8ff}
+
+/* ---------- Base ---------- */
+:root{--gut:12px} /* one side margin: bar buttons, board and bottom buttons line up (the safe areas are on #app) */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{background:var(--page);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+/* rule: 100dvh + safe areas, the board is sized from the room that is left (see layout()) */
+#app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings; touch targets ≥ 45 px) ---------- */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line);text-decoration:none}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:20px}
+/* narrow phones (360 px): less room between the bar buttons, so the name fits whole at 18 px; the outer margin stays */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:18px;letter-spacing:0}
+}
+
+/* ---------- The two players: a row above the board (the opponent) and below it (you) ---------- */
+.side{flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 var(--gut);padding:4px 10px;min-height:52px;border-radius:16px;border:3px solid transparent;background:var(--bar);--op-ava:40px;--op-ava-bg:var(--chip);--op-name:20px}
+.side.on{border-color:var(--accent)}
+.side .me{font-size:21px;font-weight:800}
+.side .tag{flex:none;font-size:18px;font-weight:800;padding:2px 10px;border-radius:12px;background:var(--accent);color:var(--accent-ink);white-space:nowrap}
+.side .tag.off{background:none;color:var(--soft);font-weight:700;padding:2px 0}
+.left{display:flex;align-items:center;gap:10px;min-width:0}
+.cnt{flex:none;display:inline-flex;align-items:center;gap:6px;font-size:19px;font-weight:700;color:var(--soft)}
+.mini{width:20px;height:20px;border-radius:50%;flex:none}
+.mini.c0{background:var(--pw);box-shadow:inset 0 0 0 2px var(--pw-rim)}
+.mini.c1{background:var(--pb);box-shadow:inset 0 0 0 2px var(--pb-rim),0 0 0 2px color-mix(in srgb,var(--ink) 35%,transparent)}
+
+/* ---------- Board ---------- */
+/* the opponent's row, the board and your row stay together in the middle of the room that is left */
+#mid{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:8px 0 0}
+#board{flex:none;display:grid;place-items:center;padding:12px var(--gut)} /* rule: at least 12 px between the board and the rows above and below, on every screen */
+#wrap{position:relative;padding:var(--fw);background:var(--frame);border-radius:8px}
+#grid{display:grid;grid-template-columns:repeat(8,var(--cs));grid-template-rows:repeat(8,var(--cs))}
+.sq{width:var(--cs);height:var(--cs);position:relative;display:grid;place-items:center}
+.sq.l{background:var(--light)}
+.sq.d{background:var(--dark)}
+/* a piece: a flat stone with a rim; a king is two stones on each other with a crown */
+.pc{width:calc(var(--cs) * .8);height:calc(var(--cs) * .8);border-radius:50%;position:relative;display:grid;place-items:center}
+.pc.c0{background:var(--pw);box-shadow:inset 0 0 0 calc(var(--cs) * .05) var(--pw-rim),inset 0 0 0 calc(var(--cs) * .14) var(--pw),inset 0 0 0 calc(var(--cs) * .17) color-mix(in srgb,var(--pw-rim) 45%,var(--pw)),0 calc(var(--cs) * .05) 0 var(--pw-rim)}
+.pc.c1{background:var(--pb);box-shadow:inset 0 0 0 calc(var(--cs) * .05) var(--pb-rim),inset 0 0 0 calc(var(--cs) * .14) var(--pb),inset 0 0 0 calc(var(--cs) * .17) color-mix(in srgb,#fff 22%,var(--pb)),0 calc(var(--cs) * .05) 0 var(--pb-rim)}
+.pc.k{transform:translateY(calc(var(--cs) * -.05))}
+.pc.k.c0{box-shadow:inset 0 0 0 calc(var(--cs) * .05) var(--pw-rim),0 calc(var(--cs) * .05) 0 var(--pw-rim),0 calc(var(--cs) * .1) 0 var(--pw),0 calc(var(--cs) * .13) 0 var(--pw-rim)}
+.pc.k.c1{box-shadow:inset 0 0 0 calc(var(--cs) * .05) var(--pb-rim),inset 0 0 0 calc(var(--cs) * .07) color-mix(in srgb,#fff 25%,var(--pb)),0 calc(var(--cs) * .05) 0 var(--pb-rim),0 calc(var(--cs) * .1) 0 color-mix(in srgb,#fff 18%,var(--pb)),0 calc(var(--cs) * .13) 0 var(--pb-rim)}
+.pc svg{width:62%;height:62%}
+.pc.c0 svg{fill:var(--pw-crown)}
+.pc.c1 svg{fill:var(--pb-crown)}
+/* the chosen piece, where it can go, compulsory captures, the advice and the opponent's last move */
+.sq.sel .pc{outline:calc(var(--cs) * .08) solid var(--sel);outline-offset:calc(var(--cs) * .02)}
+.sq.to::after{content:"";position:absolute;width:calc(var(--cs) * .34);height:calc(var(--cs) * .34);border-radius:50%;background:var(--sel);box-shadow:0 0 0 calc(var(--cs) * .04) color-mix(in srgb,#fff 70%,var(--sel))}
+.sq.must .pc{outline:calc(var(--cs) * .06) dashed var(--sel);outline-offset:calc(var(--cs) * .02)}
+.sq.must.sel .pc{outline-style:solid}
+.sq.hint{box-shadow:inset 0 0 0 calc(var(--cs) * .08) var(--hint)}
+.sq.hint.to::after{background:var(--hint)}
+.sq.lf{box-shadow:inset 0 0 0 calc(var(--cs) * .06) color-mix(in srgb,var(--last) 70%,transparent)}
+.sq.lt{box-shadow:inset 0 0 0 calc(var(--cs) * .08) var(--last)}
+.sq.lx::before{content:"×";position:absolute;font-size:calc(var(--cs) * .7);font-weight:900;line-height:1;color:color-mix(in srgb,var(--last) 75%,transparent)}
+.sq.taken .pc{opacity:.35}
+.sq.taken::before{content:"×";position:absolute;z-index:1;font-size:calc(var(--cs) * .8);font-weight:900;line-height:1;color:var(--last)}
+.ghost{position:absolute;left:0;top:0;z-index:5;pointer-events:none;width:var(--cs);height:var(--cs);display:grid;place-items:center}
+
+/* ---------- Bottom buttons ---------- */
+.tray{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px var(--gut) 12px;margin-top:8px;background:var(--bar);border-top:1px solid var(--line)}
+#hint{text-align:center;font-size:19px;line-height:1.3;color:var(--soft);min-height:25px}
+.row{display:flex;gap:10px}
+.undo{flex:1 1 0;display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:16px;font-size:21px;font-weight:800;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.undo svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+/* rule: an unavailable action is only dimmed and explains itself when tapped */
+.undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+@media (max-height:800px){
+  .topbar{height:56px}
+  .round{width:42px;height:42px}
+  .pill{height:42px}
+  .side{min-height:48px;--op-ava:36px}
+  #mid{padding-top:6px}
+  .undo{height:56px}
+  .tray{gap:6px;padding:6px var(--gut) 10px;margin-top:6px}
+}
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+/* rule: the head with Zpět and the game name stays at the top while scrolling */
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);margin-top:16px}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink)}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{height:56px;border-radius:10px;background:var(--page);box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);display:grid;grid-template-columns:repeat(4,1fr);overflow:hidden;padding:6px}
+.swatch i{display:grid;place-items:center}
+.swatch i:nth-child(odd){background:var(--light)}
+.swatch i:nth-child(even){background:var(--dark)}
+.swatch i b{width:70%;aspect-ratio:1;border-radius:50%}
+.swatch i b.c0{background:var(--pw);box-shadow:inset 0 0 0 2px var(--pw-rim)}
+.swatch i b.c1{background:var(--pb)}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.stats{font-size:20px;line-height:1.5}
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol,.help ul{padding-left:26px}
+.help li{margin:10px 0}
+.help h3 + p{margin-top:4px}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.mcard h2{font-size:28px;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 160px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Dáma</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <div id="mid">
+    <div id="foeRow" class="side"></div>
+    <main id="board"><div id="wrap"><div id="grid"></div></div></main>
+    <div id="meRow" class="side"></div>
+  </div>
+  <footer class="tray">
+    <div id="hint"></div>
+    <div class="row">
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnHint" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>Poradit</button>
+    </div>
+  </footer>
+</div>
+<!-- Every layer is shown and hidden only through its hidden attribute; every screen has a [data-act="close"] button (Back button contract) -->
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+<script src="../_opponents/opponents.js"></script>
+<script>
+/* ---------- Visible height ---------- */
+// The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
+// enough: some browsers report it taller than what is visible (the app installed by Brave on Android counted the
+// status and navigation bars too and hid the bottom buttons). visualViewport follows what is shown; it is measured
+// again on every change and shortly after loading (a browser bar that hides itself may change it without an event),
+// and a changed height makes the game lay itself out again through a resize event.
+(() => {
+  const root = document.documentElement;
+  let last = 0;
+  const measure = () => {
+    const vv = window.visualViewport;
+    const h = Math.round(vv ? vv.height * vv.scale : innerHeight);
+    if (!(h > 0) || h === last) return;
+    const first = !last; last = h;
+    root.style.setProperty('--app-h', h + 'px');
+    if (!first) dispatchEvent(new Event('resize'));
+  };
+  measure();
+  addEventListener('resize', measure);
+  if (window.visualViewport) visualViewport.addEventListener('resize', measure);
+  addEventListener('pageshow', measure);
+  [100, 500, 1500].forEach(ms => setTimeout(measure, ms));
+  // TEMPORARY (2026-11-08): what this page measured, shown in the launcher's Nastavení → "Údaje o obrazovce"
+  setTimeout(() => { try {
+    const p = document.createElement('div'); p.style.cssText = 'position:absolute;left:-50px;top:0;width:1px;height:100dvh;padding-bottom:env(safe-area-inset-bottom)';
+    document.body.appendChild(p); const dvh = Math.round(p.getBoundingClientRect().height - parseFloat(getComputedStyle(p).paddingBottom)), sb = Math.round(parseFloat(getComputedStyle(p).paddingBottom)); p.remove();
+    const vv = window.visualViewport;
+    localStorage.setItem('games.launcher.diag', JSON.stringify({ page: location.pathname.split('/').slice(-2, -1)[0], vv: vv ? Math.round(vv.height) : null, inner: innerHeight, client: root.clientHeight, dvh, sb, appH: last, app: Math.round(document.getElementById('app').getBoundingClientRect().height) }));
+  } catch (e) {} }, 2000);
+})();
+</script>
+<script>
+/* ---------- Engine ---------- */
+// Czech draughts (česká dáma): the rules, the move generator and the computer's search. No DOM here: the same
+// function also runs inside a Web Worker made from its source text and in Node (tools/dama-test.js).
+function DamaEngine() {
+'use strict';
+/* Squares: the 32 dark squares, s = row * 4 + (col >> 1); row 0 is white's home row and a1 (row 0, col 0) is dark.
+   A position is { w, b, k, stm, h1, h2 }: bit masks of the white pieces, the black pieces and the kings,
+   the side to move (0 white, 1 black) and a 64-bit Zobrist hash in two halves. As text it is 32 characters
+   (. w b W B) for squares 0..31. White men move up (row + 1), black men down. */
+const ROW = new Int8Array(32), COL = new Int8Array(32);
+for (let s = 0; s < 32; s++) { const r = s >> 2; ROW[s] = r; COL[s] = (s & 3) * 2 + (r & 1); }
+const sqAt = (r, c) => (r < 0 || r > 7 || c < 0 || c > 7 || ((r + c) & 1)) ? -1 : r * 4 + (c >> 1);
+// directions 0 up-left, 1 up-right, 2 down-left, 3 down-right; NB[d * 32 + s] = the next square or -1
+const DR = [1, 1, -1, -1], DC = [-1, 1, -1, 1];
+const NB = new Int8Array(128);
+for (let d = 0; d < 4; d++) for (let s = 0; s < 32; s++) NB[d * 32 + s] = sqAt(ROW[s] + DR[d], COL[s] + DC[d]);
+const FWD = [[0, 1], [2, 3]];          // the men's forward directions for white and black
+const LAST = [0xF0000000 | 0, 0x0000000F]; // the row where a man of that side becomes a king
+const bit = s => 1 << s;
+const has = (m, s) => (m >>> s) & 1;
+const low = m => 31 - Math.clz32(m & -m);
+function popcnt(m) { m = m - ((m >>> 1) & 0x55555555); m = (m & 0x33333333) + ((m >>> 2) & 0x33333333); return (((m + (m >>> 4)) & 0x0F0F0F0F) * 0x01010101) >>> 24; }
+
+/* ---------- Hashing ---------- */
+let zs = 0x9E3779B9;
+const zr = () => { zs = (zs + 0x6D2B79F5) | 0; let t = zs; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return (t ^ t >>> 14) | 0; };
+const Z1 = new Int32Array(128), Z2 = new Int32Array(128); // [type * 32 + s], type 0 white man, 1 white king, 2 black man, 3 black king
+for (let i = 0; i < 128; i++) { Z1[i] = zr(); Z2[i] = zr(); }
+const ZS1 = zr(), ZS2 = zr();
+function hashOf(p) {
+  let h1 = p.stm ? ZS1 : 0, h2 = p.stm ? ZS2 : 0;
+  for (let s = 0; s < 32; s++) {
+    const t = has(p.w, s) ? (has(p.k, s) ? 1 : 0) : has(p.b, s) ? (has(p.k, s) ? 3 : 2) : -1;
+    if (t >= 0) { h1 ^= Z1[t * 32 + s]; h2 ^= Z2[t * 32 + s]; }
+  }
+  p.h1 = h1; p.h2 = h2; return p;
+}
+
+/* ---------- Positions as text ---------- */
+const START = 'wwwwwwwwwwww........bbbbbbbbbbbb';
+function parse(str, stm) {
+  if (typeof str !== 'string' || str.length !== 32 || !/^[.wbWB]+$/.test(str) || (stm !== 0 && stm !== 1)) return null;
+  let w = 0, b = 0, k = 0;
+  for (let s = 0; s < 32; s++) {
+    const ch = str[s];
+    if (ch === 'w' || ch === 'W') w |= bit(s);
+    if (ch === 'b' || ch === 'B') b |= bit(s);
+    if (ch === 'W' || ch === 'B') k |= bit(s);
+  }
+  // a man never stands on the row where it would have become a king
+  if ((w & ~k & LAST[0]) || (b & ~k & LAST[1])) return null;
+  return hashOf({ w, b, k, stm });
+}
+function text(p) {
+  let out = '';
+  for (let s = 0; s < 32; s++) out += has(p.w, s) ? (has(p.k, s) ? 'W' : 'w') : has(p.b, s) ? (has(p.k, s) ? 'B' : 'b') : '.';
+  return out;
+}
+
+/* ---------- Moves ----------
+   A move is { from, to, path: [the squares it lands on, in order], caps: [the captured squares, in order],
+   cm: mask of the captured squares, king: a king moves, promo: a man becomes a king }.
+   Rules (česká dáma): a capture is compulsory and a multiple capture is played to its end; a capture by a king has
+   priority over a capture by a man; otherwise any capture may be chosen (no "take the most"). Men move and capture
+   forward only. A king moves any distance and captures a piece at any distance on its line, landing on any free
+   square behind it; when it can go on capturing from some of those squares it must land on one of them. Captured
+   pieces leave the board only after the whole move, so they still block, and no piece is jumped twice. */
+function moves(p) {
+  const side = p.stm, me = side ? p.b : p.w, op = side ? p.w : p.b, all = p.w | p.b;
+  const out = [];
+  let from = 0, occ = 0, taken = 0, isKing = false;
+  const path = [], caps = [];
+  const finish = () => {
+    const to = path[path.length - 1];
+    out.push({ from, to, path: path.slice(), caps: caps.slice(), cm: taken, king: isKing, promo: !isKing && has(LAST[side], to) === 1 });
+  };
+  // all captures that go on from square s; returns whether there is at least one
+  function capFrom(s) {
+    let found = false;
+    if (isKing) {
+      for (let d = 0; d < 4; d++) {
+        let t = NB[d * 32 + s];
+        while (t >= 0 && !has(occ, t)) t = NB[d * 32 + t];
+        if (t < 0 || !has(op, t) || has(taken, t)) continue; // the board's edge, own piece or a piece already jumped
+        let l = NB[d * 32 + t];
+        const lands = [];
+        while (l >= 0 && !has(occ, l)) { lands.push(l); l = NB[d * 32 + l]; }
+        if (!lands.length) continue;
+        found = true;
+        taken |= bit(t); caps.push(t);
+        let goesOn = false;
+        for (const x of lands) { path.push(x); if (capFrom(x)) goesOn = true; path.pop(); }
+        if (!goesOn) for (const x of lands) { path.push(x); finish(); path.pop(); }
+        taken &= ~bit(t); caps.pop();
+      }
+    } else {
+      for (const d of FWD[side]) {
+        const t = NB[d * 32 + s];
+        if (t < 0 || !has(op, t) || has(taken, t)) continue;
+        const l = NB[d * 32 + t];
+        if (l < 0 || has(occ, l)) continue;
+        found = true;
+        taken |= bit(t); caps.push(t); path.push(l);
+        if (!capFrom(l)) finish();
+        taken &= ~bit(t); caps.pop(); path.pop();
+      }
+    }
+    return found;
+  }
+  // captures: kings first (they have priority), then men
+  for (const kings of [true, false]) {
+    let m = me & (kings ? p.k : ~p.k);
+    while (m) {
+      from = low(m); m &= m - 1;
+      occ = all & ~bit(from); taken = 0; isKing = kings;
+      capFrom(from);
+    }
+    if (out.length) return out;
+  }
+  // ordinary moves
+  let m = me;
+  while (m) {
+    const s = low(m); m &= m - 1;
+    if (has(p.k, s)) {
+      for (let d = 0; d < 4; d++) for (let t = NB[d * 32 + s]; t >= 0 && !has(all, t); t = NB[d * 32 + t])
+        out.push({ from: s, to: t, path: [t], caps: [], cm: 0, king: true, promo: false });
+    } else {
+      for (const d of FWD[side]) {
+        const t = NB[d * 32 + s];
+        if (t >= 0 && !has(all, t)) out.push({ from: s, to: t, path: [t], caps: [], cm: 0, king: false, promo: has(LAST[side], t) === 1 });
+      }
+    }
+  }
+  return out;
+}
+// the position after a move (a new object; the old one is kept)
+function play(p, mv) {
+  const side = p.stm;
+  let w = p.w, b = p.b, k = p.k, h1 = p.h1 ^ ZS1, h2 = p.h2 ^ ZS2;
+  // captured pieces leave the board
+  for (let i = 0; i < mv.caps.length; i++) {
+    const c = mv.caps[i], t = (1 - side) * 2 + has(k, c);
+    h1 ^= Z1[t * 32 + c]; h2 ^= Z2[t * 32 + c];
+  }
+  if (side) w &= ~mv.cm; else b &= ~mv.cm;
+  k &= ~mv.cm;
+  // the moving piece (a king's capture may end on the square it started from)
+  const t0 = side * 2 + (mv.king ? 1 : 0), t1 = side * 2 + (mv.king || mv.promo ? 1 : 0);
+  h1 ^= Z1[t0 * 32 + mv.from] ^ Z1[t1 * 32 + mv.to]; h2 ^= Z2[t0 * 32 + mv.from] ^ Z2[t1 * 32 + mv.to];
+  if (side) b = (b & ~bit(mv.from)) | bit(mv.to); else w = (w & ~bit(mv.from)) | bit(mv.to);
+  k &= ~bit(mv.from);
+  if (mv.king || mv.promo) k |= bit(mv.to);
+  return { w, b, k, stm: 1 - side, h1, h2 };
+}
+// a move that resets the draw count: a man moved or something was captured
+const irreversible = mv => !mv.king || mv.caps.length > 0;
+
+/* ---------- Draws ----------
+   A draw: 15 moves of each player in a row (30 half-moves) with only kings moving and nothing captured, or the
+   same position (same side to move) for the third time. */
+const QUIET_LIMIT = 30;
+
+/* ---------- Evaluation (in centipieces: a man = 100), from white's point of view ---------- */
+const MAN = 100, KING = 300;
+const ADV = [0, 3, 6, 10, 15, 22, 32, 0];            // a white man on this row (black: mirrored)
+const MAIN = bit(0) | bit(4) | bit(9) | bit(13) | bit(18) | bit(22) | bit(27) | bit(31); // the long diagonal a1–h8
+const CENTER = bit(13) | bit(14) | bit(17) | bit(18);
+const EDGE = (() => { let m = 0; for (let s = 0; s < 32; s++) if (COL[s] === 0 || COL[s] === 7) m |= bit(s); return m; })();
+const BACK_W = bit(1) | bit(2), BACK_B = bit(29) | bit(30);   // the home squares that guard against a new king
+const mirror = s => 31 - s;
+
+function kingMob(s, all) {
+  let n = 0;
+  for (let d = 0; d < 4; d++) for (let t = NB[d * 32 + s]; t >= 0 && !has(all, t); t = NB[d * 32 + t]) n++;
+  return n;
+}
+// how far a man of this side is from becoming a king when nothing blocks its way: a free forward square
+function runaway(s, side, all) {
+  for (const d of FWD[side]) { const t = NB[d * 32 + s]; if (t >= 0 && !has(all, t)) return true; }
+  return false;
+}
+function evalFull(p) {
+  const wm = p.w & ~p.k, bm = p.b & ~p.k, wk = p.w & p.k, bk = p.b & p.k, all = p.w | p.b;
+  const nwm = popcnt(wm), nbm = popcnt(bm), nwk = popcnt(wk), nbk = popcnt(bk);
+  const n = nwm + nbm + nwk + nbk;
+  const matW = nwm * MAN + nwk * KING, matB = nbm * MAN + nbk * KING;
+  let s = matW - matB;
+  // with fewer pieces the men's advance and trading down when ahead matter more
+  const late = 24 - n;
+  s += (matW - matB) * late / 96;
+  let pos = 0;
+  for (let m = wm; m; m &= m - 1) {
+    const q = low(m), r = ROW[q];
+    pos += ADV[r] * (1 + late / 16);
+    if (r >= 5 && runaway(q, 0, all)) pos += r === 6 ? 25 : 10;
+  }
+  for (let m = bm; m; m &= m - 1) {
+    const q = low(m), r = 7 - ROW[q];
+    pos -= ADV[r] * (1 + late / 16);
+    if (r >= 5 && runaway(q, 1, all)) pos -= r === 6 ? 25 : 10;
+  }
+  if (nbm + nbk) pos += 8 * popcnt(wm & BACK_W);
+  if (nwm + nwk) pos -= 8 * popcnt(bm & BACK_B);
+  pos += 6 * (popcnt(wm & CENTER) - popcnt(bm & CENTER));
+  pos -= 4 * (popcnt(wm & EDGE) - popcnt(bm & EDGE));
+  for (let m = wk; m; m &= m - 1) { const q = low(m); pos += 2 * kingMob(q, all) + (has(MAIN, q) ? 12 : 0); }
+  for (let m = bk; m; m &= m - 1) { const q = low(m); pos -= 2 * kingMob(q, all) + (has(MAIN, q) ? 12 : 0); }
+  s += pos;
+  // endings with kings only that nobody can win: 1–2 kings against 1–2, three against one on the long diagonal
+  if (!nwm && !nbm) {
+    const hi = Math.max(nwk, nbk), lo = Math.min(nwk, nbk);
+    if (hi <= 2 || (hi === 3 && lo === 1 && (nwk === 1 ? (wk & MAIN) : (bk & MAIN)))) s = s / 16;
+  }
+  return s | 0;
+}
+// the ordinary player looks at the material and a little at where the men stand
+function evalSimple(p) {
+  const wm = p.w & ~p.k, bm = p.b & ~p.k;
+  let s = popcnt(wm) * MAN + popcnt(p.w & p.k) * KING - popcnt(bm) * MAN - popcnt(p.b & p.k) * KING;
+  for (let m = wm; m; m &= m - 1) s += ADV[ROW[low(m)]] >> 1;
+  for (let m = bm; m; m &= m - 1) s -= ADV[7 - ROW[low(m)]] >> 1;
+  s += 4 * (popcnt(wm & CENTER) - popcnt(bm & CENTER));
+  return s;
+}
+
+/* ---------- Search ---------- */
+const MATE = 30000, INF = 32000;
+const TT_BITS = 19, TT_SIZE = 1 << TT_BITS, TT_MASK = TT_SIZE - 1;
+let TTk = null, TTs, TTd, TTf, TTm;   // made on the first search (the ordinary player does not need it)
+const HIST = new Int32Array(1024), KILL = new Int16Array(256);
+const REP1 = new Int32Array(1024), REP2 = new Int32Array(1024); // hashes of the positions before, game + search
+let nodes = 0, limit = 0, deadline = 0, stop = false, evalFn = evalFull, useTT = true;
+
+const mkey = mv => mv.from * 32 + mv.to + 1;
+function order(list, ttm, ply, p) {
+  const sc = new Int32Array(list.length);
+  const k1 = KILL[ply * 2], k2 = KILL[ply * 2 + 1];
+  for (let i = 0; i < list.length; i++) {
+    const mv = list[i], key = mkey(mv);
+    let v = HIST[key - 1];
+    if (key === ttm) v = 1e9;
+    else if (mv.caps.length) v = 1e8 + mv.caps.length * 1e6 + popcnt(mv.cm & p.k) * 2e6 + (mv.promo ? 5e5 : 0);
+    else if (mv.promo) v = 9e7;
+    else if (key === k1) v = 8e7;
+    else if (key === k2) v = 7e7;
+    sc[i] = v;
+  }
+  // insertion sort, highest first
+  for (let i = 1; i < list.length; i++) {
+    const m = list[i], v = sc[i]; let j = i - 1;
+    while (j >= 0 && sc[j] < v) { list[j + 1] = list[j]; sc[j + 1] = sc[j]; j--; }
+    list[j + 1] = m; sc[j + 1] = v;
+  }
+}
+function repeated(p, ply, quiet) {
+  // the same position with the same side to move earlier, within the half-moves since the last man move or capture
+  for (let i = ply - 2, n = 2; n <= quiet && i >= 0; i -= 2, n += 2) if (REP1[i] === p.h1 && REP2[i] === p.h2) return true;
+  return false;
+}
+// rp = index in REP of this node (the game history comes first)
+function search(p, depth, alpha, beta, ply, rp, quiet) {
+  if ((++nodes & 1023) === 0 && (nodes > limit || Date.now() > deadline)) stop = true;
+  if (stop) return 0;
+  if (quiet >= QUIET_LIMIT || repeated(p, rp, quiet)) return 0;
+  const list = moves(p);
+  if (!list.length) return -MATE + ply;
+  const capture = list[0].caps.length > 0;
+  if (depth <= 0 && !capture) { const e = evalFn(p); return p.stm ? -e : e; }
+  if (ply >= 120) { const e = evalFn(p); return p.stm ? -e : e; }
+  // a forced single reply costs no depth
+  if (list.length === 1 && depth > 0) depth++;
+  let ttm = 0, idx = 0;
+  if (useTT) {
+    idx = p.h1 & TT_MASK;
+    if (TTk[idx] === p.h2) {
+      ttm = TTm[idx];
+      if (TTd[idx] >= depth) {
+        let v = TTs[idx];
+        if (v > MATE - 1000) v -= ply; else if (v < -MATE + 1000) v += ply;
+        const f = TTf[idx];
+        if (f === 0 || (f === 1 && v >= beta) || (f === 2 && v <= alpha)) return v;
+      }
+    }
+  }
+  order(list, ttm, ply, p);
+  REP1[rp] = p.h1; REP2[rp] = p.h2;
+  const a0 = alpha;
+  let best = -INF, bestKey = 0;
+  for (let i = 0; i < list.length; i++) {
+    const mv = list[i], child = play(p, mv), q = irreversible(mv) ? 0 : quiet + 1;
+    const d = depth > 0 ? depth - 1 : 0;
+    let s;
+    if (i === 0) s = -search(child, d, -beta, -alpha, ply + 1, rp + 1, q);
+    else {
+      const key = mkey(mv);
+      const r = i >= 3 && depth >= 3 && !capture && !mv.promo && key !== KILL[ply * 2] && key !== KILL[ply * 2 + 1] ? 1 : 0;
+      s = -search(child, d - r, -alpha - 1, -alpha, ply + 1, rp + 1, q);
+      if (s > alpha && !stop && (r || s < beta)) s = -search(child, d, -beta, -alpha, ply + 1, rp + 1, q);
+    }
+    if (stop) return 0;
+    if (s > best) {
+      best = s; bestKey = mkey(mv);
+      if (s > alpha) {
+        alpha = s;
+        if (alpha >= beta) {
+          if (!capture) {
+            if (KILL[ply * 2] !== bestKey) { KILL[ply * 2 + 1] = KILL[ply * 2]; KILL[ply * 2] = bestKey; }
+            HIST[bestKey - 1] += depth * depth;
+          }
+          break;
+        }
+      }
+    }
+  }
+  if (useTT && (TTk[idx] !== p.h2 || TTd[idx] <= depth)) {
+    let v = best;
+    if (v > MATE - 1000) v += ply; else if (v < -MATE + 1000) v -= ply;
+    TTk[idx] = p.h2; TTs[idx] = v; TTd[idx] = depth; TTm[idx] = bestKey;
+    TTf[idx] = best >= beta ? 1 : best <= a0 ? 2 : 0;
+  }
+  return best;
+}
+
+/* ---------- Randomness from the game's seed: the same position gives the same move (Undo, reload) ---------- */
+function rng(seed) {
+  let a = seed | 0;
+  return () => { a = (a + 0x6D2B79F5) | 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+
+/* ---------- The computer's move ----------
+   o = { pos: text, stm, hist: [texts of the positions before, oldest first, since the last man move or capture],
+         quiet, level: 'normal' | 'master' | 'hint', seed, nodes?, maxMs?, myMove (how many moves this side made) }
+   Returns { i: index into moves(pos), score, depth, nodes }. */
+const LEVEL = {
+  normal: { nodes: 0, depth: 2 },
+  master: { nodes: 1200000 },
+  hint:   { nodes: 400000 },
+};
+function setup(o, p) {
+  nodes = 0; stop = false;
+  limit = o.nodes || LEVEL[o.level].nodes || 1e9;
+  deadline = Date.now() + (o.maxMs || 20000); // only a far safety net: the node budget decides, so the same position gives the same move
+  HIST.fill(0); KILL.fill(0);
+  // the game's own history, for repetitions
+  const H = Array.isArray(o.hist) ? o.hist.slice(-QUIET_LIMIT) : [];
+  H.forEach((t, j) => { const q = parse(t, (o.stm + H.length - j) & 1); REP1[j] = q ? q.h1 : 0; REP2[j] = q ? q.h2 : 0; });
+  return H.length;
+}
+function think(o) {
+  const p = parse(o.pos, o.stm);
+  const list = moves(p);
+  if (list.length <= 1) return { i: 0, score: 0, depth: 0, nodes: 0 };
+  const rp = setup(o, p), rand = rng((o.seed | 0) ^ Math.imul((o.myMove | 0) + 1, 0x9E3779B1));
+  const quiet = o.quiet | 0;
+  REP1[rp] = p.h1; REP2[rp] = p.h2;
+  // a move that wins at once is never missed
+  for (let i = 0; i < list.length; i++) if (!moves(play(p, list[i])).length) return { i, score: MATE, depth: 1, nodes: 0 };
+  return o.level === 'normal' ? thinkNormal(o, p, list, rp, quiet, rand) : thinkMaster(o, p, list, rp, quiet, rand);
+}
+// The ordinary player: two half-moves ahead plus the captures that follow, a simple view of the board, some noise,
+// and now and then the second best move when it is not much worse. It sees "if I go there, he takes me", not more.
+function thinkNormal(o, p, list, rp, quiet, rand) {
+  evalFn = evalSimple; useTT = false;
+  const D = LEVEL.normal.depth;
+  const scored = list.map((mv, i) => {
+    const child = play(p, mv);
+    const s = -search(child, D - 1, -INF, INF, 1, rp + 1, irreversible(mv) ? 0 : quiet + 1);
+    return { i, s, v: s + Math.round((rand() * 2 - 1) * 25) };
+  });
+  scored.sort((a, b) => b.v - a.v || a.i - b.i);
+  let pick = scored[0];
+  if (scored.length > 1 && rand() < 0.15 && scored[1].v >= scored[0].v - 60) pick = scored[1];
+  return { i: pick.i, score: pick.s, depth: D, nodes };
+}
+// The master: iterative deepening alpha-beta (PVS, transposition table, killer and history moves, late move
+// reductions, captures searched to the end), with a node budget so the same position always gives the same move.
+// In its first four moves a small random bonus (up to 0.1 man) keeps the games from repeating.
+function thinkMaster(o, p, list, rp, quiet, rand) {
+  evalFn = evalFull; useTT = true;
+  if (!TTk) { TTk = new Int32Array(TT_SIZE); TTs = new Int16Array(TT_SIZE); TTd = new Int8Array(TT_SIZE); TTf = new Uint8Array(TT_SIZE); TTm = new Int16Array(TT_SIZE); }
+  else { TTk.fill(0); TTd.fill(0); TTm.fill(0); }
+  const bonus = list.map(() => o.level === 'master' && (o.myMove | 0) < 4 ? Math.floor(rand() * 11) : 0);
+  const rootIdx = list.map((_, i) => i);
+  let bestI = 0, bestS = -INF, done = 0;
+  for (let depth = 1; depth <= 60; depth++) {
+    let alpha = -INF, beta = INF, curI = -1, curS = -INF;
+    // aspiration window around the last score
+    if (depth >= 5 && Math.abs(bestS) < MATE - 1000) { alpha = bestS - 40; beta = bestS + 40; }
+    for (;;) {
+      curI = -1; curS = -INF;
+      let a = alpha;
+      for (let j = 0; j < rootIdx.length; j++) {
+        const i = rootIdx[j], mv = list[i], child = play(p, mv), b = bonus[i];
+        const q = irreversible(mv) ? 0 : quiet + 1;
+        let s;
+        if (j === 0) s = -search(child, depth - 1, -(beta - b), -(a - b), 1, rp + 1, q) + b;
+        else {
+          s = -search(child, depth - 1, -(a - b) - 1, -(a - b), 1, rp + 1, q) + b;
+          if (s > a && s < beta && !stop) s = -search(child, depth - 1, -(beta - b), -(a - b), 1, rp + 1, q) + b;
+        }
+        if (stop) break;
+        if (s > curS) { curS = s; curI = i; }
+        if (s > a) a = s;
+        if (a >= beta) break;
+      }
+      if (stop) break;
+      if (curS <= alpha && alpha > -INF) { alpha = -INF; continue; }  // failed low: search again with a full window
+      if (curS >= beta && beta < INF) { beta = INF; continue; }       // failed high
+      break;
+    }
+    // a stopped iteration still counts when its first (best so far) move was searched to the end
+    if (stop) { if (curI >= 0) bestI = curI; break; }
+    bestI = curI; bestS = curS; done = depth;
+    // the best move goes first in the next iteration
+    rootIdx.splice(rootIdx.indexOf(bestI), 1); rootIdx.unshift(bestI);
+    if (Math.abs(bestS) > MATE - 1000 && depth > 2) break; // a forced win or loss was found
+  }
+  return { i: bestI, score: bestS, depth: done, nodes };
+}
+
+return { START, QUIET_LIMIT, ROW, COL, NB, parse, text, moves, play, irreversible, think, evalFull, evalSimple, hashOf, popcnt };
+}
+/* ---------- Engine end ---------- */
+</script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const GUT = 12; // side margin in px, the same as --gut in the CSS
+const E = DamaEngine();
+
+/* ---------- Settings and storage ---------- */
+const ID = 'dama';
+const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const THEMES = [
+  { id: 'paper', name: 'Papír',  meta: '#f4ebdf' },
+  { id: 'wood',  name: 'Dřevo',  meta: '#4a2f1b' },
+  { id: 'green', name: 'Zelená', meta: '#23402a' },
+];
+// The computer opponent: its own AI here (the engine), the name, face and stars from games/_opponents/opponents.js
+const O = OPPONENTS;
+const LEVELS = [
+  { id: 'normal', title: 'Běžný hráč', desc: 'Hraje jako běžný člověk: vidí tah nebo dva dopředu a občas se splete. Dobrý soupeř na každý den.' },
+  { id: 'master', title: 'Mistr', desc: 'Hraje nejlépe, jak umí: propočítá mnoho tahů dopředu a nic nedaruje. Porazit ho je opravdu těžké.' },
+];
+const lvIdx = id => Math.max(0, LEVELS.findIndex(l => l.id === id));
+const SPEEDS = [
+  { id: 'slow', name: 'Pomalu', desc: 'Soupeř chvíli přemýšlí a kámen posouvá pomalu, takže je dobře vidět, kam táhl.', think: 900, step: 480 },
+  { id: 'fast', name: 'Rychle', desc: 'Soupeř táhne hned.', think: 250, step: 200 },
+];
+const DEFAULTS = { level: 'normal', theme: 'paper', show: true, speed: 'slow', vibrate: true };
+const COLOR = ['bílými', 'černými'];
+const nm = () => G.foe.name;
+
+/* ---------- State ----------
+   G = { level, foe, seed, you: your colour (0 white, 1 black; white starts), starter: who started (0 you, 1 the computer),
+         line: every position of the game, 33 characters each (the board as E.text and the side to move),
+         quiets: for each position the half-moves since a man moved or something was captured,
+         last: the computer's last move { from, path, caps } (marked on the board until you move),
+         status: 'playing' | 'won' | 'lost' | 'draw', why: the reason of the end, counted: the end is in the statistics }
+   Everything else (the pieces, whose turn, Undo) comes from line, so a reload goes on exactly where it was. */
+let S, G, ST;
+const rnd = n => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; } catch (e) { return Math.floor(Math.random() * n); } };
+const cur = () => G.line[G.line.length - 1];
+const posOf = k => E.parse(k.slice(0, 32), +k[32]);
+const curPos = () => posOf(cur());
+const stm = () => +cur()[32];
+const yourTurn = () => G.status === 'playing' && stm() === G.you;
+// how many moves you have made (Undo goes back to before your last one)
+const yourMoves = () => { let n = 0; for (let i = 0; i < G.line.length - 1; i++) if (+G.line[i][32] === G.you) n++; return n; };
+const isFresh = () => yourMoves() === 0;
+const hasProgress = () => G.status === 'playing' && !isFresh();
+function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, stats: ST }));
+    if (hasProgress()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {} // rule: storage may be full or blocked; the game goes on
+}
+// the end comes from the position: no move = lost; 15 moves each with kings only; the same position the third time
+function judge(g) {
+  const k = g.line[g.line.length - 1], p = posOf(k);
+  if (!E.moves(p).length) return { status: p.stm === g.you ? 'lost' : 'won', why: (p.stm ? p.b : p.w) ? 'blocked' : 'none' };
+  if (g.quiets[g.quiets.length - 1] >= E.QUIET_LIMIT) return { status: 'draw', why: 'quiet' };
+  if (g.line.filter(x => x === k).length >= 3) return { status: 'draw', why: 'repeat' };
+  return { status: 'playing', why: '' };
+}
+// rule: corrupted data never crashes the game; the end comes from the board, never from the save
+function validGame(g) {
+  try {
+    if (!g || !LEVELS.some(l => l.id === g.level) || ![0, 1].includes(g.you) || ![0, 1].includes(g.starter) || !Number.isInteger(g.seed)) return false;
+    if (!Array.isArray(g.line) || !g.line.length || g.line.length > 2000 || !Array.isArray(g.quiets) || g.quiets.length !== g.line.length) return false;
+    // every position must follow from the one before by a legal move (a broken game starts again)
+    if (g.line[0] !== E.START + '0' || g.quiets[0] !== 0) return false;
+    for (let i = 1; i < g.line.length; i++) {
+      const p = posOf(g.line[i - 1]); if (!p) return false;
+      const mv = E.moves(p).find(m => E.text(E.play(p, m)) + (1 - p.stm) === g.line[i]);
+      if (!mv) return false;
+      const q = E.irreversible(mv) ? 0 : g.quiets[i - 1] + 1;
+      if (g.quiets[i] !== q) return false;
+    }
+    if (!O.valid(g.foe)) g.foe = O.create(rnd);
+    if (!g.last || !Number.isInteger(g.last.from) || !Array.isArray(g.last.path) || !Array.isArray(g.last.caps)) g.last = null;
+    const j = judge(g); g.status = j.status; g.why = j.why;
+    g.counted = g.counted === true || g.status !== 'playing';
+    return true;
+  } catch (e) { return false; }
+}
+function normalize(s) {
+  if (!LEVELS.some(l => l.id === s.level)) s.level = DEFAULTS.level;
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  if (!SPEEDS.some(t => t.id === s.speed)) s.speed = DEFAULTS.speed;
+  s.show = !!s.show; s.vibrate = !!s.vibrate;
+}
+// played / won / drawn games per opponent level
+function validStats(v) {
+  const n = x => Number.isInteger(x) && x >= 0 ? x : 0;
+  const out = {};
+  for (const l of LEVELS) { const x = v && v[l.id], played = n(x && x.played); out[l.id] = { played, won: Math.min(n(x && x.won), played), draw: Math.min(n(x && x.draw), played) }; }
+  return out;
+}
+function count() {
+  if (G.counted || G.status === 'playing') return;
+  G.counted = true;
+  const st = ST[G.level]; st.played++;
+  if (G.status === 'won') st.won++;
+  if (G.status === 'draw') st.draw++;
+}
+// a new game: the starter changes every game (a game in which you did not move yet keeps its starter)
+function newGame(msg) {
+  stopThinking();
+  const starter = !G ? 0 : isFresh() ? G.starter : 1 - G.starter;
+  G = { level: S.level, foe: O.create(rnd, G && G.foe ? [G.foe.name] : []), seed: rnd(2 ** 31), starter, you: starter === 0 ? 0 : 1,
+        line: [E.START + '0'], quiets: [0], last: null, status: 'playing', why: '', counted: false };
+  sel = null; hintMv = null;
+  save(); render();
+  if (msg) toast(msg);
+  cpuTurn();
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) {
+  // Chrome refuses vibration (with a console error) before the first real tap
+  if (!S.vibrate || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+  try { navigator.vibrate(ms); } catch (e) {}
+}
+let toastT;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('');
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+  $('#modal').hidden = false;
+}
+
+/* ---------- The computer's thinking ----------
+   The engine runs in a Web Worker made from its own source text (nothing is downloaded), so the screen stays free while
+   it thinks. Where a worker cannot be made (some browsers with a file opened from disk), the same engine runs here.
+   Its answer depends only on the position, the game's seed and the move number, so Undo and a reload give the same
+   reply to the same move. */
+let worker = null, workerOk = true, job = 0, pending = null, watchdog = 0;
+function makeWorker() {
+  if (!workerOk) return null;
+  try {
+    const src = DamaEngine.toString() + '\nconst E = DamaEngine();\nonmessage = e => { postMessage({ id: e.data.id, r: E.think(e.data.o) }); };';
+    const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+    const w = new Worker(url);
+    w.onmessage = e => { if (pending && e.data.id === pending.id) { const cb = pending.cb; pending = null; clearTimeout(watchdog); cb(e.data.r); } };
+    w.onerror = e => { if (e && e.preventDefault) e.preventDefault(); workerOk = false; worker = null; runHere(); };
+    return w;
+  } catch (e) { workerOk = false; return null; }
+}
+// the job that was waiting for the worker is done here instead
+function runHere() {
+  clearTimeout(watchdog);
+  if (!pending) return;
+  const p = pending;
+  setTimeout(() => {
+    if (pending !== p) return;
+    const r = E.think(Object.assign({}, p.o, { maxMs: 8000 })); // here the screen waits, so a shorter safety net
+    if (pending !== p) return;
+    pending = null; p.cb(r);
+  }, 30);
+}
+function ask(o, cb) {
+  const id = ++job;
+  pending = { id, o, cb };
+  if (!worker && workerOk) worker = makeWorker();
+  if (worker) {
+    worker.postMessage({ id, o });
+    // a worker that never answers is given up and the move is thought out here
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => { if (pending && pending.id === id) { try { worker.terminate(); } catch (e) {} worker = null; workerOk = false; runHere(); } }, 30000);
+  } else runHere();
+}
+function stopThinking() {
+  clearTimeout(watchdog); clearTimeout(cpuTimer);
+  if (pending && worker) { try { worker.terminate(); } catch (e) {} worker = null; }
+  pending = null; job++;
+  thinking = false; anim = false; hintBusy = false; view = null;
+  document.querySelectorAll('.ghost').forEach(el => el.remove());
+}
+// what the engine needs to know: the position, the positions since the last man move or capture (repetitions),
+// the seed and how many moves this side has made
+function engineInput(level) {
+  const n = G.line.length - 1, q = G.quiets[n];
+  const hist = G.line.slice(n - q, n).map(k => k.slice(0, 32));
+  let my = 0; for (let i = 0; i < n; i++) if (+G.line[i][32] === stm()) my++;
+  return { pos: cur().slice(0, 32), stm: stm(), hist, quiet: q, level, seed: G.seed, myMove: my };
+}
+
+/* ---------- Moves ---------- */
+let sel = null;       // your chosen piece: { from, steps: [squares already jumped to] }
+let hintMv = null;    // the advice: a move of the current position
+let view = null;      // what the board shows during a move: { from, at, kind, taken: [] }
+let thinking = false, anim = false, hintBusy = false, cpuTimer = 0;
+const busy = () => thinking || anim;
+// moves of the chosen piece that fit the squares tapped so far
+function candidates() {
+  if (!sel) return [];
+  return E.moves(curPos()).filter(m => m.from === sel.from && sel.steps.every((s, i) => m.path[i] === s));
+}
+// apply a move: a new position in the line
+function apply(mv) {
+  const p = curPos(), q = E.irreversible(mv) ? 0 : G.quiets[G.quiets.length - 1] + 1;
+  const np = E.play(p, mv);
+  G.line.push(E.text(np) + np.stm); G.quiets.push(q);
+  const j = judge(G); G.status = j.status; G.why = j.why;
+  if (G.status !== 'playing') { count(); endDialog(); }
+}
+function playYours(mv) {
+  sel = null; hintMv = null; view = null; hintBusy = false; // an advice still being worked out is dropped
+  G.last = null;
+  apply(mv);
+  buzz(mv.caps.length ? 25 : 12);
+  save(); render();
+  cpuTurn();
+}
+function cpuTurn() {
+  if (G.status !== 'playing' || stm() === G.you || busy()) return;
+  const g0 = G, sp = SPEEDS.find(s => s.id === S.speed), t0 = Date.now();
+  thinking = true; render();
+  ask(engineInput(G.level), r => {
+    if (G !== g0 || !thinking) return;
+    const wait = Math.max(0, sp.think - (Date.now() - t0));
+    cpuTimer = setTimeout(function go() {
+      if (G !== g0 || !thinking) return;
+      if (!nothingOpen()) { cpuTimer = setTimeout(go, 400); return; } // waits while Settings or Help are open
+      const mv = E.moves(curPos())[r.i] || E.moves(curPos())[0];
+      thinking = false; anim = true;
+      animate(mv, sp.step, () => {
+        if (G !== g0) return;
+        anim = false; view = null;
+        G.last = { from: mv.from, path: mv.path.slice(), caps: mv.caps.slice() };
+        apply(mv);
+        if (mv.caps.length) buzz(25);
+        save(); render();
+      });
+    }, wait);
+  });
+}
+// the opponent's piece goes square by square; the stones it jumps are crossed out until the move ends
+function animate(mv, step, done) {
+  const p = curPos(), kind = (has(p.k, mv.from) ? 'k ' : '') + 'c' + p.stm;
+  view = { from: mv.from, at: null, kind, taken: [] };
+  let at = mv.from, i = 0;
+  const next = () => {
+    if (!anim) return;
+    if (i >= mv.path.length) { done(); return; }
+    const to = mv.path[i];
+    view.at = null; renderBoard();
+    slide(at, to, kind, step, () => {
+      if (!anim) return;
+      if (mv.caps[i] !== undefined) view.taken.push(mv.caps[i]);
+      view.at = to; at = to; i++; renderBoard();
+      cpuTimer = setTimeout(next, i < mv.path.length ? 160 : 260);
+    });
+  };
+  next();
+}
+function slide(a, b, kind, ms, done) {
+  const ea = $(`.sq[data-s="${a}"]`), eb = $(`.sq[data-s="${b}"]`);
+  if (!ea || !eb) { done(); return; }
+  const g = document.createElement('div');
+  g.className = 'ghost';
+  g.innerHTML = pieceHTML(kind);
+  g.style.transform = `translate(${ea.offsetLeft}px,${ea.offsetTop}px)`;
+  $('#grid').appendChild(g);
+  g.getBoundingClientRect();
+  g.style.transition = `transform ${ms}ms ease-in-out`;
+  g.style.transform = `translate(${eb.offsetLeft}px,${eb.offsetTop}px)`;
+  setTimeout(() => { g.remove(); done(); }, ms + 20);
+}
+const has = (m, s) => (m >>> s) & 1;
+
+/* ---------- Rendering ---------- */
+const CROWN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 10H5z"/></svg>';
+const pieceHTML = kind => `<i class="pc ${kind}">${kind.includes('k') ? CROWN : ''}</i>`;
+function applyLook() {
+  root.dataset.theme = S.theme;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+}
+function render() {
+  applyLook();
+  renderBoard();
+  renderSides();
+  renderHint();
+  const canUndo = undoTarget() >= 0 || !!(sel && sel.steps.length);
+  $('#btnUndo').classList.toggle('dim', !canUndo || anim);
+  $('#btnHint').classList.toggle('dim', !yourTurn() || busy());
+  layout();
+}
+// the board as you see it: your pieces at the bottom (the board is turned for black)
+function squareAt(R, C) {
+  const r = G.you === 0 ? 7 - R : R, c = G.you === 0 ? C : 7 - C;
+  return (r + c) % 2 === 0 ? r * 4 + (c >> 1) : -1;
+}
+function renderBoard() {
+  const p = curPos(), all = p.w | p.b;
+  const mine = yourTurn() && !busy();
+  const list = mine ? E.moves(p) : [];
+  const must = mine && list.length && list[0].caps.length ? new Set(list.map(m => m.from)) : null;
+  const cands = mine ? candidates() : [];
+  const targets = new Set(), steps = sel ? sel.steps.length : 0;
+  for (const m of cands) if (m.path[steps] !== undefined) targets.add(m.path[steps]);
+  const taken = new Set(view ? view.taken : sel && cands.length ? cands[0].caps.slice(0, steps) : []);
+  let movingFrom = view ? view.from : sel && steps ? sel.from : -1;
+  let movingAt = view ? view.at : sel && steps ? sel.steps[steps - 1] : -1;
+  const movingKind = view ? view.kind : sel && steps ? ((has(p.k, sel.from) ? 'k ' : '') + 'c' + p.stm) : '';
+  const last = !view && G.last && !sel ? G.last : null;
+  const lastCaps = last ? new Set(last.caps) : null;
+  const hint = !view && hintMv;
+  let html = '';
+  for (let R = 0; R < 8; R++) for (let C = 0; C < 8; C++) {
+    const s = squareAt(R, C);
+    if (s < 0) { html += '<div class="sq l"></div>'; continue; }
+    const cls = ['sq', 'd'];
+    let piece = '';
+    if (s === movingAt && movingKind) piece = pieceHTML(movingKind);
+    else if (s !== movingFrom && has(all, s)) piece = pieceHTML((has(p.k, s) ? 'k ' : '') + 'c' + (has(p.w, s) ? 0 : 1));
+    if (sel && s === (steps ? movingAt : sel.from)) cls.push('sel');
+    if (S.show && targets.has(s)) cls.push('to');
+    else if (!S.show && targets.has(s) && steps) cls.push('to'); // inside a multiple capture the next squares are always shown
+    if (must && must.has(s) && (S.show || flashMust)) cls.push('must');
+    if (taken.has(s)) cls.push('taken');
+    if (last) { if (s === last.from) cls.push('lf'); if (s === last.path[last.path.length - 1]) cls.push('lt'); if (lastCaps.has(s) && !has(all, s)) cls.push('lx'); }
+    if (hint && (s === hint.from || s === hint.to)) cls.push('hint');
+    if (hint && sel && sel.from === hint.from && s === hint.to) cls.push('to');
+    html += `<button class="${cls.join(' ')}" data-s="${s}" aria-label="${sqLabel(s, p)}">${piece}</button>`;
+  }
+  $('#grid').innerHTML = html;
+}
+const sqLabel = (s, p) => `${'abcdefgh'[E.COL[s]]}${E.ROW[s] + 1}${has(p.w, s) ? (has(p.k, s) ? ', bílá dáma' : ', bílý kámen') : has(p.b, s) ? (has(p.k, s) ? ', černá dáma' : ', černý kámen') : ''}`;
+function foeMood() {
+  if (thinking) return 'think';
+  if (G.status === 'lost') return 'happy';
+  if (G.status === 'won') return 'sad';
+  if (G.last && G.last.caps.length) return 'happy';
+  return 'calm';
+}
+function renderSides() {
+  const p = curPos(), cpu = 1 - G.you;
+  const left = c => E.popcnt(c ? p.b : p.w);
+  const foeTurn = G.status === 'playing' && stm() === cpu;
+  const tagFoe = thinking ? 'Přemýšlí…' : anim ? 'Táhne' : foeTurn ? 'Na tahu' : '';
+  $('#foeRow').classList.toggle('on', foeTurn);
+  $('#foeRow').innerHTML = `<div class="left">${O.head(G.foe, { mood: foeMood(), badge: O.levelBadge(LEVELS, lvIdx(G.level)) })}</div>
+    <span class="cnt" aria-label="Soupeři zbývá ${left(cpu)} kamenů"><i class="mini c${cpu}"></i>${left(cpu)}</span>${tagFoe ? `<span class="tag">${tagFoe}</span>` : ''}`;
+  const meTurn = G.status === 'playing' && stm() === G.you;
+  $('#meRow').classList.toggle('on', meTurn);
+  $('#meRow').innerHTML = `<div class="left"><span class="me">Ty</span><span class="cnt" aria-label="Zbývá ti ${left(G.you)} kamenů"><i class="mini c${G.you}"></i>${left(G.you)}</span></div>
+    ${meTurn ? '<span class="tag">Na tahu</span>' : `<span class="tag off">hraješ ${COLOR[G.you]}</span>`}`;
+}
+function renderHint() {
+  let t = '';
+  if (G.status === 'won') t = 'Výhra! Ťukni na Nová hra.';
+  else if (G.status === 'lost') t = `${O.past(G.foe, 'Vyhrál', 'Vyhrála')} ${nm()}. Zpět vrátí tah.`;
+  else if (G.status === 'draw') t = 'Remíza. Ťukni na Nová hra.';
+  else if (thinking) t = `${nm()} přemýšlí…`;
+  else if (anim) t = `${nm()} táhne`;
+  else if (hintBusy) t = 'Hledám dobrý tah…';
+  else {
+    const list = E.moves(curPos()), must = list.length && list[0].caps.length;
+    if (sel && sel.steps.length) t = 'Skákej dál: ťukni na označené pole';
+    else if (sel) t = must ? 'Musíš brát: ťukni, kam skočit' : 'Ťukni, kam má kámen jít';
+    else if (hintMv) t = 'Rada: ťukni na modře označený kámen';
+    else t = must ? (S.show ? 'Musíš brát: ťukni na označený kámen' : 'Musíš brát: některý tvůj kámen může skočit') : `Hraješ ${COLOR[G.you]}. Ťukni na svůj kámen.`;
+  }
+  $('#hint').textContent = t;
+}
+// rule: the board size comes from the room that is left, so it fits without scrolling
+function layout() {
+  if (!G) return;
+  const mid = $('#mid'), fw = 4;
+  const rows = $('#foeRow').offsetHeight + $('#meRow').offsetHeight + parseFloat(getComputedStyle(mid).paddingTop);
+  // inside #board's padding (GUT at the sides, 12 px above and below), next to the two player rows
+  const room = Math.min(mid.clientWidth - 2 * GUT, mid.clientHeight - rows - 24) - 2 * fw;
+  const cs = Math.max(12, Math.min(76, Math.floor(room / 8))); // a short window shrinks the board, it never overlaps the rows
+  root.style.setProperty('--cs', cs + 'px'); root.style.setProperty('--fw', fw + 'px');
+}
+
+/* ---------- Controls ---------- */
+// whether the man on s could capture if the king's priority did not apply (only for the message why it may not)
+function manCouldCapture(p, s) {
+  const mineK = (G.you ? p.b : p.w) & p.k;
+  const q = E.hashOf({ w: G.you ? p.w : p.w & ~mineK, b: G.you ? p.b & ~mineK : p.b, k: p.k & ~mineK, stm: p.stm });
+  return E.moves(q).some(m => m.from === s && m.caps.length);
+}
+let flashMust = false, flashT = 0;
+function showMust() { flashMust = true; clearTimeout(flashT); flashT = setTimeout(() => { flashMust = false; renderBoard(); }, 2600); }
+$('#grid').addEventListener('click', e => {
+  const b = e.target.closest('.sq[data-s]'); if (!b) return;
+  const s = +b.dataset.s;
+  if (G.status !== 'playing') { toast(G.status === 'lost' ? 'Hra skončila. Zpět vrátí tvůj tah, nebo ťukni na Nová hra.' : 'Hra skončila. Ťukni na Nová hra.'); return; }
+  if (busy()) { toast(thinking ? `Chvilku, ${nm()} přemýšlí` : `Chvilku, ${nm()} táhne`); return; }
+  if (!yourTurn()) return;
+  const p = curPos(), list = E.moves(p), mineHere = has(G.you ? p.b : p.w, s), theirsHere = has(G.you ? p.w : p.b, s);
+  const must = list.length && list[0].caps.length > 0;
+  if (sel) {
+    const steps = sel.steps.length, cands = candidates();
+    // the advice: its piece and its square do the advised move
+    if (hintMv && sel.from === hintMv.from && s === hintMv.to && !steps) { playYours(hintMv); return; }
+    const next = cands.filter(m => m.path[steps] === s);
+    if (next.length) {
+      sel.steps.push(s);
+      let left = next;
+      // go on by itself while there is only one way
+      for (;;) {
+        const done = left.filter(m => m.path.length === sel.steps.length);
+        if (done.length === left.length) { playYours(left[0]); return; }
+        const nexts = new Set(left.map(m => m.path[sel.steps.length]));
+        if (nexts.size !== 1 || done.length) break;
+        sel.steps.push([...nexts][0]);
+        left = left.filter(m => m.path[sel.steps.length - 1] === [...nexts][0]);
+      }
+      buzz(8); render(); return;
+    }
+    // a tap straight on the final square of a single move
+    const ends = cands.filter(m => m.to === s);
+    if (ends.length === 1) { playYours(ends[0]); return; }
+    if (ends.length > 1) { toast('Sem vede víc cest. Ťukni nejdřív na pole, kam kámen skočí.'); return; }
+    if (s === sel.from) { sel = null; render(); if (steps) toast('Skok je zrušený, vyber znovu'); return; } // an unfinished capture is not a move yet
+    if (steps) { toast('Dokonči skok: ťukni na označené pole, nebo zruš skok tlačítkem Zpět'); return; }
+  }
+  if (mineHere) {
+    if (list.some(m => m.from === s)) { sel = { from: s, steps: [] }; buzz(8); render(); return; }
+    sel = null;
+    if (must && list[0].king && !has(p.k, s) && manCouldCapture(p, s)) { toast('Brát musí dáma: má přednost před kamenem'); showMust(); render(); return; }
+    if (must) { toast('Musíš brát. Kameny, které mohou brát, jsou označené.'); showMust(); render(); return; }
+    toast('Tímto kamenem teď nemůžeš táhnout'); render(); return;
+  }
+  if (theirsHere) { toast(`To je soupeřův kámen. Ty hraješ ${COLOR[G.you]}.`); return; }
+  if (sel) { toast(S.show ? 'Sem kámen táhnout nemůže. Kam může, ukazují tečky.' : 'Sem kámen táhnout nemůže'); return; }
+  toast('Nejdřív ťukni na svůj kámen');
+});
+// Undo: back to before your last move, with the opponent's reply (also after the end of the game)
+function undoTarget() {
+  for (let i = G.line.length - 2; i >= 0; i--) if (+G.line[i][32] === G.you) return i;
+  return -1;
+}
+$('#btnUndo').addEventListener('click', () => {
+  if (anim) { toast(`Chvilku, ${nm()} táhne`); return; }
+  // an unfinished multiple capture is only taken back (it is not a move yet)
+  if (sel && sel.steps.length && yourTurn()) { sel = null; buzz(); render(); toast('Skok je zrušený, vyber znovu'); return; }
+  const i = undoTarget();
+  if (i < 0) { toast('Zatím není co vrátit'); return; }
+  stopThinking();
+  G.line.length = i + 1; G.quiets.length = i + 1;
+  G.last = null; sel = null; hintMv = null;
+  const j = judge(G); G.status = j.status; G.why = j.why;
+  $('#modal').hidden = true;
+  buzz(); save(); render();
+});
+$('#btnHint').addEventListener('click', () => {
+  if (G.status !== 'playing') { toast('Hra skončila'); return; }
+  if (busy()) { toast(thinking ? `Chvilku, ${nm()} přemýšlí` : `Chvilku, ${nm()} táhne`); return; }
+  if (hintBusy) { toast('Chvilku, hledám dobrý tah'); return; }
+  const list = E.moves(curPos());
+  if (list.length === 1) { hintMv = list[0]; sel = null; render(); toast('Jiný tah tu není'); return; }
+  const g0 = G, n = G.line.length;
+  hintBusy = true; render();
+  ask(engineInput('hint'), r => {
+    hintBusy = false;
+    if (G !== g0 || G.line.length !== n) return;
+    hintMv = E.moves(curPos())[r.i] || null;
+    if (!sel || !sel.steps.length) sel = null; // a capture already started stays
+    render();
+  });
+});
+// rule: a new game in the middle of one asks first
+$('#btnNew').addEventListener('click', () => {
+  if (hasProgress()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+// rule: an end dialog only for the game that ended, never over Settings or Help (whenFree)
+function endDialog() {
+  const g0 = G, line = G.line.length;
+  whenFree(g0, 700, () => {
+    if (G.line.length !== line || G.status === 'playing') return;
+    const why = {
+      none: G.status === 'won' ? `${nm()} už nemá žádný kámen.` : 'Už ti nezbyl žádný kámen.',
+      blocked: G.status === 'won' ? `${nm()} nemá čím táhnout.` : 'Nemáš čím táhnout.',
+      quiet: 'Patnáct tahů za sebou táhly jen dámy a nikdo nic nebral.',
+      repeat: 'Na desce je potřetí stejná pozice.',
+    }[G.why] || '';
+    const head = G.status === 'won' ? 'Výhra! 🎉' : G.status === 'lost' ? `${O.past(G.foe, 'Vyhrál', 'Vyhrála')} ${nm()}` : 'Remíza';
+    const btns = [{ text: 'Nová hra', fn: () => newGame() }];
+    if (G.status !== 'won') btns.push({ text: 'Vrátit tah', cls: 'alt', fn: () => $('#btnUndo').click() });
+    btns.push({ text: 'Prohlédnout', cls: 'alt' });
+    showModal(`<h2>${head}</h2><p>${why}</p>`, btns);
+  });
+}
+
+/* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
+const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+const swatch = id => `<span class="swatch" data-theme="${id}"><i><b class="c1"></b></i><i></i><i><b class="c0"></b></i><i></i></span>`;
+const plural = (n, a, b, c) => `${n} ${n === 1 ? a : n >= 2 && n <= 4 ? b : c}`;
+function renderSettings() {
+  const changed = G && S.level !== G.level;
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Dáma<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Soupeř</h3>
+      <div class="field">
+        ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, O.levelName(LEVELS, i), l.desc)).join('')}
+        <div class="fnote">Soupeř má každou hru jiné jméno. Kdo začíná, se střídá: kdo začíná, hraje bílými.</div>
+        ${changed && !isFresh() ? `<div class="notice">Nový soupeř začne hrát od příští hry.${hasProgress() ? ' Rozehraná hra zůstává.' : ''}</div>` : ''}
+      </div>
+      <div class="field"><div class="flabel">Rychlost soupeře</div>
+        ${SPEEDS.map(s => opt('speed:' + s.id, S.speed === s.id, s.name, s.desc)).join('')}
+      </div>
+    </section>
+    <section class="card"><h3>Pomoc</h3>
+      ${toggleRow('show', 'Ukazovat, kam můžeš táhnout', 'Tečky ukážou, kam může vybraný kámen, a čárkovaně se označí kameny, které musí brát.')}
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}">${swatch(t.id)}${t.name}</button>`).join('')}</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <section class="card"><h3>Statistika</h3>
+      ${LEVELS.map((l, i) => { const st = ST[l.id]; return `<p class="stats"><b>${O.levelName(LEVELS, i)}</b><br>Odehráno ${plural(st.played, 'hra', 'hry', 'her')}, výher ${st.won}, remíz ${st.draw}</p>`; }).join('')}
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'level') S.level = arg;
+  else if (act === 'speed') S.speed = arg;
+  else if (act === 'theme') S.theme = arg;
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S); buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
+});
+function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+// a new opponent level applies from the next game; a game in which you have not moved yet is replaced at once
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  if (S.level !== G.level && isFresh()) { const g = G; stopThinking(); G.level = S.level; G.foe = O.create(rnd, [g.foe.name]); G.line = [E.START + '0']; G.quiets = [0]; G.last = null; save(); render(); cpuTurn(); toast(`Hraješ proti soupeři: ${O.levelName(LEVELS, lvIdx(S.level))}`); }
+  else if (S.level !== G.level) { render(); toast(`Nový soupeř začne hrát od příští hry${hasProgress() ? '. Rozehraná hra zůstává.' : ''}`); }
+  else render();
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
+function renderHelp() {
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Dáma<small>Jak hrát</small></h2></div>
+    <section class="card help"><h3>Pravidla české dámy</h3><ul>
+      <li>Hraje se jen po tmavých polích. Každý má 12 kamenů, začínají bílé. Kdo začíná, se každou hru střídá; tvoje kameny jsou vždy dole.</li>
+      <li><b>Kámen</b> táhne šikmo dopředu o jedno pole.</li>
+      <li><b>Braní:</b> stojí-li šikmo před tvým kamenem soupeřův kámen a pole za ním je volné, přeskoč ho a sebereš ho. Kámen bere jen dopředu. Když může skákat dál, skáče dál.</li>
+      <li><b>Brát se musí.</b> Hra jiný tah nedovolí a kameny, které mohou brát, označí. Když se dá brát víc způsoby, vyber si kterýkoli.</li>
+      <li><b>Dáma:</b> kámen, který dojde až na druhý konec desky, se změní v dámu (dva kameny s korunkou). Dáma jezdí šikmo dopředu i dozadu o kolik polí chce a bere i z dálky; za sebraným kamenem může dopadnout na kterékoli volné pole, a když odtud může brát dál, musí.</li>
+      <li>Může-li brát dáma i kámen, <b>musí brát dáma</b>.</li>
+      <li>Přeskočené kameny zmizí až po celém tahu a žádný se nepřeskakuje dvakrát.</li>
+      <li><b>Prohrává</b>, kdo nemá žádný kámen nebo nemá čím táhnout.</li>
+      <li><b>Remíza</b> je, když patnáct tahů každého z vás táhnou jen dámy a nikdo nic nebere, nebo když je na desce potřetí stejná pozice.</li>
+    </ul></section>
+    <section class="card help"><h3>Ovládání</h3><ol>
+      <li>Ťukni na svůj kámen. Tečky ukážou, kam může jít.</li>
+      <li>Ťukni na pole s tečkou. Při skoku přes víc kamenů ťukej postupně na další pole; když je cesta jen jedna, kámen jde sám.</li>
+      <li>Soupeřův poslední tah zůstane na desce označený červeně: odkud vyšel, kam došel a co sebral.</li>
+      <li><b>Zpět</b> vrátí tvůj poslední tah i soupeřovu odpověď. Dá se ťukat opakovaně, i po konci hry.</li>
+      <li><b>Poradit</b> ukáže modře dobrý tah. Ťukni na označený kámen a pak na označené pole.</li>
+    </ol></section>
+    <section class="card help"><h3>Soupeř</h3>
+      <p>${LEVELS.map((l, i) => `<b>${O.levelName(LEVELS, i)}</b>: ${l.desc}`).join('<br><br>')}</p>
+      <p style="margin-top:12px">Soupeře vybereš v Nastavení. Každou hru má jiné jméno.</p>
+    </section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// rule: ask for persistent storage so the browser does not delete the saved game by itself
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+const savedSettings = saved && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+ST = validStats(saved && saved.stats);
+// rule: a level chosen just before the app was closed (Settings still open) is applied now, as closing Settings would
+if (saved && validGame(saved.game)) { G = saved.game; if (S.level !== G.level && isFresh()) closeSettings(); else { render(); cpuTurn(); } }
+else newGame();
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// contract: opened from the launcher (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing: the engine, the moves of the current position, play one of them (an index), turn the worker off
+window.Dama = {
+  E, moves: () => E.moves(curPos()), play: i => { const mv = E.moves(curPos())[i]; if (mv && yourTurn() && !busy()) playYours(mv); },
+  noWorker() { workerOk = false; if (worker) { try { worker.terminate(); } catch (e) {} worker = null; } },
+  get busy() { return busy() || hintBusy; }, get state() { return { S, G, ST }; },
+};
+})();
+</script>
+</body>
+</html>
