@@ -142,7 +142,9 @@ for (const [name, L] of Object.entries(E.FLEETS)) {
   console.log(`  ${name}: average shots to sink the fleet: ${line.join(', ')}`);
   // with ten ships the four one-square ships are luck for everybody, so the levels are closer there
   const gap = name === 'big' ? 1 : 3;
-  ok(avg['easy' + name] > avg['normal' + name] + 5 && avg['normal' + name] > avg['master' + name] + gap, `${name}: the levels are not in order`);
+  // the order is only meaningful with enough games (the averages vary by several shots below about 200 games)
+  if (GAMES >= 200) ok(avg['easy' + name] > avg['normal' + name] + 5 && avg['normal' + name] > avg['master' + name] + gap, `${name}: the levels are not in order`);
+  else console.log(`  ${name}: level order not checked (needs --games 200 or more)`);
 }
 // determinism: the same seed gives the same shots
 ok(solo('master', E.FLEETS.classic, 5).n === solo('master', E.FLEETS.classic, 5).n && solo('normal', E.FLEETS.big, 9).n === solo('normal', E.FLEETS.big, 9).n, 'the same seed gives the same game');

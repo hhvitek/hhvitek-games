@@ -686,7 +686,10 @@ let toastT;
 // only downward, never over the cells or the hint line
 function toast(msg, ms = 2600) {
   const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
-  t.style.bottom = 'auto'; t.style.top = Math.round($('.tray .row').getBoundingClientRect().top) + 'px';
+  // its top at the top of the bottom buttons, but never below the visible bottom (a long text on a short screen)
+  const vh = window.visualViewport ? visualViewport.height : innerHeight;
+  t.style.bottom = 'auto';
+  t.style.top = Math.round(Math.max(0, Math.min($('.tray .row').getBoundingClientRect().top, vh - t.getBoundingClientRect().height - 8))) + 'px';
   clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
 }
 function hideToast() { $('#toast').classList.add('hide'); }

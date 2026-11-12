@@ -499,8 +499,11 @@ function buzz(ms = 12) {
 let toastT;
 function toast(msg, ms = 2600) {
   const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
-  // its top at the top of the bottom buttons: it grows down over them, never over the board or the tray
-  t.style.bottom = 'auto'; t.style.top = Math.round($('.actions').getBoundingClientRect().top) + 'px';
+  // its top at the top of the bottom buttons: it grows down over them, never over the board or the tray;
+  // but never below the visible bottom (a long text on a short screen)
+  const vh = window.visualViewport ? visualViewport.height : innerHeight;
+  t.style.bottom = 'auto';
+  t.style.top = Math.round(Math.max(0, Math.min($('.actions').getBoundingClientRect().top, vh - t.getBoundingClientRect().height - 8))) + 'px';
   clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
 }
 function hideToast() { $('#toast').classList.add('hide'); }
@@ -877,7 +880,7 @@ $('#bsvg').addEventListener('click', e => {
   if (cell < 0) return;
   if (sel === null) {
     if (hint && hint.cell === cell) { place(hint.i, cell); return; }
-    toast('Přetáhni věžičku zespodu na prázdné políčko, nebo na ni nejdřív ťukni');
+    toast('Nejdřív ťukni na věžičku dole, nebo ji sem přetáhni');
     return;
   }
   if (G.board[cell].length) {

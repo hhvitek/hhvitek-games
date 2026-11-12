@@ -188,6 +188,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
    one or two lines fit the row (keep the messages short) */
 #toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 12px);transform:translateX(-50%);z-index:60;width:max-content;max-width:min(90vw,520px);background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;line-height:1.25;padding:10px 18px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
 #toast.hide{opacity:0}
+#toast{font-size:17px;padding:9px 14px;max-width:calc(100vw - 24px)}
 /* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
 @supports (color: rgb(from red r g b)){
   #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
@@ -584,7 +585,12 @@ function toast(msg, ms = 2600) {
   const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
   // over the row of bottom buttons (taps go through it), never over the hint line or the board
   const row = $('.tray .row').getBoundingClientRect();
-  if (row.height) { t.style.top = Math.round(row.top) + 'px'; t.style.bottom = 'auto'; }
+  if (row.height) {
+    // ... but never below the visible bottom (a long text on a short screen)
+    const vh = window.visualViewport ? visualViewport.height : innerHeight;
+    t.style.bottom = 'auto';
+    t.style.top = Math.round(Math.max(0, Math.min(row.top, vh - t.getBoundingClientRect().height - 8))) + 'px';
+  }
   clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
 }
 function hideToast() { $('#toast').classList.add('hide'); }

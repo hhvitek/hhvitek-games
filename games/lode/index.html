@@ -649,9 +649,14 @@ function buzz(ms = 12) {
 let toastT;
 function toast(msg, ms = 2600) {
   const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
-  // its top at the top of the bottom buttons: it grows down over them, never over the seas
+  // its top at the top of the bottom buttons: it grows down over them, never over the seas;
+  // but never below the visible bottom (a long text on a short screen)
   const row = [...document.querySelectorAll('.tray .row')].find(r => !r.hidden);
-  if (row) { t.style.bottom = 'auto'; t.style.top = Math.round(row.getBoundingClientRect().top) + 'px'; }
+  if (row) {
+    const vh = window.visualViewport ? visualViewport.height : innerHeight;
+    t.style.bottom = 'auto';
+    t.style.top = Math.round(Math.max(0, Math.min(row.getBoundingClientRect().top, vh - t.getBoundingClientRect().height - 8))) + 'px';
+  }
   clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
 }
 function hideToast() { $('#toast').classList.add('hide'); }

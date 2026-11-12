@@ -16,6 +16,7 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 - Nová hra Lodě: rozmísti své lodě, střílej do moře soupeře a potop celé jeho loďstvo dřív než on tvoje. Pět nebo deset lodí, tři soupeři od začátečníka po mistra, Poradit.
 - Nová hra Mlýn: klasický mlýn s devíti kameny proti počítači – pokládej, posouvej a skládej mlýny, za každý vezmeš soupeři kámen; se třemi kameny se skáče. Soupeř běžný hráč nebo mistr, Poradit a Zpět.
 - Nová hra Věžičky: pokládej věžičky z barevných šestiúhelníků na plástev; stejné barvy u sousedů se sesypou na jednu věžičku a deset dílků jedné barvy zmizí. Tři obtížnosti, rekordy, značky barev, Poradit a Zpět.
+- Dáma a Piškvorky: hláška už nezakrývá tvůj řádek „Ty – Na tahu“ pod deskou, ukáže se dole přes tlačítka.
 
 ## 1.0.15 – 2026-11-12
 

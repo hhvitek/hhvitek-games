@@ -37,6 +37,8 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Paprsek         | `games/paprsek/`         | Otáčej zrcadly, ať paprsky světla trefí všechny terče; barevné paprsky se mísí, úrovně postupně těžší, Poradit a Zpět     |
 | Kulička         | `games/kulicka/`         | Nakláněj telefon (nebo ťukej na šipky) a doveď kuličku bludištěm do cíle kolem děr; bez spěchu, Poradit ukáže cestu     |
 | Zavři čísla     | `games/zavri-cisla/`     | Kostková hra (Shut the Box): hoď kostkami a zavři destičky se stejným součtem; 9, 10 nebo 12 destiček, statistika         |
+| Dáma            | `games/dama/`            | Klasická česká dáma proti počítači: dlouhá dáma, braní je povinné; soupeř běžný hráč nebo mistr, Poradit a Zpět            |
+| Piškvorky       | `games/piskvorky/`       | Pět v řadě proti počítači na ploše 13 × 13, 15 × 15 nebo 19 × 19; soupeř běžný hráč nebo mistr, Poradit, Zpět a přiblížení |
 | Šroubky         | `games/sroubky/`         | Přesouvej barevné matky mezi šrouby, dokud na každém nezůstane jedna barva; čtyři obtížnosti, každá hra jde vyřešit, Poradit, Zpět a Od začátku |
 | Malované křížovky | `games/malovane-krizovky/` | Čísla u řádků a sloupců říkají, kolik políček vybarvit; z vyluštěné křížovky je barevný obrázek; 36 obrázků 5 × 5 až 15 × 15 |
 | Šipky ven       | `games/sipky-ven/`       | Ťukej na šipky a pouštěj je z plochy; šipka, které stojí v cestě jiná, narazí; úrovně postupně větší, hvězdy, Poradit a Zpět |
@@ -47,8 +49,6 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Mlýn            | `games/mlyn/`            | Klasický mlýn s devíti kameny proti počítači: pokládej, posouvej a skládej mlýny, za každý vezmeš soupeři kámen; se třemi kameny se skáče; soupeř běžný hráč nebo mistr, Poradit a Zpět |
 | Věžičky         | `games/vezicky/`         | Pokládej věžičky z šestiúhelníkových dílků na plástev: stejné barvy u sousedů se sesypou na jednu věžičku a deset dílků jedné barvy zmizí; tři obtížnosti, rekordy, Poradit a Zpět |
 | Kostky          | `games/kostky/`          | Klasické kostky (jedničky a pětky) se šesti kostkami proti počítači: házej, dokud se nebojíš, a body si zapiš; tři soupeři od začátečníka po mistra, hra do 3 000, 5 000 nebo 10 000 |
-| Dáma            | `games/dama/`            | Klasická česká dáma proti počítači: dlouhá dáma, braní je povinné; soupeř běžný hráč nebo mistr, Poradit a Zpět            |
-| Piškvorky       | `games/piskvorky/`       | Pět v řadě proti počítači na ploše 13 × 13, 15 × 15 nebo 19 × 19; soupeř běžný hráč nebo mistr, Poradit, Zpět a přiblížení |
 | Solitér         | `games/soliter/`         | Klasický solitér (Klondike)                                                                                               |
 | FreeCell        | `games/freecell/`        | Solitér se čtyřmi volnými políčky                                                                                         |
 | Pyramida        | `games/pyramida/`        | Odebírej dvojice karet se součtem 13                                                                                      |
