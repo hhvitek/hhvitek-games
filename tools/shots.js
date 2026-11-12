@@ -130,7 +130,6 @@ async (page) => {
     'cesta-ven': async () => { await tap('#btnGo'); await wait(500); await tap(HINTED); await wait(800); await tap('#btnGo'); await wait(500); },
     // a mirror turned, then the hint, a tap on the hinted mirror, and the next hint shown
     'paprsek': async () => { await tap('#taps .cell[aria-label^="Zrcadlo"]'); await wait(400); await tapButton(/Poradit/); await wait(600); await tap(HINTED); await wait(600); await tapButton(/Poradit/); await wait(600); },
-    // the hint (dotted way, the next arrow framed), a tap on the framed arrow, the hint again
     // granule dragged into the bowl (she walks there and eats), then a stroke along her back; the hint stays visible
     'kocka': async () => {
       await page.evaluate(() => { const st = window.Kocka.state.G.st; st.asleep = false; st.needs.food = 25; if (window.Kocka.go) window.Kocka.go('kitchen', -1); window.Kocka.settle(); });
@@ -141,11 +140,14 @@ async (page) => {
       if (pts) { await page.mouse.move(pts[0].x, pts[0].y); await page.mouse.down(); for (const p of pts.slice(1)) { await page.mouse.move(p.x, p.y); await wait(8); } await page.mouse.up(); }
       await wait(600);
     },
+    // the hint (dotted way, the next arrow framed), a tap on the framed arrow, the hint again
     'kulicka': async () => { await tap('#btnHint'); await wait(400); await tap('.arrow.hint'); await wait(1200); await tap('#btnHint'); await wait(500); },
     'patnactka': async () => { await page.evaluate(() => { const P = window.Patnactka, G = P.state.G, n = G.rules.n, z = G.board.indexOf(0); P.tryMove(z % n ? z - 1 : z + 1); }); await wait(500); },
     'kostky': async () => { await tap('#btnRoll'); await wait(1200); await tap('#roll .die:not(.dead)'); await wait(400); },
     // the advised move (its piece, then its square), the opponent's reply, then the next advice and its piece chosen
     'dama': async () => { await tap('#btnHint'); await wait(1200); await tap('.sq.hint:has(.pc)'); await wait(300); await tap('.sq.hint.to'); await wait(4000); await tap('#btnHint'); await wait(1200); await tap('.sq.hint:has(.pc)'); await wait(300); },
+    // the advised cell (a tap plays it), the opponent's reply, the next advice
+    'piskvorky': async () => { await tap('#btnHint'); await wait(1500); await tap('#svg .hint'); await wait(3500); await tap('#btnHint'); await wait(1500); },
     'zavri-cisla': async () => { await tapButton(/Hodit kostk/); await wait(1800); await tap('#rails .plate:not(.dim):not(.down)'); await wait(400); },
     'soliter': async () => { await tap('[data-a="hint"]'); await wait(900); await tap('.cd.hint'); await wait(800); },
     'freecell': async () => { await tap('[data-a="hint"]'); await wait(900); await tap('.cd.hint'); await wait(800); },

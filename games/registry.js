@@ -24,6 +24,7 @@ globalThis.GAMES = [
   { id: 'kostky', name: 'Kostky', description: 'Házej kostkami proti soupeři' },
   // Board games against the computer.
   { id: 'dama', name: 'Dáma', description: 'Klasická dáma proti počítači' },
+  { id: 'piskvorky', name: 'Piškvorky', description: 'Pět v řadě proti počítači' },
   // Card solitaires last.
   { id: 'soliter', name: 'Solitér', description: 'Skládej karty od esa po krále' },
   { id: 'freecell', name: 'FreeCell', description: 'Solitér se čtyřmi volnými políčky' },

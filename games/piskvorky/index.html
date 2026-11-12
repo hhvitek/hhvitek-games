@@ -1,0 +1,1319 @@
+<!doctype html>
+<html lang="cs" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f4ebdf">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Piškvorky">
+<title>Piškvorky</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f4ebdf'/%3E%3Cpath d='M14 14l16 16M30 14L14 30' stroke='%232b1a0e' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='42' cy='42' r='9' fill='none' stroke='%23b5482a' stroke-width='6'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
+/* --sheet the board, --grid its lines, --x and --o the marks, --last the last mark, --hint the advice, --win the five */
+[data-theme="paper"]{--page:#f4ebdf;--bar:rgba(122,69,32,.06);--line:#e6d8c6;--ink:#2b1a0e;--soft:#6f5a48;--accent:#7a4520;--accent-ink:#fff;--chip:#fff;--chip-line:#e6d8c6;--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--undo-bg:rgba(122,69,32,.1);
+  --sheet:#fffaf2;--grid:#dccab3;--edge:#c9b394;--x:#2b1a0e;--o:#b5482a;--last:rgba(122,69,32,.16);--hint:#2f7fd8;--win:#7a4520}
+[data-theme="notebook"]{--page:#eef2f8;--bar:rgba(31,79,191,.06);--line:#d3deee;--ink:#1d2b44;--soft:#52617c;--accent:#1f4fbf;--accent-ink:#fff;--chip:#fff;--chip-line:#cfdaec;--btn:#1f4fbf;--btn-ink:#fff;--btn-sh:#123077;--undo-bg:rgba(31,79,191,.08);
+  --sheet:#ffffff;--grid:#b4cbea;--edge:#8fb0dd;--x:#1f4fbf;--o:#d1342a;--last:rgba(31,79,191,.14);--hint:#18a058;--win:#d1342a}
+[data-theme="board"]{--page:#23402a;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.1);--ink:#eef6e8;--soft:#cfe2c6;--accent:#ffd66b;--accent-ink:#2a2200;--chip:rgba(255,255,255,.12);--chip-line:rgba(255,255,255,.22);--btn:#ffd66b;--btn-ink:#2a2200;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.25);
+  --sheet:#2c4f35;--grid:rgba(255,255,255,.17);--edge:rgba(255,255,255,.3);--x:#ffffff;--o:#ffd66b;--last:rgba(255,255,255,.16);--hint:#6fc3ff;--win:#ff8a65}
+
+/* ---------- Base ---------- */
+:root{--gut:12px} /* one side margin: bar buttons, board and bottom buttons line up (the safe areas are on #app) */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{background:var(--page);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+/* rule: 100dvh + safe areas, the board is sized from the room that is left (see layout()) */
+#app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings) ---------- */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line);text-decoration:none}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:20px}
+/* narrow phones (360 px): less room between the bar buttons, so the name fits whole at 18 px; the outer margin stays */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:18px;letter-spacing:0}
+}
+
+/* ---------- The two players: a row above the board (the opponent) and below it (you) ---------- */
+.side{flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 var(--gut);padding:4px 10px;min-height:52px;border-radius:16px;border:3px solid transparent;background:var(--bar);--op-ava:40px;--op-ava-bg:var(--chip);--op-name:20px}
+.side.on{border-color:var(--accent)}
+.side .me{font-size:21px;font-weight:800}
+.side .tag{flex:none;font-size:18px;font-weight:800;padding:2px 10px;border-radius:12px;background:var(--accent);color:var(--accent-ink);white-space:nowrap}
+.side .tag.off{background:none;color:var(--soft);font-weight:700;padding:2px 0}
+.left{display:flex;align-items:center;gap:10px;min-width:0}
+.mk{flex:none;width:26px;height:26px}
+.mk path{stroke:var(--x)}
+.mk circle{stroke:var(--o)}
+
+/* ---------- Board: squared paper drawn as one SVG; it can be zoomed and moved inside #view ---------- */
+#mid{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;padding:8px 0 0}
+#board{flex:none;display:grid;place-items:center;padding:12px var(--gut)} /* rule: at least 12 px between the board and the rows above and below, on every screen */
+#view{position:relative;overflow:hidden;background:var(--sheet);border-radius:6px;box-shadow:0 0 0 2px var(--edge);touch-action:none}
+#svg{position:absolute;left:0;top:0;transform-origin:0 0;display:block}
+#svg .gl{stroke:var(--grid);stroke-width:1;fill:none}
+#svg .x{stroke:var(--x);stroke-width:.15;stroke-linecap:round;fill:none}
+#svg .o{stroke:var(--o);stroke-width:.12;fill:none}
+#svg .last{fill:var(--last)}
+#svg .hint{fill:color-mix(in srgb,var(--hint) 22%,transparent);stroke:var(--hint);stroke-width:.09}
+#svg .pend{opacity:.38}
+#svg .pendbox{fill:none;stroke:var(--accent);stroke-width:.08;stroke-dasharray:.16 .1}
+#svg .win{stroke:var(--win);stroke-width:.16;stroke-linecap:round;opacity:.85}
+#svg .new{animation:pop .28s ease-out;transform-box:fill-box;transform-origin:center}
+@keyframes pop{from{transform:scale(.3);opacity:.2}to{transform:scale(1);opacity:1}}
+
+/* ---------- Bottom buttons ---------- */
+.tray{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px var(--gut) 12px;margin-top:8px;background:var(--bar);border-top:1px solid var(--line)}
+#hint{text-align:center;font-size:19px;line-height:1.3;color:var(--soft);min-height:25px}
+.row{display:flex;gap:10px}
+.undo{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;height:64px;border-radius:16px;font-size:20px;font-weight:800;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.undo svg{flex:none;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+/* an unavailable action is only dimmed and explains itself when tapped */
+.undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+@media (max-height:800px){
+  .topbar{height:56px}
+  .round{width:42px;height:42px}
+  .pill{height:42px}
+  .side{min-height:48px;--op-ava:36px}
+  #mid{padding-top:6px}
+  .undo{height:56px}
+  .tray{gap:6px;padding:6px var(--gut) 10px;margin-top:6px}
+}
+@media (max-width:380px){ .undo{font-size:18px;gap:4px} .undo svg{width:20px;height:20px} }
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+/* rule: the head with Zpět and the game name stays at the top while scrolling */
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);margin-top:16px}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink)}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{display:block;height:56px;border-radius:10px;background:var(--page);box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);padding:6px}
+.swatch svg{display:block;width:100%;height:100%;border-radius:4px;background:var(--sheet)}
+.swatch .gl{stroke:var(--grid);stroke-width:1;fill:none}
+.swatch .x{stroke:var(--x);stroke-width:3;stroke-linecap:round}
+.swatch .o{stroke:var(--o);stroke-width:2.6;fill:none}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.stats{font-size:20px;line-height:1.5}
+.stats + .stats{margin-top:10px}
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol,.help ul{padding-left:26px}
+.help li{margin:10px 0}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.mcard h2{font-size:28px;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 160px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Piškvorky</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <div id="mid">
+    <div id="foeRow" class="side"></div>
+    <main id="board"><div id="view"><svg id="svg" aria-label="Hrací plocha"></svg></div></main>
+    <div id="meRow" class="side"></div>
+  </div>
+  <footer class="tray">
+    <div id="hint"></div>
+    <div class="row">
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnHint" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>Poradit</button>
+      <button id="btnZoom" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/><path id="zoomPlus" d="M10.5 7.5v6M7.5 10.5h6"/></svg><span id="zoomLabel">Zvětšit</span></button>
+    </div>
+  </footer>
+</div>
+<!-- Every layer is shown and hidden only through its hidden attribute; every screen has a [data-act="close"] button (Back button contract) -->
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+<script src="../_opponents/opponents.js"></script>
+<script>
+/* ---------- Visible height ---------- */
+// The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
+// enough: some browsers report it taller than what is visible (the app installed by Brave on Android counted the
+// status and navigation bars too and hid the bottom buttons). visualViewport follows what is shown; it is measured
+// again on every change and shortly after loading (a browser bar that hides itself may change it without an event),
+// and a changed height makes the game lay itself out again through a resize event.
+(() => {
+  const root = document.documentElement;
+  let last = 0;
+  const measure = () => {
+    const vv = window.visualViewport;
+    const h = Math.round(vv ? vv.height * vv.scale : innerHeight);
+    if (!(h > 0) || h === last) return;
+    const first = !last; last = h;
+    root.style.setProperty('--app-h', h + 'px');
+    if (!first) dispatchEvent(new Event('resize'));
+  };
+  measure();
+  addEventListener('resize', measure);
+  if (window.visualViewport) visualViewport.addEventListener('resize', measure);
+  addEventListener('pageshow', measure);
+  [100, 500, 1500].forEach(ms => setTimeout(measure, ms));
+  // TEMPORARY (2026-11-08): what this page measured, shown in the launcher's Nastavení → "Údaje o obrazovce"
+  setTimeout(() => { try {
+    const p = document.createElement('div'); p.style.cssText = 'position:absolute;left:-50px;top:0;width:1px;height:100dvh;padding-bottom:env(safe-area-inset-bottom)';
+    document.body.appendChild(p); const dvh = Math.round(p.getBoundingClientRect().height - parseFloat(getComputedStyle(p).paddingBottom)), sb = Math.round(parseFloat(getComputedStyle(p).paddingBottom)); p.remove();
+    const vv = window.visualViewport;
+    localStorage.setItem('games.launcher.diag', JSON.stringify({ page: location.pathname.split('/').slice(-2, -1)[0], vv: vv ? Math.round(vv.height) : null, inner: innerHeight, client: root.clientHeight, dvh, sb, appH: last, app: Math.round(document.getElementById('app').getBoundingClientRect().height) }));
+  } catch (e) {} }, 2000);
+})();
+</script>
+<script>
+/* ---------- Engine ---------- */
+// Piškvorky (freestyle gomoku: five or more in a row wins) on an n × n board: the rules and the computer's thinking.
+// No DOM here: the same function also runs inside a Web Worker made from its source text and in Node
+// (tools/piskvorky-test.js). Cells outside are r * n + c; inside, the board has a border of walls.
+function PiskvorkyEngine() {
+'use strict';
+// shapes of one line through an empty cell, if a player put a mark there
+const NONE = 0, TWO = 1, OPEN2 = 2, THREE = 3, OPEN3 = 4, FOUR = 5, OPEN4 = 6, FIVE = 7;
+
+/* ----- the rules (light, used by the page) ----- */
+// the winning line through the last mark: the cells of the longest run of five or more, or null
+function winLine(n, moves) {
+  if (!moves.length) return null;
+  const last = moves[moves.length - 1], who = (moves.length - 1) & 1;
+  const own = new Set(); moves.forEach((m, i) => { if ((i & 1) === who) own.add(m); });
+  const r0 = (last / n) | 0, c0 = last % n;
+  let best = null;
+  for (const [dr, dc] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+    const line = [last];
+    for (const s of [1, -1]) {
+      let r = r0 + dr * s, c = c0 + dc * s;
+      while (r >= 0 && r < n && c >= 0 && c < n && own.has(r * n + c)) { line.push(r * n + c); r += dr * s; c += dc * s; }
+    }
+    if (line.length >= 5 && (!best || line.length > best.length)) best = line;
+  }
+  return best ? best.sort((a, b) => a - b) : null;
+}
+// a game is valid when every move is a free cell on the board and nothing was played after a five
+function validMoves(n, moves) {
+  if (!Array.isArray(moves) || moves.length > n * n) return false;
+  const seen = new Set();
+  for (let i = 0; i < moves.length; i++) {
+    const m = moves[i];
+    if (!Number.isInteger(m) || m < 0 || m >= n * n || seen.has(m)) return false;
+    seen.add(m);
+    if (i < moves.length - 1 && winLine(n, moves.slice(0, i + 1))) return false;
+  }
+  return true;
+}
+
+/* ----- line shapes: a table over the 8 neighbours (4 each side) of a cell in one direction ----- */
+// neighbour states: 0 empty, 1 own, 2 blocked (the other player or the wall); index = sum state_k * 3^k,
+// k = 0..3 the cells 4..1 to the left, k = 4..7 the cells 1..4 to the right. Built once, when first needed.
+let TABLE = null;
+function buildTable() {
+  TABLE = new Uint8Array(6561);
+  const l = new Int8Array(9);
+  const fiveThrough = () => { let a = 4, b = 4; while (a > 0 && l[a - 1] === 1) a--; while (b < 8 && l[b + 1] === 1) b++; return b - a + 1 >= 5; };
+  const winPts = () => { let k = 0; for (let e = 0; e < 9; e++) if (l[e] === 0) { l[e] = 1; if (fiveThrough()) k++; l[e] = 0; } return k; };
+  // with the centre placed: FIVE; OPEN4 (two cells give five); FOUR (one); OPEN3 (one move makes OPEN4); THREE (makes FOUR)
+  const level3 = () => {
+    if (fiveThrough()) return FIVE;
+    const w = winPts(); if (w >= 2) return OPEN4; if (w === 1) return FOUR;
+    let s = NONE;
+    for (let e = 0; e < 9; e++) if (l[e] === 0) { l[e] = 1; const w2 = winPts(); l[e] = 0; if (w2 >= 2) return OPEN3; if (w2 === 1) s = THREE; }
+    return s;
+  };
+  for (let idx = 0; idx < 6561; idx++) {
+    let x = idx;
+    for (let k = 0; k < 8; k++) { l[k < 4 ? k : k + 1] = x % 3; x = (x / 3) | 0; }
+    l[4] = 1;
+    let s = level3();
+    if (s === NONE) {
+      for (let e = 0; e < 9 && s !== OPEN2; e++) if (l[e] === 0) {
+        l[e] = 1; const t = level3(); l[e] = 0;
+        if (t === OPEN3) s = OPEN2; else if (t === THREE && s === NONE) s = TWO;
+      }
+    }
+    TABLE[idx] = s;
+  }
+}
+
+/* ----- the search board, kept up to date move by move ----- */
+// For every empty cell, direction and player: the shape (shp). From them, per cell and player: its value for move
+// ordering (cv) and flags: five (f5), a winning four = open four or two fours (fa4), any four (f4); and per player the
+// counts of those cells and the sum of the evaluation weights (ev). A move changes only the cells in its 4 lines.
+const BORDER = 5, WALL = 3;
+const SV = [0, 2, 10, 8, 50, 60, 800, 100000];       // move ordering
+const EV = [0, 1, 5, 4, 22, 25, 120, 1000];           // static evaluation
+let n = 0, W = 0, bd = null, steps = null, near = null, cells = null, hist = null, stack = [];
+const shp = [null, null, null], cv = [null, null, null], f5 = [null, null, null], fa4 = [null, null, null], f4 = [null, null, null];
+const ev = [0, 0, 0], c5 = [0, 0, 0], cA4n = [0, 0, 0], c4 = [0, 0, 0];
+let zLo = null, zHi = null, hLo = 0, hHi = 0;
+function prng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const inner = m => ((m / n | 0) + BORDER) * W + (m % n) + BORDER;
+const outer = c => ((c / W | 0) - BORDER) * n + (c % W) - BORDER;
+function setup(size, moves) {
+  if (!TABLE) buildTable();
+  if (n !== size) {
+    n = size; W = n + 2 * BORDER;
+    const z = prng(12345 + n);
+    zLo = [null, new Int32Array(W * W), new Int32Array(W * W)]; zHi = [null, new Int32Array(W * W), new Int32Array(W * W)];
+    for (const p of [1, 2]) for (let i = 0; i < W * W; i++) { zLo[p][i] = (z() * 4294967296) | 0; zHi[p][i] = (z() * 4294967296) | 0; }
+    steps = [1, W, W + 1, W - 1];
+    cells = new Int32Array(n * n);
+    for (let r = 0, i = 0; r < n; r++) for (let c = 0; c < n; c++) cells[i++] = (r + BORDER) * W + c + BORDER;
+  }
+  bd = new Uint8Array(W * W).fill(WALL);
+  for (const c of cells) bd[c] = 0;
+  for (const p of [1, 2]) {
+    shp[p] = new Uint8Array(W * W * 4); cv[p] = new Int32Array(W * W); idx[p] = new Int32Array(W * W * 4);
+    f5[p] = new Uint8Array(W * W); fa4[p] = new Uint8Array(W * W); f4[p] = new Uint8Array(W * W);
+    ev[p] = 0; c5[p] = 0; cA4n[p] = 0; c4[p] = 0;
+  }
+  near = new Uint8Array(W * W);
+  hist = new Int32Array(W * W);
+  hLo = 0; hHi = 0; stack = [];
+  for (const c of cells) for (let d = 0; d < 4; d++) indexAt(c, d);
+  for (const c of cells) { for (let d = 0; d < 4; d++) shapeAt(c, d); flags(c); }
+  moves.forEach((m, i) => place(inner(m), (i & 1) + 1));
+}
+// idx[p][c * 4 + d]: the table index of cell c in direction d as player p sees it, kept up to date by place()
+const POW = [1, 3, 9, 27, 81, 243, 729, 2187];
+const idx = [null, null, null];
+// returns which players' shapes changed (bit 1: player 1, bit 2: player 2)
+function shapeAt(c, d) {
+  const o = c * 4 + d, s1 = TABLE[idx[1][o]], s2 = TABLE[idx[2][o]], o1 = shp[1][o], o2 = shp[2][o];
+  let ch = 0;
+  if (s1 !== o1) { ev[1] += EV[s1] - EV[o1]; shp[1][o] = s1; ch = 1; }
+  if (s2 !== o2) { ev[2] += EV[s2] - EV[o2]; shp[2][o] = s2; ch |= 2; }
+  return ch;
+}
+// the indexes from the board (only at the start)
+function indexAt(c, d) {
+  const s = steps[d];
+  let i1 = 0, i2 = 0, j = 0;
+  for (let k = -4; k <= 4; k++) {
+    if (!k) continue;
+    const a = bd[c + k * s];
+    if (a === 1) { i1 += POW[j]; i2 += 2 * POW[j]; } else if (a === 2) { i1 += 2 * POW[j]; i2 += POW[j]; } else if (a === WALL) { i1 += 2 * POW[j]; i2 += 2 * POW[j]; }
+    j++;
+  }
+  idx[1][c * 4 + d] = i1; idx[2][c * 4 + d] = i2;
+}
+let cA4 = false, cF5 = false, cF4 = false; // set by val()
+function val(p, c) {
+  const o = c * 4, a = shp[p];
+  let s = 0, x5 = 0, x4 = 0, o4 = 0, o3 = 0;
+  for (let d = 0; d < 4; d++) {
+    const x = a[o + d]; s += SV[x];
+    if (x === FIVE) x5++; else if (x === OPEN4) o4++; else if (x === FOUR) x4++; else if (x === OPEN3) o3++;
+  }
+  cF5 = x5 > 0; cF4 = x5 + o4 + x4 > 0;
+  cA4 = !x5 && (o4 > 0 || x4 >= 2);
+  if (x5) return 1000000;
+  if (cA4) return 50000;
+  if (x4 && o3) return 20000 + s;
+  if (o3 >= 2) return 5000 + s;
+  return s;
+}
+function flags(c, which) {
+  for (let p = 1; p <= 2; p++) {
+    if (which && !(which & p)) continue;
+    cv[p][c] = val(p, c);
+    const a = cF5 ? 1 : 0, b = cA4 ? 1 : 0, e = cF4 ? 1 : 0;
+    c5[p] += a - f5[p][c]; f5[p][c] = a;
+    cA4n[p] += b - fa4[p][c]; fa4[p][c] = b;
+    c4[p] += e - f4[p][c]; f4[p][c] = e;
+  }
+}
+// a mark of p appears (sign 1) or leaves (sign -1) at m: the cells in its 4 lines see it, the empty ones get new shapes
+function touch(m, p, sign) {
+  const a1 = sign * (p === 1 ? 1 : 2), a2 = sign * (p === 2 ? 1 : 2), i1 = idx[1], i2 = idx[2];
+  for (let d = 0; d < 4; d++) {
+    const s = steps[d];
+    for (let k = -4; k <= 4; k++) {
+      if (!k) continue;
+      const c = m + k * s, j = k > 0 ? 4 - k : 3 - k, o = c * 4 + d; // m is the cell -k away from c
+      i1[o] += a1 * POW[j]; i2[o] += a2 * POW[j];
+      if (bd[c] === 0) { const ch = shapeAt(c, d); if (ch) flags(c, ch); }
+    }
+  }
+}
+function place(m, p) {
+  // the cell is no longer empty: its own shapes and flags leave the sums
+  const o = m * 4;
+  for (let d = 0; d < 4; d++) { ev[1] -= EV[shp[1][o + d]]; ev[2] -= EV[shp[2][o + d]]; shp[1][o + d] = 0; shp[2][o + d] = 0; }
+  flags(m);
+  bd[m] = p; hLo ^= zLo[p][m]; hHi ^= zHi[p][m];
+  for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) near[m + dr * W + dc]++;
+  touch(m, p, 1);
+  stack.push(m);
+}
+function unplace() {
+  const m = stack.pop(), p = bd[m];
+  bd[m] = 0; hLo ^= zLo[p][m]; hHi ^= zHi[p][m];
+  for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) near[m + dr * W + dc]--;
+  touch(m, p, -1);
+  for (let d = 0; d < 4; d++) shapeAt(m, d);
+  flags(m);
+}
+const best4 = (p, c) => { const o = c * 4, a = shp[p]; return Math.max(a[o], a[o + 1], a[o + 2], a[o + 3]); };
+function findFive(p) { for (let i = 0; i < cells.length; i++) { const c = cells[i]; if (f5[p][c] && bd[c] === 0) return c; } return -1; }
+function fivesOf(p) { const out = []; for (let i = 0; i < cells.length; i++) { const c = cells[i]; if (f5[p][c] && bd[c] === 0) out.push(c); } return out; }
+// the cells where p just got five next to the mark at m (its 4 lines)
+function fivesNear(p, m) {
+  let wp = -1;
+  for (let d = 0; d < 4; d++) { const s = steps[d]; for (let k = -4; k <= 4; k++) { const c = m + k * s; if (bd[c] === 0 && f5[p][c] && c !== wp) { if (wp >= 0) return -2; wp = c; } } }
+  return wp;
+}
+
+/* ----- move lists ----- */
+// cells near the marks, the best first for p to move (own value + the other's value as defence); at most k of them
+function ordered(p, only, k) {
+  const q = 3 - p, K = k || 1000, oc = [], os = [];
+  const vp = cv[p], vq = cv[q];
+  for (let i = 0; i < cells.length; i++) {
+    const c = cells[i];
+    if (bd[c] !== 0 || !near[c] || (only && !only(c))) continue;
+    const s = vp[c] + vq[c] * 0.9 + hist[c] * 0.001;
+    if (oc.length >= K && s <= os[K - 1]) continue;
+    let j = oc.length < K ? oc.length : K - 1;
+    while (j > 0 && os[j - 1] < s) { oc[j] = oc[j - 1]; os[j] = os[j - 1]; j--; }
+    oc[j] = c; os[j] = s;
+  }
+  return oc;
+}
+// against the other's open three: block it (its winning-four cells and its four cells) or answer with own fours
+const defenceOf = (p, q) => c => fa4[q][c] || f4[q][c] || f4[p][c];
+
+/* ----- limits ----- */
+let nodes = 0, limit = 0, deadline = 0, stop = false;
+const tick = () => { if ((++nodes & 1023) === 0 && (nodes > limit || Date.now() > deadline)) stop = true; return stop; };
+
+/* ----- VCF: winning by fours only (every move a four, the other must block it) ----- */
+const vcfFail = new Int32Array(1 << 16), vcfFailHi = new Int32Array(1 << 16);
+let vcfBudget = 0, vcfFirst = -1;
+function vcf(a, depth, top) {
+  if (tick() || --vcfBudget < 0) return false;
+  const d = 3 - a;
+  if (c5[a]) { if (top) vcfFirst = findFive(a); return true; }
+  if (c5[d] >= 2 || depth <= 0 || !c4[a]) return false;
+  const slot = (hLo ^ (a * 0x9E3779B1)) & 0xFFFF;
+  if (vcfFail[slot] === hLo && vcfFailHi[slot] === (hHi ^ a)) return false;
+  let moves;
+  if (c5[d] === 1) { const x = findFive(d); moves = f4[a][x] ? [x] : []; }
+  else moves = ordered(a, c => f4[a][c]);
+  for (const m of moves) {
+    if (fa4[a][m]) { if (top) vcfFirst = m; return true; }
+    place(m, a);
+    const wp = fivesNear(a, m);
+    let ok = false;
+    if (wp === -2) ok = true;
+    else if (wp >= 0 && !f5[d][wp]) { place(wp, d); ok = vcf(a, depth - 1, false); unplace(); }
+    unplace();
+    if (ok) { if (top) vcfFirst = m; return true; }
+    if (stop || vcfBudget < 0) return false;
+  }
+  vcfFail[slot] = hLo; vcfFailHi[slot] = hHi ^ a;
+  return false;
+}
+
+/* ----- VCT: winning by threats (fours and open threes); the other may block or answer with own fours ----- */
+let vctBudget = 0, vctFirst = -1;
+const vctFail = new Int32Array(1 << 16), vctFailHi = new Int32Array(1 << 16);
+function vct(a, depth, top) {
+  if (tick() || --vctBudget < 0) return false;
+  const d = 3 - a;
+  if (c5[a]) { if (top) vctFirst = findFive(a); return true; }
+  if (c5[d] >= 2) return false;
+  const slot = (hLo ^ (a * 0x7F4A7C15) ^ (depth << 3)) & 0xFFFF, chk = hHi ^ (a << 8) ^ depth;
+  if (vctFail[slot] === hLo && vctFailHi[slot] === chk) return false;
+  let moves;
+  if (c5[d] === 1) { const x = findFive(d); moves = best4(a, x) >= OPEN3 ? [x] : []; }
+  else {
+    vcfBudget = Math.min(vctBudget, 2000);
+    if (vcf(a, 12, top)) { if (top) vctFirst = vcfFirst; return true; }
+    if (depth <= 0) return false;
+    moves = ordered(a, c => best4(a, c) >= OPEN3).slice(0, 10);
+  }
+  for (const m of moves) {
+    if (fa4[a][m] && !c5[d]) { if (top) vctFirst = m; return true; }
+    place(m, a);
+    const ok = defend(a, depth - 1);
+    unplace();
+    if (ok) { if (top) vctFirst = m; return true; }
+    if (stop || vctBudget < 0) return false;
+  }
+  vctFail[slot] = hLo; vctFailHi[slot] = chk;
+  return false;
+}
+// d to move against a's threat: true when every defence loses
+function defend(a, depth) {
+  if (tick() || --vctBudget < 0) return false;
+  const d = 3 - a;
+  if (c5[d]) return false;     // d wins first
+  if (c5[a] >= 2) return true;
+  const list = c5[a] === 1 ? [findFive(a)] : ordered(d, c => f4[a][c] || fa4[a][c] || f4[d][c]);
+  if (!list.length) return false;
+  for (const x of list) {
+    place(x, d);
+    let r;
+    const wp = fivesNear(d, x); // x was a four of d: a must block it at once (or win by five)
+    if (c5[a]) r = true;
+    else if (wp === -2) r = false;
+    else if (wp >= 0) { place(wp, a); r = defend(a, depth); unplace(); }
+    else r = vct(a, depth, false);
+    unplace();
+    if (!r) return false;
+  }
+  return true;
+}
+
+/* ----- alpha-beta ----- */
+const WIN = 1000000;
+const TT = 1 << 18, ttLo = new Int32Array(TT), ttHi = new Int32Array(TT), ttVal = new Int32Array(TT), ttDep = new Int8Array(TT), ttFlag = new Int8Array(TT), ttMove = new Int32Array(TT);
+const evaluate = (p, q) => Math.round(ev[p] * 1.15 - ev[q]);
+function search(p, depth, alpha, beta, ply) {
+  if (tick()) return 0;
+  const q = 3 - p;
+  if (c5[p]) return WIN - ply - 1;
+  if (c5[q] >= 2) return -(WIN - ply - 2);
+  let moves, d2 = depth - 1;
+  if (c5[q] === 1) { moves = [findFive(q)]; d2 = depth; } // forced: no depth spent
+  else if (cA4n[p]) return WIN - ply - 3;
+  else if (depth <= 0) return evaluate(p, q);
+  const slot = (hLo ^ (p === 2 ? 0x55555555 : 0)) & (TT - 1), key = hHi ^ p;
+  let ttm = -1;
+  if (ttLo[slot] === hLo && ttHi[slot] === key) {
+    ttm = ttMove[slot];
+    if (ttDep[slot] >= depth) {
+      const v = ttVal[slot], f = ttFlag[slot];
+      if (f === 0 || (f === 1 && v >= beta) || (f === 2 && v <= alpha)) return v;
+    }
+  }
+  if (!moves) {
+    if (cA4n[q]) moves = ordered(p, defenceOf(p, q));
+    else moves = ordered(p, null, 7 + depth);
+  }
+  if (!moves.length) return 0; // full board
+  if (ttm >= 0) { const i = moves.indexOf(ttm); if (i > 0) { moves.splice(i, 1); moves.unshift(ttm); } }
+  const a0 = alpha;
+  let best = -WIN * 2, bm = moves[0];
+  for (let i = 0; i < moves.length; i++) {
+    const m = moves[i];
+    place(m, p);
+    let v;
+    if (i === 0) v = -search(q, d2, -beta, -alpha, ply + 1);
+    else {
+      v = -search(q, d2, -alpha - 1, -alpha, ply + 1);
+      if (v > alpha && v < beta) v = -search(q, d2, -beta, -alpha, ply + 1);
+    }
+    unplace();
+    if (stop) return 0;
+    if (v > best) { best = v; bm = m; }
+    if (v > alpha) alpha = v;
+    if (alpha >= beta) { hist[m] += depth * depth; break; }
+  }
+  ttLo[slot] = hLo; ttHi[slot] = key; ttVal[slot] = best; ttDep[slot] = depth; ttMove[slot] = bm;
+  ttFlag[slot] = best <= a0 ? 2 : best >= beta ? 1 : 0;
+  return best;
+}
+
+/* ----- the levels ----- */
+const LEVEL = {
+  master: { nodes: 350000, vcf: 50000, vct: 80000 },
+  hint:   { nodes: 120000, vcf: 20000, vct: 30000 },
+};
+// the "ordinary player": always sees fives and fours, usually an open three, likes good shapes, errs sometimes
+function ordinary(p, rnd) {
+  const q = 3 - p;
+  if (c5[p]) return { c: findFive(p), how: 'five' };
+  if (c5[q]) return { c: findFive(q), how: 'block' };
+  if (cA4n[p] && rnd() < 0.95) return { c: ordered(p, c => fa4[p][c])[0], how: 'four' };
+  if (cA4n[q] && rnd() < 0.8) return { c: ordered(p, c => fa4[q][c] || f4[q][c])[0], how: 'three' };
+  const list = [];
+  for (let i = 0; i < cells.length; i++) {
+    const c = cells[i]; if (bd[c] !== 0 || !near[c]) continue;
+    list.push({ c, s: (cv[p][c] + cv[q][c] * 0.8 + 1) * (1 + (rnd() - 0.5) * 0.5) });
+  }
+  list.sort((a, b) => b.s - a.s);
+  if (list.length > 2 && rnd() < 0.15) { const k = rnd() < 0.5 ? 1 : 2; if (list[k].s >= list[0].s * 0.6) return { c: list[k].c, how: 'pick' }; }
+  return { c: list[0].c, how: 'pick' };
+}
+// opening moves: the centre, or a cell next to the other's first mark (towards the centre)
+function opening(moves, rnd) {
+  const h = n >> 1;
+  if (!moves.length) return h * n + h;
+  const r0 = (moves[0] / n) | 0, c0 = moves[0] % n, opts = [];
+  for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+    const r = r0 + dr, c = c0 + dc;
+    if ((dr || dc) && r >= 0 && c >= 0 && r < n && c < n) opts.push({ m: r * n + c, d: Math.abs(r - h) + Math.abs(c - h) });
+  }
+  opts.sort((a, b) => a.d - b.d);
+  const good = opts.filter(o => o.d <= opts[0].d + 1);
+  return good[Math.floor(rnd() * good.length)].m;
+}
+/* think({ n, moves, level: 'normal' | 'master' | 'hint', seed, nodes?, maxMs? }) → { m: cell, how, score?, depth?, nodes }
+   The side to move is the one whose turn it is after moves. The answer depends only on these inputs. */
+function think(o) {
+  setup(o.n, o.moves);
+  // nothing remembered from an earlier search: the same position always gets the same answer (Undo, reload, Poradit)
+  for (const t of [ttLo, ttHi, ttVal, ttDep, ttFlag, ttMove, vcfFail, vcfFailHi, vctFail, vctFailHi]) t.fill(0);
+  nodes = 0; stop = false;
+  const L = LEVEL[o.level] || LEVEL.master;
+  limit = o.nodes || L.nodes; deadline = Date.now() + (o.maxMs || 20000);
+  const p = (o.moves.length & 1) + 1, q = 3 - p;
+  const rnd = prng((o.seed | 0) ^ Math.imul(o.moves.length + 1, 2654435761));
+  const res = (c, how, extra) => Object.assign({ m: outer(c), how, nodes }, extra || {});
+  if (o.moves.length >= n * n) return { m: -1, how: 'full', nodes: 0 };
+  if (o.moves.length < 2 && (o.level !== 'hint' || !o.moves.length)) return { m: opening(o.moves, rnd), how: 'opening', nodes: 0 };
+  if (o.level === 'normal') { const r = ordinary(p, rnd); return res(r.c, r.how); }
+
+  if (c5[p]) return res(findFive(p), 'five');
+  if (c5[q]) return res(findFive(q), 'block');
+  if (cA4n[p]) return res(ordered(p, c => fa4[p][c])[0], 'four');
+  vcfBudget = L.vcf;
+  if (vcf(p, 20, true)) return res(vcfFirst, 'vcf');
+  // the other's winning fours if we did nothing: our move must spoil them
+  vcfBudget = L.vcf;
+  const theirVcf = vcf(q, 20, false);
+  vctBudget = L.vct;
+  if (!cA4n[q] && !theirVcf && vct(p, 4, true)) return res(vctFirst, 'vct');
+
+  // root moves
+  let moves;
+  if (cA4n[q]) moves = ordered(p, defenceOf(p, q));
+  else moves = ordered(p, null, 20);
+  if (theirVcf) {
+    const all = ordered(p, null, 40);
+    const safe = all.filter(m => { place(m, p); vcfBudget = 3000; const bad = vcf(q, 16, false); unplace(); return !bad; });
+    if (safe.length) moves = safe.slice(0, 20);
+  }
+  // a little variety in the first moves: near-equal moves are tried in an order drawn from the seed
+  if (o.moves.length < 8) {
+    const sc = m => cv[p][m] + cv[q][m] * 0.9, top = sc(moves[0]);
+    const eq = moves.filter(m => sc(m) >= top * 0.85);
+    for (let i = eq.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [eq[i], eq[j]] = [eq[j], eq[i]]; }
+    moves = eq.concat(moves.filter(m => !eq.includes(m)));
+  }
+  let bestM = moves[0], bestV = -WIN * 2, done = 0;
+  const scores = new Map();
+  for (let depth = 1; depth <= 30 && !stop; depth++) {
+    let alpha = -WIN * 2, bm = -1, bv = -WIN * 2;
+    for (let i = 0; i < moves.length; i++) {
+      const m = moves[i];
+      place(m, p);
+      let v;
+      if (i === 0) v = -search(q, depth - 1, -WIN * 2, -alpha, 1);
+      else {
+        v = -search(q, depth - 1, -alpha - 1, -alpha, 1);
+        if (!stop && v > alpha) v = -search(q, depth - 1, -WIN * 2, -alpha, 1);
+      }
+      unplace();
+      if (stop) break;
+      scores.set(m, v);
+      if (v > bv) { bv = v; bm = m; }
+      if (v > alpha) alpha = v;
+    }
+    // an unfinished depth still counts when its first move (the best so far) was searched: bm is at least as good
+    if (bm >= 0) { bestM = bm; bestV = bv; }
+    if (!stop) {
+      done = depth;
+      moves.sort((a, b) => (scores.has(b) ? scores.get(b) : -WIN * 3) - (scores.has(a) ? scores.get(a) : -WIN * 3));
+      if (bestV >= WIN - 100 || bestV <= -(WIN - 100)) break;
+    }
+  }
+  return res(bestM, 'search', { score: bestV, depth: done });
+}
+
+return { think, winLine, validMoves,
+  // for tests: the shapes of the 4 lines through the empty cell m if player p (1 starts) played there
+  shapes(size, moves, m, p) { setup(size, moves); const c = inner(m); return [0, 1, 2, 3].map(d => shp[p][c * 4 + d]); },
+  SHAPES: { NONE, TWO, OPEN2, THREE, OPEN3, FOUR, OPEN4, FIVE } };
+}
+/* ---------- Engine end ---------- */
+</script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const GUT = 12; // side margin in px, the same as --gut in the CSS
+const E = PiskvorkyEngine();
+
+/* ---------- Settings and storage ---------- */
+const ID = 'piskvorky';
+const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const THEMES = [
+  { id: 'paper',    name: 'Papír',  meta: '#f4ebdf' },
+  { id: 'notebook', name: 'Sešit',  meta: '#eef2f8' },
+  { id: 'board',    name: 'Tabule', meta: '#23402a' },
+];
+// The computer opponent: its own AI here (the engine), the name, face and stars from games/_opponents/opponents.js
+const O = OPPONENTS;
+const LEVELS = [
+  { id: 'normal', title: 'Běžný hráč', desc: 'Hraje jako běžný člověk: čtyřku v řadě vždycky zastaví, ale otevřenou trojku občas přehlédne a sem tam táhne jinam, než by měl. Dobrý soupeř na každý den.' },
+  { id: 'master', title: 'Mistr', desc: 'Hraje nejlépe, jak umí: hledá vynucené výhry řadou hrozeb, propočítá tahy dopředu a hrozby skoro nikdy nepřehlédne. Porazit ho je opravdu těžké, hlavně když začíná.' },
+];
+const lvIdx = id => Math.max(0, LEVELS.findIndex(l => l.id === id));
+const SIZES = [
+  { n: 13, name: 'Malá',    desc: '13 × 13 políček. Hra je kratší a políčka větší.' },
+  { n: 15, name: 'Střední', desc: '15 × 15 políček, obvyklá velikost.' },
+  { n: 19, name: 'Velká',   desc: '19 × 19 políček, víc místa. Políčka jsou malá: plochu si přibliž tlačítkem Zvětšit nebo dvěma prsty.' },
+];
+const SPEEDS = [
+  { id: 'slow', name: 'Pomalu', desc: 'Soupeř chvíli přemýšlí, takže je dobře vidět, kam táhl.', think: 800 },
+  { id: 'fast', name: 'Rychle', desc: 'Soupeř táhne hned, jak má tah promyšlený.', think: 150 },
+];
+const DEFAULTS = { level: 'normal', size: 15, theme: 'paper', confirm: false, speed: 'slow', vibrate: true };
+const MARK = ['křížky', 'kolečka'];
+const nm = () => G.foe.name;
+
+/* ---------- State ----------
+   G = { n, level, foe, seed, starter: who started (0 you, 1 the computer), you: your mark (0 ×, 1 ○; × starts),
+         moves: every mark in order (cells r * n + c; even indexes ×, odd ○), status: 'playing' | 'won' | 'lost' | 'draw',
+         counted: the end is in the statistics }
+   Everything else (the board, whose turn, the five, Undo) comes from moves, so a reload goes on exactly where it was. */
+let S, G, ST;
+const rnd = n => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; } catch (e) { return Math.floor(Math.random() * n); } };
+const turn = () => G.moves.length & 1;          // whose mark comes next: 0 ×, 1 ○
+const yourTurn = () => G.status === 'playing' && turn() === G.you;
+const yourMoves = () => G.moves.filter((m, i) => (i & 1) === G.you).length;
+const isFresh = () => yourMoves() === 0;
+const hasProgress = () => G.status === 'playing' && !isFresh();
+function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, stats: ST }));
+    if (hasProgress()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {} // rule: storage may be full or blocked; the game goes on
+}
+// the end comes from the board: five in a row (or more) of the last mark, or a full board
+function judge(g) {
+  if (E.winLine(g.n, g.moves)) return ((g.moves.length - 1) & 1) === g.you ? 'won' : 'lost';
+  return g.moves.length >= g.n * g.n ? 'draw' : 'playing';
+}
+// rule: corrupted data never crashes the game; the end comes from the board, never from the save
+function validGame(g) {
+  try {
+    if (!g || !SIZES.some(s => s.n === g.n) || !LEVELS.some(l => l.id === g.level) || ![0, 1].includes(g.you) || ![0, 1].includes(g.starter) || g.you !== g.starter || !Number.isInteger(g.seed)) return false;
+    if (!E.validMoves(g.n, g.moves)) return false;
+    if (!O.valid(g.foe)) g.foe = O.create(rnd);
+    g.status = judge(g);
+    g.counted = g.counted === true || g.status !== 'playing';
+    return true;
+  } catch (e) { return false; }
+}
+function normalize(s) {
+  if (!LEVELS.some(l => l.id === s.level)) s.level = DEFAULTS.level;
+  s.size = +s.size; if (!SIZES.some(z => z.n === s.size)) s.size = DEFAULTS.size;
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  if (!SPEEDS.some(t => t.id === s.speed)) s.speed = DEFAULTS.speed;
+  s.confirm = !!s.confirm; s.vibrate = !!s.vibrate;
+}
+// played / won / drawn games per opponent level and board size
+function validStats(v) {
+  const n = x => Number.isInteger(x) && x >= 0 ? x : 0;
+  const out = {};
+  for (const l of LEVELS) {
+    out[l.id] = {};
+    for (const z of SIZES) { const x = v && v[l.id] && v[l.id][z.n], played = n(x && x.played); out[l.id][z.n] = { played, won: Math.min(n(x && x.won), played), draw: Math.min(n(x && x.draw), played) }; }
+  }
+  return out;
+}
+function count() {
+  if (G.counted || G.status === 'playing') return;
+  G.counted = true;
+  const st = ST[G.level][G.n]; st.played++;
+  if (G.status === 'won') st.won++;
+  if (G.status === 'draw') st.draw++;
+}
+// a new game: the starter changes every game (a game in which you did not move yet keeps its starter); the starter plays ×
+function newGame(msg) {
+  stopThinking();
+  const starter = !G ? 0 : isFresh() ? G.starter : 1 - G.starter;
+  G = { n: S.size, level: S.level, foe: O.create(rnd, G && G.foe ? [G.foe.name] : []), seed: rnd(2 ** 31), starter, you: starter,
+        moves: [], status: 'playing', counted: false };
+  pending = -1; hintCell = -1; resetZoom();
+  save(); render();
+  if (msg) toast(msg);
+  cpuTurn();
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) {
+  // Chrome refuses vibration (with a console error) before the first real tap
+  if (!S.vibrate || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+  try { navigator.vibrate(ms); } catch (e) {}
+}
+let toastT;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('');
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+  $('#modal').hidden = false;
+}
+
+/* ---------- The computer's thinking ----------
+   The engine runs in a Web Worker made from its own source text (nothing is downloaded), so the screen stays free while
+   it thinks. Where a worker cannot be made (some browsers with a file opened from disk), the same engine runs here.
+   Its answer depends only on the marks, the game's seed and the level, so Undo and a reload give the same reply to the
+   same move. */
+let worker = null, workerOk = true, job = 0, pending_ = null, watchdog = 0;
+function makeWorker() {
+  if (!workerOk) return null;
+  try {
+    const src = PiskvorkyEngine.toString() + '\nconst E = PiskvorkyEngine();\nonmessage = e => { postMessage({ id: e.data.id, r: E.think(e.data.o) }); };';
+    const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+    const w = new Worker(url);
+    w.onmessage = e => { if (pending_ && e.data.id === pending_.id) { const cb = pending_.cb; pending_ = null; clearTimeout(watchdog); cb(e.data.r); } };
+    w.onerror = e => { if (e && e.preventDefault) e.preventDefault(); workerOk = false; worker = null; runHere(); };
+    return w;
+  } catch (e) { workerOk = false; return null; }
+}
+// the job that was waiting for the worker is done here instead
+function runHere() {
+  clearTimeout(watchdog);
+  if (!pending_) return;
+  const p = pending_;
+  setTimeout(() => {
+    if (pending_ !== p) return;
+    const r = E.think(Object.assign({}, p.o, { maxMs: 8000 })); // here the screen waits, so a shorter safety net
+    if (pending_ !== p) return;
+    pending_ = null; p.cb(r);
+  }, 30);
+}
+function ask(o, cb) {
+  const id = ++job;
+  pending_ = { id, o, cb };
+  if (!worker && workerOk) worker = makeWorker();
+  if (worker) {
+    worker.postMessage({ id, o });
+    // a worker that never answers is given up and the move is thought out here
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => { if (pending_ && pending_.id === id) { try { worker.terminate(); } catch (e) {} worker = null; workerOk = false; runHere(); } }, 30000);
+  } else runHere();
+}
+function stopThinking() {
+  clearTimeout(watchdog); clearTimeout(cpuTimer);
+  if (pending_ && worker) { try { worker.terminate(); } catch (e) {} worker = null; }
+  pending_ = null; job++;
+  thinking = false; hintBusy = false;
+}
+const engineInput = level => ({ n: G.n, moves: G.moves.slice(), level, seed: G.seed });
+
+/* ---------- Moves ---------- */
+let pending = -1;     // "Potvrzovat tah": the cell tapped once, shown faintly until the second tap
+let hintCell = -1;    // the advice
+let fresh = -1;       // the mark that has just appeared (it pops in)
+let thinking = false, hintBusy = false, cpuTimer = 0;
+const busy = () => thinking;
+function apply(cell) {
+  G.moves.push(cell); fresh = cell;
+  G.status = judge(G);
+  if (G.status !== 'playing') { count(); endDialog(); }
+}
+function playYours(cell) {
+  pending = -1; hintCell = -1; hintBusy = false; // an advice still being worked out is dropped
+  if (pending_ && !thinking) stopThinking();
+  apply(cell);
+  buzz(G.status === 'won' ? 40 : 12);
+  save(); render();
+  cpuTurn();
+}
+function cpuTurn() {
+  if (G.status !== 'playing' || turn() === G.you || busy()) return;
+  const g0 = G, sp = SPEEDS.find(s => s.id === S.speed), t0 = Date.now();
+  thinking = true; render();
+  ask(engineInput(G.level), r => {
+    if (G !== g0 || !thinking) return;
+    const wait = Math.max(0, sp.think - (Date.now() - t0));
+    cpuTimer = setTimeout(function go() {
+      if (G !== g0 || !thinking) return;
+      if (!nothingOpen()) { cpuTimer = setTimeout(go, 400); return; } // waits while Settings or Help are open
+      let cell = r.m;
+      if (!Number.isInteger(cell) || cell < 0 || cell >= G.n * G.n || G.moves.includes(cell)) cell = firstFree();
+      thinking = false;
+      apply(cell);
+      showCell(cell);
+      if (G.status === 'lost') buzz(40);
+      save(); render();
+    }, wait);
+  });
+}
+function firstFree() { for (let i = 0; i < G.n * G.n; i++) if (!G.moves.includes(i)) return i; return -1; }
+
+/* ---------- Rendering ---------- */
+const SVGNS = 'http://www.w3.org/2000/svg';
+const xPath = (r, c) => `M${c + .25} ${r + .25}L${c + .75} ${r + .75}M${c + .75} ${r + .25}L${c + .25} ${r + .75}`;
+function markSVG(cell, who, cls = '') {
+  const r = (cell / G.n) | 0, c = cell % G.n;
+  return who === 0 ? `<path class="x ${cls}" d="${xPath(r, c)}"/>` : `<circle class="o ${cls}" cx="${c + .5}" cy="${r + .5}" r=".3"/>`;
+}
+const markIcon = who => `<svg class="mk" viewBox="0 0 26 26" aria-hidden="true">${who === 0 ? '<path d="M6 6l14 14M20 6L6 20" stroke-width="3.6" stroke-linecap="round" fill="none"/>' : '<circle cx="13" cy="13" r="8" stroke-width="3.4" fill="none"/>'}</svg>`;
+function applyLook() {
+  root.dataset.theme = S.theme;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+}
+function render() {
+  applyLook();
+  layout();
+  renderBoard();
+  renderSides();
+  renderHint();
+  layout(); // the hint may have changed the height of the tray
+  $('#btnUndo').classList.toggle('dim', undoTarget() < 0);
+  $('#btnHint').classList.toggle('dim', !yourTurn() || busy());
+  $('#zoomLabel').textContent = zoom > 1 ? 'Zmenšit' : 'Zvětšit';
+  $('#zoomPlus').setAttribute('d', zoom > 1 ? 'M7.5 10.5h6' : 'M10.5 7.5v6M7.5 10.5h6');
+}
+function renderBoard() {
+  const n = G.n, svg = $('#svg');
+  svg.setAttribute('viewBox', `0 0 ${n} ${n}`);
+  let grid = '';
+  for (let i = 1; i < n; i++) grid += `M${i} 0V${n}M0 ${i}H${n}`;
+  let html = `<path class="gl" vector-effect="non-scaling-stroke" d="${grid}"/>`;
+  const last = G.moves.length ? G.moves[G.moves.length - 1] : -1;
+  if (last >= 0 && G.status === 'playing') html += `<rect class="last" x="${last % n}" y="${(last / n) | 0}" width="1" height="1"/>`;
+  if (hintCell >= 0) html += `<rect class="hint" x="${hintCell % n + .05}" y="${((hintCell / n) | 0) + .05}" width=".9" height=".9" rx=".12"/>`;
+  G.moves.forEach((m, i) => { html += markSVG(m, i & 1, m === fresh ? 'new' : ''); });
+  if (pending >= 0) html += `<rect class="pendbox" x="${pending % n + .06}" y="${((pending / n) | 0) + .06}" width=".88" height=".88" rx=".12"/>` + markSVG(pending, G.you, 'pend');
+  const line = G.status !== 'playing' && G.status !== 'draw' ? E.winLine(n, G.moves) : null;
+  if (line) {
+    const a = line[0], b = line[line.length - 1], ra = (a / n) | 0, ca = a % n, rb = (b / n) | 0, cb = b % n;
+    html += `<line class="win" x1="${ca + .5}" y1="${ra + .5}" x2="${cb + .5}" y2="${rb + .5}"/>`;
+  }
+  svg.innerHTML = html;
+  fresh = -1;
+}
+function foeMood() {
+  if (thinking) return 'think';
+  if (G.status === 'lost') return 'happy';
+  if (G.status === 'won') return 'sad';
+  return 'calm';
+}
+function renderSides() {
+  const cpu = 1 - G.you;
+  const foeTurn = G.status === 'playing' && turn() === cpu;
+  $('#foeRow').classList.toggle('on', foeTurn);
+  $('#foeRow').innerHTML = `<div class="left">${O.head(G.foe, { mood: foeMood(), badge: O.levelBadge(LEVELS, lvIdx(G.level)) })}</div>
+    <span class="left">${markIcon(cpu)}${foeTurn ? `<span class="tag">${thinking ? 'Přemýšlí…' : 'Na tahu'}</span>` : ''}</span>`;
+  const meTurn = G.status === 'playing' && turn() === G.you;
+  $('#meRow').classList.toggle('on', meTurn);
+  $('#meRow').innerHTML = `<div class="left"><span class="me">Ty</span>${markIcon(G.you)}</div>
+    ${meTurn ? '<span class="tag">Na tahu</span>' : `<span class="tag off">hraješ ${MARK[G.you]}</span>`}`;
+}
+function renderHint() {
+  let t = '';
+  if (G.status === 'won') t = 'Pět v řadě, vyhráváš!';
+  else if (G.status === 'lost') t = `${O.past(G.foe, 'Vyhrál', 'Vyhrála')} ${nm()}. Zpět vrátí tah.`;
+  else if (G.status === 'draw') t = 'Plocha je plná, remíza.';
+  else if (thinking) t = `${nm()} přemýšlí…`;
+  else if (hintBusy) t = 'Hledám dobrý tah…';
+  else if (pending >= 0) t = 'Ťukni znovu a tah se potvrdí';
+  else if (hintCell >= 0) t = 'Rada: ťukni na označené políčko';
+  else t = G.moves.length ? `Hraješ ${MARK[G.you]}: ťukni na políčko` : 'Začínáš ty: ťukni na políčko';
+  $('#hint').textContent = t;
+}
+// rule: the board size comes from the room that is left, so it fits without scrolling
+let side = 0;
+function layout() {
+  if (!G) return;
+  const mid = $('#mid');
+  const rows = $('#foeRow').offsetHeight + $('#meRow').offsetHeight + parseFloat(getComputedStyle(mid).paddingTop);
+  // inside #board's padding (GUT at the sides, 12 px above and below), next to the two player rows
+  const room = Math.min(mid.clientWidth - 2 * GUT, mid.clientHeight - rows - 24);
+  const cs = Math.max(8, Math.floor(room / G.n)); // a short window shrinks the board, it never overlaps the rows
+  side = cs * G.n;
+  const v = $('#view'); v.style.width = v.style.height = side + 'px';
+  const svg = $('#svg'); svg.setAttribute('width', side); svg.setAttribute('height', side);
+  clampPan(); applyZoom();
+}
+
+/* ---------- Zoom: two fingers or the Zvětšit button; one finger moves a zoomed board ---------- */
+let zoom = 1, tx = 0, ty = 0;
+function clampPan() { tx = Math.min(0, Math.max(side - side * zoom, tx)); ty = Math.min(0, Math.max(side - side * zoom, ty)); }
+function applyZoom() { $('#svg').style.transform = `translate(${tx}px,${ty}px) scale(${zoom})`; }
+function resetZoom() { zoom = 1; tx = 0; ty = 0; if (side) applyZoom(); }
+// zoom so that the board point (bx, by) in board pixels sits at (vx, vy) in the view
+function zoomTo(z, bx, by, vx, vy) { zoom = Math.min(3.5, Math.max(1, z)); tx = vx - bx * zoom; ty = vy - by * zoom; clampPan(); applyZoom(); }
+// a mark that appeared outside the zoomed view: move the view to it
+function showCell(cell) {
+  if (zoom <= 1) return;
+  const cs = side / G.n, x = (cell % G.n + .5) * cs * zoom + tx, y = (((cell / G.n) | 0) + .5) * cs * zoom + ty, m = cs * zoom;
+  if (x < m || y < m || x > side - m || y > side - m) zoomTo(zoom, (cell % G.n + .5) * cs, (((cell / G.n) | 0) + .5) * cs, side / 2, side / 2);
+}
+$('#btnZoom').addEventListener('click', () => {
+  if (zoom > 1) resetZoom();
+  else {
+    // around the last mark, or the middle of the board
+    const c = G.moves.length ? G.moves[G.moves.length - 1] : ((G.n >> 1) * G.n + (G.n >> 1)), cs = side / G.n;
+    zoomTo(G.n >= 19 ? 2.4 : 2, (c % G.n + .5) * cs, (((c / G.n) | 0) + .5) * cs, side / 2, side / 2);
+  }
+  buzz(8); render();
+});
+(() => {
+  const view = $('#view'), pts = new Map();
+  let start = null, pinch = null, moved = false;
+  const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
+  const midp = () => { const [a, b] = [...pts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+  view.addEventListener('pointerdown', e => {
+    try { view.setPointerCapture(e.pointerId); } catch (er) {}
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) { start = { x: e.clientX, y: e.clientY, tx, ty }; moved = false; pinch = null; }
+    else if (pts.size === 2) {
+      const r = view.getBoundingClientRect(), m = midp();
+      pinch = { d: dist(), z: zoom, bx: (m.x - r.left - tx) / zoom, by: (m.y - r.top - ty) / zoom };
+      moved = true; // a pinch is never a tap
+    }
+  });
+  view.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const r = view.getBoundingClientRect();
+    if (pinch && pts.size >= 2) { const m = midp(); zoomTo(pinch.z * dist() / pinch.d, pinch.bx, pinch.by, m.x - r.left, m.y - r.top); return; }
+    if (start && pts.size === 1) {
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      if (!moved && Math.hypot(dx, dy) > 10) moved = true;
+      if (moved && zoom > 1) { tx = start.tx + dx; ty = start.ty + dy; clampPan(); applyZoom(); }
+    }
+  });
+  const end = e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.delete(e.pointerId);
+    if (pinch) { if (pts.size === 0) { pinch = null; start = null; render(); } else if (pts.size === 1) { const p = [...pts.values()][0]; start = { x: p.x, y: p.y, tx, ty }; } return; }
+    if (e.type === 'pointerup' && start && !moved && pts.size === 0) {
+      const r = view.getBoundingClientRect(), cs = side / G.n;
+      const bx = (e.clientX - r.left - tx) / zoom, by = (e.clientY - r.top - ty) / zoom;
+      const c = Math.floor(bx / cs), rr = Math.floor(by / cs);
+      if (c >= 0 && rr >= 0 && c < G.n && rr < G.n) onCell(rr * G.n + c);
+    }
+    if (pts.size === 0) start = null;
+  };
+  view.addEventListener('pointerup', end);
+  view.addEventListener('pointercancel', end);
+})();
+
+/* ---------- Controls ---------- */
+function onCell(cell) {
+  if (G.status !== 'playing') { toast(G.status === 'lost' ? 'Hra skončila. Zpět vrátí tvůj tah, nebo ťukni na Nová hra.' : 'Hra skončila. Ťukni na Nová hra.'); return; }
+  if (busy()) { toast(`Chvilku, ${nm()} přemýšlí`); return; }
+  if (!yourTurn()) return;
+  if (G.moves.includes(cell)) { if (pending >= 0) { pending = -1; render(); } toast('Tohle políčko už je zabrané'); return; }
+  // the advice and a second tap on the faint mark place it; with "Potvrzovat tah" the first tap only shows it
+  if (cell === hintCell || cell === pending || !S.confirm) { playYours(cell); return; }
+  pending = cell; buzz(8); render();
+}
+// Undo: back to before your last mark, with the opponent's reply (also after the end of the game)
+function undoTarget() {
+  for (let i = G.moves.length - 1; i >= 0; i--) if ((i & 1) === G.you) return i;
+  return -1;
+}
+$('#btnUndo').addEventListener('click', () => {
+  if (pending >= 0 && yourTurn()) { pending = -1; buzz(); render(); return; } // first only the faint mark goes
+  const i = undoTarget();
+  if (i < 0) { toast('Zatím není co vrátit'); return; }
+  stopThinking();
+  G.moves.length = i;
+  pending = -1; hintCell = -1;
+  G.status = judge(G);
+  $('#modal').hidden = true;
+  buzz(); save(); render();
+});
+$('#btnHint').addEventListener('click', () => {
+  if (G.status !== 'playing') { toast('Hra skončila'); return; }
+  if (busy()) { toast(`Chvilku, ${nm()} přemýšlí`); return; }
+  if (hintBusy) { toast('Chvilku, hledám dobrý tah'); return; }
+  const g0 = G, k = G.moves.length;
+  hintBusy = true; render();
+  ask(engineInput('hint'), r => {
+    hintBusy = false;
+    if (G !== g0 || G.moves.length !== k) return;
+    hintCell = Number.isInteger(r.m) && r.m >= 0 && !G.moves.includes(r.m) ? r.m : -1;
+    pending = -1;
+    if (hintCell >= 0) showCell(hintCell);
+    render();
+  });
+});
+// rule: a new game in the middle of one asks first
+$('#btnNew').addEventListener('click', () => {
+  if (hasProgress()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+// rule: an end dialog only for the game that ended, never over Settings or Help (whenFree)
+function endDialog() {
+  const g0 = G, k = G.moves.length;
+  whenFree(g0, 900, () => {
+    if (G.moves.length !== k || G.status === 'playing') return;
+    const head = G.status === 'won' ? 'Výhra! 🎉' : G.status === 'lost' ? `${O.past(G.foe, 'Vyhrál', 'Vyhrála')} ${nm()}` : 'Remíza';
+    const why = G.status === 'won' ? 'Máš pět v řadě.' : G.status === 'lost' ? `${nm()} má pět v řadě.` : 'Plocha je plná a nikdo nemá pět v řadě.';
+    const btns = [{ text: 'Nová hra', fn: () => newGame() }];
+    if (G.status !== 'won') btns.push({ text: 'Vrátit tah', cls: 'alt', fn: () => $('#btnUndo').click() });
+    btns.push({ text: 'Prohlédnout', cls: 'alt' });
+    showModal(`<h2>${head}</h2><p>${why}</p>`, btns);
+  });
+}
+
+/* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
+const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+const swatch = id => `<span class="swatch" data-theme="${id}"><svg viewBox="0 0 60 30" aria-hidden="true"><path class="gl" d="M15 0V30M30 0V30M45 0V30M0 15H60"/><path class="x" d="M4 4l7 7M11 4l-7 7M34 19l7 7M41 19l-7 7"/><circle class="o" cx="22.5" cy="22.5" r="4.4"/><circle class="o" cx="52.5" cy="7.5" r="4.4"/></svg></span>`;
+const plural = (n, a, b, c) => `${n} ${n === 1 ? a : n >= 2 && n <= 4 ? b : c}`;
+const changed = () => G && (S.level !== G.level || S.size !== G.n);
+function renderSettings() {
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Piškvorky<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Soupeř</h3>
+      <div class="field">
+        ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, O.levelName(LEVELS, i), l.desc)).join('')}
+        <div class="fnote">Soupeř má každou hru jiné jméno. Kdo začíná, se střídá: kdo začíná, kreslí křížky.</div>
+      </div>
+      <div class="field"><div class="flabel">Rychlost soupeře</div>
+        ${SPEEDS.map(s => opt('speed:' + s.id, S.speed === s.id, s.name, s.desc)).join('')}
+      </div>
+    </section>
+    <section class="card"><h3>Plocha</h3>
+      <div class="field">
+        ${SIZES.map(z => opt('size:' + z.n, S.size === z.n, z.name, z.desc)).join('')}
+      </div>
+      ${changed() && !isFresh() ? `<div class="notice">Změna platí od příští hry.${hasProgress() ? ' Rozehraná hra zůstává.' : ''}</div>` : ''}
+    </section>
+    <section class="card"><h3>Ovládání</h3>
+      ${toggleRow('confirm', 'Potvrzovat tah', 'První ťuknutí ukáže značku jen slabě, druhé ťuknutí na stejné políčko ji položí. Chrání před překlepem na malých políčkách.')}
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}">${swatch(t.id)}${t.name}</button>`).join('')}</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <section class="card"><h3>Statistika</h3>
+      ${LEVELS.map((l, i) => {
+        const rows = SIZES.filter(z => ST[l.id][z.n].played).map(z => { const st = ST[l.id][z.n]; return `${z.name} plocha: ${plural(st.played, 'hra', 'hry', 'her')}, výher ${st.won}, remíz ${st.draw}`; });
+        return `<p class="stats"><b>${O.levelName(LEVELS, i)}</b><br>${rows.length ? rows.join('<br>') : 'Zatím žádná dohraná hra'}</p>`;
+      }).join('')}
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'level') S.level = arg;
+  else if (act === 'speed') S.speed = arg;
+  else if (act === 'size') S.size = +arg;
+  else if (act === 'theme') S.theme = arg;
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S); buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
+});
+function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+// a new opponent or board size applies from the next game; a game in which you have not moved yet is replaced at once
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  if (!S.confirm) pending = -1;
+  if (changed() && isFresh()) {
+    stopThinking();
+    const g = G, foe = S.level !== g.level ? O.create(rnd, [g.foe.name]) : g.foe;
+    G = Object.assign({}, g, { n: S.size, level: S.level, foe, moves: [], status: 'playing', counted: false });
+    pending = -1; hintCell = -1; resetZoom();
+    save(); render(); cpuTurn();
+    toast(S.level !== g.level ? `Hraješ proti soupeři: ${O.levelName(LEVELS, lvIdx(S.level))}` : `Nová hra na ploše ${S.size} × ${S.size}`);
+  } else if (changed()) { render(); toast(`Změna platí od příští hry${hasProgress() ? '. Rozehraná hra zůstává.' : ''}`); }
+  else render();
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
+function renderHelp() {
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Piškvorky<small>Jak hrát</small></h2></div>
+    <section class="card help"><h3>Pravidla</h3><ul>
+      <li>Ty a soupeř se střídáte a kreslíte značky do volných políček. Kdo začíná, kreslí <b>křížky</b>, druhý <b>kolečka</b>. Kdo začíná, se každou hru střídá.</li>
+      <li><b>Vyhrává</b>, kdo má první <b>pět svých značek v řadě</b>: vodorovně, svisle nebo šikmo. Platí i šest a víc v řadě.</li>
+      <li>Když se zaplní celá plocha a nikdo nemá pět v řadě, je to <b>remíza</b>.</li>
+      <li>Tip: <b>otevřená trojka</b> (tři v řadě a volno na obou koncích) se musí zastavit hned, jinak z ní soupeř udělá čtyřku, kterou už zavřít nejde.</li>
+    </ul></section>
+    <section class="card help"><h3>Ovládání</h3><ol>
+      <li>Ťukni na volné políčko. Když je zapnuté <b>Potvrzovat tah</b> (v Nastavení), značka se ukáže slabě a další ťuknutí na stejné políčko ji položí; ťuknutím jinam ji přesuneš.</li>
+      <li>Soupeřova poslední značka má podbarvené políčko.</li>
+      <li><b>Zpět</b> vrátí tvůj poslední tah i soupeřovu odpověď. Dá se ťukat opakovaně, i po konci hry.</li>
+      <li><b>Poradit</b> označí dobré políčko. Ťukni na něj a tah se hned zahraje.</li>
+      <li><b>Zvětšit</b> přiblíží plochu kolem poslední značky, <b>Zmenšit</b> ukáže zase celou. Přibližovat jde i roztažením dvěma prsty; přiblíženou plochou posouváš jedním prstem.</li>
+    </ol></section>
+    <section class="card help"><h3>Soupeř</h3>
+      <p>${LEVELS.map((l, i) => `<b>${O.levelName(LEVELS, i)}</b>: ${l.desc}`).join('<br><br>')}</p>
+      <p style="margin-top:12px">Soupeře a velikost plochy vybereš v Nastavení. Soupeř má každou hru jiné jméno.</p>
+    </section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// rule: ask for persistent storage so the browser does not delete the saved game by itself
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+const savedSettings = saved && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+ST = validStats(saved && saved.stats);
+// rule: a level or size chosen just before the app was closed (Settings still open) is applied now, as closing Settings would
+if (saved && validGame(saved.game)) { G = saved.game; if (changed() && isFresh()) closeSettings(); else { render(); cpuTurn(); } }
+else newGame();
+
+window.addEventListener('resize', render);
+if (window.visualViewport) visualViewport.addEventListener('resize', render);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// contract: opened from the launcher (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing: the engine, place your mark on a cell (r * n + c), turn the worker off
+window.Piskvorky = {
+  E, play: cell => { if (yourTurn() && !busy() && !G.moves.includes(cell)) playYours(cell); },
+  noWorker() { workerOk = false; if (worker) { try { worker.terminate(); } catch (e) {} worker = null; } },
+  get busy() { return busy() || hintBusy; }, get state() { return { S, G, ST }; },
+};
+})();
+</script>
+</body>
+</html>
