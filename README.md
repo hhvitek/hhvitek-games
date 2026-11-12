@@ -42,6 +42,7 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Šipky ven       | `games/sipky-ven/`       | Ťukej na šipky a pouštěj je z plochy; šipka, které stojí v cestě jiná, narazí; úrovně postupně větší, hvězdy, Poradit a Zpět |
 | Hledání min     | `games/hledani-min/`     | Klasické hledání min: odkrývej políčka, čísla říkají, kolik min je kolem; vlajky přepínačem nebo podržením prstu, tři velikosti, rozdání bez hádání, Poradit, Zpět, přiblížení a nejlepší časy |
 | Generál         | `games/general/`         | Kostky s tabulkou proti počítači: pět kostek, tři hody za kolo, pak zapiš body do jednoho z 15 okének (jedničky až šestky s prémií, páry, trojice, postupky, full, šance, generál); tři soupeři |
+| Reversi         | `games/reversi/`         | Klasické reversi proti počítači: polož kámen tak, aby obklíčil soupeřovy, a ty se otočí; soupeř běžný hráč nebo mistr, Poradit a Zpět |
 | Kostky          | `games/kostky/`          | Klasické kostky (jedničky a pětky) se šesti kostkami proti počítači: házej, dokud se nebojíš, a body si zapiš; tři soupeři od začátečníka po mistra, hra do 3 000, 5 000 nebo 10 000 |
 | Dáma            | `games/dama/`            | Klasická česká dáma proti počítači: dlouhá dáma, braní je povinné; soupeř běžný hráč nebo mistr, Poradit a Zpět            |
 | Piškvorky       | `games/piskvorky/`       | Pět v řadě proti počítači na ploše 13 × 13, 15 × 15 nebo 19 × 19; soupeř běžný hráč nebo mistr, Poradit, Zpět a přiblížení |

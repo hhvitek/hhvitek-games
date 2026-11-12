@@ -170,6 +170,8 @@ async (page) => {
     'dama': async () => { await tap('#btnHint'); await wait(1200); await tap('.sq.hint:has(.pc)'); await wait(300); await tap('.sq.hint.to'); await wait(4000); await tap('#btnHint'); await wait(1200); await tap('.sq.hint:has(.pc)'); await wait(300); },
     // the advised cell (a tap plays it), the opponent's reply, the next advice
     'piskvorky': async () => { await tap('#btnHint'); await wait(1500); await tap('#svg .hint'); await wait(3500); await tap('#btnHint'); await wait(1500); },
+    // the advised square (a tap plays it, the discs turn), the opponent's reply, the next advice
+    'reversi': async () => { await tap('#btnHint'); await wait(1500); await tap('.sq.hint'); await wait(4000); await tap('#btnHint'); await wait(1500); },
     'zavri-cisla': async () => { await tapButton(/Hodit kostk/); await wait(1800); await tap('#rails .plate:not(.dim):not(.down)'); await wait(400); },
     'soliter': async () => { await tap('[data-a="hint"]'); await wait(900); await tap('.cd.hint'); await wait(800); },
     'freecell': async () => { await tap('[data-a="hint"]'); await wait(900); await tap('.cd.hint'); await wait(800); },

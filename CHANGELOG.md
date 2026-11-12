@@ -12,6 +12,7 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 - Nová hra Šipky ven: ťukej na šipky a pouštěj je z plochy; šipka, které stojí v cestě jiná, narazí. Úrovně od malých po velké, hvězdy za hru bez chyby, volitelné životy, Poradit a Zpět.
 - Nová hra Hledání min: odkrývej políčka a vyhni se minám; vlajky přepínačem nebo podržením prstu, tři velikosti, rozdání vždy bez hádání, Poradit, Zpět, přiblížení a nejlepší časy.
 - Nová hra Generál: kostky s tabulkou proti počítači – pět kostek, tři hody za kolo, pak body zapíšeš do jednoho z 15 okének (od jedniček po generál). Tři soupeři od začátečníka po mistra, statistika a nejlepší skóre.
+- Nová hra Reversi: pokládej kameny tak, aby obklíčily soupeřovy, a ty se otočí na tvou barvu. Soupeř běžný hráč nebo mistr, který konec hry spočítá přesně, Poradit a Zpět.
 
 ## 1.0.15 – 2026-11-12
 
