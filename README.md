@@ -22,7 +22,6 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Kočka           | `games/kocka/`           | Starej se o kočku Koxu podle skutečných hodin: krm ji, hlaď prstem, hraj si s ní, pěstuj zahrádku; když se o ni nikdo nestará, zhubne a může onemocnět |
 | Logik           | `games/logik/`           | Uhodni tajný barevný kód                                                                                                  |
 | Sudoku          | `games/sudoku/`          | Klasické sudoku 9×9 (nebo 6×6) s poznámkami a nápovědou                                                                   |
-| Malované křížovky | `games/malovane-krizovky/` | Čísla u řádků a sloupců říkají, kolik políček vybarvit; z vyluštěné křížovky je barevný obrázek; 36 obrázků 5 × 5 až 15 × 15 |
 | Skládání kostek | `games/skladani-kostek/` | Skládačka: přetahuj tvary do mřížky a plň celé řady                                                                       |
 | Padající tvary  | `games/padajici-tvary/`  | Tvary ovládané tlačítky místo gest; pomalu padají a postupně zrychlují, hru jde kdykoli zastavit tlačítkem Pauza; v nastavení jde padání vypnout |
 | Barevné kostky  | `games/barevne-kostky/`  | SameGame: ťukej na skupiny stejně barevných kostek, zbytek spadne dolů; volitelně vždy řešitelné hrací plochy             |
@@ -31,16 +30,17 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Pexeso          | `games/pexeso/`          | Otáčej karty a hledej dvojice stejných obrázků; fotky (Náchodsko, kočky, znaky obcí), kresby (houby, ptáci, ovoce a zelenina) nebo obrázky, 6 až 21 dvojic, bez spěchu |
 | Spoj tři        | `games/spoj-tri/`        | Prohazuj sousední kameny a skládej řady po třech; tvary, sady fotek (kočky, Náchodsko, znaky obcí) nebo kreseb (houby, ptáci, ovoce a zelenina) |
 | Přelévání       | `games/prelevani/`       | Přelévej barevné vrstvy mezi zkumavkami, dokud v každé nezůstane jedna barva; úrovně postupně přidávají barvy             |
-| Šroubky         | `games/sroubky/`         | Přesouvej barevné matky mezi šrouby, dokud na každém nezůstane jedna barva; čtyři obtížnosti, každá hra jde vyřešit, Poradit, Zpět a Od začátku |
 | Hanojské věže   | `games/hanojske-veze/`   | Přesouvej disky mezi třemi tyčemi, větší nikdy na menší; 3 až 8 disků, Poradit a Zpět                                     |
 | Spojování čísel | `games/spojovani-cisel/` | Posouvej a spojuj stejná čísla (jako 2048): šipky nebo tah prstem, Zpět, volitelně fotky nebo kresby na kostkách         |
 | Cesta ven       | `games/cesta-ven/`       | Posouvej auta (nebo kostky) na parkovišti, ať červené vyjede ven; úrovně postupně těžší, Poradit a Zpět                   |
-| Šipky ven       | `games/sipky-ven/`       | Ťukej na šipky a pouštěj je z plochy; šipka, které stojí v cestě jiná, narazí; úrovně postupně větší, hvězdy, Poradit a Zpět |
 | Patnáctka       | `games/patnactka/`       | Posuvná skládačka: seřaď čísla posouváním na prázdné místo; desky 3 × 3, 4 × 4 a 5 × 5, mírné až úplné zamíchání, Zpět    |
-| Hledání min     | `games/hledani-min/`     | Klasické hledání min: odkrývej políčka, čísla říkají, kolik min je kolem; vlajky přepínačem nebo podržením prstu, tři velikosti, rozdání bez hádání, Poradit, Zpět, přiblížení a nejlepší časy |
 | Paprsek         | `games/paprsek/`         | Otáčej zrcadly, ať paprsky světla trefí všechny terče; barevné paprsky se mísí, úrovně postupně těžší, Poradit a Zpět     |
 | Kulička         | `games/kulicka/`         | Nakláněj telefon (nebo ťukej na šipky) a doveď kuličku bludištěm do cíle kolem děr; bez spěchu, Poradit ukáže cestu     |
 | Zavři čísla     | `games/zavri-cisla/`     | Kostková hra (Shut the Box): hoď kostkami a zavři destičky se stejným součtem; 9, 10 nebo 12 destiček, statistika         |
+| Šroubky         | `games/sroubky/`         | Přesouvej barevné matky mezi šrouby, dokud na každém nezůstane jedna barva; čtyři obtížnosti, každá hra jde vyřešit, Poradit, Zpět a Od začátku |
+| Malované křížovky | `games/malovane-krizovky/` | Čísla u řádků a sloupců říkají, kolik políček vybarvit; z vyluštěné křížovky je barevný obrázek; 36 obrázků 5 × 5 až 15 × 15 |
+| Šipky ven       | `games/sipky-ven/`       | Ťukej na šipky a pouštěj je z plochy; šipka, které stojí v cestě jiná, narazí; úrovně postupně větší, hvězdy, Poradit a Zpět |
+| Hledání min     | `games/hledani-min/`     | Klasické hledání min: odkrývej políčka, čísla říkají, kolik min je kolem; vlajky přepínačem nebo podržením prstu, tři velikosti, rozdání bez hádání, Poradit, Zpět, přiblížení a nejlepší časy |
 | Kostky          | `games/kostky/`          | Klasické kostky (jedničky a pětky) se šesti kostkami proti počítači: házej, dokud se nebojíš, a body si zapiš; tři soupeři od začátečníka po mistra, hra do 3 000, 5 000 nebo 10 000 |
 | Dáma            | `games/dama/`            | Klasická česká dáma proti počítači: dlouhá dáma, braní je povinné; soupeř běžný hráč nebo mistr, Poradit a Zpět            |
 | Piškvorky       | `games/piskvorky/`       | Pět v řadě proti počítači na ploše 13 × 13, 15 × 15 nebo 19 × 19; soupeř běžný hráč nebo mistr, Poradit, Zpět a přiblížení |

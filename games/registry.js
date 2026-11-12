@@ -5,7 +5,6 @@
 globalThis.GAMES = [
   { id: 'logik', name: 'Logik', description: 'Uhodni tajný barevný kód' },
   { id: 'sudoku', name: 'Sudoku', description: 'Doplň čísla do mřížky' },
-  { id: 'malovane-krizovky', name: 'Malované křížovky', description: 'Vybarvi políčka podle čísel a odhal obrázek' },
   { id: 'skladani-kostek', name: 'Skládání kostek', description: 'Skládej tvary do mřížky' },
   { id: 'padajici-tvary', name: 'Padající tvary', description: 'Otáčej padající tvary a plň řady' },
   { id: 'barevne-kostky', name: 'Barevné kostky', description: 'Odebírej skupiny stejných barev' },
@@ -15,19 +14,21 @@ globalThis.GAMES = [
   { id: 'spoj-tri', name: 'Spoj tři', description: 'Prohazuj kameny a skládej řady po třech' },
   { id: 'kocka', name: 'Kočka', description: 'Starej se o kočku Koxu a její zahrádku' },
   { id: 'prelevani', name: 'Přelévání', description: 'Přelévej barvy, ať je v každé zkumavce jedna' },
-  { id: 'sroubky', name: 'Šroubky', description: 'Přesouvej matky, ať je na každém šroubu jedna barva' },
   { id: 'hanojske-veze', name: 'Hanojské věže', description: 'Přenes věž z disků na pravou tyč' },
   { id: 'spojovani-cisel', name: 'Spojování čísel', description: 'Posouvej a spojuj stejná čísla' },
   { id: 'cesta-ven', name: 'Cesta ven', description: 'Posouvej auta, ať červené vyjede ven' },
-  { id: 'sipky-ven', name: 'Šipky ven', description: 'Pouštěj šipky z plochy, ať do sebe nenarazí' },
   { id: 'patnactka', name: 'Patnáctka', description: 'Posouvej čísla, až budou po řadě' },
-  { id: 'hledani-min', name: 'Hledání min', description: 'Odkryj políčka a vyhni se minám' },
   { id: 'paprsek', name: 'Paprsek', description: 'Otáčej zrcadly a doveď světlo do terčů' },
   { id: 'kulicka', name: 'Kulička', description: 'Nakláněj telefon a doveď kuličku do cíle' },
   { id: 'zavri-cisla', name: 'Zavři čísla', description: 'Házej kostkami a zavírej čísla' },
   // Board games against the computer.
   { id: 'dama', name: 'Dáma', description: 'Klasická dáma proti počítači' },
   { id: 'piskvorky', name: 'Piškvorky', description: 'Pět v řadě proti počítači' },
+  // New games (user's rule 2026-11-12): right before Kostky, after the board games; the newest last.
+  { id: 'sroubky', name: 'Šroubky', description: 'Přesouvej matky, ať je na každém šroubu jedna barva' },
+  { id: 'malovane-krizovky', name: 'Malované křížovky', description: 'Vybarvi políčka podle čísel a odhal obrázek' },
+  { id: 'sipky-ven', name: 'Šipky ven', description: 'Pouštěj šipky z plochy, ať do sebe nenarazí' },
+  { id: 'hledani-min', name: 'Hledání min', description: 'Odkryj políčka a vyhni se minám' },
   // Kostky (user's wish: at the start of the card games), then the card solitaires.
   { id: 'kostky', name: 'Kostky', description: 'Házej kostkami proti soupeři' },
   { id: 'soliter', name: 'Solitér', description: 'Skládej karty od esa po krále' },

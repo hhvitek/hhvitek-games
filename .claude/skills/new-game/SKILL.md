@@ -16,7 +16,8 @@ CLAUDE.md is the source of the rules; this file only says what to do when.
 ## 2. Create the game
 - `<id>` = the game's Czech name without diacritics in kebab-case (`games/zavri-cisla/`).
 - Copy `games/_template/` to `games/<id>/`, then replace only the parts marked as game logic. Keep everything marked "rule" or "contract".
-- Add `games/<id>/icon.svg` (`viewBox="0 0 512 512"`), one line in `games/registry.js`, a Czech row in `README.md`.
+- Add `games/<id>/icon.svg` (`viewBox="0 0 512 512"`), one line in `games/registry.js` right before `kostky`
+  (after the other new games; the user's rule, see CLAUDE.md), a Czech row in `README.md` right before the Kostky row.
 - After every edit the hook runs `node tools/check.js <id>`; fix what it reports before going on.
 
 ## 3. Write the game: copy each pattern from the game that does it best
