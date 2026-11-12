@@ -14,6 +14,7 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 - Nová hra Generál: kostky s tabulkou proti počítači – pět kostek, tři hody za kolo, pak body zapíšeš do jednoho z 15 okének (od jedniček po generál). Tři soupeři od začátečníka po mistra, statistika a nejlepší skóre.
 - Nová hra Reversi: pokládej kameny tak, aby obklíčily soupeřovy, a ty se otočí na tvou barvu. Soupeř běžný hráč nebo mistr, který konec hry spočítá přesně, Poradit a Zpět.
 - Nová hra Lodě: rozmísti své lodě, střílej do moře soupeře a potop celé jeho loďstvo dřív než on tvoje. Pět nebo deset lodí, tři soupeři od začátečníka po mistra, Poradit.
+- Nová hra Mlýn: klasický mlýn s devíti kameny proti počítači – pokládej, posouvej a skládej mlýny, za každý vezmeš soupeři kámen; se třemi kameny se skáče. Soupeř běžný hráč nebo mistr, Poradit a Zpět.
 
 ## 1.0.15 – 2026-11-12
 

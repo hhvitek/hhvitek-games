@@ -32,6 +32,7 @@ globalThis.GAMES = [
   { id: 'general', name: 'Generál', description: 'Kostky s tabulkou: postupky, full a generál' },
   { id: 'reversi', name: 'Reversi', description: 'Obkličuj a otáčej kameny soupeře' },
   { id: 'lode', name: 'Lodě', description: 'Potop loďstvo soupeře dřív než on tvoje' },
+  { id: 'mlyn', name: 'Mlýn', description: 'Skládej mlýny a ber soupeři kameny' },
   // Kostky (user's wish: at the start of the card games), then the card solitaires.
   { id: 'kostky', name: 'Kostky', description: 'Házej kostkami proti soupeři' },
   { id: 'soliter', name: 'Solitér', description: 'Skládej karty od esa po krále' },

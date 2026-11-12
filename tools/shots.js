@@ -178,6 +178,8 @@ async (page) => {
       await tap('#btnStart'); await wait(600); await tap('#grid .c[data-i="44"]'); await wait(300); await mine();
       await tap('#btnHint'); await wait(400); await tap('#grid .c.hint'); await wait(3500);
     },
+    // the advised point (a tap places the stone there), the opponent's reply, the next advice
+    'mlyn': async () => { await tap('#btnHint'); await wait(1500); await tap('#svg .hit.hint'); await wait(4000); await tap('#btnHint'); await wait(1500); },
     'zavri-cisla': async () => { await tapButton(/Hodit kostk/); await wait(1800); await tap('#rails .plate:not(.dim):not(.down)'); await wait(400); },
     'soliter': async () => { await tap('[data-a="hint"]'); await wait(900); await tap('.cd.hint'); await wait(800); },
     'freecell': async () => { await tap('[data-a="hint"]'); await wait(900); await tap('.cd.hint'); await wait(800); },
