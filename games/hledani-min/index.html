@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="cs" data-theme="meadow">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#244a2c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hledání min">
+<title>Hledání min</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23244a2c'/%3E%3Cpath d='M32 12v40M12 32h40M18 18l28 28M46 18 18 46' stroke='%23161616' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='32' cy='32' r='13' fill='%23161616'/%3E%3Ccircle cx='27' cy='27' r='3.5' fill='%23fff' opacity='.7'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
+/* --hid/--hid2: hidden cells (a quiet checker), --open/--open2: opened cells, --n1…--n8: the numbers */
+[data-theme="meadow"]{--page:#244a2c;--bar:rgba(0,0,0,.2);--line:rgba(255,255,255,.08);--ink:#eef6ea;--soft:#c5dcc0;--accent:#ffd54f;--chip:rgba(255,255,255,.12);--chip-line:rgba(255,255,255,.2);--btn:#ffd54f;--btn-ink:#2a2200;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.22);
+  --gapc:#1b3a22;--hid:#9ccc65;--hid2:#92c25b;--hid-hl:rgba(255,255,255,.35);--hid-sh:rgba(0,0,0,.16);--open:#eadbb9;--open2:#e2d1ac;--open-line:rgba(0,0,0,.05);
+  --n1:#1a5fc4;--n2:#2a7a2e;--n3:#d02b2b;--n4:#7a1fa0;--n5:#a64d00;--n6:#00808c;--n7:#222;--n8:#6b6b6b;--flag:#e5372f;--pole:#3a2a1a;--mine:#1b1b1b;--boom:#ef5350;--wrong:#c62828;--hintc:#1a5fc4}
+[data-theme="paper"]{--page:#f4ebdf;--bar:rgba(122,69,32,.06);--line:#e6d8c6;--ink:#2b1a0e;--soft:#6f5a48;--accent:#7a4520;--chip:#fff;--chip-line:#e6d8c6;--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--undo-bg:rgba(122,69,32,.1);
+  --gapc:#e6d8c6;--hid:#d9c2a2;--hid2:#d9c2a2;--hid-hl:rgba(255,255,255,.45);--hid-sh:rgba(63,34,14,.16);--open:#fffaf3;--open2:#fffaf3;--open-line:rgba(0,0,0,0);
+  --n1:#1d5bb8;--n2:#2a7a2e;--n3:#c62828;--n4:#6a1b9a;--n5:#9a4500;--n6:#00756b;--n7:#2b1a0e;--n8:#6f5a48;--flag:#c62828;--pole:#2b1a0e;--mine:#2b1a0e;--boom:#ef7f6f;--wrong:#c62828;--hintc:#1d5bb8}
+[data-theme="classic"]{--page:#bdbdbd;--bar:rgba(0,0,0,.06);--line:#a3a3a3;--ink:#1a1a1a;--soft:#454545;--accent:#000080;--chip:#d4d4d4;--chip-line:#8c8c8c;--btn:#000080;--btn-ink:#fff;--btn-sh:#00004d;--undo-bg:#cfcfcf;
+  --gapc:#8a8a8a;--hid:#c9c9c9;--hid2:#c9c9c9;--hid-hl:rgba(255,255,255,.95);--hid-sh:rgba(0,0,0,.4);--open:#e6e6e6;--open2:#e6e6e6;--open-line:rgba(0,0,0,0);
+  --n1:#0000e0;--n2:#007a00;--n3:#e00000;--n4:#000080;--n5:#800000;--n6:#007b7b;--n7:#000;--n8:#555;--flag:#e00000;--pole:#000;--mine:#000;--boom:#ff3b30;--wrong:#e00000;--hintc:#0000e0}
+[data-theme="night"]{--page:#10151c;--bar:rgba(0,0,0,.3);--line:rgba(255,255,255,.07);--ink:#e8edf3;--soft:#a9b4c2;--accent:#ffd166;--chip:rgba(255,255,255,.1);--chip-line:rgba(255,255,255,.18);--btn:#ffd166;--btn-ink:#2a2000;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.3);
+  --gapc:#0a0e13;--hid:#3c4d66;--hid2:#38485f;--hid-hl:rgba(255,255,255,.14);--hid-sh:rgba(0,0,0,.3);--open:#1c2430;--open2:#1a222d;--open-line:rgba(255,255,255,.03);
+  --n1:#6cb2ff;--n2:#7fd282;--n3:#ff7f76;--n4:#d59cf5;--n5:#ffb454;--n6:#4fd6d6;--n7:#f0f0f0;--n8:#a8b0bb;--flag:#ff6b62;--pole:#e8edf3;--mine:#e8edf3;--boom:#b3261e;--wrong:#ff6b62;--hintc:#ffd166}
+
+/* ---------- Base ---------- */
+:root{--gut:12px} /* one side margin: bar buttons, board and bottom buttons line up (the safe areas are on #app) */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{background:var(--page);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+/* rule: 100dvh + safe areas, the board is sized from the room that is left (see layout()) */
+#app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings) ---------- */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line);text-decoration:none}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:20px}
+/* narrow phones (360 px): less room between the bar buttons, so the name fits whole at 18 px; the outer margin stays */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:18px;letter-spacing:0}
+}
+
+/* ---------- Info row: mines left and the clock (rule: info goes on its own row) ---------- */
+.stats{flex:none;display:flex;justify-content:center;gap:28px;padding:8px var(--gut) 0;font-size:20px;font-weight:700;color:var(--soft)}
+.stats span{display:flex;align-items:center;gap:7px}
+.stats b{color:var(--ink);font-size:22px;font-variant-numeric:tabular-nums}
+.stats svg{width:22px;height:22px}
+.stats .clk{fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round}
+.stats{--mine:var(--ink)} /* the mine icon in the info row is drawn in the ink colour, readable on the page */
+
+/* ---------- Board: a grid of cells inside #view; it can be zoomed and moved ---------- */
+#board{flex:1;min-height:0;display:grid;place-items:center;padding:12px var(--gut)} /* rule: at least 12 px between the board and the rows above and below, on every screen */
+#view{position:relative;overflow:hidden;background:var(--gapc);border-radius:6px;touch-action:none;-webkit-touch-callout:none}
+#grid{position:absolute;left:0;top:0;transform-origin:0 0;display:grid;grid-template-columns:repeat(var(--w),var(--cs));grid-auto-rows:var(--cs);gap:var(--gap)}
+/* sizes inside a cell come from --cs (never a % padding or margin) */
+.c{position:relative;display:grid;place-items:center;border-radius:calc(var(--cs)*.12);font:800 calc(var(--cs)*.62)/1 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.c.h{background:var(--hid);box-shadow:inset 0 calc(var(--cs)*.07) 0 var(--hid-hl),inset 0 calc(var(--cs)*-.09) 0 var(--hid-sh)}
+.c.h.alt{background:var(--hid2)}
+.c.o{background:var(--open);box-shadow:inset 0 0 0 1px var(--open-line)}
+.c.o.alt{background:var(--open2)}
+.c.press{filter:brightness(.82)}
+.c svg{width:calc(var(--cs)*.74);height:calc(var(--cs)*.74);pointer-events:none}
+.c svg + svg{position:absolute;inset:0;margin:auto}
+.c.boom{background:var(--boom)}
+.c.hint{outline:calc(var(--cs)*.1) solid var(--hintc);outline-offset:calc(var(--cs)*-.1);animation:blink 1.1s ease-in-out infinite}
+@keyframes blink{50%{outline-color:color-mix(in srgb,var(--hintc) 50%,transparent)}} /* never fades out: always clearly seen */
+.n1{color:var(--n1)}.n2{color:var(--n2)}.n3{color:var(--n3)}.n4{color:var(--n4)}.n5{color:var(--n5)}.n6{color:var(--n6)}.n7{color:var(--n7)}.n8{color:var(--n8)}
+.c.pop{animation:pop .22s ease-out}
+@keyframes pop{from{transform:scale(.6);opacity:.3}to{transform:none;opacity:1}}
+
+/* ---------- Bottom buttons ---------- */
+.tray{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px var(--gut) 12px;background:var(--bar);border-top:1px solid var(--line)}
+#hint{text-align:center;font-size:19px;line-height:1.3;color:var(--soft);min-height:25px}
+.row{display:flex;gap:8px}
+.undo{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:64px;border-radius:16px;font-size:17px;font-weight:800;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.undo svg{flex:none;width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+/* the mode switch: what a tap does; in the flag mode it is filled, so it is never overlooked */
+#btnMode{flex:1.25 1 0}
+#btnMode.flag{background:var(--btn);color:var(--btn-ink);box-shadow:0 3px 0 var(--btn-sh)}
+/* an unavailable action: dimmed, explains itself when tapped */
+.undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+@media (max-height:700px){
+  .topbar{height:54px}
+  .round{width:42px;height:42px}
+  .pill{height:42px}
+  .undo{height:56px}
+  .tray{gap:6px;padding:6px var(--gut) 10px}
+  #hint{font-size:17px;min-height:22px}
+}
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+/* rule: the head with Zpět and the game name stays at the top while scrolling */
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);margin-top:16px}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink)}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{height:56px;border-radius:10px;background:var(--page);box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.mcard h2{font-size:28px;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 160px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+/* the toast is placed over the bottom buttons by toast(): smaller, so two lines fit the height of the buttons */
+#toast{font-size:17px;line-height:1.25;padding:9px 14px;max-width:calc(100vw - 24px)}
+.srow{display:flex;justify-content:space-between;gap:12px;padding:8px 0;font-size:20px}
+.srow b{font-size:22px}
+.swatch{display:flex;align-items:center;justify-content:center;gap:4px;background:var(--page)}
+.swatch i{width:30px;height:30px;border-radius:5px;display:grid;place-items:center;font:800 19px/1 system-ui,sans-serif;font-style:normal}
+.swatch i.h{background:var(--hid);box-shadow:inset 0 3px 0 var(--hid-hl),inset 0 -3px 0 var(--hid-sh)}
+.swatch i.o{background:var(--open)}
+.swatch svg{width:22px;height:22px}
+.help{--mine:#2b1a0e;--flag:#c62828;--pole:#2b1a0e} /* the icons in the help on the light paper, whatever the theme */
+.help .ic{display:inline-block;vertical-align:-4px;width:22px;height:22px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="sMine" viewBox="0 0 24 24"><path d="M12 2.6v18.8M2.6 12h18.8M5.4 5.4l13.2 13.2M18.6 5.4 5.4 18.6" style="stroke:var(--mine);stroke-width:2.3;stroke-linecap:round"/><circle cx="12" cy="12" r="6.6" style="fill:var(--mine)"/><circle cx="9.6" cy="9.6" r="1.9" style="fill:#fff;opacity:.7"/></symbol>
+  <symbol id="sFlag" viewBox="0 0 24 24"><path d="M8.5 3.5v15.5" style="stroke:var(--pole);stroke-width:2.2;stroke-linecap:round"/><path d="M9.2 3.6 19 8.1 9.2 12.6z" style="fill:var(--flag)"/><path d="M4.8 20.3h8.4" style="stroke:var(--pole);stroke-width:2.6;stroke-linecap:round"/></symbol>
+  <symbol id="sCross" viewBox="0 0 24 24"><path d="M4 4l16 16M20 4 4 20" style="stroke:var(--wrong);stroke-width:2.8;stroke-linecap:round"/></symbol>
+</svg>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Hledání min</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <div class="stats">
+    <span aria-label="Zbývá označit min"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#sMine"/></svg><b id="left">0</b></span>
+    <span aria-label="Čas"><svg class="clk" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M10 2.5h4"/></svg><b id="clock">0:00</b></span>
+  </div>
+  <main id="board"><div id="view"><div id="grid" aria-label="Hrací plocha"></div></div></main>
+  <footer class="tray">
+    <div id="hint"></div>
+    <div class="row">
+      <button id="btnMode" class="undo"><svg id="modeIcon" viewBox="0 0 24 24" aria-hidden="true"></svg><span id="modeLabel">Odkrýt</span></button>
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnHint" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>Poradit</button>
+      <button id="btnZoom" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/><path id="zoomPlus" d="M10.5 7.5v6M7.5 10.5h6"/></svg><span id="zoomLabel">Zvětšit</span></button>
+    </div>
+  </footer>
+</div>
+<!-- Every layer is shown and hidden only through its hidden attribute; every screen has a [data-act="close"] button (Back button contract) -->
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+<script>
+/* ---------- Visible height ---------- */
+// The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
+// enough: some browsers report it taller than what is visible (the app installed by Brave on Android counted the
+// status and navigation bars too and hid the bottom buttons). visualViewport follows what is shown; it is measured
+// again on every change and shortly after loading (a browser bar that hides itself may change it without an event),
+// and a changed height makes the game lay itself out again through a resize event.
+(() => {
+  const root = document.documentElement;
+  let last = 0;
+  const measure = () => {
+    const vv = window.visualViewport;
+    const h = Math.round(vv ? vv.height * vv.scale : innerHeight);
+    if (!(h > 0) || h === last) return;
+    const first = !last; last = h;
+    root.style.setProperty('--app-h', h + 'px');
+    if (!first) dispatchEvent(new Event('resize'));
+  };
+  measure();
+  addEventListener('resize', measure);
+  if (window.visualViewport) visualViewport.addEventListener('resize', measure);
+  addEventListener('pageshow', measure);
+  [100, 500, 1500].forEach(ms => setTimeout(measure, ms));
+  // TEMPORARY (2026-11-08): what this page measured, shown in the launcher's Nastavení → "Údaje o obrazovce"
+  setTimeout(() => { try {
+    const p = document.createElement('div'); p.style.cssText = 'position:absolute;left:-50px;top:0;width:1px;height:100dvh;padding-bottom:env(safe-area-inset-bottom)';
+    document.body.appendChild(p); const dvh = Math.round(p.getBoundingClientRect().height - parseFloat(getComputedStyle(p).paddingBottom)), sb = Math.round(parseFloat(getComputedStyle(p).paddingBottom)); p.remove();
+    const vv = window.visualViewport;
+    localStorage.setItem('games.launcher.diag', JSON.stringify({ page: location.pathname.split('/').slice(-2, -1)[0], vv: vv ? Math.round(vv.height) : null, inner: innerHeight, client: root.clientHeight, dvh, sb, appH: last, app: Math.round(document.getElementById('app').getBoundingClientRect().height) }));
+  } catch (e) {} }, 2000);
+})();
+
+/* ---------- Engine ---------- */
+// The rules and the solver without any page code (tools/miny-test.js runs this block in Node).
+// A board is w × h cells, cell index i = row * w + col. mine[i] = 1 for a mine, num[i] = mines around i.
+function MinyEngine() {
+  'use strict';
+  // mulberry32: the same seed always gives the same numbers
+  function rng(seed) {
+    let s = seed | 0;
+    return () => { s = (s + 0x6D2B79F5) | 0; let t = s; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  }
+  // the cells around every cell up to distance d (cached per board shape)
+  const AROUND = new Map();
+  function around(w, h, d) {
+    const k = w + 'x' + h + 'x' + d;
+    if (AROUND.has(k)) return AROUND.get(k);
+    const out = [];
+    for (let i = 0; i < w * h; i++) {
+      const r = (i / w) | 0, c = i % w, a = [];
+      for (let dr = -d; dr <= d; dr++) for (let dc = -d; dc <= d; dc++) {
+        if (!dr && !dc) continue;
+        const rr = r + dr, cc = c + dc;
+        if (rr >= 0 && rr < h && cc >= 0 && cc < w) a.push(rr * w + cc);
+      }
+      out.push(a);
+    }
+    AROUND.set(k, out);
+    return out;
+  }
+  const neighbours = (w, h) => around(w, h, 1);
+  function numbers(w, h, mine) {
+    const nb = neighbours(w, h), num = new Array(w * h).fill(0);
+    for (let i = 0; i < w * h; i++) if (mine[i]) for (const j of nb[i]) num[j]++;
+    return num;
+  }
+  // Opens cell c (st: 0 hidden, 1 open, 2 flag); a zero opens its neighbours too (never a flagged cell).
+  // Returns the cells it opened. A mine opens just itself.
+  function reveal(w, h, mine, num, st, c) {
+    if (st[c] !== 0) return [];
+    const nb = neighbours(w, h), out = [c], stack = [c];
+    st[c] = 1;
+    if (mine[c]) return out;
+    while (stack.length) {
+      const i = stack.pop();
+      if (num[i]) continue;
+      for (const j of nb[i]) if (st[j] === 0 && !mine[j]) { st[j] = 1; out.push(j); stack.push(j); }
+    }
+    return out;
+  }
+  // What follows by logic from the open numbers alone (flags are never trusted). know[i]: 0 unknown, 1 safe,
+  // 2 mine; open cells are safe. The rules: a number with all its mines found makes the rest safe; a number that
+  // needs every hidden neighbour makes them mines; two numbers that share cells (the difference rule); the mine
+  // count (total < 0: not used). know is filled in place; returns true when something new was found.
+  function deduce(w, h, num, open, know, total) {
+    const n = w * h, nb = neighbours(w, h), n2 = around(w, h, 2);
+    for (let i = 0; i < n; i++) if (open[i]) know[i] = 1;
+    const U = new Array(n), need = new Int32Array(n), mark = new Int32Array(n);
+    let any = false, changed = true, stamp = 0;
+    const set = (j, v) => { if (know[j] === 0) { know[j] = v; changed = true; any = true; } };
+    while (changed) {
+      changed = false;
+      // the constraints: the unknown neighbours of every open number and how many mines they still hold
+      const act = [];
+      for (let i = 0; i < n; i++) {
+        U[i] = null;
+        if (!open[i]) continue;
+        let m = 0; const u = [];
+        for (const j of nb[i]) { if (know[j] === 2) m++; else if (know[j] === 0) u.push(j); }
+        if (!u.length) continue;
+        U[i] = u; need[i] = num[i] - m; act.push(i);
+      }
+      for (const i of act) {
+        if (need[i] === 0) for (const j of U[i]) set(j, 1);
+        else if (need[i] === U[i].length) for (const j of U[i]) set(j, 2);
+      }
+      if (changed) continue;
+      // two numbers A and B: (mines next to B only) - (mines next to A only) = needB - needA. When that equals the
+      // count of cells next to B only, those are all mines and the cells next to A only are all safe; when A has no
+      // cells of its own and the needs are equal, the cells next to B only are safe.
+      for (const a of act) {
+        stamp++;
+        for (const j of U[a]) mark[j] = stamp;
+        for (const b of n2[a]) {
+          if (!U[b]) continue;
+          let common = 0;
+          for (const j of U[b]) if (mark[j] === stamp) common++;
+          if (!common) continue;
+          const onlyB = U[b].length - common, onlyA = U[a].length - common, d = need[b] - need[a];
+          if (onlyB > 0 && d === onlyB) {
+            for (const j of U[b]) if (mark[j] !== stamp) set(j, 2);
+            if (onlyA) { for (const j of U[b]) mark[j] = -1; for (const j of U[a]) if (mark[j] === stamp) set(j, 1); }
+          } else if (onlyB > 0 && onlyA === 0 && d === 0) {
+            for (const j of U[b]) if (mark[j] !== stamp) set(j, 1);
+          }
+          if (changed) break;
+        }
+        if (changed) break;
+      }
+      if (changed) continue;
+      // the mine count: no mines left, or as many mines left as unknown cells
+      if (total >= 0) {
+        let left = total, unk = 0;
+        for (let i = 0; i < n; i++) { if (know[i] === 2) left--; else if (know[i] === 0) unk++; }
+        if (unk && (left === 0 || left === unk)) for (let i = 0; i < n; i++) set(i, left ? 2 : 1);
+      }
+    }
+    return any;
+  }
+  // Can the board be cleared from the first opened cell by logic alone (never a guess)?
+  function solvable(w, h, mine, num, first, total) {
+    const n = w * h, st = new Array(n).fill(0), know = new Uint8Array(n), open = new Uint8Array(n);
+    let safeLeft = n - total;
+    for (const c of reveal(w, h, mine, num, st, first)) { open[c] = 1; safeLeft--; }
+    while (safeLeft > 0) {
+      deduce(w, h, num, open, know, total);
+      let opened = 0;
+      for (let i = 0; i < n; i++) if (know[i] === 1 && !open[i]) {
+        if (mine[i]) return false; // never happens: the logic is sound
+        for (const c of reveal(w, h, mine, num, st, i)) { open[c] = 1; know[c] = 1; safeLeft--; opened++; }
+      }
+      if (!opened) return false;
+    }
+    return true;
+  }
+  // The mines of a game whose first tap is on `first`: never on it or next to it, so the first tap opens an area.
+  // With noGuess, layouts are drawn one after another (from the seed) until the solver clears one without a guess;
+  // maxTries limits it (then the last layout is used and ok is false). The same seed and first cell always give
+  // the same mines.
+  function generate(w, h, total, first, seed, noGuess, maxTries = 20000) {
+    const n = w * h, rand = rng((seed ^ Math.imul(first + 1, 0x9E3779B1)) | 0), nb = neighbours(w, h);
+    const banned = new Set([first, ...nb[first]]), free = [];
+    for (let i = 0; i < n; i++) if (!banned.has(i)) free.push(i);
+    let mine, tries = 0;
+    for (;;) {
+      tries++;
+      mine = new Array(n).fill(0);
+      const a = free.slice();
+      for (let k = 0; k < total; k++) { const j = k + Math.floor(rand() * (a.length - k)); const t = a[k]; a[k] = a[j]; a[j] = t; mine[a[k]] = 1; }
+      if (!noGuess) return { mine, tries, ok: true };
+      if (solvable(w, h, mine, numbers(w, h, mine), first, total)) return { mine, tries, ok: true };
+      if (tries >= maxTries) return { mine, tries, ok: false };
+    }
+  }
+  return { rng, neighbours, numbers, reveal, deduce, solvable, generate };
+}
+/* ---------- Engine end ---------- */
+
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const GUT = 12; // side margin in px, the same as --gut in the CSS
+const E = MinyEngine();
+
+/* ---------- Settings and storage ---------- */
+const ID = 'hledani-min';                                   // = the folder name
+const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const THEMES = [
+  { id: 'meadow',  name: 'Louka',   meta: '#244a2c' },
+  { id: 'paper',   name: 'Papír',   meta: '#f4ebdf' },
+  { id: 'classic', name: 'Klasika', meta: '#bdbdbd' },
+  { id: 'night',   name: 'Noc',     meta: '#10151c' },
+];
+// board sizes for a phone held upright (columns × rows); the share of mines grows with the size
+const SIZES = {
+  small:  { w: 8,  h: 10, m: 10, name: 'Malá',    desc: '8 × 10 políček, 10 min. Velká políčka, na rozehřátí.' },
+  medium: { w: 10, h: 14, m: 22, name: 'Střední', desc: '10 × 14 políček, 22 min.' },
+  large:  { w: 12, h: 18, m: 40, name: 'Velká',   desc: '12 × 18 políček, 40 min. Menší políčka: pomůže Zvětšit.' },
+};
+const MODES = ['open', 'flag'];
+const DEFAULTS = { size: 'medium', noGuess: true, longPress: true, mode: 'open', theme: 'meadow', vibrate: true };
+const HOLD_MS = 350;   // a press this long does the other action (flag in the Odkrýt mode, open in the Vlajka mode)
+const MAX_TRIES = 4000; // no-guess layouts tried at most (usually 1 to 20 are enough, a few ms)
+
+/* ---------- Game logic ---------- */
+const rnd = n => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; } catch (e) { return Math.floor(Math.random() * n); } };
+const rulesKey = r => `${r.size}-${r.noGuess ? 1 : 0}`;
+const fmtTime = ms => { const s = Math.floor(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, ss = String(s % 60).padStart(2, '0'); return h ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`; };
+const minesWord = n => n === 1 ? 'mina' : n >= 2 && n <= 4 ? 'miny' : 'min';
+const flagsWord = n => n === 1 ? 'vlajka' : n >= 2 && n <= 4 ? 'vlajky' : 'vlajek';
+// the numbers of the current board (computed from the mines, never saved)
+let numFor = null, numCache = null;
+function num() { if (numFor !== G.mine) { numFor = G.mine; numCache = G.mine ? E.numbers(G.w, G.h, G.mine) : null; } return numCache; }
+
+/* ---------- State ---------- */
+// G.st[i]: 0 hidden, 1 open, 2 flag. G.mine: null until the first tap places the mines (from G.seed and that cell).
+// G.history: { k: 'o', c: [cells opened] } or { k: 'f', c: cell } (a flag put or taken).
+// G.helped: Poradit was used or a mine was undone, so the win does not count for the best time.
+let S, G, stats = {}, hint = null;
+const isFresh = () => G.history.length === 0;
+const inProgress = () => G && G.status === 'playing' && !isFresh();
+let lastWritten = null; // what this page last read or wrote under KEY
+function load() { try { lastWritten = localStorage.getItem(KEY); return JSON.parse(lastWritten); } catch (e) { return null; } }
+function save() {
+  clockSync();
+  try {
+    const s = JSON.stringify({ settings: S, game: G, stats });
+    localStorage.setItem(KEY, s); lastWritten = s;
+    if (G.status === 'playing' && !isFresh()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {} // rule: storage may be full or blocked; the game goes on
+}
+const isCell = (g, c) => Number.isInteger(c) && c >= 0 && c < g.w * g.h;
+// every Undo step must fit the board: undone from the last to the first, nothing may stay open
+function validHistory(g) {
+  if (!Array.isArray(g.history)) return false;
+  const st = g.st.slice();
+  for (let k = g.history.length - 1; k >= 0; k--) {
+    const h = g.history[k];
+    if (!h || typeof h !== 'object') return false;
+    if (h.k === 'f') { if (!isCell(g, h.c) || st[h.c] === 1) return false; st[h.c] = st[h.c] === 2 ? 0 : 2; }
+    else if (h.k === 'o') {
+      if (!Array.isArray(h.c) || !h.c.length || !h.c.every(c => isCell(g, c) && st[c] === 1)) return false;
+      for (const c of h.c) st[c] = 0;
+    } else return false;
+  }
+  return !st.includes(1);
+}
+const validStat = s => !!s && typeof s === 'object' && ['played', 'won', 'helped'].every(k => Number.isInteger(s[k]) && s[k] >= 0) && s.won + s.helped <= s.played
+  && (s.best === null || Number.isFinite(s.best) && s.best >= 0);
+// rule: corrupted data never crashes the game; a broken history only loses Undo; the end comes from the board
+function validGame(g) {
+  try {
+    if (!g || !g.rules || !SIZES[g.rules.size] || typeof g.rules.noGuess !== 'boolean') return false;
+    const z = SIZES[g.rules.size], n = z.w * z.h;
+    g.w = z.w; g.h = z.h; g.m = z.m;
+    if (!Number.isInteger(g.seed)) g.seed = rnd(2 ** 31);
+    if (!Array.isArray(g.st) || g.st.length !== n || !g.st.every(v => v === 0 || v === 1 || v === 2)) return false;
+    if (g.mine !== null) {
+      if (!Array.isArray(g.mine) || g.mine.length !== n || !g.mine.every(v => v === 0 || v === 1) || g.mine.reduce((a, v) => a + v, 0) !== z.m) return false;
+    } else if (g.st.includes(1)) return false;
+    if (!validHistory(g)) g.history = [];
+    g.time = Number.isFinite(g.time) && g.time >= 0 ? g.time : 0;
+    g.helped = g.helped === true; g.record = g.record === true;
+    g.counted = g.counted === true || g.mine !== null;
+    // the end from the board: an opened mine is a loss, every safe cell open is a win
+    const booms = g.mine ? g.st.map((v, i) => v === 1 && g.mine[i] ? i : -1).filter(i => i >= 0) : [];
+    const opened = g.st.filter(v => v === 1).length;
+    if (booms.length) { g.status = 'lost'; if (!booms.includes(g.boom)) g.boom = booms[0]; }
+    else { g.boom = -1; g.status = g.mine && opened === n - z.m ? 'won' : 'playing'; }
+    g.wonCounted = g.wonCounted === true || g.status === 'won';
+    return true;
+  } catch (e) { return false; }
+}
+function normalize(s) {
+  if (!SIZES[s.size]) s.size = DEFAULTS.size;
+  if (!MODES.includes(s.mode)) s.mode = DEFAULTS.mode;
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  s.noGuess = !!s.noGuess; s.longPress = !!s.longPress; s.vibrate = !!s.vibrate;
+}
+function newGame(msg) {
+  const z = SIZES[S.size];
+  runFrom = 0;
+  G = { rules: { size: S.size, noGuess: S.noGuess }, w: z.w, h: z.h, m: z.m, seed: rnd(2 ** 31), mine: null, st: new Array(z.w * z.h).fill(0),
+        history: [], status: 'playing', boom: -1, time: 0, helped: false, counted: false, wonCounted: false, record: false };
+  hint = null; resetZoom(); hideToast();
+  save(); render();
+  if (msg) toast(msg);
+}
+const stat = () => { const k = rulesKey(G.rules); return stats[k] || (stats[k] = { played: 0, won: 0, helped: 0, best: null }); };
+
+/* ---------- Clock: runs only while a game with mines is played and nothing covers it ---------- */
+let runFrom = 0; // performance.now() when the clock last started, 0 = stopped
+const running = () => G && G.status === 'playing' && !!G.mine && !document.hidden && nothingOpen();
+function clockSync() {
+  if (!G) return;
+  const now = performance.now();
+  if (runFrom) { G.time += now - runFrom; runFrom = 0; }
+  if (running()) runFrom = now;
+}
+const elapsed = () => G.time + (runFrom ? performance.now() - runFrom : 0);
+function showClock() { $('#clock').textContent = fmtTime(elapsed()); }
+setInterval(() => { clockSync(); showClock(); }, 500);
+// leaving the page stores the time played since the last move, but only over what this page wrote itself: storage
+// cleared meanwhile ("Smazat uložená data", another tab) stays cleared
+function saveClock() {
+  if (!G) return;
+  try { if (localStorage.getItem(KEY) !== lastWritten) { clockSync(); return; } } catch (e) { return; }
+  save();
+}
+document.addEventListener('visibilitychange', saveClock);
+addEventListener('pagehide', saveClock);
+
+/* ---------- Moves ---------- */
+function placeMines(first) {
+  const r = E.generate(G.w, G.h, G.m, first, G.seed, G.rules.noGuess, MAX_TRIES);
+  G.mine = r.mine;
+  if (!G.counted) { G.counted = true; stat().played++; }
+  if (!r.ok) toast('Rozdání bez hádání se nenašlo, možná bude třeba hádat');
+}
+function openCell(c) {
+  if (!G.mine) placeMines(c);
+  const opened = E.reveal(G.w, G.h, G.mine, num(), G.st, c);
+  if (!opened.length) return;
+  G.history.push({ k: 'o', c: opened });
+  afterOpen(opened);
+}
+// a tap on an opened number whose flags are complete opens every other cell around it
+function chord(c) {
+  const n = num()[c], nb = E.neighbours(G.w, G.h)[c];
+  const flags = nb.filter(j => G.st[j] === 2).length, hidden = nb.filter(j => G.st[j] === 0);
+  if (!n || !hidden.length) { toast(n ? 'Kolem už je všechno odkryté' : 'Tohle políčko je prázdné'); return; }
+  if (flags !== n) { buzz(25); toast(`Kolem je ${n} ${minesWord(n)}, ${flags === 0 ? 'zatím žádná vlajka' : `zatím ${flags} ${flagsWord(flags)}`}`); return; }
+  const opened = [];
+  for (const j of hidden) opened.push(...E.reveal(G.w, G.h, G.mine, num(), G.st, j));
+  G.history.push({ k: 'o', c: opened });
+  afterOpen(opened);
+}
+function afterOpen(opened) {
+  hint = null;
+  const boom = opened.find(c => G.mine[c]);
+  if (boom !== undefined) {
+    clockSync(); G.status = 'lost'; G.boom = boom; G.record = false;
+    buzz([70, 50, 140]); save(); render(opened);
+    whenFree(G, 700, () => { if (G.status === 'lost') showEnd(); });
+    return;
+  }
+  const safeOpen = G.st.filter(v => v === 1).length;
+  if (safeOpen === G.w * G.h - G.m) win();
+  else { buzz(opened.length > 1 ? 18 : 10); save(); render(opened); }
+}
+function win() {
+  clockSync(); G.status = 'won'; G.record = false;
+  if (!G.wonCounted) {
+    G.wonCounted = true;
+    const st = stat(), t = Math.round(G.time);
+    if (G.helped) st.helped++;
+    else { st.won++; G.record = st.best !== null && t < st.best; if (st.best === null || t < st.best) st.best = t; }
+  }
+  buzz([40, 60, 40, 60, 90]); save(); render();
+  whenFree(G, 600, () => { if (G.status === 'won') showEnd(); });
+}
+function toggleFlag(c) {
+  if (G.st[c] === 1) return;
+  G.st[c] = G.st[c] === 2 ? 0 : 2;
+  G.history.push({ k: 'f', c });
+  hint = null; buzz(G.st[c] === 2 ? 22 : 12); save(); render();
+}
+// Undo: the last opening or flag; also a step on a mine (the game then counts as helped: all mines were seen)
+function undo() {
+  hideToast(); // an old message (e.g. about the mine) never stays over the game that goes on
+  if (G.status === 'won') { toast('Hra je vyhraná – ťukni na Nová hra'); return; }
+  if (!G.history.length) { toast('Zatím není co vrátit'); return; }
+  const h = G.history.pop();
+  if (h.k === 'f') G.st[h.c] = G.st[h.c] === 2 ? 0 : 2;
+  else for (const c of h.c) G.st[c] = 0;
+  let msg = '';
+  if (G.status === 'lost') {
+    G.status = 'playing'; G.boom = -1;
+    if (!G.helped) msg = 'Tah je vrácený, čas se už nezapíše';
+    G.helped = true;
+  }
+  // the first opening undone: the mines are placed again by the next first tap (the same cell gives the same mines)
+  if (!G.st.includes(1)) G.mine = null;
+  hint = null; buzz(); save(); render();
+  if (msg) toast(msg, 3400);
+}
+
+/* ---------- Taps ---------- */
+function ended() { toast(G.status === 'won' ? 'Vyhráno! Ťukni na Nová hra' : 'Mina! Ťukni na Zpět nebo Nová hra'); }
+function onTap(c) {
+  hideToast(); // every tap answers with its own message, an older one goes
+  if (G.status !== 'playing') { ended(); return; }
+  // rule: a tap on the hinted cell does what the hint said
+  if (hint && hint.c === c) { const k = hint.kind; hint = null; if (k === 'open') openCell(c); else toggleFlag(c); return; }
+  if (G.st[c] === 1) { chord(c); return; }
+  if (S.mode === 'flag') { toggleFlag(c); return; }
+  if (G.st[c] === 2) { toast(S.longPress ? 'Je tu vlajka – odeber ji podržením' : 'Je tu vlajka – odeber ji v režimu Vlajka'); return; }
+  openCell(c);
+}
+// a long press (or the right mouse button) does the other action than a tap
+function onHold(c) {
+  hideToast();
+  if (G.status !== 'playing') { ended(); return; }
+  if (G.st[c] === 1) { chord(c); return; }
+  if (S.mode === 'flag') {
+    if (G.st[c] === 2) { toast('Je tu vlajka – odeber ji ťuknutím'); return; }
+    openCell(c);
+  } else toggleFlag(c);
+}
+// Poradit: a cell that is certain from the open numbers alone (flags are not trusted): a wrong flag first, then a
+// safe cell, then a mine without a flag, the nearest to the last move. Using it makes the win a helped one.
+function giveHint() {
+  hideToast();
+  if (G.status !== 'playing') { ended(); return; }
+  const n = G.w * G.h, mid = (G.h >> 1) * G.w + (G.w >> 1);
+  if (!G.mine) { hint = { c: mid, kind: 'open' }; render(); showCell(mid); toast('První ťuknutí je vždy bezpečné'); return; } // no help yet: nothing is known
+  const open = G.st.map(v => v === 1 ? 1 : 0), know = new Uint8Array(n);
+  E.deduce(G.w, G.h, num(), open, know, G.m);
+  const lastH = G.history[G.history.length - 1], last = lastH ? (Array.isArray(lastH.c) ? lastH.c[0] : lastH.c) : mid;
+  const dist = c => Math.max(Math.abs(c % G.w - last % G.w), Math.abs(((c / G.w) | 0) - ((last / G.w) | 0)));
+  const nearest = test => { let best = -1; for (let i = 0; i < n; i++) if (test(i) && (best < 0 || dist(i) < dist(best))) best = i; return best; };
+  let c, kind;
+  if ((c = nearest(i => G.st[i] === 2 && know[i] === 1)) >= 0) kind = 'unflag';
+  else if ((c = nearest(i => G.st[i] === 0 && know[i] === 1)) >= 0) kind = 'open';
+  else if ((c = nearest(i => G.st[i] === 0 && know[i] === 2)) >= 0) kind = 'flag';
+  else { toast('Nic není jisté – musíš hádat'); return; }
+  const first = !G.helped;
+  G.helped = true; hint = { c, kind };
+  buzz(8); save(); render(); showCell(c);
+  if (first) toast('S radou se čas nezapíše', 3000);
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) {
+  // Chrome refuses vibration (with a console error) before the first real tap
+  if (!S.vibrate || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+  try { navigator.vibrate(ms); } catch (e) {}
+}
+let toastT;
+// the toast sits over the bottom buttons (taps go through it): its top at the top of the button row, so it grows
+// only downward, never over the cells or the hint line
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  t.style.bottom = 'auto'; t.style.top = Math.round($('.tray .row').getBoundingClientRect().top) + 'px';
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('');
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    clockSync();
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+  $('#modal').hidden = false;
+  clockSync();
+}
+function showEnd() {
+  const st = stat();
+  let html;
+  if (G.status === 'won') {
+    html = `<h2>Vyhráno! 🎉</h2><p>Všechna bezpečná políčka jsou odkrytá.<br>Čas: <b>${fmtTime(G.time)}</b></p>`;
+    if (G.helped) html += '<p>Hrálo se s pomocí (Poradit nebo Zpět po mině), proto se čas nezapisuje do nejlepších.</p>';
+    else if (G.record) html += '<p><b>Nejlepší čas!</b></p>';
+    else if (st.best !== null) html += `<p>Nejlepší čas: <b>${fmtTime(st.best)}</b></p>`;
+    html += `<p>Výhry: <b>${st.won + st.helped}</b> z ${st.played} her</p>`;
+    showModal(html, [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]);
+  } else {
+    html = `<h2>Bum! 💥</h2><p>Pod tímhle políčkem byla mina.</p><p>Zpět vrátí poslední tah, výhra se pak ale nezapíše do nejlepších časů.</p>`;
+    showModal(html, [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Vrátit tah', cls: 'alt', fn: undo }, { text: 'Prohlédnout', cls: 'alt' }]);
+  }
+}
+
+/* ---------- Rendering ---------- */
+const ICON = id => `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#${id}"/></svg>`;
+const MODE_ICON = {
+  open: '<path d="M14.5 3.5 20.5 9.5"/><path d="M17.5 6.5 10 14"/><path d="m10 14-2.5-2.5-4 4a2.5 2.5 0 0 0 0 3.5l1 1a2.5 2.5 0 0 0 3.5 0l4-4z"/>',
+  flag: '<path d="M6 21V3.5"/><path d="M6 4h11.5l-3 4.2 3 4.3H6"/>',
+};
+function applyLook() {
+  root.dataset.theme = S.theme;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+}
+function cellHTML(i, fresh) {
+  const g = G, s = g.st[i], r = (i / g.w) | 0, alt = (r + i % g.w) % 2 ? ' alt' : '';
+  const over = g.status !== 'playing', isMine = g.mine && g.mine[i];
+  const hl = hint && hint.c === i ? ' hint' : '';
+  if (s === 1) {
+    if (isMine) return `<div class="c o boom${alt}" aria-label="Mina">${ICON('sMine')}</div>`;
+    const n = num()[i], pop = fresh && fresh.has(i) ? ' pop' : '';
+    return `<div class="c o${alt}${pop}${n ? ' n' + n : ''}${hl}" aria-label="${n || 'Prázdné'}">${n || ''}</div>`;
+  }
+  if (s === 2) {
+    // after a loss a flag on a cell without a mine is crossed out
+    if (g.status === 'lost' && !isMine) return `<div class="c h${alt}" aria-label="Špatná vlajka">${ICON('sFlag')}${ICON('sCross')}</div>`;
+    return `<div class="c h${alt}${hl}" aria-label="Vlajka">${ICON('sFlag')}</div>`;
+  }
+  if (over && isMine) return g.status === 'won' ? `<div class="c h${alt}" aria-label="Mina, označená">${ICON('sFlag')}</div>` : `<div class="c o${alt}" aria-label="Mina">${ICON('sMine')}</div>`;
+  return `<div class="c h${alt}${hl}" aria-label="Neodkryté"></div>`;
+}
+function render(openedNow) {
+  applyLook();
+  const g = G, grid = $('#grid'), fresh = openedNow && openedNow.length < 60 ? new Set(openedNow) : null;
+  let html = '';
+  for (let i = 0; i < g.w * g.h; i++) html += cellHTML(i, fresh);
+  grid.innerHTML = html;
+  grid.style.setProperty('--w', g.w);
+  const flags = g.st.filter(v => v === 2).length;
+  $('#left').textContent = g.status === 'won' ? 0 : g.m - flags;
+  showClock();
+  // the hint line: what a tap does now
+  let t;
+  // short texts: one line on a 360 px phone, so the board does not jump
+  if (g.status === 'won') t = 'Vyhráno! Všechny miny nalezeny';
+  else if (g.status === 'lost') t = 'Bum! Zpět vrátí poslední tah';
+  else if (hint) t = hint.kind === 'open' ? (g.mine ? 'Orámované políčko je bezpečné' : 'Ťukni kamkoli, třeba sem') : hint.kind === 'flag' ? 'Pod orámovaným políčkem je mina' : 'Tahle vlajka je špatně';
+  else if (!g.mine) t = 'První ťuknutí je vždy bezpečné';
+  else if (S.mode === 'flag') t = S.longPress ? 'Ťukni: vlajka · podrž: odkrýt' : 'Ťuknutím dáváš vlajky';
+  else t = S.longPress ? 'Ťukni: odkrýt · podrž: vlajka' : 'Ťuknutím odkrýváš políčka';
+  $('#hint').textContent = t;
+  const mb = $('#btnMode');
+  mb.classList.toggle('flag', S.mode === 'flag');
+  $('#modeIcon').innerHTML = MODE_ICON[S.mode];
+  $('#modeLabel').textContent = S.mode === 'flag' ? 'Vlajka' : 'Odkrýt';
+  mb.setAttribute('aria-label', S.mode === 'flag' ? 'Ťuknutí dává vlajky, přepnout na odkrývání' : 'Ťuknutí odkrývá, přepnout na vlajky');
+  $('#btnUndo').classList.toggle('dim', !g.history.length || g.status === 'won');
+  $('#btnHint').classList.toggle('dim', g.status !== 'playing');
+  $('#zoomLabel').textContent = zoom > 1 ? 'Zmenšit' : 'Zvětšit';
+  $('#zoomPlus').setAttribute('d', zoom > 1 ? 'M7.5 10.5h6' : 'M10.5 7.5v6M7.5 10.5h6');
+  layout();
+}
+// rule: the board size comes from the room that is left, so it fits without scrolling
+// pitch: cell + gap; gw × gh: the whole board unzoomed; roomW × roomH: the free room; vw × vh: the window (#view)
+let pitch = 0, gw = 0, gh = 0, roomW = 0, roomH = 0, vw = 0, vh = 0;
+function layout() {
+  if (!G) return;
+  const b = $('#board');
+  roomW = b.clientWidth - 2 * GUT; roomH = b.clientHeight - 24; // inside #board's padding (GUT at the sides, 12 px above and below)
+  let p = Math.floor(Math.min(roomW / G.w, roomH / G.h));
+  p = Math.max(8, Math.min(72, p)); // a short window shrinks the board, it never overlaps the rows
+  const gap = p >= 34 ? 3 : p >= 20 ? 2 : 1;
+  pitch = p; gw = G.w * p - gap; gh = G.h * p - gap;
+  const grid = $('#grid');
+  grid.style.setProperty('--cs', (p - gap) + 'px'); grid.style.setProperty('--gap', gap + 'px');
+  sizeView();
+}
+
+/* ---------- Zoom: the Zvětšit button or two fingers; one finger moves a zoomed board ---------- */
+let zoom = 1, tx = 0, ty = 0;
+// the window onto the board: as big as the board, zoomed up to all the free room (12 px side margins kept)
+function sizeView() {
+  vw = Math.min(Math.max(roomW, gw), Math.round(gw * zoom)); vh = Math.min(Math.max(roomH, gh), Math.round(gh * zoom));
+  const v = $('#view'); v.style.width = vw + 'px'; v.style.height = vh + 'px';
+  clampPan(); applyZoom();
+}
+function clampPan() { tx = Math.min(0, Math.max(vw - gw * zoom, tx)); ty = Math.min(0, Math.max(vh - gh * zoom, ty)); }
+function applyZoom() { $('#grid').style.transform = `translate(${tx}px,${ty}px) scale(${zoom})`; }
+function resetZoom() { zoom = 1; tx = 0; ty = 0; if (pitch) sizeView(); }
+// zoom so that the board point (bx, by) in board pixels sits at the screen point (sx, sy), or in the middle of
+// the window (sx null); the window grows with the zoom, so the point is measured after it is resized
+function zoomTo(z, bx, by, sx, sy) {
+  zoom = Math.min(3.5, Math.max(1, z)); sizeView();
+  const r = $('#view').getBoundingClientRect();
+  tx = (sx == null ? vw / 2 : sx - r.left) - bx * zoom; ty = (sy == null ? vh / 2 : sy - r.top) - by * zoom;
+  clampPan(); applyZoom();
+}
+const cellCentre = c => [(c % G.w + .5) * pitch, (((c / G.w) | 0) + .5) * pitch];
+// a cell outside the zoomed view (the hint): move the view to it
+function showCell(c) {
+  if (zoom <= 1) return;
+  const [bx, by] = cellCentre(c), x = bx * zoom + tx, y = by * zoom + ty, m = pitch * zoom;
+  if (x < m || y < m || x > vw - m || y > vh - m) zoomTo(zoom, bx, by, null, null);
+}
+$('#btnZoom').addEventListener('click', () => {
+  if (zoom > 1) resetZoom();
+  else {
+    // about 50 px per cell, around the hint, the last move or the middle of the board
+    const lastH = G.history[G.history.length - 1];
+    const c = hint ? hint.c : lastH ? (Array.isArray(lastH.c) ? lastH.c[0] : lastH.c) : (G.h >> 1) * G.w + (G.w >> 1);
+    const [bx, by] = cellCentre(c);
+    zoomTo(Math.min(3, Math.max(1.6, 50 / pitch)), bx, by, null, null);
+  }
+  buzz(8); render();
+});
+// the cell under a point of the screen, or -1
+function cellAt(x, y) {
+  const r = $('#view').getBoundingClientRect();
+  const bx = (x - r.left - tx) / zoom, by = (y - r.top - ty) / zoom;
+  const c = Math.floor(bx / pitch), rr = Math.floor(by / pitch);
+  return c >= 0 && rr >= 0 && c < G.w && rr < G.h ? rr * G.w + c : -1;
+}
+(() => {
+  const view = $('#view'), pts = new Map();
+  let start = null, pinch = null, moved = false, holdT = 0, held = false, pressEl = null;
+  const unpress = () => { clearTimeout(holdT); holdT = 0; if (pressEl) pressEl.classList.remove('press'); pressEl = null; };
+  const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
+  const midp = () => { const [a, b] = [...pts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+  view.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button === 2) { const c = cellAt(e.clientX, e.clientY); if (c >= 0) onHold(c); return; } // a computer: the right button flags
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    try { view.setPointerCapture(e.pointerId); } catch (er) {}
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) {
+      start = { x: e.clientX, y: e.clientY, tx, ty }; moved = false; pinch = null; held = false;
+      const c = cellAt(e.clientX, e.clientY);
+      if (c >= 0) {
+        pressEl = $('#grid').children[c] || null;
+        if (pressEl) pressEl.classList.add('press');
+        if (S.longPress) holdT = setTimeout(() => { holdT = 0; held = true; unpress(); buzz(30); onHold(c); }, HOLD_MS);
+      }
+    } else if (pts.size === 2) {
+      unpress();
+      const r = view.getBoundingClientRect(), m = midp();
+      pinch = { d: dist(), z: zoom, bx: (m.x - r.left - tx) / zoom, by: (m.y - r.top - ty) / zoom };
+      moved = true; // a pinch is never a tap
+    }
+  });
+  view.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const r = view.getBoundingClientRect();
+    if (pinch && pts.size >= 2) { const m = midp(); zoomTo(pinch.z * dist() / pinch.d, pinch.bx, pinch.by, m.x, m.y); return; }
+    if (start && pts.size === 1) {
+      const dx = e.clientX - start.x, dy = e.clientY - start.y;
+      if (!moved && Math.hypot(dx, dy) > 10) { moved = true; unpress(); }
+      if (moved && zoom > 1) { tx = start.tx + dx; ty = start.ty + dy; clampPan(); applyZoom(); }
+    }
+  });
+  const end = e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.delete(e.pointerId);
+    if (pinch) { if (pts.size === 0) { pinch = null; start = null; render(); } else if (pts.size === 1) { const p = [...pts.values()][0]; start = { x: p.x, y: p.y, tx, ty }; } return; }
+    const tap = e.type === 'pointerup' && start && !moved && !held && pts.size === 0;
+    unpress();
+    if (tap) { const c = cellAt(e.clientX, e.clientY); if (c >= 0) onTap(c); }
+    if (pts.size === 0) start = null;
+  };
+  view.addEventListener('pointerup', end);
+  view.addEventListener('pointercancel', end);
+})();
+
+/* ---------- Controls ---------- */
+$('#btnMode').addEventListener('click', () => {
+  S.mode = S.mode === 'open' ? 'flag' : 'open';
+  buzz(10); save(); render();
+});
+$('#btnUndo').addEventListener('click', undo);
+$('#btnHint').addEventListener('click', giveHint);
+// rule: a new game in the middle of one asks first
+$('#btnNew').addEventListener('click', () => {
+  if (G.status === 'playing' && !isFresh()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+
+/* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
+const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
+const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+const SW = '<i class="h"><svg viewBox="0 0 24 24"><use href="#sFlag"/></svg></i><i class="o n1">1</i><i class="o n2">2</i><i class="o n3">3</i><i class="h"></i>';
+function renderSettings() {
+  const st = stats[rulesKey(S)];
+  const variant = `${SIZES[S.size].name} plocha, ${S.noGuess ? 'bez hádání' : 's hádáním'}`;
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Hledání min<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Hra</h3>
+      <div class="field"><div class="flabel">Velikost plochy</div>
+        ${Object.entries(SIZES).map(([id, z]) => opt('size:' + id, S.size === id, z.name, z.desc)).join('')}
+        ${S.size !== G.rules.size && !isFresh() ? `<div class="notice">Po návratu do hry začne <b>nová hra</b> s novou velikostí${inProgress() ? ' a rozehraná hra se ztratí' : ''}.</div>` : ''}
+      </div>
+      ${toggleRow('noGuess', 'Bez hádání')}
+      <div class="fnote" style="margin-top:-6px">Každé rozdání jde celé vyřešit úvahou, nikdy nemusíš hádat. Bez toho se občas hádat musí, jako v klasické hře.</div>
+      ${S.noGuess !== G.rules.noGuess && S.size === G.rules.size && !isFresh() ? (inProgress()
+        ? '<div class="notice">Rozehraná hra se dohraje podle původního nastavení. Změna platí od příští hry.</div>'
+        : '<div class="notice">Po návratu do hry začne <b>nová hra</b> s tímto nastavením.</div>') : ''}
+    </section>
+    <section class="card"><h3>Ovládání</h3>
+      ${toggleRow('longPress', 'Podržením prstu to druhé')}
+      <div class="fnote" style="margin-top:-6px">Podržíš-li prst na políčku, udělá se opak ťuknutí: v režimu Odkrýt vlajka, v režimu Vlajka odkrytí. Režim se přepíná tlačítkem dole.</div>
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch" data-theme="${t.id}">${SW}</span>${t.name}</button>`).join('')}</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <section class="card"><h3>Statistika</h3>
+      <div class="fnote" style="margin:0 0 6px">${variant}</div>
+      <div class="srow"><span>Odehrané hry</span><b>${st ? st.played : 0}</b></div>
+      <div class="srow"><span>Výhry bez pomoci</span><b>${st ? st.won : 0}</b></div>
+      <div class="srow"><span>Výhry s pomocí</span><b>${st ? st.helped : 0}</b></div>
+      <div class="srow"><span>Nejlepší čas</span><b>${st && st.best !== null ? fmtTime(st.best) : '–'}</b></div>
+      <div class="fnote">Hra se počítá od prvního ťuknutí. S pomocí znamená, že pomohlo Poradit nebo Zpět po šlápnutí na minu; taková výhra nemá nejlepší čas.</div>
+      <button class="link" data-act="clearStats">Smazat statistiku</button>
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'clearStats') {
+    showModal('<h2>Smazat statistiku?</h2><p>Smažou se výsledky a nejlepší časy všech velikostí.</p>', [
+      { text: 'Ano, smazat', fn: () => {
+        stats = {}; G.record = false;
+        // the game on the board was counted as played already: it stays counted, so its win can still be added
+        if (G.counted && !G.wonCounted) stat().played = 1;
+        save(); renderSettings(); toast('Statistika je smazaná'); } },
+      { text: 'Ne, nechat', cls: 'alt' }]);
+    return;
+  }
+  if (act === 'size') S.size = arg;
+  else if (act === 'theme') S.theme = arg;
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S); buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
+});
+function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; clockSync(); }
+// a change that needs a new game starts it after returning and says so (rule); "Bez hádání" waits for the next
+// game while one is in progress
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  if (S.size !== G.rules.size) newGame(!isFresh() ? 'Začala nová hra s novou velikostí' : '');
+  else if (S.noGuess !== G.rules.noGuess && !inProgress()) newGame(!isFresh() ? 'Začala nová hra s novým nastavením' : '');
+  else { clockSync(); render(); }
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
+function renderHelp() {
+  const ic = id => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><use href="#${id}"/></svg>`;
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Hledání min<small>Jak hrát</small></h2></div>
+    <section class="card help"><ol>
+      <li>Pod některými políčky jsou schované miny ${ic('sMine')}. Odkryj všechna políčka, pod kterými mina není.</li>
+      <li>Číslo na odkrytém políčku říká, kolik min je v osmi políčkách kolem něj. Políčko bez čísla nemá kolem žádnou minu a samo odkryje sousedy.</li>
+      <li><b>První ťuknutí je vždy bezpečné</b> a odkryje kus plochy.</li>
+      <li>Tlačítko <b>Odkrýt / Vlajka</b> dole přepíná, co dělá ťuknutí. Vlajkou ${ic('sFlag')} si označíš, kde je podle tebe mina; políčko s vlajkou se omylem neodkryje. Druhým ťuknutím vlajku zase sundáš.</li>
+      ${S.longPress ? '<li><b>Podržením prstu</b> uděláš opak ťuknutí: v režimu Odkrýt dáš vlajku, v režimu Vlajka políčko odkryješ. Na počítači dělá totéž pravé tlačítko myši.</li>' : '<li>Podržení prstu jde zapnout v Nastavení: pak dělá opak ťuknutí.</li>'}
+      <li>Ťukni na odkryté číslo, kolem kterého už je stejně vlajek, kolik ukazuje: odkryjí se všechna ostatní políčka kolem. Když je některá vlajka špatně, vybuchne mina.</li>
+      <li>Nahoře je počet min, které zbývá označit (miny minus vlajky), a čas.</li>
+      <li><b>Bez hádání</b> (v Nastavení, zapnuto): každé rozdání jde celé vyřešit úvahou. Program to před hrou ověří.</li>
+      <li><b>Poradit</b> orámuje políčko, o kterém se dá s jistotou říct, co skrývá: bezpečné políčko, minu bez vlajky nebo špatnou vlajku. Ťuknutím na něj se tah udělá.</li>
+      <li><b>Zpět</b> vrátí poslední tah, i šlápnutí na minu. Když pomohlo Poradit nebo Zpět po mině, je to výhra s pomocí: počítá se, ale její čas se nezapisuje mezi nejlepší.</li>
+      <li><b>Zvětšit</b> přiblíží plochu, přiblížit jde i dvěma prsty. Přiblíženou plochu posouváš jedním prstem.</li>
+      <li>Statistika a nejlepší časy jsou v Nastavení, zvlášť pro každou velikost a pro hru s hádáním a bez.</li>
+    </ol></section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; clockSync(); }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) { $('#screenHelp').hidden = true; clockSync(); } });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// rule: ask for persistent storage so the browser does not delete the saved game by itself
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+const savedSettings = saved && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+if (saved && saved.stats && typeof saved.stats === 'object') {
+  for (const [k, v] of Object.entries(saved.stats)) if (/^(small|medium|large)-[01]$/.test(k) && validStat(v)) stats[k] = { played: v.played, won: v.won, helped: v.helped, best: v.best };
+}
+if (saved && validGame(saved.game)) {
+  G = saved.game;
+  // rule: a setting chosen just before the app was closed (Settings still open) is applied now, as closing Settings would
+  if (S.size !== G.rules.size || (S.noGuess !== G.rules.noGuess && !inProgress())) closeSettings(); else { render(); clockSync(); }
+}
+else newGame();
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// contract: opened from the launcher (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing: tap(i) and hold(i) as a finger would; win() opens every safe cell, lose() steps on a mine
+const mid = () => (G.h >> 1) * G.w + (G.w >> 1);
+window.HledaniMin = {
+  E, tap: c => onTap(c), hold: c => onHold(c),
+  win() { if (!G.mine) onTap(mid()); for (let i = 0; i < G.w * G.h && G.status === 'playing'; i++) if (!G.mine[i] && G.st[i] !== 1) { if (G.st[i] === 2) toggleFlag(i); openCell(i); } },
+  lose() { if (!G.mine) onTap(mid()); const c = G.mine.findIndex((m, i) => m && G.st[i] !== 1); if (G.status === 'playing' && c >= 0) { if (G.st[c] === 2) toggleFlag(c); openCell(c); } },
+  get state() { return { S, G, stats }; },
+};
+})();
+</script>
+</body>
+</html>

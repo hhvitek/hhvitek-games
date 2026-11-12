@@ -37,6 +37,7 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Cesta ven       | `games/cesta-ven/`       | Posouvej auta (nebo kostky) na parkovišti, ať červené vyjede ven; úrovně postupně těžší, Poradit a Zpět                   |
 | Šipky ven       | `games/sipky-ven/`       | Ťukej na šipky a pouštěj je z plochy; šipka, které stojí v cestě jiná, narazí; úrovně postupně větší, hvězdy, Poradit a Zpět |
 | Patnáctka       | `games/patnactka/`       | Posuvná skládačka: seřaď čísla posouváním na prázdné místo; desky 3 × 3, 4 × 4 a 5 × 5, mírné až úplné zamíchání, Zpět    |
+| Hledání min     | `games/hledani-min/`     | Klasické hledání min: odkrývej políčka, čísla říkají, kolik min je kolem; vlajky přepínačem nebo podržením prstu, tři velikosti, rozdání bez hádání, Poradit, Zpět, přiblížení a nejlepší časy |
 | Paprsek         | `games/paprsek/`         | Otáčej zrcadly, ať paprsky světla trefí všechny terče; barevné paprsky se mísí, úrovně postupně těžší, Poradit a Zpět     |
 | Kulička         | `games/kulicka/`         | Nakláněj telefon (nebo ťukej na šipky) a doveď kuličku bludištěm do cíle kolem děr; bez spěchu, Poradit ukáže cestu     |
 | Zavři čísla     | `games/zavri-cisla/`     | Kostková hra (Shut the Box): hoď kostkami a zavři destičky se stejným součtem; 9, 10 nebo 12 destiček, statistika         |

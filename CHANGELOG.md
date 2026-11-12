@@ -10,6 +10,7 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 - Nová hra Šroubky: přesouvej barevné matky mezi šrouby, dokud na každém nezůstane jen jedna barva. Čtyři obtížnosti, každá hra jde vyřešit, s tlačítkem Poradit.
 - Nová hra Malované křížovky: podle čísel u řádků a sloupců vybarvuješ políčka a odhalíš barevný obrázek; 36 obrázků od 5 × 5 po 15 × 15, křížky, tažení prstem, Poradit, Zpět a přiblížení velkých mřížek.
 - Nová hra Šipky ven: ťukej na šipky a pouštěj je z plochy; šipka, které stojí v cestě jiná, narazí. Úrovně od malých po velké, hvězdy za hru bez chyby, volitelné životy, Poradit a Zpět.
+- Nová hra Hledání min: odkrývej políčka a vyhni se minám; vlajky přepínačem nebo podržením prstu, tři velikosti, rozdání vždy bez hádání, Poradit, Zpět, přiblížení a nejlepší časy.
 
 ## 1.0.15 – 2026-11-12
 

@@ -21,6 +21,7 @@ globalThis.GAMES = [
   { id: 'cesta-ven', name: 'Cesta ven', description: 'Posouvej auta, ať červené vyjede ven' },
   { id: 'sipky-ven', name: 'Šipky ven', description: 'Pouštěj šipky z plochy, ať do sebe nenarazí' },
   { id: 'patnactka', name: 'Patnáctka', description: 'Posouvej čísla, až budou po řadě' },
+  { id: 'hledani-min', name: 'Hledání min', description: 'Odkryj políčka a vyhni se minám' },
   { id: 'paprsek', name: 'Paprsek', description: 'Otáčej zrcadly a doveď světlo do terčů' },
   { id: 'kulicka', name: 'Kulička', description: 'Nakláněj telefon a doveď kuličku do cíle' },
   { id: 'zavri-cisla', name: 'Zavři čísla', description: 'Házej kostkami a zavírej čísla' },

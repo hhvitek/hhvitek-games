@@ -155,6 +155,11 @@ async (page) => {
     // the hint (dotted way, the next arrow framed), a tap on the framed arrow, the hint again
     'kulicka': async () => { await tap('#btnHint'); await wait(400); await tap('.arrow.hint'); await wait(1200); await tap('#btnHint'); await wait(500); },
     'patnactka': async () => { await page.evaluate(() => { const P = window.Patnactka, G = P.state.G, n = G.rules.n, z = G.board.indexOf(0); P.tryMove(z % n ? z - 1 : z + 1); }); await wait(500); },
+    // the first tap (always safe), the hint and a tap on the hinted cell, then a flag in the Vlajka mode
+    'hledani-min': async () => {
+      await tap('#grid .c:nth-child(65)'); await wait(500); await tap('#btnHint'); await wait(500); await tap('#grid .c.hint'); await wait(500);
+      await tap('#btnMode'); await wait(300); await tap('#grid .c.h:not(:has(svg))'); await wait(500);
+    },
     'kostky': async () => { await tap('#btnRoll'); await wait(1200); await tap('#roll .die:not(.dead)'); await wait(400); },
     // the advised move (its piece, then its square), the opponent's reply, then the next advice and its piece chosen
     'dama': async () => { await tap('#btnHint'); await wait(1200); await tap('.sq.hint:has(.pc)'); await wait(300); await tap('.sq.hint.to'); await wait(4000); await tap('#btnHint'); await wait(1200); await tap('.sq.hint:has(.pc)'); await wait(300); },
