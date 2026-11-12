@@ -117,6 +117,10 @@ async (page) => {
     'hanojske-veze': async () => { await tap('[data-r="0"]'); await wait(300); await tap('[data-r="2"]'); await wait(500); await tap('#btnHint'); await wait(500); },
     'spojovani-cisel': async () => { for (const k of ['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp']) { await page.keyboard.press(k); await wait(250); } },
     'cesta-ven': async () => { await tap('#btnGo'); await wait(500); await tap(HINTED); await wait(800); await tap('#btnGo'); await wait(500); },
+    // a mirror turned, then the hint, a tap on the hinted mirror, and the next hint shown
+    'paprsek': async () => { await tap('#taps .cell[aria-label^="Zrcadlo"]'); await wait(400); await tapButton(/Poradit/); await wait(600); await tap(HINTED); await wait(600); await tapButton(/Poradit/); await wait(600); },
+    // the hint (dotted way, the next arrow framed), a tap on the framed arrow, the hint again
+    'kulicka': async () => { await tap('#btnHint'); await wait(400); await tap('.arrow.hint'); await wait(1200); await tap('#btnHint'); await wait(500); },
     'patnactka': async () => { await page.evaluate(() => { const P = window.Patnactka, G = P.state.G, n = G.rules.n, z = G.board.indexOf(0); P.tryMove(z % n ? z - 1 : z + 1); }); await wait(500); },
     'kostky': async () => { await tap('#btnRoll'); await wait(1200); await tap('#roll .die:not(.dead)'); await wait(400); },
     // the advised move (its piece, then its square), the opponent's reply, then the next advice and its piece chosen

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="steel" cx=".35" cy=".3" r=".75">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset=".35" stop-color="#dfe4e9"/>
+      <stop offset=".8" stop-color="#8a949d"/>
+      <stop offset="1" stop-color="#4b535b"/>
+    </radialGradient>
+  </defs>
+  <!-- background, the dark wooden frame and the light wooden floor (4x4 cells, step 100) -->
+  <rect width="512" height="512" fill="#f3e6d2"/>
+  <rect x="24" y="24" width="464" height="464" rx="40" fill="#6b4524"/>
+  <rect x="56" y="56" width="400" height="400" rx="8" fill="#e8c995"/>
+  <!-- trap hole and the goal (a hole in a green ring) -->
+  <circle cx="306" cy="206" r="32" fill="#24150a"/>
+  <circle cx="406" cy="406" r="38" fill="#2f9e57"/>
+  <circle cx="406" cy="406" r="25" fill="#24150a"/>
+  <!-- the walls with their shadow -->
+  <g fill="none" stroke-width="18" stroke-linecap="square">
+    <path stroke="#4f3015" transform="translate(4 7)" d="M156 56V256M156 256H256M256 156H456M256 156V356M56 356H156M356 256V456M256 356H356"/>
+    <path stroke="#8f5c2c" d="M156 56V256M156 256H256M256 156H456M256 156V356M56 356H156M356 256V456M256 356H356"/>
+  </g>
+  <!-- the steel ball with its shadow -->
+  <circle cx="113" cy="116" r="34" fill="rgba(0,0,0,.28)"/>
+  <circle cx="106" cy="106" r="34" fill="url(#steel)"/>
+</svg>

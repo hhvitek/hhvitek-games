@@ -1,0 +1,1030 @@
+<!doctype html>
+<html lang="cs" data-theme="night">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0e1525">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Paprsek">
+<title>Paprsek</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230e1525'/%3E%3Cpath d='M8 20h34v34' fill='none' stroke='%23ff4b4b' stroke-width='6' stroke-linecap='round'/%3E%3Cpath d='M34 12l16 16' stroke='%23e9f1fb' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
+/* game screen + the board: frame, floor, grid, pieces, the three light colours and how the beams glow */
+[data-theme="night"]{--page:#0e1525;--bar:rgba(0,0,0,.3);--line:rgba(255,255,255,.08);--ink:#eef3fb;--soft:#b9c6dc;--chip:rgba(255,255,255,.12);--chip-line:rgba(255,255,255,.22);--btn:#ffd166;--btn-ink:#2a2000;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.3);
+  --frame:#060a13;--floor:#182238;--grid:rgba(255,255,255,.07);--stone:#5d6779;--stone-sh:#363e4d;--plate:#2c3852;--disc:rgba(255,255,255,.09);--disc-line:rgba(255,255,255,.3);--mirror:#e9f1fb;--fixmir:#94a3ba;--half:#9fd8ff;--edge:#0a0f1c;--lamp:#2b3446;--lamp-line:#a1adc3;--hole:#0b1120;
+  --red:#ff4b4b;--blue:#3d9bff;--violet:#c763ff;--glow-op:.4;--glow-w:28px;--core-w:9px;--hot:#fff;--hot-op:.8;--hint:#7fd3ff}
+[data-theme="slate"]{--page:#2e363e;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.08);--ink:#eef3f6;--soft:#c3cdd5;--chip:rgba(255,255,255,.12);--chip-line:rgba(255,255,255,.22);--btn:#e9eef2;--btn-ink:#1f262c;--btn-sh:#8c979f;--undo-bg:rgba(0,0,0,.26);
+  --frame:#1b2025;--floor:#424c56;--grid:rgba(255,255,255,.09);--stone:#8d969f;--stone-sh:#59626b;--plate:#5b6670;--disc:rgba(255,255,255,.1);--disc-line:rgba(255,255,255,.34);--mirror:#f4f7fa;--fixmir:#b4bec8;--half:#a9dcff;--edge:#14181c;--lamp:#1f252b;--lamp-line:#aab4be;--hole:#2a3138;
+  --red:#ff5a52;--blue:#5aaaff;--violet:#d27bff;--glow-op:.32;--glow-w:24px;--core-w:9px;--hot:#fff;--hot-op:.65;--hint:#8fd8ff}
+[data-theme="paper"]{--page:#f4ebdf;--bar:rgba(122,69,32,.08);--line:#e6d8c6;--ink:#2b1a0e;--soft:#6f5a48;--chip:rgba(122,69,32,.08);--chip-line:rgba(122,69,32,.24);--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--undo-bg:rgba(122,69,32,.1);
+  --frame:#7a4520;--floor:#fbf6ee;--grid:rgba(122,69,32,.15);--stone:#a3907c;--stone-sh:#6f5a48;--plate:#e2d1bc;--disc:rgba(122,69,32,.12);--disc-line:rgba(122,69,32,.4);--mirror:#eef3f8;--fixmir:#c2b19c;--half:#b5e0f7;--edge:#2b1a0e;--lamp:#3b2a1d;--lamp-line:#2b1a0e;--hole:#ece0cf;
+  --red:#d7191c;--blue:#0b5bd3;--violet:#8e24c9;--glow-op:.16;--glow-w:22px;--core-w:12px;--hot:#fff;--hot-op:0;--hint:#1f5fd6}
+
+/* ---------- Base ---------- */
+:root{--gut:12px} /* one side margin: bar buttons, board and bottom buttons line up (the safe areas are on #app) */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{background:var(--page);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+/* rule: 100dvh + safe areas, the board is sized from the room that is left (see layout()) */
+#app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings; touch targets ≥ 45 px) ---------- */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line);text-decoration:none}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:20px}
+/* narrow phones (360 px): less room between the bar buttons, so the name fits whole at 18 px; the outer margin stays */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:18px;letter-spacing:0}
+  .stats{font-size:18px}
+}
+
+/* ---------- Score row (rule: info goes on its own row, not in place of the name) ---------- */
+.stats{flex:none;text-align:center;padding:8px var(--gut) 0;font-size:20px;font-weight:700;line-height:1.3;color:var(--soft)}
+.stats b{color:var(--ink)}
+
+/* ---------- GAME: the board ---------- */
+#board{flex:1;min-height:0;display:grid;place-items:center;padding:12px var(--gut)} /* rule: at least 12 px between the board and the rows above and below, on every screen */
+#field{position:relative;padding:var(--pad);background:var(--frame);border-radius:calc(var(--cs)*.22);box-shadow:0 6px 18px rgba(0,0,0,.3);transition:box-shadow .4s}
+#scene{display:block;width:calc(var(--cs)*var(--n));height:calc(var(--cs)*var(--n));border-radius:calc(var(--cs)*.1)}
+#taps{position:absolute;left:var(--pad);top:var(--pad);display:grid;grid-template-columns:repeat(var(--n),var(--cs));grid-auto-rows:var(--cs)}
+.cell{width:var(--cs);height:var(--cs);border-radius:calc(var(--cs)*.16)}
+.cell.hint{outline:5px solid var(--hint);outline-offset:-3px;animation:blink 1.1s ease-in-out infinite}
+@keyframes blink{50%{outline-color:color-mix(in srgb,var(--hint) 25%,transparent)}}
+#field.won{box-shadow:0 0 0 4px var(--btn),0 6px 18px rgba(0,0,0,.3)}
+#field.won .tglow{animation:pulse .6s ease-in-out 4 alternate}
+@keyframes pulse{to{opacity:.9}}
+
+/* the pieces and the light (SVG, 100 units per cell); sizes in px are user units of the board */
+.floor{fill:var(--floor)}
+.gridl{fill:none;stroke:var(--grid);stroke-width:3px}
+.beams line{stroke-linecap:round;fill:none}
+.glow{opacity:var(--glow-op)}
+.glow line{stroke-width:var(--glow-w)}
+.core line{stroke-width:var(--core-w)}
+.hot{opacity:var(--hot-op)}
+.hot line{stroke-width:3px;stroke:var(--hot)}
+.k1{stroke:var(--red)} .k2{stroke:var(--blue)} .k3{stroke:var(--violet)}
+.f1{fill:var(--red)} .f2{fill:var(--blue)} .f3{fill:var(--violet)}
+.disc{fill:var(--disc);stroke:var(--disc-line);stroke-width:3px}
+.mir{fill:var(--mirror);stroke:var(--edge);stroke-width:3px}
+.mir.fix{fill:var(--fixmir)}
+.mir.half{fill:var(--half)}
+.dash{stroke:var(--edge);stroke-width:4px;stroke-dasharray:9px 7px}
+.pivot{fill:var(--edge)}
+.plate{fill:var(--plate);stroke:var(--edge);stroke-opacity:.4;stroke-width:3px}
+.rivet{fill:var(--edge);opacity:.5}
+.stone{fill:var(--stone);stroke:var(--stone-sh);stroke-width:4px}
+.crack{fill:none;stroke:var(--stone-sh);stroke-width:4px;stroke-linecap:round;stroke-linejoin:round}
+.lamp{fill:var(--lamp);stroke:var(--lamp-line);stroke-width:3px}
+.ring{fill:none;stroke-width:9px}
+.ring.thin{stroke-width:7px}
+.hole{fill:var(--hole)}
+.tglow{opacity:.45}
+.part{opacity:.55}
+.mark-sh{fill:none;stroke:rgba(0,0,0,.55);stroke-width:16px;stroke-linecap:round;stroke-linejoin:round}
+.mark{fill:none;stroke:#fff;stroke-width:9px;stroke-linecap:round;stroke-linejoin:round}
+.rot{transform-origin:0 0;transition:transform .22s ease-out}
+
+/* ---------- Bottom buttons ---------- */
+.tray{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px var(--gut) 12px;background:var(--bar);border-top:1px solid var(--line)}
+#hint{text-align:center;font-size:19px;font-weight:600;line-height:1.3;color:var(--ink);min-height:25px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row{display:flex;gap:10px}
+.undo{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:16px;font-size:21px;font-weight:800;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.undo svg{flex:none;width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.go{flex:1.4 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:16px;font-size:21px;font-weight:800;background:var(--btn);color:var(--btn-ink);box-shadow:0 4px 0 var(--btn-sh);white-space:nowrap}
+.go:active{transform:translateY(3px);box-shadow:0 1px 0 var(--btn-sh)}
+.go svg{flex:none;width:26px;height:26px;fill:currentColor}
+/* rule: an unavailable action is only dimmed and explains itself when tapped */
+.undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+
+@media (max-height:800px){
+  .topbar{height:54px}
+  .stats{padding-top:6px}
+  .tray{gap:6px;padding:6px var(--gut) 10px}
+  .undo,.go{height:58px}
+}
+@media (prefers-reduced-motion:reduce){
+  .rot,.cell.hint,#field.won .tglow{transition:none!important;animation:none!important}
+}
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+/* rule: the head with Zpět and the game name stays at the top while scrolling */
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);margin-top:16px}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink)}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.stepper{display:flex;align-items:center;gap:12px}
+.sbtn{flex:none;width:60px;height:60px;border-radius:50%;background:var(--pbtn);color:var(--pbtn-ink);font-size:36px;font-weight:700;line-height:1;display:grid;place-items:center;box-shadow:0 3px 0 var(--pbtn-sh)}
+.sbtn.dim{background:var(--psw);box-shadow:none;color:var(--psoft)}
+.sval{flex:1;text-align:center;font-size:25px;font-weight:800}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+/* a small board in the theme tiles and the help pictures */
+.mini{display:flex;justify-content:center;align-items:center;gap:10px;border-radius:12px;background:var(--page);padding:8px}
+.mini svg{display:block;flex:none;border-radius:8px}
+.tile .mini svg{width:76px;height:76px}
+.help .mini{margin:10px 0 4px;flex-wrap:wrap}
+.help .mini svg{width:104px;height:104px}
+.help .mini .arrow{font-size:20px;font-weight:800;line-height:1.2;text-align:center;color:var(--ink)}
+.help .legend{display:flex;justify-content:space-around;gap:6px;margin:10px 0 0;text-align:center}
+.help .legend span{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:18px;font-weight:700;color:var(--pink)}
+.help .legend .mini{padding:6px;margin:0}
+.help .legend .mini svg{width:58px;height:58px}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.mcard h2{font-size:28px;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 160px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Paprsek</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <div class="stats" id="stats">&nbsp;</div>
+  <main id="board"><div id="field"><svg id="scene" aria-hidden="true"></svg><div id="taps"></div></div></main>
+  <footer class="tray">
+    <div id="hint"></div>
+    <div class="row">
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnGo" class="go"></button>
+    </div>
+  </footer>
+</div>
+<!-- Every layer is shown and hidden only through its hidden attribute; every screen has a [data-act="close"] button (Back button contract) -->
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+<script>
+/* ---------- Visible height ---------- */
+// The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
+// enough: some browsers report it taller than what is visible (the app installed by Brave on Android counted the
+// status and navigation bars too and hid the bottom buttons). visualViewport follows what is shown; it is measured
+// again on every change and shortly after loading (a browser bar that hides itself may change it without an event),
+// and a changed height makes the game lay itself out again through a resize event.
+(() => {
+  const root = document.documentElement;
+  let last = 0;
+  const measure = () => {
+    const vv = window.visualViewport;
+    const h = Math.round(vv ? vv.height * vv.scale : innerHeight);
+    if (!(h > 0) || h === last) return;
+    const first = !last; last = h;
+    root.style.setProperty('--app-h', h + 'px');
+    if (!first) dispatchEvent(new Event('resize'));
+  };
+  measure();
+  addEventListener('resize', measure);
+  if (window.visualViewport) visualViewport.addEventListener('resize', measure);
+  addEventListener('pageshow', measure);
+  [100, 500, 1500].forEach(ms => setTimeout(measure, ms));
+  // TEMPORARY (2026-11-08): what this page measured, shown in the launcher's Nastavení → "Údaje o obrazovce"
+  setTimeout(() => { try {
+    const p = document.createElement('div'); p.style.cssText = 'position:absolute;left:-50px;top:0;width:1px;height:100dvh;padding-bottom:env(safe-area-inset-bottom)';
+    document.body.appendChild(p); const dvh = Math.round(p.getBoundingClientRect().height - parseFloat(getComputedStyle(p).paddingBottom)), sb = Math.round(parseFloat(getComputedStyle(p).paddingBottom)); p.remove();
+    const vv = window.visualViewport;
+    localStorage.setItem('games.launcher.diag', JSON.stringify({ page: location.pathname.split('/').slice(-2, -1)[0], vv: vv ? Math.round(vv.height) : null, inner: innerHeight, client: root.clientHeight, dvh, sb, appH: last, app: Math.round(document.getElementById('app').getBoundingClientRect().height) }));
+  } catch (e) {} }, 2000);
+})();
+
+/* ---------- Engine ---------- */
+// Everything about the puzzle that does not touch the page: the beam tracer, the solver and the level generator
+// (tested in Node by extracting this block). A board is an array of cell tokens, row by row:
+//   ''  empty           'W' stone (stops light)      'S<c><d>' a lamp of colour c shining in direction d
+//   'T<c>' a target that wants colour c               'M' mirror (turns)   'F' fixed mirror   'H' half mirror (turns)
+// colours are bits: 1 red, 2 blue, 3 = both (violet); directions: 0 up, 1 right, 2 down, 3 left.
+// Every mirror cell has an orientation in ori[]: 0 = '/', 1 = '\'.
+function PaprsekEngine() {
+  const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0];
+  const TOKEN = /^(|W|S[12][0-3]|T[123]|[MFH])$/;
+  const SIZES = [5, 6, 7];
+  const MAX_TURN = 14;                          // turnable mirrors in one level: the solver tries 2^k positions
+  const refl = (o, d) => o ? 3 - d : d ^ 1;     // '/' : right <-> up, left <-> down;  '\' : right <-> down, left <-> up
+  const isMirror = t => t === 'M' || t === 'F' || t === 'H';
+  const turnable = t => t === 'M' || t === 'H';
+
+  // the board in a form the tracer reads fast; turn = the turnable mirrors (the bits of a solution mask)
+  function compile(n, board) {
+    const N = n * n, kind = new Uint8Array(N), want = new Uint8Array(N), srcs = [], tgts = [], turn = [];
+    for (let c = 0; c < N; c++) {
+      const t = board[c];
+      if (t === '') continue;
+      if (t === 'W') kind[c] = 1;
+      else if (t[0] === 'S') { kind[c] = 1; srcs.push(c, +t[2], +t[1]); }
+      else if (t[0] === 'T') { kind[c] = 2; want[c] = +t[1]; tgts.push(c); }
+      else { kind[c] = t === 'H' ? 4 : 3; if (turnable(t)) turn.push(c); }
+    }
+    return { n, N, kind, want, srcs, tgts, turn };
+  }
+
+  // Follows every beam. hit[c] = the colours reaching target c. With full: seg[c*4+side] = the colours drawn from the
+  // centre of cell c to its side, and order = the mirrors in the order the beams reach them.
+  function trace(L, ori, full) {
+    const { n, N, kind } = L, seen = new Uint8Array(N * 4), hit = new Uint8Array(N);
+    const seg = full ? new Uint8Array(N * 4) : null, order = full ? [] : null;
+    const st = L.srcs.slice();
+    while (st.length) {
+      const col = st.pop(), d = st.pop(), c = st.pop();
+      const k = c * 4 + d;
+      if ((seen[k] & col) === col) continue;
+      seen[k] |= col;
+      if (seg) seg[k] |= col;
+      const x = c % n + DX[d], y = (c / n | 0) + DY[d];
+      if (x < 0 || y < 0 || x >= n || y >= n) continue;        // out of the board
+      const c2 = y * n + x, t = kind[c2];
+      if (t === 1) continue;                                     // a stone or a lamp stops it at its side
+      if (seg) seg[c2 * 4 + (d ^ 2)] |= col;
+      if (t === 0) st.push(c2, d, col);
+      else if (t === 2) hit[c2] |= col;                          // a target takes it
+      else {
+        if (order && !order.includes(c2)) order.push(c2);
+        st.push(c2, refl(ori[c2], d), col);
+        if (t === 4) st.push(c2, d, col);                        // a half mirror also lets it through
+      }
+    }
+    return { hit, seg, order };
+  }
+  const solvedHit = (L, hit) => L.tgts.every(c => hit[c] === L.want[c]);
+  const isSolved = (L, ori) => solvedHit(L, trace(L, ori).hit);
+  const maskOf = (L, ori) => L.turn.reduce((m, c, j) => m | (ori[c] & 1) << j, 0);
+  const bits = m => { let b = 0; while (m) { m &= m - 1; b++; } return b; };
+
+  // every position of the turnable mirrors that lights all targets correctly (bit masks over L.turn)
+  function solutions(L, ori0) {
+    const k = L.turn.length, ori = Uint8Array.from(ori0), out = [];
+    if (k > MAX_TURN) return out;
+    for (let m = 0; m < 1 << k; m++) {
+      for (let j = 0; j < k; j++) ori[L.turn[j]] = m >> j & 1;
+      if (isSolved(L, ori)) out.push(m);
+    }
+    return out;
+  }
+  // the fewest turns from ori to a solution (each tap turns one mirror)
+  function distance(L, sols, ori) {
+    const m = maskOf(L, ori);
+    let best = Infinity;
+    for (const s of sols) best = Math.min(best, bits(m ^ s));
+    return best;
+  }
+  // a mirror to turn on the way to the nearest solution: the first one the light reaches (there always is one:
+  // if the beams reached no wrong mirror, they would run as in the solution and everything would be lit)
+  function hintCell(L, sols, ori) {
+    const m = maskOf(L, ori);
+    let best = Infinity, near = [];
+    for (const s of sols) { const b = bits(m ^ s); if (b < best) { best = b; near = [s]; } else if (b === best) near.push(s); }
+    if (!near.length || !best) return -1;
+    const order = trace(L, ori, true).order;
+    for (const c of order) {
+      const j = L.turn.indexOf(c);
+      if (j >= 0 && near.some(s => ((m ^ s) >> j) & 1)) return c;
+    }
+    const j = L.turn.findIndex((c, j) => ((m ^ near[0]) >> j) & 1);
+    return j >= 0 ? L.turn[j] : -1;
+  }
+
+  /* ---------- Levels ---------- */
+  // what each level holds: grid size; the beams (colour c, m mirrors on the way to its target, split = a half mirror
+  // whose second beam has that many mirrors before its own target, join = ends in the target of that beam, which then
+  // wants both colours); decoy = extra turnable mirrors off the way, wall = stones, fixed = path mirrors that cannot
+  // turn; min = how many mirrors are turned wrong at the start (the fewest moves)
+  const PLAN = [
+    { n: 5, beams: [{ c: 1, m: 2 }], decoy: 0, wall: 0, fixed: 0, min: 1 },
+    { n: 5, beams: [{ c: 1, m: 2 }], decoy: 1, wall: 1, fixed: 0, min: 2 },
+    { n: 5, beams: [{ c: 1, m: 3 }], decoy: 1, wall: 1, fixed: 0, min: 2 },
+    { n: 5, beams: [{ c: 1, m: 3 }], decoy: 2, wall: 1, fixed: 1, min: 2 },
+    { n: 6, beams: [{ c: 1, m: 4 }], decoy: 2, wall: 2, fixed: 1, min: 3 },
+    { n: 6, beams: [{ c: 1, m: 2 }, { c: 2, m: 2 }], decoy: 1, wall: 1, fixed: 0, min: 2 },
+    { n: 6, beams: [{ c: 1, m: 3 }, { c: 2, m: 2 }], decoy: 2, wall: 2, fixed: 1, min: 3 },
+    { n: 6, beams: [{ c: 1, m: 2 }, { c: 2, m: 2, join: 0 }], decoy: 2, wall: 1, fixed: 0, min: 3 },
+    { n: 6, beams: [{ c: 1, m: 3 }, { c: 2, m: 3, join: 0 }], decoy: 2, wall: 2, fixed: 1, min: 3 },
+    { n: 6, beams: [{ c: 1, m: 2, split: 1 }], decoy: 2, wall: 1, fixed: 0, min: 3 },
+    { n: 7, beams: [{ c: 1, m: 3 }, { c: 2, m: 3 }], decoy: 3, wall: 2, fixed: 1, min: 4 },
+    { n: 7, beams: [{ c: 1, m: 2, split: 2 }, { c: 2, m: 2 }], decoy: 2, wall: 2, fixed: 1, min: 4 },
+    { n: 7, beams: [{ c: 1, m: 3 }, { c: 2, m: 3, join: 0 }], decoy: 3, wall: 2, fixed: 1, min: 4 },
+    { n: 7, beams: [{ c: 2, m: 3, split: 2 }, { c: 1, m: 2 }], decoy: 3, wall: 2, fixed: 1, min: 5 },
+    { n: 7, beams: [{ c: 1, m: 3, split: 2 }, { c: 2, m: 3, join: 0 }], decoy: 2, wall: 2, fixed: 2, min: 5 },
+  ];
+  const MAX_LEVEL = 999;
+  // levels after the plan repeat its last five kinds, one wrong mirror more (other puzzles every level)
+  function planFor(level) {
+    if (level <= PLAN.length) return PLAN[level - 1];
+    const p = PLAN[PLAN.length - 5 + (level - PLAN.length - 1) % 5];
+    return Object.assign({}, p, { min: Math.min(6, p.min + 1) });
+  }
+
+  function rng(seed) {
+    let a = seed >>> 0;
+    const f = () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    f.int = k => Math.floor(f() * k);
+    f.shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = f.int(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    return f;
+  }
+
+  // One try at building a level: the beams are laid first (each a walk that turns at its mirrors), then decoys and
+  // stones go only where no beam runs, so the planned orientations light every target.
+  function build(P, r) {
+    const n = P.n, N = n * n, board = Array(N).fill(''), sol = new Uint8Array(N), beam = new Uint8Array(N);
+    const inb = (x, y) => x >= 0 && y >= 0 && x < n && y < n;
+    const free = c => board[c] === '' && !beam[c];
+    const pathMirrors = [];                     // { c, din } for the decoys on the wrong rays
+    const RUNS = [0, 1, 1, 2, 2, 3];
+    // from cell c going d: m stops for mirrors (one of them a half mirror when split), then the end piece
+    function walk(c, d, m, split, end) {
+      const half = split ? r.int(m + 1) : -1;
+      for (let s = 0; s <= m + (split ? 1 : 0); s++) {
+        const last = s === m + (split ? 1 : 0);
+        let x = c % n, y = c / n | 0, ok = false;
+        for (const run of r.shuffle(RUNS.slice())) {
+          let xx = x, yy = y, good = true;
+          for (let i = 0; i < run && good; i++) { xx += DX[d]; yy += DY[d]; good = inb(xx, yy) && board[yy * n + xx] === ''; }
+          xx += DX[d]; yy += DY[d];
+          if (!good || !inb(xx, yy) || !free(yy * n + xx)) continue;
+          // mark the run, then put the stop there
+          for (let i = 1; i <= run; i++) beam[(y + DY[d] * i) * n + x + DX[d] * i] = 1;
+          x = xx; y = yy; ok = true; break;
+        }
+        if (!ok) return -1;
+        const at = y * n + x;
+        beam[at] = 1;
+        if (last) { end(at, d); return at; }
+        // turn left or right, whichever way still has room
+        let o = r.int(2);
+        if (!inb(x + DX[refl(o, d)], y + DY[refl(o, d)])) o = 1 - o;
+        if (!inb(x + DX[refl(o, d)], y + DY[refl(o, d)])) return -1;
+        sol[at] = o;
+        if (s === half) {
+          board[at] = 'H';
+          const out = refl(sol[at], d), straight = inb(x + DX[d], y + DY[d]);
+          if (!straight) return -1;
+          // one way goes on with this walk, the other ends in a target of the same colour after `split` mirrors
+          const branchFirst = r.int(2);
+          const bd = branchFirst ? out : d, md = branchFirst ? d : out;
+          const t = walk(at, bd, split, 0, (e, dd) => { board[e] = 'T' + colour; });
+          if (t < 0) return -1;
+          pathMirrors.push({ c: at, din: d });
+          c = at; d = md;
+          continue;
+        }
+        board[at] = 'M';
+        pathMirrors.push({ c: at, din: d });
+        c = at; d = refl(sol[at], d);
+      }
+      return -1;
+    }
+    let colour = 0;
+    const mainEnd = [];
+    for (const b of P.beams) {
+      colour = b.c;
+      if (b.join !== undefined) {
+        // start in the target of beam `join` (it now wants both colours) and walk out to this beam's lamp
+        const t = mainEnd[b.join];
+        const tx = t % n, ty = t / n | 0;
+        const dirs = r.shuffle([0, 1, 2, 3]).filter(d => inb(tx + DX[d], ty + DY[d]) && free((ty + DY[d]) * n + tx + DX[d]));
+        if (!dirs.length) return null;
+        board[t] = 'T3';
+        const e = walk(t, dirs[0], b.m, b.split || 0, (e, dd) => { board[e] = 'S' + b.c + (dd ^ 2); });
+        if (e < 0) return null;
+        mainEnd.push(t);
+        continue;
+      }
+      // a lamp on a free cell, shining where there is room
+      const cells = r.shuffle([...Array(N).keys()].filter(free));
+      let placed = false;
+      for (const s of cells.slice(0, 12)) {
+        const sx = s % n, sy = s / n | 0;
+        const dirs = r.shuffle([0, 1, 2, 3]).filter(d => inb(sx + DX[d], sy + DY[d]) && inb(sx + 2 * DX[d], sy + 2 * DY[d]));
+        if (!dirs.length) continue;
+        board[s] = 'S' + b.c + dirs[0]; beam[s] = 1;
+        const e = walk(s, dirs[0], b.m, b.split || 0, (e, dd) => { board[e] = 'T' + b.c; });
+        if (e < 0) return null;
+        mainEnd.push(e); placed = true; break;
+      }
+      if (!placed) return null;
+    }
+    // fixed mirrors: some plain path mirrors keep their orientation for good
+    const plain = r.shuffle(pathMirrors.filter(p => board[p.c] === 'M'));
+    for (let i = 0; i < P.fixed && i < plain.length - 1; i++) board[plain[i].c] = 'F';
+    // decoys and stones: first on the rays a wrongly turned mirror sends the light along
+    const wrong = [];
+    for (const p of pathMirrors) {
+      if (board[p.c] === 'F') continue;
+      const d = refl(1 - sol[p.c], p.din);
+      let x = p.c % n + DX[d], y = (p.c / n | 0) + DY[d];
+      while (inb(x, y) && board[y * n + x] === '') { if (!beam[y * n + x]) wrong.push(y * n + x); x += DX[d]; y += DY[d]; }
+    }
+    const pickFree = (pref) => {
+      for (const c of r.shuffle(pref.slice())) if (free(c)) return c;
+      const all = r.shuffle([...Array(N).keys()].filter(free));
+      return all.length ? all[0] : -1;
+    };
+    for (let i = 0; i < P.decoy; i++) { const c = pickFree(wrong); if (c < 0) return null; board[c] = 'M'; sol[c] = r.int(2); }
+    for (let i = 0; i < P.wall; i++) { const c = pickFree(r.int(2) ? wrong : []); if (c < 0) return null; board[c] = 'W'; }
+    return { n, board, sol, pathMirrors };
+  }
+
+  // the pieces reach over nearly the whole board (not all in one corner)
+  function spread(B) {
+    const n = B.n; let x0 = n, x1 = -1, y0 = n, y1 = -1;
+    B.board.forEach((t, c) => { if (!t) return; const x = c % n, y = c / n | 0; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); });
+    return x1 - x0 >= n - 2 && y1 - y0 >= n - 2;
+  }
+
+  // The level of a number: always the same for the same number (seeded), solvable, and not solved at the start.
+  function generate(level) {
+    const P = planFor(level);
+    for (let relax = 0; relax < 4; relax++) {
+      const want = Math.max(1, P.min - relax);
+      for (let attempt = 0; attempt < 300; attempt++) {
+        const r = rng(level * 7919 + attempt * 104729 + relax * 15485863 + 1);
+        const B = build(P, r);
+        if (!B || relax < 2 && !spread(B)) continue;
+        const L = compile(B.n, B.board);
+        if (L.turn.length > MAX_TURN || !isSolved(L, B.sol)) continue;
+        const sols = solutions(L, B.sol);
+        if (!sols.length) continue;
+        const cand = B.pathMirrors.map(p => p.c).filter(c => turnable(B.board[c]));
+        if (cand.length < want) continue;
+        for (let k = 0; k < 6; k++) {
+          const ori = Uint8Array.from(B.sol);
+          for (const c of r.shuffle(cand.slice()).slice(0, want)) ori[c] ^= 1;
+          if (distance(L, sols, ori) === want) return { n: B.n, board: B.board, start: Array.from(ori), min: want, sols };
+        }
+      }
+    }
+    // never reached in the tests; a tiny level so the game still goes on
+    const board = Array(25).fill(''); board[10] = 'S11'; board[13] = 'M'; board[3] = 'T1';
+    const ori = Array(25).fill(0); ori[13] = 1;
+    const L = compile(5, board);
+    return { n: 5, board, start: ori, min: 1, sols: solutions(L, ori) };
+  }
+
+  return { DX, DY, TOKEN, SIZES, MAX_TURN, MAX_LEVEL, PLAN, refl, isMirror, turnable, compile, trace, solvedHit, isSolved, maskOf, solutions, distance, hintCell, planFor, rng, generate };
+}
+/* ---------- Engine end ---------- */
+
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const E = PaprsekEngine();
+
+/* ---------- Settings and storage ---------- */
+const ID = 'paprsek';                                     // = the folder name
+const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const THEMES = [
+  { id: 'night', name: 'Noc',      meta: '#0e1525' },
+  { id: 'slate', name: 'Břidlice', meta: '#2e363e' },
+  { id: 'paper', name: 'Papír', meta: '#f4ebdf' },
+];
+const DEFAULTS = { theme: 'night', vibrate: true };
+const MAX_LEVEL = E.MAX_LEVEL;
+const COLOUR = ['', 'červené', 'modré', 'fialové'];       // light of colour bit 1, 2, 3 (both)
+
+/* ---------- State ---------- */
+// level = the level to play next (after a win the following one), top = the highest level open to play,
+// bests[level] = the fewest moves that solved it. G = the level being played; LV and SOLS are computed from it.
+let S, G, level = 1, top = 1, bests = {}, LV = null, SOLS = [], hint = null, openLevel = null;
+const isFresh = () => G.history.length === 0;
+const inProgress = () => G && G.status === 'playing' && !isFresh();
+function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, level, top, bests, game: G }));
+    if (inProgress()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {} // rule: storage may be full or blocked; the game goes on
+}
+const clampLevel = v => Math.max(1, Math.min(MAX_LEVEL, v));
+const bit = v => v === 0 || v === 1;
+// rule: corrupted data never crashes the game; a broken history only loses Undo; the end comes from the board
+function validGame(g) {
+  try {
+    if (!g || typeof g !== 'object' || !Number.isInteger(g.level) || g.level < 1 || g.level > MAX_LEVEL || !E.SIZES.includes(g.n)) return false;
+    const N = g.n * g.n;
+    if (!Array.isArray(g.board) || g.board.length !== N || !g.board.every(t => typeof t === 'string' && E.TOKEN.test(t))) return false;
+    if (!g.board.some(t => t[0] === 'S') || !g.board.some(t => t[0] === 'T')) return false;
+    if (!Array.isArray(g.start) || g.start.length !== N || !g.start.every(bit)) return false;
+    if (!Array.isArray(g.ori) || g.ori.length !== N || !g.ori.every(bit)) return false;
+    const L = E.compile(g.n, g.board);
+    if (!L.turn.length || L.turn.length > E.MAX_TURN) return false;
+    g.board.forEach((t, c) => { if (!E.turnable(t)) g.ori[c] = g.start[c]; });  // only turnable mirrors move
+    const sols = E.solutions(L, g.start);
+    if (!sols.length) return false;
+    // the history must lead from the start to this position, else only Undo is lost
+    const okHist = Array.isArray(g.history) && g.history.every(c => Number.isInteger(c) && L.turn.includes(c));
+    if (okHist) { const o = g.start.slice(); g.history.forEach(c => { o[c] ^= 1; }); if (o.some((v, c) => v !== g.ori[c])) g.history = []; }
+    else g.history = [];
+    g.min = E.distance(L, sols, g.start);
+    g.status = E.isSolved(L, g.ori) ? 'won' : 'playing';
+    LV = L; SOLS = sols;
+    return true;
+  } catch (e) { return false; }
+}
+function normalize(s) {
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  s.vibrate = !!s.vibrate;
+}
+// starts level lv from its beginning (the same puzzle every time for the same number)
+function newGame(lv, msg) {
+  const r = E.generate(clampLevel(lv));
+  G = { level: clampLevel(lv), n: r.n, board: r.board, start: r.start.slice(), ori: r.start.slice(), history: [], min: r.min, status: 'playing' };
+  LV = E.compile(G.n, G.board); SOLS = r.sols; hint = null;
+  level = G.level;
+  save(); build(); render();
+  if (msg) toast(msg);
+}
+function restart() {
+  G.ori = G.start.slice(); G.history = []; G.status = 'playing'; hint = null;
+  buzz(); save(); render();
+  toast(`Úroveň ${G.level} je zase na začátku`);
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) {
+  // Chrome refuses vibration (with a console error) before the first real tap
+  if (!S.vibrate || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+  try { navigator.vibrate(ms); } catch (e) {}
+}
+let toastT;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('');
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+  $('#modal').hidden = false;
+}
+const plural = (n, one, few, many) => n === 1 ? one : n >= 2 && n <= 4 ? few : many;
+const movesWord = n => `${n} ${plural(n, 'tah', 'tahy', 'tahů')}`;
+const zFor = n => [2, 3, 4, 6, 7].includes(n) ? 'ze' : 'z';   // "z 1", "ze 2" … (said as words)
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- Drawing (SVG, 100 units per cell) ---------- */
+const RIVETS = [[-31, -31], [31, -31], [-31, 31], [31, 31]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5" class="rivet"/>`).join('');
+const rotOf = o => `rotate(${o ? 45 : -45}deg)`;
+function mirrorSVG(t, o) {
+  const bar = t === 'H'
+    ? '<rect x="-50" y="-8" width="100" height="16" rx="5" class="mir half"/><line x1="-40" x2="40" y1="0" y2="0" class="dash"/>'
+    : `<rect x="-50" y="-8" width="100" height="16" rx="5" class="mir${t === 'F' ? ' fix' : ''}"/>`;
+  const base = t === 'F' ? `<rect x="-43" y="-43" width="86" height="86" rx="12" class="plate"/>${RIVETS}` : '<circle r="45" class="disc"/>';
+  return `${base}<g class="rot" style="transform:${rotOf(o)}">${bar}</g>${t === 'F' ? '' : '<circle r="5" class="pivot"/>'}`;
+}
+function lampSVG(c, d) {
+  const sym = c === 1 ? '<circle r="13" class="f1"/>' : '<rect x="-12" y="-12" width="24" height="24" rx="3" class="f2"/>';
+  return `<g transform="rotate(${d * 90})"><rect x="-15" y="-48" width="30" height="34" rx="5" class="lamp"/><rect x="-13" y="-50" width="26" height="10" rx="3" class="f${c}"/></g>`
+    + `<circle r="30" class="lamp"/>${sym}`;
+}
+// a target: its shape tells the colour (circle = red, square = blue, both = violet); filled with the light that
+// reaches it: the right one glows with a tick, a wrong one shows a cross, part of violet is shown pale
+function targetSVG(w, h) {
+  const ok = h === w, wrong = (h & ~w) !== 0, part = !ok && !wrong && h > 0;
+  const fill = ok ? `f${w}` : h ? `f${h}${part ? ' part' : ''}` : 'hole';
+  let s = ok ? `<circle r="50" class="tglow f${w}"/>` : '';
+  if (w === 1) s += `<circle r="28" class="${fill}"/><circle r="34" class="ring k1"/>`;
+  else s += `<rect x="-28" y="-28" width="56" height="56" rx="6" class="${fill}"/><rect x="-35" y="-35" width="70" height="70" rx="9" class="ring k${w}"/>`;
+  if (w === 3) s += `<circle r="17" class="ring thin ${ok || h ? '' : 'k3'}" style="${ok || h ? 'stroke:#fff' : ''}"/>`;
+  if (ok) s += '<path d="M-15 1 -5 11 15 -11" class="mark-sh"/><path d="M-15 1 -5 11 15 -11" class="mark"/>';
+  else if (wrong) s += '<path d="M-11 -11 11 11M11 -11-11 11" class="mark-sh"/><path d="M-11 -11 11 11M11 -11-11 11" class="mark"/>';
+  return s;
+}
+const STONE = '<rect x="-41" y="-41" width="82" height="82" rx="14" class="stone"/><path d="M-24 -10-8-20 4-6M8 16 24 6" class="crack"/>';
+function pieceSVG(t, o, hit) {
+  if (t === 'W') return STONE;
+  if (t[0] === 'S') return lampSVG(+t[1], +t[2]);
+  if (t[0] === 'T') return targetSVG(+t[1], hit);
+  return mirrorSVG(t, o);
+}
+// the beams: every half segment (from a cell's centre to one of its sides) in the colour of the light on it
+function beamsSVG(n, seg) {
+  let ls = '';
+  for (let c = 0; c < n * n; c++) for (let s = 0; s < 4; s++) {
+    const m = seg[c * 4 + s]; if (!m) continue;
+    const x = c % n * 100 + 50, y = (c / n | 0) * 100 + 50;
+    ls += `<line x1="${x}" y1="${y}" x2="${x + E.DX[s] * 50}" y2="${y + E.DY[s] * 50}" class="k${m}"/>`;
+  }
+  return `<g class="glow">${ls}</g><g class="core">${ls}</g><g class="hot">${ls}</g>`;
+}
+// the whole picture of a board (the game board, the theme tiles and the help pictures)
+function sceneInner(n, board, ori, tr) {
+  const W = n * 100;
+  let grid = '';
+  for (let i = 1; i < n; i++) grid += `M${i * 100} 0V${W}M0 ${i * 100}H${W}`;
+  let pcs = '';
+  board.forEach((t, c) => {
+    if (!t) return;
+    pcs += `<g class="pc" data-c="${c}" transform="translate(${c % n * 100 + 50} ${(c / n | 0) * 100 + 50})">${pieceSVG(t, ori[c], tr.hit[c])}</g>`;
+  });
+  return `<rect width="${W}" height="${W}" class="floor"/><path d="${grid}" class="gridl"/><g class="beams">${beamsSVG(n, tr.seg)}</g><g class="pieces">${pcs}</g>`;
+}
+function miniSVG(n, board, ori) {
+  const tr = E.trace(E.compile(n, board), ori, true);
+  return `<svg viewBox="0 0 ${n * 100} ${n * 100}" aria-hidden="true">${sceneInner(n, board, ori, tr)}</svg>`;
+}
+// the pictures in the help and the theme tiles: a lamp, a mirror and a target (before and after a tap), and the colours
+const EX_TURN = ['S11', '', 'M', '', '', '', '', '', 'T1'];
+const EX_MIX = ['S21', '', 'T3', '', '', '', 'S11', '', 'M'];
+const EX_HALF = ['', '', '', 'S11', 'H', 'T1', '', 'T1', ''];
+const one = t => miniSVG(1, [t], [0]);
+const exOri = o => [0, 0, o, 0, 0, 0, 0, 0, 0];
+
+/* ---------- Rendering ---------- */
+let pcs = {};          // the drawn pieces of the board by cell
+function applyLook() {
+  root.dataset.theme = S.theme;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+}
+function cellLabel(c, hit) {
+  const t = G.board[c];
+  if (t === 'M') return 'Zrcadlo, ťukni a otočí se';
+  if (t === 'H') return 'Poloprůhledné zrcadlo, ťukni a otočí se';
+  if (t === 'F') return 'Pevné zrcadlo';
+  if (t === 'W') return 'Kámen';
+  if (t[0] === 'S') return `Lampa, svítí ${COLOUR[+t[1]]} světlo`;
+  if (t[0] === 'T') return `Terč na ${COLOUR[+t[1]]} světlo, ${hit === +t[1] ? 'svítí' : 'nesvítí'}`;
+  return 'Prázdné políčko';
+}
+// the board is drawn once per level; a move only changes the mirrors, the targets and the light
+function build() {
+  const n = G.n, tr = E.trace(LV, G.ori, true);
+  const sc = $('#scene');
+  sc.setAttribute('viewBox', `0 0 ${n * 100} ${n * 100}`);
+  sc.innerHTML = sceneInner(n, G.board, G.ori, tr);
+  pcs = {};
+  sc.querySelectorAll('.pc').forEach(el => { pcs[+el.dataset.c] = el; });
+  $('#taps').innerHTML = G.board.map((t, c) => `<button class="cell" data-c="${c}" aria-label="${cellLabel(c, tr.hit[c])}"></button>`).join('');
+  root.style.setProperty('--n', n);
+  layout();
+}
+function render() {
+  applyLook();
+  if (!G) return;
+  const tr = E.trace(LV, G.ori, true), won = G.status === 'won';
+  $('#scene .beams').innerHTML = beamsSVG(G.n, tr.seg);
+  for (const c of Object.keys(pcs)) {
+    const t = G.board[c], el = pcs[c];
+    if (E.isMirror(t)) { const r = el.querySelector('.rot'); if (r) r.style.transform = rotOf(G.ori[c]); }
+    else if (t[0] === 'T') el.innerHTML = targetSVG(+t[1], tr.hit[c]);
+  }
+  const btns = $('#taps').children;
+  for (let c = 0; c < btns.length; c++) { btns[c].classList.toggle('hint', c === hint); btns[c].setAttribute('aria-label', cellLabel(c, tr.hit[c])); }
+  $('#field').classList.toggle('won', won);
+  const lit = LV.tgts.filter(c => tr.hit[c] === LV.want[c]).length, all = LV.tgts.length;
+  $('#stats').innerHTML = `Úroveň <b>${G.level}</b> · Tahy: <b>${G.history.length}</b> · Nejméně: <b>${G.min}</b>`;
+  $('#hint').textContent = won ? 'Vyřešeno! Všechny terče svítí 🎉'
+    : hint !== null ? 'Ťukni na zrcadlo v modrém rámečku'
+    : isFresh() && G.level <= 2 ? 'Ťukni na zrcadlo, otočí se'
+    : `Svítí ${lit} ${zFor(all)} ${all} ${all === 1 ? 'terče' : 'terčů'}`;
+  $('#btnUndo').classList.toggle('dim', won || !G.history.length);
+  $('#btnGo').innerHTML = won ? nextLabel()
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2zm-3 18h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/></svg>Poradit';
+}
+// rule: the board size comes from the room that is left, so it fits without scrolling
+function layout() {
+  if (!G) return;
+  const b = $('#board'), bs = getComputedStyle(b);
+  const w = b.clientWidth - parseFloat(bs.paddingLeft) - parseFloat(bs.paddingRight);   // without the side margin (--gut)
+  const h = b.clientHeight - parseFloat(bs.paddingTop) - parseFloat(bs.paddingBottom) - 2; // 12 px above and below
+  // rule: cells ≥ 45 px (0.8 cm) on every phone; only a very short window (desktop) shrinks them further rather than overflow
+  const cs = Math.max(24, Math.min(96, Math.floor(Math.min(w, h) / (G.n + 0.3))));
+  root.style.setProperty('--cs', cs + 'px');
+  // the frame takes what is left, so the board reaches the side margin (but stays a thin frame)
+  root.style.setProperty('--pad', Math.max(4, Math.min(Math.floor(cs * .25), Math.floor((Math.min(w, h) - G.n * cs) / 2))) + 'px');
+}
+
+/* ---------- Playing ---------- */
+const nextLabel = () => G.level < MAX_LEVEL ? 'Další úroveň' : 'Hrát znovu';
+const wonToast = () => toast(`Vyřešeno – ťukni na ${nextLabel()}`);
+function turn(c) {
+  G.ori[c] ^= 1; G.history.push(c); hint = null;
+  if (E.isSolved(LV, G.ori)) { win(); return; }
+  buzz(); save(); render();
+}
+function win() {
+  G.status = 'won';
+  const m = G.history.length, prev = bests[G.level];
+  if (!prev || m < prev) bests[G.level] = m;
+  top = Math.max(top, clampLevel(G.level + 1));
+  level = clampLevel(G.level + 1);
+  hideToast(); save(); render();
+  buzz([40, 60, 40, 60, 80]);
+  // rule: an end dialog only for the game that ended (not over a new game started meanwhile)
+  whenFree(G, reducedMotion() ? 400 : 1500, () => showWin(prev));
+}
+function showWin(prev) {
+  const m = G.history.length;
+  showModal(`<h2>Výborně! 🎉</h2><p>Úroveň ${G.level} je vyřešená za <b>${movesWord(m)}</b>.</p>`
+    + (m <= G.min ? '<p>Rychleji to nejde!</p>' : `<p>Nejméně to jde za ${movesWord(G.min)}.</p>`)
+    + (prev && m < prev ? `<p>Nový rekord této úrovně (dřív ${movesWord(prev)}).</p>` : ''),
+    [{ text: nextLabel(), fn: () => newGame(level) }, { text: 'Prohlédnout', cls: 'alt' }]);
+}
+function tapCell(c) {
+  const t = G.board[c];
+  if (E.turnable(t)) {
+    if (G.status !== 'playing') { wonToast(); return; }
+    turn(c); return;
+  }
+  const hit = E.trace(LV, G.ori).hit[c];
+  if (t === 'F') toast('Tohle zrcadlo je pevné (na hranaté destičce), otočit nejde');
+  else if (t === 'W') toast('Kámen světlo zastaví');
+  else if (t[0] === 'S') toast(`Lampa svítí ${COLOUR[+t[1]]} světlo, otáčet jde jen zrcadla`);
+  else if (t[0] === 'T') {
+    const w = +t[1], what = `Terč chce ${COLOUR[w]} světlo${w === 3 ? ' (červené i modré)' : ''}`;
+    toast(hit === w ? `${what} a svítí` : !hit ? `${what}, zatím sem nic nedopadá`
+      : hit & ~w ? `${what}, ale dopadá sem ${COLOUR[hit]}` : `${what}, zatím sem dopadá jen ${COLOUR[hit]}`, 3200);
+  }
+  else toast('Otáčet jde jen zrcadla na kulatém podstavci');
+}
+$('#taps').addEventListener('click', e => {
+  const b = e.target.closest('.cell'); if (!b || !G) return;
+  tapCell(+b.dataset.c);
+});
+// rule: Undo ("Zpět") wherever it makes sense; when unavailable it says why
+$('#btnUndo').addEventListener('click', () => {
+  if (G.status !== 'playing') { wonToast(); return; }
+  if (!G.history.length) { toast('Zatím není co vrátit'); return; }
+  G.ori[G.history.pop()] ^= 1; hint = null;
+  buzz(); save(); render();
+});
+// Poradit: a mirror to turn on the way to the nearest solution; a tap on it turns it (blue frame, class hint)
+$('#btnGo').addEventListener('click', () => {
+  if (G.status === 'won') { newGame(level); return; }
+  const c = E.hintCell(LV, SOLS, G.ori);
+  if (c < 0) { toast('Poradit se teď nepovedlo, zkus Zpět'); return; }
+  hint = c;
+  buzz(8); render();
+  toast(`Otoč zrcadlo v modrém rámečku. Do cíle ještě nejméně ${movesWord(E.distance(LV, SOLS, G.ori))}.`, 3200);
+});
+// rule: a new game in the middle of one asks first. Nová hra = this level again from its start; after a win the next level
+$('#btnNew').addEventListener('click', () => {
+  if (G.status === 'won') { newGame(level); return; }
+  if (inProgress()) {
+    showModal(`<h2>Začít znovu?</h2><p>Úroveň ${G.level} začne od začátku, otočená zrcadla se vrátí.</p>`, [
+      { text: 'Ano, od začátku', fn: restart },
+      { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else toast(`Úroveň ${G.level} je na začátku. Jinou úroveň vybereš v Nastavení.`, 3200);
+});
+
+/* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
+const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+function renderSettings() {
+  const solved = Object.keys(bests).length, b = bests[level];
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Paprsek<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Úroveň</h3>
+      <div class="field"><div class="stepper">
+        <button class="sbtn${level > 1 ? '' : ' dim'}" data-act="dec" aria-label="Nižší úroveň">−</button>
+        <div class="sval">Úroveň ${level}</div>
+        <button class="sbtn${level < top ? '' : ' dim'}" data-act="inc" aria-label="Vyšší úroveň">+</button>
+      </div>
+      <div class="fnote">${b ? `Vyřešeno, nejlépe za ${movesWord(b)}.` : 'Zatím nevyřešeno.'} Vyřešených úrovní: ${solved}. Každá vyřešená úroveň otevře další.</div>
+      ${openLevel !== null && level !== openLevel ? `<div class="notice">Po návratu do hry začne <b>úroveň ${level}</b>${inProgress() ? ' a rozehraná úroveň se ztratí' : ''}.</div>` : ''}
+      </div>
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="mini" data-theme="${t.id}">${miniSVG(3, EX_TURN, exOri(1))}</span>${t.name}</button>`).join('')}</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'dec' || act === 'inc') {
+    const v = level + (act === 'inc' ? 1 : -1);
+    if (v < 1) { toast('Nižší úroveň už není'); return; }
+    if (v > MAX_LEVEL) { toast('Vyšší úroveň už není'); return; }
+    if (v > top) { toast(`Úroveň ${v} se otevře, až vyřešíš úroveň ${top}`); return; }
+    level = v;
+  }
+  else if (act === 'theme') S.theme = arg;
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí (úrovně zůstávají)'); }
+  normalize(S); buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
+});
+function openSettings() {
+  hideToast(); openLevel = level;
+  renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0;
+}
+// a change of the level starts it after returning and says so (rule)
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  const changed = openLevel !== null && level !== openLevel, had = inProgress();
+  openLevel = null;
+  if (changed) newGame(level, had ? `Začala úroveň ${level}, rozehraná se ztratila` : `Úroveň ${level}`);
+  else render();
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
+function renderHelp() {
+  const th = S.theme;
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Paprsek<small>Jak hrát</small></h2></div>
+    <section class="card help"><ol>
+      <li>Lampa svítí jedním směrem. Paprsek letí rovně, dokud do něčeho nenarazí.</li>
+      <li><b>Ťukni na zrcadlo</b> na kulatém podstavci a otočí se. Paprsek se od zrcadla odrazí do strany.
+        <div class="mini" data-theme="${th}">${miniSVG(3, EX_TURN, exOri(0))}<span class="arrow">ťuk<br>→</span>${miniSVG(3, EX_TURN, exOri(1))}</div></li>
+      <li>Doveď světlo do <b>všech terčů</b>. Terč se rozsvítí a ukáže fajfku, když do něj dopadne přesně jeho barva. Špatná barva ukáže křížek.
+        <div class="legend">
+          <span><span class="mini" data-theme="${th}">${one('T1')}</span>červený</span>
+          <span><span class="mini" data-theme="${th}">${one('T2')}</span>modrý</span>
+          <span><span class="mini" data-theme="${th}">${one('T3')}</span>fialový</span>
+        </div></li>
+      <li>Kolečko znamená červenou, čtvereček modrou. <b>Fialový</b> terč potřebuje obě světla: červené i modré.
+        <div class="mini" data-theme="${th}">${miniSVG(3, EX_MIX, Array(9).fill(0))}</div></li>
+      <li>Zrcadlo na hranaté destičce se šrouby je <b>pevné</b>, otočit nejde. <b>Kámen</b> světlo zastaví. Paprsky se můžou křížit.
+        <div class="legend">
+          <span><span class="mini" data-theme="${th}">${one('M')}</span>otočí se</span>
+          <span><span class="mini" data-theme="${th}">${one('F')}</span>pevné</span>
+          <span><span class="mini" data-theme="${th}">${one('W')}</span>kámen</span>
+        </div></li>
+      <li>Od vyšších úrovní je tu i <b>poloprůhledné zrcadlo</b> s čárkami: část světla projde rovně a část se odrazí.
+        <div class="mini" data-theme="${th}">${miniSVG(3, EX_HALF, [0, 0, 0, 0, 1, 0, 0, 0, 0])}</div></li>
+      <li><b>Zpět</b> vrátí poslední otočení, dá se ťukat opakovaně. <b>Poradit</b> ukáže v modrém rámečku zrcadlo, které je potřeba otočit; ťukni na něj.</li>
+      <li>Nahoře je vidět, kolika otočeními to jde nejméně. Nikam se nespěchá a každá úroveň jde vyřešit.</li>
+      <li>Úrovně jsou postupně těžší. <b>Nová hra</b> začne úroveň znovu od začátku, po vyřešení přejde na další. Vyřešené úrovně si můžeš znovu zahrát v Nastavení.</li>
+    </ol></section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// rule: ask for persistent storage so the browser does not delete the saved game by itself
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+const savedSettings = saved && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+// records: only whole levels with a sensible number of moves
+if (saved && saved.bests && typeof saved.bests === 'object') for (const [k, v] of Object.entries(saved.bests)) {
+  const lv = +k;
+  if (Number.isInteger(lv) && lv >= 1 && lv <= MAX_LEVEL && Number.isInteger(v) && v >= 1 && v < 10000) bests[lv] = v;
+}
+const solvedTop = Object.keys(bests).reduce((m, k) => Math.max(m, +k + 1), 1);
+top = clampLevel(Math.max(solvedTop, saved && Number.isInteger(saved.top) ? saved.top : 1));
+// the level to play: the saved one, else the one of the saved game (a broken game is made again from its number)
+const savedLevel = !saved ? 1 : Number.isInteger(saved.level) ? saved.level : saved.game && Number.isInteger(saved.game.level) ? saved.game.level : 1;
+level = Math.min(clampLevel(savedLevel), top);
+// contract: opened from the launcher (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+applyLook();
+if (saved && validGame(saved.game)) {
+  G = saved.game;
+  build();
+  // the level was changed in Settings and the page closed before returning: apply it now, as closing Settings would
+  // (after a win the expected level is the next one, so only a real change in Settings starts another level)
+  if (level !== (G.status === 'won' ? clampLevel(G.level + 1) : G.level)) newGame(level, inProgress() ? `Začala úroveň ${level}, rozehraná se ztratila` : `Úroveň ${level}`);
+  else render();
+}
+else newGame(level);
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// For testing
+window.Paprsek = { E, tapCell, get state() { return { S, G, level, top, bests, hint, sols: SOLS }; } };
+})();
+</script>
+</body>
+</html>

@@ -32,6 +32,8 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Spojování čísel | `games/spojovani-cisel/` | Posouvej a spojuj stejná čísla (jako 2048): šipky nebo tah prstem, Zpět, volitelně fotky nebo kresby na kostkách         |
 | Cesta ven       | `games/cesta-ven/`       | Posouvej auta (nebo kostky) na parkovišti, ať červené vyjede ven; úrovně postupně těžší, Poradit a Zpět                   |
 | Patnáctka       | `games/patnactka/`       | Posuvná skládačka: seřaď čísla posouváním na prázdné místo; desky 3 × 3, 4 × 4 a 5 × 5, mírné až úplné zamíchání, Zpět    |
+| Paprsek         | `games/paprsek/`         | Otáčej zrcadly, ať paprsky světla trefí všechny terče; barevné paprsky se mísí, úrovně postupně těžší, Poradit a Zpět     |
+| Kulička         | `games/kulicka/`         | Nakláněj telefon (nebo ťukej na šipky) a doveď kuličku bludištěm do cíle kolem děr; bez spěchu, Poradit ukáže cestu     |
 | Zavři čísla     | `games/zavri-cisla/`     | Kostková hra (Shut the Box): hoď kostkami a zavři destičky se stejným součtem; 9, 10 nebo 12 destiček, statistika         |
 | Kostky          | `games/kostky/`          | Klasické kostky (jedničky a pětky) se šesti kostkami proti počítači: házej, dokud se nebojíš, a body si zapiš; tři soupeři od začátečníka po mistra, hra do 3 000, 5 000 nebo 10 000 |
 | Dáma            | `games/dama/`            | Klasická česká dáma proti počítači: dlouhá dáma, braní je povinné; soupeř běžný hráč nebo mistr, Poradit a Zpět            |

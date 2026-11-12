@@ -7,6 +7,10 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Nová hra Paprsek: otáčej zrcadly a doveď paprsky světla do terčů; barevné paprsky se mísí.
+- Nová hra Kulička: nakláněj telefon a doveď kuličku bludištěm do cíle, nebo ji posílej šipkami. Po pádu do díry začíná kulička znovu od startu.
+- Cesta ven: úroveň vybraná v Nastavení po vyřešené úloze se po zavření a otevření hry opravdu spustí.
+
 ## 1.0.12 – 2026-11-12
 
 - Nová hra Dáma: klasická česká dáma proti počítači. Soupeř je běžný hráč, nebo mistr, který propočítá mnoho tahů dopředu; tlačítka Poradit a Zpět.

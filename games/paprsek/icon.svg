@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- background: the "Noc" theme -->
+  <rect width="512" height="512" fill="#0e1525"/>
+
+  <!-- the board: a 4 × 4 floor of cells of 100 in a dark frame -->
+  <rect x="40" y="40" width="432" height="432" rx="40" fill="#060a13"/>
+  <rect x="56" y="56" width="400" height="400" rx="16" fill="#182238"/>
+  <g stroke="#ffffff" stroke-opacity=".08" stroke-width="4">
+    <path d="M156 56v400M256 56v400M356 56v400M56 156h400M56 256h400M56 356h400"/>
+  </g>
+
+  <!-- the red beam: from the lamp on the left to the mirror, then down into the target -->
+  <g stroke-linecap="round" fill="none">
+    <path d="M106 206H306V406" stroke="#ff4b4b" stroke-width="34" stroke-opacity=".4"/>
+    <path d="M106 206H306V406" stroke="#ff4b4b" stroke-width="12"/>
+    <path d="M106 206H306V406" stroke="#fff" stroke-width="4" stroke-opacity=".8"/>
+    <!-- the blue beam from below-left into the same target -->
+    <path d="M106 406H306" stroke="#3d9bff" stroke-width="34" stroke-opacity=".4"/>
+    <path d="M106 406H306" stroke="#3d9bff" stroke-width="12"/>
+    <path d="M106 406H306" stroke="#fff" stroke-width="4" stroke-opacity=".8"/>
+  </g>
+
+  <!-- red lamp shining right -->
+  <g transform="translate(106 206)">
+    <rect x="14" y="-15" width="34" height="30" rx="5" fill="#2b3446" stroke="#a1adc3" stroke-width="3"/>
+    <rect x="40" y="-13" width="10" height="26" rx="3" fill="#ff4b4b"/>
+    <circle r="30" fill="#2b3446" stroke="#a1adc3" stroke-width="3"/>
+    <circle r="13" fill="#ff4b4b"/>
+  </g>
+  <!-- blue lamp shining right -->
+  <g transform="translate(106 406)">
+    <rect x="14" y="-15" width="34" height="30" rx="5" fill="#2b3446" stroke="#a1adc3" stroke-width="3"/>
+    <rect x="40" y="-13" width="10" height="26" rx="3" fill="#3d9bff"/>
+    <circle r="30" fill="#2b3446" stroke="#a1adc3" stroke-width="3"/>
+    <rect x="-12" y="-12" width="24" height="24" rx="3" fill="#3d9bff"/>
+  </g>
+
+  <!-- the mirror on its round turntable, turned "\" -->
+  <g transform="translate(306 206)">
+    <circle r="45" fill="#ffffff" fill-opacity=".09" stroke="#ffffff" stroke-opacity=".3" stroke-width="3"/>
+    <rect x="-50" y="-8" width="100" height="16" rx="5" fill="#e9f1fb" stroke="#0a0f1c" stroke-width="3" transform="rotate(45)"/>
+    <circle r="5" fill="#0a0f1c"/>
+  </g>
+
+  <!-- the violet target, lit by both colours, with a tick -->
+  <g transform="translate(306 406)">
+    <circle r="50" fill="#c763ff" opacity=".5"/>
+    <rect x="-28" y="-28" width="56" height="56" rx="6" fill="#c763ff"/>
+    <rect x="-35" y="-35" width="70" height="70" rx="9" fill="none" stroke="#c763ff" stroke-width="9"/>
+    <path d="M-15 1-5 11 15-11" fill="none" stroke="#000" stroke-opacity=".55" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M-15 1-5 11 15-11" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- a stone in the corner -->
+  <g transform="translate(406 106)">
+    <rect x="-41" y="-41" width="82" height="82" rx="14" fill="#5d6779" stroke="#363e4d" stroke-width="4"/>
+    <path d="M-24-10-8-20 4-6M8 16 24 6" fill="none" stroke="#363e4d" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

@@ -1,0 +1,1056 @@
+<!doctype html>
+<!--
+  Kulička: a wooden labyrinth with a steel ball. Tilt the phone (or tap the arrows) and guide the ball into the
+  goal hole, past the trap holes. The maze is a perfect maze generated from G.seed; trap holes lie only off the
+  way from the start to the goal, so they never block it. A fall sends the ball back to the start (user's
+  decision 2026-11-12) with a fresh Zpět history, and the falls counter goes up.
+-->
+<html lang="cs" data-theme="wood">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#6b4524">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kulička">
+<title>Kulička</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236b4524'/%3E%3Crect x='8' y='8' width='48' height='48' rx='6' fill='%23e8c995'/%3E%3Ccircle cx='40' cy='40' r='9' fill='%23263038'/%3E%3Ccircle cx='24' cy='24' r='9' fill='%23aab3bb'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
+/* --board: the labyrinth's floor, --wall/--wall-sh: its walls and their shadow, --hole: trap holes, --goal: the ring
+   around the goal hole, --path: the dotted way shown by Poradit */
+[data-theme="wood"]{--page:#6b4524;--bar:rgba(0,0,0,.18);--line:rgba(255,255,255,.1);--ink:#fff4e2;--soft:#efd9b8;--accent:#ffd27a;--chip:rgba(255,255,255,.13);--chip-line:rgba(255,255,255,.24);--btn:#ffd27a;--btn-ink:#3a2410;--btn-sh:#a4782f;--undo-bg:rgba(0,0,0,.22);--board:#e8c995;--wall:#8f5c2c;--wall-sh:#4f3015;--hole:#24150a;--goal:#2f9e57;--path:#1b5fa8}
+[data-theme="paper"]{--page:#f4ebdf;--bar:rgba(122,69,32,.06);--line:#e6d8c6;--ink:#2b1a0e;--soft:#6f5a48;--accent:#7a4520;--chip:#fff;--chip-line:#e6d8c6;--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--undo-bg:rgba(122,69,32,.1);--board:#fffaf3;--wall:#7a4520;--wall-sh:#d9c6ad;--hole:#2b1a0e;--goal:#2f8a4e;--path:#d9480f}
+[data-theme="green"]{--page:#1d5236;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.08);--ink:#eaf7ee;--soft:#cfe8d7;--accent:#ffd66b;--chip:rgba(255,255,255,.12);--chip-line:rgba(255,255,255,.2);--btn:#ffd66b;--btn-ink:#2a2200;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.25);--board:#e4f0dc;--wall:#2d6a49;--wall-sh:#143522;--hole:#0f2318;--goal:#d99a16;--path:#c2410c}
+
+/* ---------- Base ---------- */
+:root{--gut:12px} /* one side margin: bar buttons, board and bottom buttons line up (the safe areas are on #app) */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{background:var(--page);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+/* rule: 100dvh + safe areas, the board is sized from the room that is left (see layout()) */
+#app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings; touch targets ≥ 45 px) ---------- */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line);text-decoration:none}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:20px}
+/* narrow phones (360 px): less room between the bar buttons, so the name fits whole at 18 px; the outer margin stays */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:18px;letter-spacing:0}
+}
+
+/* ---------- Score row (rule: info goes on its own row, not in place of the name) ---------- */
+.stats{flex:none;text-align:center;padding:8px var(--gut) 0;font-size:20px;font-weight:700;color:var(--soft)}
+.stats b{color:var(--ink)}
+
+/* ---------- GAME: board ---------- */
+#board{flex:1;min-height:0;display:grid;place-items:center;padding:12px var(--gut)} /* rule: at least 12 px between the board and the rows above and below, on every screen */
+#maze{position:relative;border-radius:12px;box-shadow:0 5px 16px rgba(0,0,0,.32)}
+#maze canvas{position:absolute;left:0;top:0;width:100%;height:100%;border-radius:12px}
+/* iOS asks for the motion sensor only after a tap: this big button sits in the middle of the board until then */
+.enable{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;width:min(300px,90%);min-height:72px;padding:10px 16px;border-radius:18px;background:var(--btn);color:var(--btn-ink);font-size:23px;font-weight:800;line-height:1.2;box-shadow:0 4px 0 var(--btn-sh),0 8px 20px rgba(0,0,0,.35)}
+
+/* ---------- Bottom buttons ---------- */
+.tray{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px var(--gut) 12px;background:var(--bar);border-top:1px solid var(--line)}
+#hint{text-align:center;font-size:19px;line-height:1.3;color:var(--soft);min-height:25px}
+.row{display:flex;gap:10px}
+.undo{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:16px;font-size:21px;font-weight:800;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.undo svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.undo.arrow svg{width:38px;height:38px;stroke-width:3}
+/* the arrow Poradit points to: a thick frame in the colour of the dotted way */
+.undo.arrow.hint{box-shadow:inset 0 0 0 4px var(--path);background:color-mix(in srgb,var(--path) 22%,var(--undo-bg))}
+/* rule: an unavailable action is only dimmed and explains itself when tapped */
+.undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+@media (max-height:700px){ .undo{height:56px} }
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+/* rule: the head with Zpět and the game name stays at the top while scrolling */
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);margin-top:16px}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink)}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+/* a theme swatch: the frame colour around a piece of the floor with one wall and the ball */
+.swatch{position:relative;height:56px;border-radius:10px;background:var(--board);box-shadow:inset 0 0 0 7px var(--page),inset 0 0 0 8px rgba(0,0,0,.2)}
+.swatch::before{content:"";position:absolute;left:30%;top:7px;bottom:22px;width:7px;background:var(--wall)}
+.swatch::after{content:"";position:absolute;right:24%;top:19px;width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#aab3bb 55%,#4b535b)}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+/* small pictures of the ball, a hole and the goal in the game's theme */
+.pic{display:inline-block;vertical-align:middle;width:34px;height:34px;margin:0 4px}
+.mcard .stat{font-size:19px;color:var(--psoft)}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.mcard h2{font-size:28px;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+/* the toast sits just above the bottom buttons (--toast-b is measured in layout()) */
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + var(--toast-b,160px));transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+#toast.top{bottom:auto;top:var(--toast-t,120px)}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* short screens (user's decision): the top-bar buttons may be 42 px and the score row 18 px */
+@media (max-height:800px){
+  .topbar{height:54px}
+  .round{width:44px;height:44px}
+  .pill{height:44px}
+  .stats{font-size:18px;padding-top:6px}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Kulička</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <div class="stats">Pády: <b id="falls">0</b> · Hotovo: <b id="done">0</b></div>
+  <main id="board"><div id="maze"><canvas id="cvBase"></canvas><canvas id="cvTop"></canvas><button id="btnEnable" class="enable" hidden>Zapnout naklápění</button></div></main>
+  <footer class="tray">
+    <div id="hint"></div>
+    <div class="row">
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnLevel" class="undo">Vyrovnat</button>
+      <button class="undo arrow" data-d="0" aria-label="Nahoru"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20V4M5 11l7-7 7 7"/></svg></button>
+      <button id="btnHint" class="undo">Poradit</button>
+    </div>
+    <div class="row" id="rowArrows">
+      <button class="undo arrow" data-d="3" aria-label="Doleva"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12H4M11 5l-7 7 7 7"/></svg></button>
+      <button class="undo arrow" data-d="2" aria-label="Dolů"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M5 13l7 7 7-7"/></svg></button>
+      <button class="undo arrow" data-d="1" aria-label="Doprava"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16M13 5l7 7-7 7"/></svg></button>
+    </div>
+  </footer>
+</div>
+<!-- Every layer is shown and hidden only through its hidden attribute; every screen has a [data-act="close"] button (Back button contract) -->
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+<script>
+/* ---------- Visible height ---------- */
+// The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
+// enough: some browsers report it taller than what is visible (the app installed by Brave on Android counted the
+// status and navigation bars too and hid the bottom buttons). visualViewport follows what is shown; it is measured
+// again on every change and shortly after loading (a browser bar that hides itself may change it without an event),
+// and a changed height makes the game lay itself out again through a resize event.
+(() => {
+  const root = document.documentElement;
+  let last = 0;
+  const measure = () => {
+    const vv = window.visualViewport;
+    const h = Math.round(vv ? vv.height * vv.scale : innerHeight);
+    if (!(h > 0) || h === last) return;
+    const first = !last; last = h;
+    root.style.setProperty('--app-h', h + 'px');
+    if (!first) dispatchEvent(new Event('resize'));
+  };
+  measure();
+  addEventListener('resize', measure);
+  if (window.visualViewport) visualViewport.addEventListener('resize', measure);
+  addEventListener('pageshow', measure);
+  [100, 500, 1500].forEach(ms => setTimeout(measure, ms));
+  // TEMPORARY (2026-11-08): what this page measured, shown in the launcher's Nastavení → "Údaje o obrazovce"
+  setTimeout(() => { try {
+    const p = document.createElement('div'); p.style.cssText = 'position:absolute;left:-50px;top:0;width:1px;height:100dvh;padding-bottom:env(safe-area-inset-bottom)';
+    document.body.appendChild(p); const dvh = Math.round(p.getBoundingClientRect().height - parseFloat(getComputedStyle(p).paddingBottom)), sb = Math.round(parseFloat(getComputedStyle(p).paddingBottom)); p.remove();
+    const vv = window.visualViewport;
+    localStorage.setItem('games.launcher.diag', JSON.stringify({ page: location.pathname.split('/').slice(-2, -1)[0], vv: vv ? Math.round(vv.height) : null, inner: innerHeight, client: root.clientHeight, dvh, sb, appH: last, app: Math.round(document.getElementById('app').getBoundingClientRect().height) }));
+  } catch (e) {} }, 2000);
+})();
+
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const GUT = 12; // side margin in px, the same as --gut in the CSS
+const has = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+
+/* ---------- Settings and storage ---------- */
+const ID = 'kulicka';                                     // = the folder name
+const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const THEMES = [
+  { id: 'wood',  name: 'Dřevo',  meta: '#6b4524' },
+  { id: 'paper', name: 'Papír', meta: '#f4ebdf' },
+  { id: 'green', name: 'Zelená', meta: '#1d5236' },
+];
+// maze sizes in cells (columns × rows), made for a phone held upright
+const SIZES = {
+  s: { cols: 5, rows: 7,  name: 'Malé',    desc: 'Široké chodby, rychle hotové.' },
+  m: { cols: 7, rows: 10, name: 'Střední', desc: '' },
+  l: { cols: 9, rows: 13, name: 'Velké',   desc: 'Užší chodby a dlouhá cesta.' },
+};
+// share of the cells with a trap hole
+const HOLES = {
+  none: { rate: 0,    name: 'Žádné',  desc: 'Kulička nikam nespadne.' },
+  few:  { rate: .07,  name: 'Několik', desc: '' },
+  many: { rate: .14,  name: 'Hodně',  desc: 'Díra skoro u každé odbočky.' },
+};
+// acceleration in cells/s² for a full tilt (sin = 1)
+const SENS = {
+  low:  { k: 13, name: 'Malá',    desc: 'Kulička se rozjíždí pomalu.' },
+  mid:  { k: 22, name: 'Střední', desc: '' },
+  high: { k: 36, name: 'Velká',   desc: 'Stačí telefon nepatrně naklonit.' },
+};
+const CONTROLS = ['tilt', 'arrows'];
+const DEFAULTS = { control: 'tilt', sens: 'mid', size: 'm', holes: 'few', theme: 'wood', vibrate: true };
+
+/* ---------- GAME LOGIC: the maze ---------- */
+const rnd = n => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; } catch (e) { return Math.floor(Math.random() * n); } };
+// a small seeded generator: the same seed always gives the same maze (reload, Undo)
+function mulberry32(a) {
+  return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+// directions: 0 up, 1 right, 2 down, 3 left; a cell's walls are bits (1 up, 2 right, 4 down, 8 left)
+const DIRS = [{ b: 1, dc: 0, dr: -1 }, { b: 2, dc: 1, dr: 0 }, { b: 4, dc: 0, dr: 1 }, { b: 8, dc: -1, dr: 0 }];
+const opp = d => (d + 2) % 4;
+// physics in cell units: half the wall thickness, the ball radius, the drawn hole radius and how close the ball's
+// centre must come to fall in (the ball tips over the edge), the same for the goal
+const WALL = 0.08, BALL = 0.26, HOLE_R = 0.31, HOLE_IN = 0.2, GOAL_R = 0.36, GOAL_IN = 0.24, GOAL_SLOW = 0.8;
+const VMAX = 6, FRICTION = 1.6, BOUNCE = 0.35, STEP = 0.04, ROLL_SPEED = 9, DEAD = 0.025, HIST_MAX = 40;
+
+// A perfect maze (exactly one way between any two cells) by the recursive backtracker, from one corner; the goal
+// is the cell farthest from it. Trap holes go only on cells off the way to the goal, first on the entrances of side
+// branches (next to the way), never two next to each other, so they never block the way.
+function makeMaze(rules, seed) {
+  const { cols, rows } = SIZES[rules.size], n = cols * rows, rand = mulberry32(seed);
+  const walls = new Uint8Array(n).fill(15), seen = new Uint8Array(n);
+  const start = [0, cols - 1, n - cols, n - 1][Math.floor(rand() * 4)];
+  const stack = [start]; seen[start] = 1;
+  while (stack.length) {
+    const i = stack[stack.length - 1], c = i % cols, r = (i / cols) | 0, opts = [];
+    for (let d = 0; d < 4; d++) { const cc = c + DIRS[d].dc, rr = r + DIRS[d].dr; if (cc >= 0 && cc < cols && rr >= 0 && rr < rows && !seen[rr * cols + cc]) opts.push(d); }
+    if (!opts.length) { stack.pop(); continue; }
+    const d = opts[Math.floor(rand() * opts.length)], j = (r + DIRS[d].dr) * cols + c + DIRS[d].dc;
+    walls[i] &= ~DIRS[d].b; walls[j] &= ~DIRS[opp(d)].b; seen[j] = 1; stack.push(j);
+  }
+  const m = { cols, rows, walls, start, goal: start, hole: new Uint8Array(n), holes: [], rects: [] };
+  const { dist, prev } = bfs(m, start, false);
+  for (let i = 0; i < n; i++) if (dist[i] > dist[m.goal]) m.goal = i;
+  const onWay = new Uint8Array(n);
+  for (let i = m.goal; i >= 0; i = prev[i]) onWay[i] = 1;
+  // trap holes
+  const want = Math.round(n * HOLES[rules.holes].rate);
+  if (want) {
+    const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    const entrance = [], other = [];
+    for (let i = 0; i < n; i++) {
+      if (onWay[i]) continue;
+      (neighbours(m, i).some(j => onWay[j]) ? entrance : other).push(i);
+    }
+    const order = [...shuffle(entrance), ...shuffle(other)];
+    // first spread out (no two holes next to each other), then fill up when the maze has few side cells
+    for (const spread of [true, false]) for (const i of order) {
+      if (m.holes.length >= want) break;
+      if (m.hole[i] || spread && neighbours(m, i).some(j => m.hole[j])) continue;
+      m.hole[i] = 1; m.holes.push(i);
+    }
+    // the way to the goal must stay open (it does by construction; checked anyway)
+    if (bfs(m, start, true).dist[m.goal] < 0) { m.hole.fill(0); m.holes = []; }
+  }
+  // the walls as rectangles: every cell's top and left wall, plus the bottom and right edge of the board
+  const W = WALL;
+  for (let i = 0; i < n; i++) {
+    const c = i % cols, r = (i / cols) | 0, w = walls[i];
+    if (w & 1) m.rects.push([c - W, r - W, c + 1 + W, r + W]);
+    if (w & 8) m.rects.push([c - W, r - W, c + W, r + 1 + W]);
+    if (r === rows - 1 && w & 4) m.rects.push([c - W, r + 1 - W, c + 1 + W, r + 1 + W]);
+    if (c === cols - 1 && w & 2) m.rects.push([c + 1 - W, r - W, c + 1 + W, r + 1 + W]);
+  }
+  return m;
+}
+const isOpen = (m, i, d) => !(m.walls[i] & DIRS[d].b);
+const stepCell = (m, i, d) => i + DIRS[d].dr * m.cols + DIRS[d].dc;
+const neighbours = (m, i) => [0, 1, 2, 3].filter(d => isOpen(m, i, d)).map(d => stepCell(m, i, d));
+// distances from a cell through the open passages (avoidHoles: trap holes are closed)
+function bfs(m, from, avoidHoles) {
+  const n = m.cols * m.rows, dist = new Int32Array(n).fill(-1), prev = new Int32Array(n).fill(-1), q = [from];
+  dist[from] = 0;
+  for (let k = 0; k < q.length; k++) {
+    const i = q[k];
+    for (const j of neighbours(m, i)) if (dist[j] < 0 && !(avoidHoles && m.hole[j])) { dist[j] = dist[i] + 1; prev[j] = i; q.push(j); }
+  }
+  return { dist, prev };
+}
+// the way from a cell to the goal (list of cells), around the holes when it can
+function findPath(m, from) {
+  for (const avoid of [true, false]) {
+    const { dist, prev } = bfs(m, from, avoid);
+    if (dist[m.goal] < 0) continue;
+    const p = []; for (let i = m.goal; i >= 0; i = prev[i]) p.unshift(i);
+    return p;
+  }
+  return [from];
+}
+// Arrows: the ball rolls from a cell until a wall, a side opening (a junction), a hole or the goal
+function rollCells(m, from, d) {
+  const cells = [from];
+  let i = from;
+  while (isOpen(m, i, d)) {
+    i = stepCell(m, i, d); cells.push(i);
+    if (m.hole[i] || i === m.goal) break;
+    if ([0, 1, 2, 3].some(e => e !== d && e !== opp(d) && isOpen(m, i, e))) break;
+  }
+  return cells;
+}
+const openings = (m, i) => [0, 1, 2, 3].filter(d => isOpen(m, i, d)).length;
+const center = i => [i % M.cols + .5, ((i / M.cols) | 0) + .5];
+const cellAt = (x, y) => Math.min(M.rows - 1, Math.max(0, Math.floor(y))) * M.cols + Math.min(M.cols - 1, Math.max(0, Math.floor(x)));
+const rulesKey = r => `${r.size}-${r.holes}`;
+
+/* ---------- State ---------- */
+// S: settings; G: the game (saved); M: the maze made from G.rules and G.seed (not saved)
+// B: the ball in cell units (x, y = its centre; s = its drawn size while it falls); not saved, only its cell (G.ball)
+let S, G, M, stats = {};
+const B = { x: .5, y: .5, vx: 0, vy: 0, s: 1 };
+let anim = null, roll = null, hintPath = null, hintUntil = 0, hintDir = -1, winT = 0;
+const isFresh = () => !G.moved && !G.falls;
+const rulesChanged = () => S.size !== G.rules.size || S.holes !== G.rules.holes;
+function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+function save() {
+  try {
+    // the ball's cell, rounded to its centre (never a hole: a falling ball belongs to where it comes back)
+    if (G && M && (!anim || anim.type === 'appear') && !roll && G.status === 'playing') { const i = cellAt(B.x, B.y); if (!M.hole[i] && i !== M.goal) G.ball = i; } // only win() puts the ball on the goal
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, stats }));
+    if (G.status === 'playing' && !isFresh()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {} // rule: storage may be full or blocked; the game goes on
+}
+// rule: corrupted data never crashes the game; a broken history only loses Undo; the end comes from the board
+function validGame(g) {
+  try {
+    if (!g || typeof g !== 'object' || !g.rules || !has(SIZES, g.rules.size) || !has(HOLES, g.rules.holes) || !Number.isInteger(g.seed)) return null;
+    g.rules = { size: g.rules.size, holes: g.rules.holes };
+    const m = makeMaze(g.rules, g.seed), n = m.cols * m.rows;
+    const okCell = i => Number.isInteger(i) && i >= 0 && i < n && !m.hole[i];
+    if (!Array.isArray(g.history) || !g.history.every(i => okCell(i) && i !== m.goal)) g.history = [];
+    // a won maze is always counted at once (win()); the ball on the goal of an uncounted maze is no win
+    if (g.ball === m.goal && g.counted !== true) g.ball = g.history.length ? g.history[g.history.length - 1] : m.start;
+    if (!okCell(g.ball)) g.ball = m.start;
+    g.history = g.history.slice(-HIST_MAX);
+    if (!g.history.length) g.history = [g.ball];
+    g.falls = Number.isInteger(g.falls) && g.falls >= 0 ? g.falls : 0;
+    g.moved = g.moved === true || g.ball !== m.start;
+    g.status = g.ball === m.goal ? 'won' : 'playing';
+    g.counted = g.counted === true || g.status === 'won';
+    return m;
+  } catch (e) { return null; }
+}
+const validStat = s => !!s && typeof s === 'object' && Number.isInteger(s.done) && s.done >= 0 && (s.best === null || Number.isInteger(s.best) && s.best >= 0);
+function normalize(s) {
+  if (!CONTROLS.includes(s.control)) s.control = DEFAULTS.control;
+  if (!has(SENS, s.sens)) s.sens = DEFAULTS.sens;
+  if (!has(SIZES, s.size)) s.size = DEFAULTS.size;
+  if (!has(HOLES, s.holes)) s.holes = DEFAULTS.holes;
+  if (s.theme === 'cream') s.theme = 'paper'; // renamed
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  s.vibrate = !!s.vibrate;
+}
+function placeBall(i) { [B.x, B.y] = center(i); B.vx = B.vy = 0; B.s = 1; }
+function newGame(msg) {
+  G = { rules: { size: S.size, holes: S.holes }, seed: rnd(2 ** 31), ball: 0, history: [], falls: 0, moved: false, status: 'playing', counted: false };
+  M = makeMaze(G.rules, G.seed);
+  G.ball = M.start; G.history = [M.start];
+  anim = roll = null; clearHint(); placeBall(G.ball);
+  keepArrows = sensor === 'none'; // a sensor that woke up late gets its tilt layout back with the new maze
+  startLevel();
+  save(); render(); layout();
+  if (msg) toast(msg);
+}
+// A finished maze goes into the statistics of its variant once (the end cannot be undone)
+let newBest = false;
+function recordWin() {
+  newBest = false;
+  if (G.counted) return;
+  G.counted = true;
+  const k = rulesKey(G.rules), prev = stats[k], st = prev ? { ...prev } : { done: 0, best: null };
+  st.done++;
+  newBest = !!prev && prev.best !== null && G.falls < prev.best;
+  if (st.best === null || G.falls < st.best) st.best = G.falls;
+  stats[k] = st;
+}
+
+/* ---------- The tilt sensor ---------- */
+// sensor: 'off' (not asked yet), 'wait' (listening, nothing came yet), 'ok', 'none' (nothing comes: arrows), 'ask'
+// (iOS: allowed only after a tap). The neutral position is the way the phone is held when the game starts or comes
+// back (after Settings, Help, a dialog or another app) and whenever Vyrovnat is tapped: the gravity measured then
+// counts as "level", so a phone held tilted toward the player keeps the ball still.
+let sensor = 'off', sensorOn = false, waitT = 0;
+let grav = null;          // smoothed gravity in the phone's own axes (x right, y up, z out of the screen)
+let level = null;         // rotation that turns the neutral gravity into "flat"
+let leveling = 0, levelSum = [0, 0, 0], levelN = 0;
+let testTilt = null;      // tests: a tilt set directly, without the sensor
+const tiltOn = () => S.control === 'tilt' && (sensor === 'ok' || !!testTilt);
+// once the arrows came as the fallback they stay for this maze, even when the sensor wakes up late (buttons never
+// move under a finger); tilting works then too
+let keepArrows = false;
+const arrowsShown = () => S.control === 'arrows' || sensor === 'none' || (keepArrows && S.control === 'tilt');
+function onOrient(e) {
+  if (e.beta == null || e.gamma == null) return;
+  const b = e.beta * Math.PI / 180, g = e.gamma * Math.PI / 180;
+  const v = [Math.sin(g) * Math.cos(b), -Math.sin(b), -Math.cos(g) * Math.cos(b)];
+  grav = grav ? grav.map((x, i) => x * .6 + v[i] * .4) : v;
+  if (leveling) { for (let i = 0; i < 3; i++) levelSum[i] += v[i]; levelN++; }
+  else if (!level) level = rotationToFlat(v);
+  if (sensor !== 'ok') {
+    const late = sensor === 'none';
+    sensor = 'ok'; clearTimeout(waitT); render();
+    if (late && S.control === 'tilt') { startLevel(); toast('Naklápění už funguje, šipky zůstanou do dalšího bludiště', 3600); }
+  }
+}
+function listen() {
+  sensorOn = true;
+  if (!('DeviceOrientationEvent' in window)) { noSensor(); return; }
+  addEventListener('deviceorientation', onOrient);
+  if (sensor !== 'ok') sensor = 'wait';
+  clearTimeout(waitT);
+  waitT = setTimeout(() => { if (sensor === 'wait') noSensor(); }, 1000);
+}
+function noSensor() {
+  sensor = 'none'; keepArrows = true; render(); // the hint line says "Naklápění nejde, hraj šipkami"
+}
+function initSensor() {
+  if (sensorOn || sensor === 'ask' || S.control !== 'tilt') return;
+  // A browser with requestPermission (iOS 13+, newer Chrome) is asked at once: Chrome answers "granted" by itself,
+  // iOS refuses without a tap, and only then the big "Zapnout naklápění" button is shown
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    sensorOn = true;
+    const ask = () => { sensorOn = false; sensor = 'ask'; render(); };
+    try { DeviceOrientationEvent.requestPermission().then(r => { if (r === 'granted') listen(); else ask(); }).catch(ask); } catch (e) { ask(); }
+    return;
+  }
+  listen();
+}
+function askSensor() {
+  const refused = () => { sensorOn = true; sensor = 'none'; keepArrows = true; render(); toast('Naklápění není povolené, hraj šipkami', 3600); };
+  try {
+    DeviceOrientationEvent.requestPermission().then(r => { if (r === 'granted') { listen(); startLevel(); render(); } else refused(); }).catch(refused);
+  } catch (e) { refused(); }
+}
+// Rodrigues: the rotation that turns the unit vector n into (0, 0, -1)
+function rotationToFlat(n) {
+  const len = Math.hypot(n[0], n[1], n[2]) || 1, a = n.map(x => x / len);
+  const c = -a[2];                                     // cos of the angle between n and (0,0,-1)
+  let k = [-a[1], a[0], 0];                            // n × (0,0,-1)
+  const s = Math.hypot(k[0], k[1]);
+  if (s < 1e-6) return c > 0 ? [1, 0, 0, 0, 1, 0, 0, 0, 1] : [1, 0, 0, 0, -1, 0, 0, 0, -1];
+  k = k.map(x => x / s);
+  const t = 1 - c, [x, y, z] = k;
+  return [t * x * x + c, t * x * y - s * z, t * x * z + s * y,
+          t * x * y + s * z, t * y * y + c, t * y * z - s * x,
+          t * x * z - s * y, t * y * z + s * x, t * z * z + c];
+}
+function startLevel() { leveling = performance.now() + 300; levelSum = [0, 0, 0]; levelN = 0; }
+function finishLevel() {
+  leveling = 0;
+  if (levelN) level = rotationToFlat(levelSum);
+  else if (grav) level = rotationToFlat(grav);
+}
+const screenAngle = () => { try { return ((screen.orientation && screen.orientation.angle) || window.orientation || 0) * Math.PI / 180; } catch (e) { return 0; } };
+// the ball's acceleration on the screen (x right, y down) in cells/s²
+function tiltAccel() {
+  const k = SENS[S.sens].k;
+  if (testTilt) return [testTilt[0] * k, testTilt[1] * k];
+  if (!grav || !level || leveling) return [0, 0];
+  const R = level, g = grav;
+  const dx = R[0] * g[0] + R[1] * g[1] + R[2] * g[2], dy = R[3] * g[0] + R[4] * g[1] + R[5] * g[2];
+  const th = screenAngle(), sx = dx * Math.cos(th) - dy * Math.sin(th), sy = dx * Math.sin(th) + dy * Math.cos(th);
+  const dz = v => Math.abs(v) < DEAD ? 0 : v - Math.sign(v) * DEAD; // a hand never holds quite still
+  return [dz(sx) * k, dz(-sy) * k];
+}
+
+/* ---------- Physics and moves ---------- */
+let bumpT = 0;
+function collide() {
+  for (let pass = 0; pass < 2; pass++) for (const q of M.rects) {
+    if (B.x + BALL < q[0] || B.x - BALL > q[2] || B.y + BALL < q[1] || B.y - BALL > q[3]) continue;
+    const px = Math.max(q[0], Math.min(B.x, q[2])), py = Math.max(q[1], Math.min(B.y, q[3]));
+    const dx = B.x - px, dy = B.y - py, d = Math.hypot(dx, dy);
+    if (d >= BALL) continue;
+    let nx, ny, pen;
+    if (d > 1e-6) { nx = dx / d; ny = dy / d; pen = BALL - d; }
+    else { // the centre got inside a wall: out the shortest way
+      const l = B.x - q[0], r = q[2] - B.x, t = B.y - q[1], b = q[3] - B.y, mn = Math.min(l, r, t, b);
+      if (mn === l) { nx = -1; ny = 0; } else if (mn === r) { nx = 1; ny = 0; } else if (mn === t) { nx = 0; ny = -1; } else { nx = 0; ny = 1; }
+      pen = mn + BALL;
+    }
+    B.x += nx * pen; B.y += ny * pen;
+    const vn = B.vx * nx + B.vy * ny;
+    if (vn < 0) { B.vx -= (1 + BOUNCE) * vn * nx; B.vy -= (1 + BOUNCE) * vn * ny; if (-vn > 2.5) bumpT = 1; }
+  }
+}
+// true when the ball fell into a hole or reached the goal
+function checkHoles() {
+  const i = cellAt(B.x, B.y), [cx, cy] = center(i), d = Math.hypot(B.x - cx, B.y - cy);
+  // the goal sits in a dead end: a ball near its hole drops in, and so does a slow ball that got into the goal's cell
+  // (it never stays stuck "almost in" at the opening)
+  if (i === M.goal && (d < GOAL_IN || Math.hypot(B.vx, B.vy) < GOAL_SLOW)) { win(); return true; }
+  if (M.hole[i] && d < HOLE_IN) { fall(i); return true; }
+  return false;
+}
+let restT = 0, physCell = -1;
+function physics(dt) {
+  const [ax, ay] = tiltAccel();
+  B.vx += ax * dt; B.vy += ay * dt;
+  const f = Math.max(0, 1 - FRICTION * dt); B.vx *= f; B.vy *= f;
+  const sp = Math.hypot(B.vx, B.vy);
+  if (sp > VMAX) { B.vx *= VMAX / sp; B.vy *= VMAX / sp; }
+  // substeps: never more than STEP per step, so the ball can never pass through a wall
+  const n = Math.min(80, Math.max(1, Math.ceil(Math.hypot(B.vx, B.vy) * dt / STEP)));
+  for (let k = 0; k < n; k++) {
+    B.x += B.vx * dt / n; B.y += B.vy * dt / n;
+    collide();
+    if (checkHoles()) return;
+  }
+  if (bumpT) { bumpT = 0; buzz(8); }
+  // the places Zpět goes back to: junctions the ball passes near their middle, and places where it stops
+  const i = cellAt(B.x, B.y), [cx, cy] = center(i);
+  if (i !== M.start && !G.moved) { G.moved = true; save(); render(); }
+  if (i !== physCell) { physCell = i; updateUndo(); } // Zpět depends on where the ball is now
+  if (Math.hypot(B.vx, B.vy) < .15) restT += dt; else restT = 0;
+  if (openings(M, i) >= 3 && Math.hypot(B.x - cx, B.y - cy) < .3) pushPoint(i);
+  else if (restT > .7) pushPoint(i);
+}
+function pushPoint(i) {
+  if (M.hole[i] || i === M.goal || G.history[G.history.length - 1] === i) return;
+  G.history.push(i);
+  if (G.history.length > HIST_MAX) G.history.shift();
+  save(); render();
+}
+// a fall sends the ball back to the start (user's decision): Zpět then has nothing before it
+function fall(i) {
+  roll = null; restT = 0;
+  G.falls++; G.moved = true;
+  G.ball = M.start; G.history = [M.start];
+  anim = { type: 'fall', t0: performance.now(), dur: 550, from: [B.x, B.y], to: center(i), back: M.start };
+  B.vx = B.vy = 0;
+  buzz(80); save(); render();
+}
+function win() {
+  roll = null; clearHint();
+  G.status = 'won'; G.ball = M.goal; G.moved = true;
+  recordWin(); save();
+  anim = { type: 'win', t0: performance.now(), dur: 650, from: [B.x, B.y], to: center(M.goal) };
+  B.vx = B.vy = 0;
+  buzz([40, 70, 40]); render();
+  // rule: an end dialog only for the game that ended, never over Settings or Help (whenFree)
+  const g0 = G;
+  whenFree(g0, 1600, () => showEnd());
+}
+function showEnd() {
+  const st = stats[rulesKey(G.rules)] || { done: 0, best: null };
+  const falls = G.falls === 0 ? 'Ani jednou nespadla do díry.' : G.falls === 1 ? 'Do díry spadla jednou.' : `Do díry spadla ${G.falls}krát.`;
+  showModal(`<h2>Výborně! 🎉</h2><p>Kulička je v cíli. ${M.holes.length ? falls : ''}</p>
+    ${newBest ? '<p><b>Nejméně pádů v tomhle bludišti!</b></p>' : ''}
+    <p class="stat">${SIZES[G.rules.size].name} bludiště, díry: ${HOLES[G.rules.holes].name.toLowerCase()}<br>Hotovo: <b>${st.done}</b>${M.holes.length && st.best !== null ? ` · Nejméně pádů: <b>${st.best}</b>` : ''}</p>`,
+    [{ text: 'Další bludiště', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]);
+}
+// one tap on an arrow: the ball rolls to the next wall or junction (a hole or the goal on the way catches it)
+function arrow(d) {
+  if (G.status !== 'playing') { toast('Kulička je v cíli – ťukni na Nová hra'); return; }
+  if (anim || roll) { toast('Chvilku, kulička ještě jede'); return; }
+  const from = cellAt(B.x, B.y);
+  if (!isOpen(M, from, d)) { toast('Tím směrem je stěna'); return; }
+  const cells = rollCells(M, from, d);
+  roll = { pts: [[B.x, B.y], center(from), ...cells.slice(1).map(center)], i: 0, along: 0, end: cells[cells.length - 1] };
+  B.vx = B.vy = 0; restT = 0;
+  clearHint(); buzz(8);
+}
+function stepRoll(dt) {
+  let go = ROLL_SPEED * dt;
+  while (roll && go > 0) {
+    const a = roll.pts[roll.i], b = roll.pts[roll.i + 1];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]), left = len - roll.along;
+    if (go < left) { roll.along += go; go = 0; const t = roll.along / len; B.x = a[0] + (b[0] - a[0]) * t; B.y = a[1] + (b[1] - a[1]) * t; }
+    else { go -= left; roll.i++; roll.along = 0; [B.x, B.y] = b; if (roll.i >= roll.pts.length - 1) endRoll(); }
+  }
+}
+function endRoll() {
+  const e = roll.end; roll = null;
+  G.moved = true;
+  if (M.hole[e]) fall(e);
+  else if (e === M.goal) win();
+  else pushPoint(e);
+  save(); render();
+}
+function stepAnim(now) {
+  const a = anim, t = Math.min(1, (now - a.t0) / a.dur), e = t * t * (3 - 2 * t);
+  if (a.type === 'fall' || a.type === 'win') {
+    B.x = a.from[0] + (a.to[0] - a.from[0]) * e; B.y = a.from[1] + (a.to[1] - a.from[1]) * e;
+    B.s = 1 - (a.type === 'fall' ? .65 : .4) * e;
+  } else if (a.type === 'appear') B.s = .2 + .8 * e;
+  if (t < 1) return;
+  if (a.type === 'fall') {
+    placeBall(a.back); B.s = .2; G.ball = a.back;
+    anim = { type: 'appear', t0: now + 200, dur: 300 };
+    save(); render(); toast('Kulička spadla do díry a vrací se na začátek');
+  } else if (a.type === 'win') { anim = null; B.s = .6; winT = now; }
+  else { anim = null; B.s = 1; restT = 0; }
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) {
+  // Chrome refuses vibration (with a console error) before the first real tap
+  if (!S.vibrate || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+  try { navigator.vibrate(ms); } catch (e) {}
+}
+let toastT;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  placeToast(t);
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// The toast never hides the ball or the goal: it goes above the bottom buttons or just below the score row,
+// whichever covers neither; when both would cover something, the place that leaves the ball free
+function placeToast(t) {
+  t.classList.remove('top');
+  if (!M) return;
+  const mz = $('#maze').getBoundingClientRect(), ox = mz.left + WALL * cs, oy = mz.top + WALL * cs;
+  const spot = (x, y, r) => ({ l: ox + (x - r) * cs, r: ox + (x + r) * cs, t: oy + (y - r) * cs, b: oy + (y + r) * cs });
+  const [gx, gy] = center(M.goal), ball = spot(B.x, B.y, BALL + .15), goal = spot(gx, gy, GOAL_R + .15);
+  const w = t.offsetWidth, h = t.offsetHeight, l = (innerWidth - w) / 2, cst = getComputedStyle(root);
+  const bottom = innerHeight - (parseFloat(cst.getPropertyValue('--toast-b')) || 160);
+  const top = parseFloat(cst.getPropertyValue('--toast-t')) || 120;
+  const hits = (y0, s) => l < s.r && s.l < l + w && y0 < s.b && s.t < y0 + h;
+  const score = y0 => (hits(y0, ball) ? 2 : 0) + (hits(y0, goal) ? 1 : 0);
+  if (score(top) < score(bottom - h)) t.classList.add('top');
+}
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('');
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+  $('#modal').hidden = false;
+}
+function clearHint() {
+  hintPath = null; hintDir = -1;
+  document.querySelectorAll('.arrow.hint').forEach(b => b.classList.remove('hint'));
+}
+
+/* ---------- Rendering ---------- */
+const cvBase = $('#cvBase'), cvTop = $('#cvTop'), ctxBase = cvBase.getContext('2d'), ctxTop = cvTop.getContext('2d');
+let cs = 40, dpr = 1, colors = {};
+function applyLook() {
+  root.dataset.theme = S.theme;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+  const cst = getComputedStyle(root);
+  for (const k of ['board', 'wall', 'wall-sh', 'hole', 'goal', 'path']) colors[k] = cst.getPropertyValue('--' + k).trim();
+}
+function canUndo() {
+  const cur = cellAt(B.x, B.y);
+  return G.history.some(x => x !== cur);
+}
+function render() {
+  if (!G) return;
+  applyLook();
+  $('#falls').textContent = G.falls;
+  const st = stats[rulesKey(G.rules)];
+  $('#done').textContent = st ? st.done : 0;
+  const arrows = arrowsShown();
+  $('#rowArrows').hidden = !arrows;
+  $('.arrow[data-d="0"]').hidden = !arrows;
+  $('#btnLevel').hidden = arrows;
+  $('#btnEnable').hidden = !(S.control === 'tilt' && sensor === 'ask' && G.status === 'playing');
+  $('#hint').textContent = G.status === 'won' ? 'Kulička je v cíli!'
+    : S.control === 'arrows' ? 'Ťukni na šipku a kulička pojede'
+    : sensor === 'none' ? 'Naklápění nejde, hraj šipkami'
+    : sensor === 'ask' ? 'Ťukni na Zapnout naklápění'
+    : arrows ? 'Nakloň telefon nebo ťukni na šipku'
+    : 'Nakloň telefon a kulička pojede';
+  updateUndo();
+  $('#btnHint').classList.toggle('dim', G.status !== 'playing');
+  if (M) drawBase();
+  // the arrows came or went: the board gets the room that is left now (and the toast its place)
+  if (arrows !== lastArrows) { lastArrows = arrows; layout(); }
+}
+let lastArrows = null;
+const updateUndo = () => $('#btnUndo').classList.toggle('dim', G.status !== 'playing' || !canUndo());
+// rule: the board size comes from the room that is left, so it fits without scrolling
+function layout() {
+  if (!G || !M) return;
+  const b = $('#board');
+  const room = [b.clientWidth - 2 * GUT, b.clientHeight - 24]; // inside #board's padding (GUT at the sides, 12 px above and below)
+  const uw = M.cols + 2 * WALL, uh = M.rows + 2 * WALL;
+  cs = Math.max(8, Math.min(96, Math.floor(Math.min(room[0] / uw, room[1] / uh) * 4) / 4));
+  dpr = Math.min(3, window.devicePixelRatio || 1);
+  const w = Math.round(uw * cs), h = Math.round(uh * cs), mz = $('#maze');
+  mz.style.width = w + 'px'; mz.style.height = h + 'px';
+  for (const c of [cvBase, cvTop]) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  root.style.setProperty('--toast-b', ($('.tray').offsetHeight + 14) + 'px');
+  root.style.setProperty('--toast-t', Math.round($('.stats').getBoundingClientRect().bottom + 10) + 'px');
+  drawBase(); lastKey = '';
+}
+const toCells = ctx => ctx.setTransform(dpr * cs, 0, 0, dpr * cs, dpr * WALL * cs, dpr * WALL * cs);
+function circle(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); }
+function drawBase() {
+  const ctx = ctxBase;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cvBase.width, cvBase.height);
+  toCells(ctx);
+  ctx.fillStyle = colors.board;
+  ctx.fillRect(-WALL, -WALL, M.cols + 2 * WALL, M.rows + 2 * WALL);
+  // trap holes: dark, with a soft rim
+  for (const i of M.holes) {
+    const [x, y] = center(i);
+    ctx.fillStyle = 'rgba(0,0,0,.18)'; circle(ctx, x, y, HOLE_R + .05); ctx.fill();
+    ctx.fillStyle = colors.hole; circle(ctx, x, y, HOLE_R); ctx.fill();
+  }
+  // the goal: a hole in a thick coloured ring with a little flag
+  const [gx, gy] = center(M.goal);
+  ctx.fillStyle = colors.goal; circle(ctx, gx, gy, GOAL_R); ctx.fill();
+  ctx.fillStyle = colors.hole; circle(ctx, gx, gy, GOAL_R - .11); ctx.fill();
+  // the walls with a shadow below and to the right
+  ctx.fillStyle = colors['wall-sh'];
+  for (const q of M.rects) ctx.fillRect(q[0] + .025, q[1] + .045, q[2] - q[0], q[3] - q[1]);
+  ctx.fillStyle = colors.wall;
+  for (const q of M.rects) ctx.fillRect(q[0], q[1], q[2] - q[0], q[3] - q[1]);
+}
+let lastKey = '';
+function drawTop(now) {
+  const showHint = hintPath && now < hintUntil, sparkle = G.status === 'won' && winT && now - winT < 1400;
+  const key = `${B.x.toFixed(3)},${B.y.toFixed(3)},${B.s.toFixed(3)},${showHint ? Math.floor((hintUntil - now) / 50) : 0},${sparkle ? now : 0},${cs}`;
+  if (key === lastKey) return;
+  lastKey = key;
+  const ctx = ctxTop;
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cvTop.width, cvTop.height);
+  toCells(ctx);
+  if (showHint) {
+    ctx.globalAlpha = Math.min(1, (hintUntil - now) / 600);
+    ctx.strokeStyle = colors.path; ctx.lineWidth = .14; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.setLineDash([.001, .26]);
+    ctx.beginPath(); ctx.moveTo(B.x, B.y);
+    for (const i of hintPath.slice(1)) { const [x, y] = center(i); ctx.lineTo(x, y); }
+    ctx.stroke(); ctx.setLineDash([]); ctx.globalAlpha = 1;
+  } else if (hintPath && now >= hintUntil) hintPath = null;
+  if (sparkle) {
+    const t = (now - winT) / 1400, [gx, gy] = center(M.goal);
+    ctx.strokeStyle = colors.goal; ctx.lineWidth = .08;
+    for (const k of [0, .3]) { const u = t - k; if (u <= 0) continue; ctx.globalAlpha = Math.max(0, 1 - u); circle(ctx, gx, gy, GOAL_R + u * 1.2); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  // the steel ball with its shadow
+  const r = BALL * B.s, x = B.x, y = B.y;
+  if (B.s < 1) ctx.globalAlpha = .45 + .55 * B.s;
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; circle(ctx, x + .05, y + .07, r); ctx.fill();
+  const gr = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .08, x, y, r);
+  gr.addColorStop(0, '#ffffff'); gr.addColorStop(.3, '#dfe4e9'); gr.addColorStop(.75, '#8a949d'); gr.addColorStop(1, '#4b535b');
+  ctx.fillStyle = gr; circle(ctx, x, y, r); ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+/* ---------- The loop ---------- */
+let lastT = 0, paused = true;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = lastT ? Math.min(.05, (now - lastT) / 1000) : 0;
+  lastT = now;
+  if (!G || !M) return;
+  // nothing moves while Settings, Help or a dialog is open, or the page is hidden; coming back takes the
+  // phone's position as level again
+  if (!nothingOpen() || document.hidden) { if (!paused) { paused = true; save(); } return; }
+  if (paused) { paused = false; startLevel(); }
+  if (leveling && now >= leveling) finishLevel();
+  if (anim) { if (now >= anim.t0) stepAnim(now); }
+  else if (roll) stepRoll(dt);
+  else if (G.status === 'playing' && tiltOn() && dt) physics(dt);
+  drawTop(now);
+}
+
+/* ---------- Controls ---------- */
+document.querySelectorAll('.arrow').forEach(b => b.addEventListener('click', () => arrow(+b.dataset.d)));
+document.addEventListener('keydown', e => {
+  const d = { ArrowUp: 0, ArrowRight: 1, ArrowDown: 2, ArrowLeft: 3 }[e.key];
+  if (d === undefined || !nothingOpen()) return;
+  e.preventDefault(); arrow(d);
+});
+// rule: Undo ("Zpět"): the ball goes back to the previous junction or resting place it passed
+$('#btnUndo').addEventListener('click', () => {
+  if (G.status !== 'playing') { toast('Bludiště je hotové – ťukni na Nová hra'); return; }
+  if (anim || roll) { toast('Chvilku, kulička ještě jede'); return; }
+  const cur = cellAt(B.x, B.y);
+  if (!canUndo()) { toast(cur === M.start ? 'Kulička je na začátku, není kam se vracet' : 'Zatím není kam se vracet'); return; }
+  while (G.history[G.history.length - 1] === cur) G.history.pop();
+  placeBall(G.history[G.history.length - 1]); B.s = .2; restT = 0;
+  anim = { type: 'appear', t0: performance.now(), dur: 250 };
+  clearHint(); buzz(); save(); render();
+});
+$('#btnHint').addEventListener('click', () => {
+  if (G.status !== 'playing') { toast('Kulička je v cíli – ťukni na Nová hra'); return; }
+  if (anim) { toast('Chvilku, kulička se vrací'); return; }
+  clearHint();
+  const from = roll ? roll.end : cellAt(B.x, B.y);
+  hintPath = findPath(M, from); hintUntil = performance.now() + 5000; lastKey = '';
+  if (hintPath.length > 1 && arrowsShown()) {
+    const [a, b] = hintPath, d = [0, 1, 2, 3].find(k => stepCell(M, a, k) === b && isOpen(M, a, k));
+    hintDir = d;
+    const btn = document.querySelector(`.arrow[data-d="${d}"]`); if (btn) btn.classList.add('hint');
+  }
+  toast('Tečky ukazují cestu do cíle');
+});
+$('#btnLevel').addEventListener('click', () => {
+  if (sensor !== 'ok' && !testTilt) { toast(sensor === 'ask' ? 'Nejdřív ťukni na Zapnout naklápění' : 'Naklápění nejde, hraj šipkami'); return; }
+  startLevel(); B.vx = B.vy = 0;
+  toast('Vyrovnáno: takhle držený telefon je teď rovně');
+});
+$('#btnEnable').addEventListener('click', askSensor);
+// rule: a new game in the middle of one asks first
+$('#btnNew').addEventListener('click', () => {
+  if (G.status === 'playing' && !isFresh()) {
+    showModal('<h2>Začít nové bludiště?</h2><p>Rozehrané bludiště se ztratí.</p>', [{ text: 'Ano, nové bludiště', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+
+/* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
+const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
+const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+function renderSettings() {
+  const st = stats[rulesKey(S)];
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Kulička<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Ovládání</h3>
+      <div class="field">
+        ${opt('control:tilt', S.control === 'tilt', 'Naklápěním telefonu', 'Kulička se kutálí tam, kam telefon nakloníš.')}
+        ${opt('control:arrows', S.control === 'arrows', 'Šipkami', 'Ťukni na šipku a kulička dojede ke stěně nebo k odbočce.')}
+      </div>
+      <div class="field"><div class="flabel">Citlivost naklápění</div>
+        ${Object.entries(SENS).map(([id, v]) => opt('sens:' + id, S.sens === id, v.name, v.desc)).join('')}
+      </div>
+    </section>
+    <section class="card"><h3>Bludiště</h3>
+      <div class="field"><div class="flabel">Velikost</div>
+        ${Object.entries(SIZES).map(([id, v]) => opt('size:' + id, S.size === id, `${v.name} (${v.cols} × ${v.rows})`, v.desc)).join('')}
+      </div>
+      <div class="field"><div class="flabel">Díry</div>
+        ${Object.entries(HOLES).map(([id, v]) => opt('holes:' + id, S.holes === id, v.name, v.desc)).join('')}
+        <div class="fnote">Kulička, která spadne do díry, se vrátí na začátek. Hotová bludiště a nejméně pádů se počítají zvlášť pro každou velikost a díry${st ? ` (tady zatím hotovo ${st.done}${st.best !== null && S.holes !== 'none' ? `, nejméně pádů ${st.best}` : ''})` : ''}.</div>
+        ${rulesChanged() && !isFresh() ? `<div class="notice">Po návratu do hry začne <b>nové bludiště</b> s tímto nastavením.${G.status === 'playing' && !isFresh() ? ' Rozehrané bludiště se ztratí.' : ''}</div>` : ''}
+      </div>
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch" data-theme="${t.id}"></span>${t.name}</button>`).join('')}</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+      <div class="fnote" style="margin-top:-6px">Telefon krátce zabzučí, když kulička spadne do díry nebo dojede do cíle.</div>
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (['control', 'sens', 'size', 'holes', 'theme'].includes(act)) S[act] = arg;
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S); buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
+});
+function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+// a change that needs a new maze starts it after returning and says so (rule)
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  initSensor();
+  if (rulesChanged()) newGame(!isFresh() ? 'Začalo nové bludiště s novým nastavením' : '');
+  else { clearHint(); render(); layout(); }
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
+const pic = inner => `<svg class="pic" viewBox="0 0 34 34" aria-hidden="true">${inner}</svg>`;
+function renderHelp() {
+  const ball = pic('<defs><radialGradient id="hb" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#fff"/><stop offset=".45" stop-color="#c9d0d6"/><stop offset="1" stop-color="#4b535b"/></radialGradient></defs><circle cx="17" cy="17" r="13" fill="url(#hb)"/>');
+  const hole = pic('<circle cx="17" cy="17" r="15" fill="var(--board)"/><circle cx="17" cy="17" r="11" fill="var(--hole)"/>');
+  const goal = pic('<circle cx="17" cy="17" r="15" fill="var(--goal)"/><circle cx="17" cy="17" r="10" fill="var(--hole)"/>');
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Kulička<small>Jak hrát</small></h2></div>
+    <section class="card help" data-theme="${S.theme}" style="background:var(--pcard)"><ol>
+      <li>Doveď ocelovou kuličku ${ball} bludištěm do cíle ${goal}. Nikam se nespěchá.</li>
+      <li>Drž telefon v ruce tak, jak je ti pohodlné. Hra tuhle polohu bere jako rovnou.</li>
+      <li>Telefon trochu nakloň a kulička se rozkutálí tím směrem. Čím víc ho nakloníš, tím rychleji jede.</li>
+      <li>Když kulička jede sama, i když telefon držíš v klidu, ťukni na <b>Vyrovnat</b>. Telefon se vyrovná také sám, kdykoli se do hry vrátíš.</li>
+      <li>Vyhni se dírám ${hole}. Když do některé kulička spadne, vrátí se na začátek bludiště a počet pádů se zvětší.</li>
+      <li>Když telefon naklápění nehlásí, objeví se <b>šipky</b>. Šipky jdou zapnout také v Nastavení. Po ťuknutí na šipku kulička dojede ke stěně nebo k nejbližší odbočce.</li>
+      <li><b>Poradit</b> na chvíli ukáže tečkami cestu do cíle. Se šipkami navíc zarámuje šipku, kudy dál.</li>
+      <li><b>Zpět</b> vrátí kuličku na předchozí odbočku nebo na místo, kde naposledy stála. Dá se ťukat opakovaně.</li>
+    </ol></section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// rule: ask for persistent storage so the browser does not delete the saved game by itself
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+const savedSettings = saved && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+if (saved && saved.stats && typeof saved.stats === 'object') {
+  for (const sz of Object.keys(SIZES)) for (const h of Object.keys(HOLES)) { const k = rulesKey({ size: sz, holes: h }); if (validStat(saved.stats[k])) stats[k] = { done: saved.stats[k].done, best: saved.stats[k].best }; }
+}
+const savedMaze = saved && validGame(saved.game);
+if (savedMaze) {
+  G = saved.game; M = savedMaze;
+  placeBall(G.ball);
+  if (G.status === 'won') B.s = .6;
+  // rule: rules chosen just before the app was closed (Settings still open) are applied now, as closing Settings would
+  if (rulesChanged()) closeSettings(); else { render(); layout(); }
+}
+else newGame();
+initSensor();
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+try { if (screen.orientation) screen.orientation.addEventListener('change', startLevel); } catch (e) {}
+document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+addEventListener('pagehide', save);
+document.addEventListener('contextmenu', e => e.preventDefault());
+requestAnimationFrame(frame);
+
+// contract: opened from the launcher (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing: the maze, moving the ball and tilting without a sensor
+window.Kulicka = {
+  get state() { return { S, G }; },
+  get maze() { return M; },
+  get ball() { return { ...B }; },
+  get sensor() { return sensor; },
+  makeMaze, findPath, rollCells, arrow,
+  teleport(i) { placeBall(i); save(); render(); },
+  move(x, y) { B.x = x; B.y = y; B.vx = B.vy = 0; },
+  tilt(ax, ay) { testTilt = ax === null ? null : [ax, ay]; render(); }, // -1..1 each, e.g. tilt(0, .3) = rolls down; tilt(null) = off
+  orient(beta, gamma) { onOrient({ beta, gamma }); },
+};
+})();
+</script>
+</body>
+</html>

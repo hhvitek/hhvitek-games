@@ -982,7 +982,8 @@ applyLook();
 if (saved && validGame(saved.game)) {
   G = saved.game;
   // the level was changed in Settings and the page closed before returning: apply it now, as closing Settings would
-  if (G.status === 'playing' && level !== G.level) newGame(inProgress() ? 'Začala nová úloha s novou úrovní' : `Úroveň ${level}`);
+  // (after a win the expected level is the next one, so only a real change in Settings starts another level)
+  if (level !== (G.status === 'won' ? clampLevel(G.level + 1) : G.level)) newGame(inProgress() ? 'Začala nová úloha s novou úrovní' : `Úroveň ${level}`);
   else render();
 }
 else newGame();
