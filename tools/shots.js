@@ -172,6 +172,12 @@ async (page) => {
     'piskvorky': async () => { await tap('#btnHint'); await wait(1500); await tap('#svg .hint'); await wait(3500); await tap('#btnHint'); await wait(1500); },
     // the advised square (a tap plays it, the discs turn), the opponent's reply, the next advice
     'reversi': async () => { await tap('#btnHint'); await wait(1500); await tap('.sq.hint'); await wait(4000); await tap('#btnHint'); await wait(1500); },
+    // the battle started, a shot, the advice and a tap on it, then the opponent's reply
+    'lode': async () => {
+      const mine = () => page.waitForFunction(() => window.Lode && !window.Lode.busy && window.Lode.state.B.turn === 0 && window.Lode.state.G.status === 'playing', null, { timeout: 8000 }).catch(() => {});
+      await tap('#btnStart'); await wait(600); await tap('#grid .c[data-i="44"]'); await wait(300); await mine();
+      await tap('#btnHint'); await wait(400); await tap('#grid .c.hint'); await wait(3500);
+    },
     'zavri-cisla': async () => { await tapButton(/Hodit kostk/); await wait(1800); await tap('#rails .plate:not(.dim):not(.down)'); await wait(400); },
     'soliter': async () => { await tap('[data-a="hint"]'); await wait(900); await tap('.cd.hint'); await wait(800); },
     'freecell': async () => { await tap('[data-a="hint"]'); await wait(900); await tap('.cd.hint'); await wait(800); },

@@ -1,0 +1,1148 @@
+<!doctype html>
+<html lang="cs" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f4ebdf">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lodě">
+<title>Lodě</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232c6b97'/%3E%3Crect x='9' y='26' width='40' height='12' rx='6' fill='%23e3e9ee'/%3E%3Cpath d='M47 25l8 8M55 25l-8 8' stroke='%23e8463a' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes: a solid colour; everything below reads these variables (rule) ----------
+   --frame/--grid/--sea: the frame of a sea, its lines and its squares, --fog: the computer's sea before the battle,
+   --zone: where a dragged ship may not go (next to another ship), --hull/--sunk: a ship and a sunk ship,
+   --hit: the red cross of a hit (with a thin --edge so it shows on a ship too), --miss: a shot into the water, --water: water marked by itself around a sunk ship,
+   --last: the computer's last shot, --hint: the advice, --ok/--bad: a dragged ship that fits / does not fit */
+[data-theme="paper"]{--page:#f4ebdf;--bar:rgba(122,69,32,.06);--line:#e6d8c6;--ink:#2b1a0e;--soft:#6f5a48;--accent:#7a4520;--accent-ink:#fff;--chip:#fff;--chip-line:#e6d8c6;--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--undo-bg:rgba(122,69,32,.1);
+  --frame:#cdb69a;--grid:#e6d6c0;--sea:#fffaf2;--fog:#efe3d2;--zone:#f1e2cd;--hull:#7d6a58;--sunk:#3b2a1c;--hit:#c0392b;--edge:#fffaf2;--miss:#5d4a3a;--water:#c4ae94;--last:#1f5fbf;--hint:#1f5fbf;--ok:#4f8a3c;--bad:#c0392b}
+[data-theme="sea"]{--page:#0f2c44;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.1);--ink:#e9f3fb;--soft:#b8cfe0;--accent:#ffd166;--accent-ink:#2a2000;--chip:rgba(255,255,255,.12);--chip-line:rgba(255,255,255,.22);--btn:#ffd166;--btn-ink:#2a2000;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.25);
+  --frame:#0a1e30;--grid:#1f5579;--sea:#2c6b97;--fog:#1d4a6b;--zone:#245a80;--hull:#d3dce4;--sunk:#061420;--hit:#ff5a3c;--edge:#fff;--miss:#e9f3fb;--water:#86aecb;--last:#ffd166;--hint:#ffd166;--ok:#8fe08f;--bad:#ff6b5a}
+[data-theme="notebook"]{--page:#fdfcf7;--bar:rgba(30,60,120,.05);--line:#d9e2ef;--ink:#1d2b4a;--soft:#5a6b8a;--accent:#2f5fb3;--accent-ink:#fff;--chip:#fff;--chip-line:#d0dbec;--btn:#2f5fb3;--btn-ink:#fff;--btn-sh:#1b3c78;--undo-bg:rgba(47,95,179,.08);
+  --frame:#9fb6d8;--grid:#c4d5ee;--sea:#fff;--fog:#eef2f8;--zone:#e6eef9;--hull:#5a7fc0;--sunk:#16233f;--hit:#d63031;--edge:#fff;--miss:#1d2b4a;--water:#9aaccc;--last:#e17000;--hint:#e17000;--ok:#3c8a4f;--bad:#d63031}
+
+/* ---------- Base ---------- */
+:root{--gut:12px} /* one side margin: bar buttons, board and bottom buttons line up (the safe areas are on #app) */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{background:var(--page);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+/* rule: 100dvh + safe areas, the board is sized from the room that is left (see layout()) */
+#app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings) ---------- */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line);text-decoration:none}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:20px}
+/* narrow phones (360 px): less room between the bar buttons, so the name fits whole at 18 px; the outer margin stays */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:18px;letter-spacing:0}
+}
+
+/* ---------- The seas: the big one above (the computer's; before the battle yours), the small one below on the left
+   (yours) with the opponent's panel next to it. Sizes come from layout(). ---------- */
+#mid{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px var(--gut)} /* rule: at least 12 px between the seas and the bars above and below */
+#big{flex:none;display:grid;grid-template-columns:var(--lab) auto;grid-template-rows:var(--lab) auto}
+.labc,.labr{display:grid;gap:var(--gl);font-size:var(--lf);font-weight:700;color:var(--soft);font-variant-numeric:tabular-nums;line-height:1}
+.labc{grid-template-columns:repeat(10,var(--cs));padding:0 var(--fw);align-items:end}
+.labr{grid-template-rows:repeat(10,var(--cs));padding:var(--fw) 0;justify-items:end}
+.labc span{text-align:center;padding-bottom:3px}
+.labr span{align-self:center;padding-right:3px}
+.cells{display:grid;gap:var(--g);background:var(--grid);border:var(--fw) solid var(--frame);border-radius:4px}
+#grid{--s:var(--cs);--g:var(--gl);grid-template-columns:repeat(10,var(--cs));grid-auto-rows:var(--cs)}
+#grid.on{border-color:var(--accent)}
+#grid.place{touch-action:none}
+#mini{--s:var(--co);--g:1px;grid-template-columns:repeat(10,var(--co));grid-auto-rows:var(--co)}
+#low{flex:none;display:flex;align-items:center;gap:10px;margin-top:12px}
+#mid.side{flex-direction:row}
+#mid.side #low{flex-direction:column;align-items:flex-start;justify-content:center;margin:0 0 0 12px}
+#panel{flex:none;display:flex;flex-direction:column;gap:6px;--op-ava:32px;--op-ava-bg:var(--chip);--op-name:18px}
+.pl{font-size:16px;line-height:1.25;color:var(--soft)}
+.pl b{color:var(--ink)}
+.tag{align-self:flex-start;font-size:16px;font-weight:800;padding:2px 10px;border-radius:12px;background:var(--accent);color:var(--accent-ink);white-space:nowrap}
+.tag.off{background:none;color:var(--soft);font-weight:700;padding:2px 0}
+/* the ships of the opponent: a bar per ship, a sunk one faded */
+.ros{display:flex;flex-wrap:wrap;align-items:center;gap:5px 6px}
+.ros i{display:block;height:10px;width:calc(var(--n) * 9px);border-radius:5px;background:var(--hull)}
+.ros i.gone{background:transparent;box-shadow:inset 0 0 0 2px var(--hull);opacity:.5}
+
+/* a square: the sea; ::before draws the ship (it reaches over the line to the next square of the same ship),
+   ::after the mark of a shot (dot = water, small dot = water marked by itself, cross = hit) */
+.c{position:relative;display:block;width:100%;height:100%;background:var(--sea)}
+.c.fog{background:var(--fog)}
+.c.z{background:var(--zone)}
+.c.s::before,.c.gh::before{content:"";position:absolute;top:15%;bottom:15%;left:0;right:0;background:var(--hull)}
+.c.v::before{top:0;bottom:0;left:15%;right:15%}
+.c.h:not(.f)::before{left:calc(-1 * var(--g))}
+.c.v:not(.f)::before{top:calc(-1 * var(--g))}
+.c.h.f::before{left:9%;border-radius:calc(var(--s) * .35) 0 0 calc(var(--s) * .35)}
+.c.h.l::before{right:9%;border-radius:0 calc(var(--s) * .35) calc(var(--s) * .35) 0}
+.c.h.f.l::before{border-radius:calc(var(--s) * .35)}
+.c.v.f::before{top:9%;border-radius:calc(var(--s) * .35) calc(var(--s) * .35) 0 0}
+.c.v.l::before{bottom:9%;border-radius:0 0 calc(var(--s) * .35) calc(var(--s) * .35)}
+.c.s.sk::before{background:var(--sunk)}
+.c.s.rv::before{opacity:.45}
+.c.s.dim::before{opacity:.3}
+.c.gh::before{background:var(--ok);opacity:.8}
+.c.gh.bad::before{background:var(--bad)}
+.c::after{content:"";position:absolute;left:50%;top:50%;width:0;height:0;border-radius:50%;transform:translate(-50%,-50%)}
+.c.o::after{width:calc(var(--s) * .26);height:calc(var(--s) * .26);background:var(--miss)}
+.c.w::after{width:calc(var(--s) * .14);height:calc(var(--s) * .14);background:var(--water)}
+.c.x::after{width:calc(var(--s) * .7);height:calc(var(--s) * .7);border-radius:0;background:linear-gradient(45deg,transparent 33%,var(--edge) 33% 40%,var(--hit) 40% 60%,var(--edge) 60% 67%,transparent 67%),linear-gradient(-45deg,transparent 33%,var(--edge) 33% 40%,var(--hit) 40% 60%,var(--edge) 60% 67%,transparent 67%)}
+.c.new::after{animation:pop .35s ease-out}
+@keyframes pop{from{scale:2.4;opacity:.15}}
+.c.last,.c.hint{z-index:1;outline:calc(var(--s) * .11) solid var(--last);outline-offset:calc(var(--s) * -.11)}
+.c.hint{outline-color:var(--hint)}
+.c.hint::after{width:calc(var(--s) * .3);height:calc(var(--s) * .3);background:var(--hint)}
+
+/* ---------- Bottom buttons ---------- */
+.tray{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px var(--gut) 12px;background:var(--bar);border-top:1px solid var(--line)}
+#hint{text-align:center;font-size:18px;line-height:1.3;color:var(--soft);min-height:24px}
+#hint b{color:var(--ink)}
+.row{display:flex;gap:8px}
+.undo{flex:1 1 auto;display:flex;align-items:center;justify-content:center;gap:6px;height:60px;padding:0 8px;border-radius:16px;font-size:20px;font-weight:800;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 0 0 2px var(--chip-line);white-space:nowrap}
+.undo svg{flex:none;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.undo.go{background:var(--btn);color:var(--btn-ink);box-shadow:0 4px 0 var(--btn-sh)}
+/* rule: an unavailable action is only dimmed and explains itself when tapped */
+.undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+@media (max-height:800px){
+  .topbar{height:56px}
+  .round{width:42px;height:42px}
+  .pill{height:42px}
+  .undo{height:54px}
+  .tray{gap:6px;padding:6px var(--gut) 10px}
+}
+@media (max-width:380px){
+  .undo{font-size:18px;gap:4px;padding:0 6px}
+  #hint{font-size:17px}
+}
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+/* rule: the head with Zpět and the game name stays at the top while scrolling */
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);margin-top:16px}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink)}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+/* a theme swatch: a short row of sea with a ship, a hit and a shot into the water */
+.swatch{height:56px;border-radius:10px;background:var(--page);box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);display:grid;place-items:center}
+.swatch .cells{--s:20px;--g:1px;grid-template-columns:repeat(5,20px);grid-auto-rows:20px;border-width:2px}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.stats{font-size:20px;line-height:1.5}
+.stats + .stats{margin-top:8px}
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol,.help ul{padding-left:26px}
+.help li{margin:10px 0}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.mcard h2{font-size:28px;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 160px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* the toast starts at the top of the bottom buttons and grows down over them: never over the seas or the panel (toast()) */
+#toast{font-size:17px;line-height:1.25;padding:9px 14px;max-width:calc(100vw - 24px)}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Lodě</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <div id="mid">
+    <main id="big">
+      <span></span>
+      <div class="labc" aria-hidden="true"><span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span><span>I</span><span>J</span></div>
+      <div class="labr" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span><span>8</span><span>9</span><span>10</span></div>
+      <div id="grid" class="cells"></div>
+    </main>
+    <div id="low">
+      <div id="mini" class="cells" role="img" aria-label="Tvoje moře"></div>
+      <div id="panel"></div>
+    </div>
+  </div>
+  <footer class="tray">
+    <div id="hint" aria-live="polite"></div>
+    <div class="row" id="rowPlace">
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnShuffle" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c3 0 4.5 10 8 10H21"/><path d="M3 17h3.5c1.4 0 2.4-2 3.3-4.4M14.2 11.4C15 9 16.1 7 17.5 7H21"/><path d="m18 4 3 3-3 3M18 14l3 3-3 3"/></svg>Zamíchat</button>
+      <button id="btnStart" class="undo go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15L19.5 12z" fill="currentColor"/></svg>Hrát</button>
+    </div>
+    <div class="row" id="rowBattle" hidden>
+      <button id="btnHint" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>Poradit</button>
+    </div>
+  </footer>
+</div>
+<!-- Every layer is shown and hidden only through its hidden attribute; every screen has a [data-act="close"] button (Back button contract) -->
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+<script src="../_opponents/opponents.js"></script>
+<script>
+/* ---------- Visible height ---------- */
+// The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
+// enough: some browsers report it taller than what is visible (the app installed by Brave on Android counted the
+// status and navigation bars too and hid the bottom buttons). visualViewport follows what is shown; it is measured
+// again on every change and shortly after loading (a browser bar that hides itself may change it without an event),
+// and a changed height makes the game lay itself out again through a resize event.
+(() => {
+  const root = document.documentElement;
+  let last = 0;
+  const measure = () => {
+    const vv = window.visualViewport;
+    const h = Math.round(vv ? vv.height * vv.scale : innerHeight);
+    if (!(h > 0) || h === last) return;
+    const first = !last; last = h;
+    root.style.setProperty('--app-h', h + 'px');
+    if (!first) dispatchEvent(new Event('resize'));
+  };
+  measure();
+  addEventListener('resize', measure);
+  if (window.visualViewport) visualViewport.addEventListener('resize', measure);
+  addEventListener('pageshow', measure);
+  [100, 500, 1500].forEach(ms => setTimeout(measure, ms));
+  // TEMPORARY (2026-11-08): what this page measured, shown in the launcher's Nastavení → "Údaje o obrazovce"
+  setTimeout(() => { try {
+    const p = document.createElement('div'); p.style.cssText = 'position:absolute;left:-50px;top:0;width:1px;height:100dvh;padding-bottom:env(safe-area-inset-bottom)';
+    document.body.appendChild(p); const dvh = Math.round(p.getBoundingClientRect().height - parseFloat(getComputedStyle(p).paddingBottom)), sb = Math.round(parseFloat(getComputedStyle(p).paddingBottom)); p.remove();
+    const vv = window.visualViewport;
+    localStorage.setItem('games.launcher.diag', JSON.stringify({ page: location.pathname.split('/').slice(-2, -1)[0], vv: vv ? Math.round(vv.height) : null, inner: innerHeight, client: root.clientHeight, dvh, sb, appH: last, app: Math.round(document.getElementById('app').getBoundingClientRect().height) }));
+  } catch (e) {} }, 2000);
+})();
+</script>
+<script>
+/* ---------- Engine ---------- */
+// Lodě: the fleets, the shots and the computer's aim. No DOM here: the same function runs in Node (tools/lode-test.js).
+function LodeEngine() {
+'use strict';
+/* The sea is 10 × 10 squares 0..99: i = row * 10 + col, row 0 is row 1 on the board, col 0 is column A.
+   A ship is { r, c, len, v }: its first square (top or left) and v = it goes down (vertical).
+   Ships are straight and never touch, not even at a corner. */
+const N = 10, CELLS = 100;
+const FLEETS = { classic: [5, 4, 3, 3, 2], big: [4, 3, 3, 2, 2, 2, 1, 1, 1, 1] };
+
+/* ---------- Randomness from the game's seed: the same state gives the same shot (reload) ---------- */
+function rng(seed) {
+  let a = seed | 0;
+  return () => { a = (a + 0x6D2B79F5) | 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+// a seed for the n-th shot of a game (salt: another stream, e.g. the advice)
+const mix = (seed, n, salt = 0) => (seed ^ Math.imul(n + 1, 0x9E3779B1) ^ salt) | 0;
+
+/* ---------- Ships ---------- */
+function cellsOf(s) {
+  const out = [];
+  for (let t = 0; t < s.len; t++) out.push((s.r + (s.v ? t : 0)) * N + s.c + (s.v ? 0 : t));
+  return out;
+}
+const inside = s => s.r >= 0 && s.c >= 0 && (s.v ? s.r + s.len <= N && s.c < N : s.c + s.len <= N && s.r < N);
+// the squares around a ship (also diagonally), inside the sea
+function ring(s) {
+  const out = [], r1 = s.r + (s.v ? s.len : 1), c1 = s.c + (s.v ? 1 : s.len);
+  for (let r = s.r - 1; r <= r1; r++) for (let c = s.c - 1; c <= c1; c++) {
+    if (r < 0 || c < 0 || r >= N || c >= N) continue;
+    if (r >= s.r && r < r1 && c >= s.c && c < c1) continue;
+    out.push(r * N + c);
+  }
+  return out;
+}
+// the squares the other ships take or touch (skip: the index of a ship that does not count, e.g. the one being moved)
+function blocked(fleet, skip = -1) {
+  const b = new Uint8Array(CELLS);
+  fleet.forEach((o, j) => { if (j === skip) return; for (const i of cellsOf(o)) b[i] = 1; for (const i of ring(o)) b[i] = 1; });
+  return b;
+}
+const fits = (fleet, s, skip = -1) => { if (!inside(s)) return false; const b = blocked(fleet, skip); return cellsOf(s).every(i => !b[i]); };
+const validShip = s => !!s && typeof s === 'object' && [s.r, s.c, s.len].every(Number.isInteger) && s.len >= 1 && s.len <= 5 && typeof s.v === 'boolean' && inside(s);
+function validFleet(fleet, lengths) {
+  if (!Array.isArray(fleet) || fleet.length !== lengths.length || !fleet.every(validShip)) return false;
+  if (fleet.map(s => s.len).sort((a, b) => a - b).join() !== [...lengths].sort((a, b) => a - b).join()) return false;
+  return fleet.every((s, j) => fits(fleet, s, j));
+}
+// a random fleet: the longest ships first, each at a random free place; a dead end starts again
+function randomFleet(lengths, rand) {
+  for (let tries = 0; tries < 2000; tries++) {
+    const fleet = [];
+    for (const len of lengths) {
+      let s = null;
+      for (let t = 0; t < 400 && !s; t++) {
+        const v = len > 1 && rand() < .5, r = Math.floor(rand() * (v ? N - len + 1 : N)), c = Math.floor(rand() * (v ? N : N - len + 1));
+        const x = { r, c, len, v };
+        if (fits(fleet, x)) s = x;
+      }
+      if (!s) break;
+      fleet.push(s);
+    }
+    if (fleet.length === lengths.length) return fleet;
+  }
+  throw new Error('No fleet found');
+}
+function shipMap(fleet) {
+  const m = new Int8Array(CELLS).fill(-1);
+  fleet.forEach((s, j) => { for (const i of cellsOf(s)) m[i] = j; });
+  return m;
+}
+
+/* ---------- Shots ----------
+   A sea under fire: what the shooter knows, k[i] = 0 unknown, 1 water, 2 hit, 3 a square of a sunk ship;
+   shot[i]: really shot there (water around a sunk ship is marked by itself, without a shot). */
+function sea(fleet) {
+  return { fleet, owner: shipMap(fleet), k: new Int8Array(CELLS), shot: new Uint8Array(CELLS), hits: fleet.map(() => 0), sunk: fleet.map(() => false), left: fleet.reduce((a, s) => a + s.len, 0) };
+}
+// one shot: 'miss' | 'hit' | 'sunk', or null for a square that is already known
+function fire(b, i) {
+  if (!(i >= 0 && i < CELLS) || b.k[i]) return null;
+  b.shot[i] = 1;
+  const j = b.owner[i];
+  if (j < 0) { b.k[i] = 1; return 'miss'; }
+  b.k[i] = 2; b.hits[j]++; b.left--;
+  if (b.hits[j] < b.fleet[j].len) return 'hit';
+  b.sunk[j] = true;
+  for (const x of cellsOf(b.fleet[j])) b.k[x] = 3;
+  for (const x of ring(b.fleet[j])) if (!b.k[x]) b.k[x] = 1; // no ship can touch it: water all around
+  return 'sunk';
+}
+// the lengths of the ships still afloat (all the shooter may know about them)
+const afloat = b => b.fleet.filter((s, j) => !b.sunk[j]).map(s => s.len);
+// The whole battle from its shots [[who, square]] (who 0 = you at the computer's fleet, 1 = the computer at yours).
+// The starter shoots first; with again, a hit (or a sunk ship) gives the shooter another shot. A shot out of turn or at a
+// known square ends the list there (n = how many shots are valid).
+function battle(mine, theirs, starter, again, shots) {
+  const B = [sea(theirs), sea(mine)], res = [];
+  let turn = starter, winner = -1, n = 0;
+  for (const sh of shots) {
+    if (winner >= 0 || !Array.isArray(sh) || sh[0] !== turn || !Number.isInteger(sh[1])) break;
+    const r = fire(B[turn], sh[1]);
+    if (!r) break;
+    res.push(r); n++;
+    if (!B[turn].left) winner = turn;
+    else if (!(again && r !== 'miss')) turn = 1 - turn;
+  }
+  return { B, res, turn, winner, n };
+}
+
+/* ---------- The computer's aim ----------
+   Fair play: it gets only what it learnt from its own shots (k) and the lengths of the ships still afloat, never where
+   your ships are. level: 'easy' | 'normal' | 'master' (also the advice). Always an unknown square. */
+const pick = (list, rand) => list[Math.floor(rand() * list.length)];
+function orth(i) {
+  const r = i / N | 0, c = i % N, out = [];
+  if (r > 0) out.push(i - N); if (r < N - 1) out.push(i + N); if (c > 0) out.push(i - 1); if (c < N - 1) out.push(i + 1);
+  return out;
+}
+function unknown(k) { const out = []; for (let i = 0; i < CELLS; i++) if (!k[i]) out.push(i); return out; }
+// Začátečník: shoots at random; after a hit it mostly tries a square next to it, but sometimes forgets about it
+function aimEasy(k, rand) {
+  const hits = []; for (let i = 0; i < CELLS; i++) if (k[i] === 2) hits.push(i);
+  if (hits.length && rand() < .7) {
+    const nb = orth(pick(hits, rand)).filter(x => !k[x]);
+    if (nb.length) return pick(nb, rand);
+  }
+  return pick(unknown(k), rand);
+}
+// how many squares in a row through i (across or down) could still hold a ship
+function run(k, i, dr, dc) {
+  let n = 1;
+  const r = i / N | 0, c = i % N;
+  for (const d of [1, -1]) {
+    let rr = r + d * dr, cc = c + d * dc;
+    while (rr >= 0 && rr < N && cc >= 0 && cc < N && (k[rr * N + cc] === 0 || k[rr * N + cc] === 2)) { n++; rr += d * dr; cc += d * dc; }
+  }
+  return n;
+}
+// Zkušený hráč: after a hit the squares next to it, after two hits in a row the ends of that row; otherwise a
+// checkerboard of the smallest ship afloat (no ship can hide between its squares), only where a ship still fits
+function aimNormal(k, left, rand) {
+  const minLen = Math.min(...left);
+  const seen = new Uint8Array(CELLS), groups = [];
+  for (let i = 0; i < CELLS; i++) if (k[i] === 2 && !seen[i]) {
+    const g = [i]; seen[i] = 1;
+    for (let q = 0; q < g.length; q++) for (const x of orth(g[q])) if (k[x] === 2 && !seen[x]) { seen[x] = 1; g.push(x); }
+    groups.push(g.sort((a, b) => a - b));
+  }
+  groups.sort((a, b) => b.length - a.length);
+  for (const g of groups) {
+    let cand;
+    if (g.length >= 2) {
+      const across = (g[0] / N | 0) === (g[1] / N | 0), a = g[0], b = g[g.length - 1];
+      cand = across ? [a % N > 0 ? a - 1 : -1, b % N < N - 1 ? b + 1 : -1] : [a - N, b + N];
+      cand = cand.filter(x => x >= 0 && x < CELLS && !k[x]);
+    } else cand = orth(g[0]).filter(x => !k[x]);
+    if (cand.length) return pick(cand, rand);
+  }
+  const room = unknown(k).filter(i => Math.max(run(k, i, 0, 1), run(k, i, 1, 0)) >= minLen);
+  const chess = room.filter(i => ((i / N | 0) + i % N) % minLen === 0);
+  return pick(chess.length ? chess : room.length ? room : unknown(k), rand);
+}
+// Mistr: counts every place where each ship afloat could lie (on unknown squares and its own hits, touching no other
+// hit) and shoots at the square most of them cover; while a ship is hit, only places through its hits count
+function aimMaster(k, left, rand) {
+  let anyHit = false;
+  for (let i = 0; i < CELLS; i++) if (k[i] === 2) { anyHit = true; break; }
+  const lens = {};
+  for (const l of left) lens[l] = (lens[l] || 0) + 1;
+  const score = new Float64Array(CELLS);
+  const count = target => {
+    let places = 0;
+    for (const key of Object.keys(lens)) {
+      const len = +key, mult = lens[key];
+      for (const v of len > 1 ? [false, true] : [false]) {
+        for (let r = 0; r < (v ? N - len + 1 : N); r++) for (let c = 0; c < (v ? N : N - len + 1); c++) {
+          let cover = 0, ok = true;
+          for (let t = 0; t < len && ok; t++) { const x = k[(r + (v ? t : 0)) * N + c + (v ? 0 : t)]; if (x === 1 || x === 3) ok = false; else if (x === 2) cover++; }
+          if (!ok || (target && !cover)) continue;
+          if (anyHit) { // a hit next to the ship that it does not cover would be another ship touching it
+            const s = { r, c, len, v };
+            if (ring(s).some(x => k[x] === 2)) continue;
+          }
+          for (let t = 0; t < len; t++) { const i = (r + (v ? t : 0)) * N + c + (v ? 0 : t); if (!k[i]) score[i] += mult; }
+          places++;
+        }
+      }
+    }
+    return places;
+  };
+  if (!(anyHit && count(true))) { score.fill(0); count(false); }
+  let best = 0, list = [];
+  for (let i = 0; i < CELLS; i++) if (!k[i]) { if (score[i] > best) { best = score[i]; list = [i]; } else if (score[i] === best && best > 0) list.push(i); }
+  return list.length ? pick(list, rand) : pick(unknown(k), rand);
+}
+function aim(k, left, level, rand) {
+  if (!left.length || !unknown(k).length) return -1;
+  return level === 'easy' ? aimEasy(k, rand) : level === 'normal' ? aimNormal(k, left, rand) : aimMaster(k, left, rand);
+}
+
+return { N, CELLS, FLEETS, rng, mix, cellsOf, inside, ring, blocked, fits, validShip, validFleet, randomFleet, shipMap, sea, fire, afloat, battle, aim };
+}
+/* ---------- Engine end ---------- */
+</script>
+<script>
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const GUT = 12; // side margin in px, the same as --gut in the CSS
+const E = LodeEngine();
+const N = 10;
+
+/* ---------- Settings and storage ---------- */
+const ID = 'lode';
+const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const THEMES = [
+  { id: 'paper',    name: 'Papír', meta: '#f4ebdf' },
+  { id: 'sea',      name: 'Moře',  meta: '#0f2c44' },
+  { id: 'notebook', name: 'Sešit', meta: '#fdfcf7' },
+];
+// The computer opponent: its own aim here (the engine), the name, face and stars from games/_opponents/opponents.js
+const O = OPPONENTS;
+const LEVELS = [
+  { id: 'easy',   title: 'Začátečník',   desc: 'Střílí většinou naslepo. Když trefí loď, zkouší pole vedle, ale občas na ni zapomene.' },
+  { id: 'normal', title: 'Zkušený hráč', desc: 'Hledá lodě po šachovnici, aby žádná neunikla, a zasaženou loď dorazí: zkouší pole vedle a pak pokračuje v řadě.' },
+  { id: 'master', title: 'Mistr',        desc: 'Počítá, kde všude se lodě, které ještě plují, mohou schovávat, a střílí tam, kde je loď nejpravděpodobnější.' },
+];
+const lvIdx = id => Math.max(0, LEVELS.findIndex(l => l.id === id));
+const FLEETS = [
+  { id: 'classic', name: 'Pět lodí',   desc: 'Lodě o 5, 4, 3, 3 a 2 polích.' },
+  { id: 'big',     name: 'Deset lodí', desc: 'Jedna čtyřka, dvě trojky, tři dvojky a čtyři jedničky.' },
+];
+const SPEEDS = [
+  { id: 'slow', name: 'Pomalu', desc: 'Soupeř chvíli míří, takže je dobře vidět, kam střílí.', think: 1100 },
+  { id: 'fast', name: 'Rychle', desc: 'Soupeř střílí hned.', think: 350 },
+];
+const DEFAULTS = { level: 'normal', fleet: 'classic', again: true, speed: 'slow', theme: 'paper', vibrate: true };
+const COLS = 'ABCDEFGHIJ';
+const coord = i => COLS[i % N] + ((i / N | 0) + 1);
+const nm = () => G.foe.name;
+
+/* ---------- State ----------
+   G = { level, rules: { fleet, again }, foe, seed, starter: who shoots first (0 you, 1 the computer),
+         mine: your fleet [{ r, c, len, v }], theirs: the computer's fleet (from the seed), hist: your fleet before each
+         change while placing (Zpět), started: the battle began (your fleet is fixed), shots: [[who, square]] in order,
+         helped: Poradit was used (no record), counted: the end is in the statistics, record: it was a new record }
+   Everything else (both seas, whose turn, the end) comes from the shots (E.battle), so a reload goes on exactly. */
+let S, G, ST, B;
+const rnd = n => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; } catch (e) { return Math.floor(Math.random() * n); } };
+const randUnit = () => rnd(2 ** 30) / 2 ** 30;
+const sync = () => {
+  B = E.battle(G.mine, G.theirs, G.starter, G.rules.again, G.shots);
+  G.status = B.winner === 0 ? 'won' : B.winner === 1 ? 'lost' : 'playing';
+};
+const turn = () => B.turn;
+const yourShots = () => G.shots.reduce((n, s) => n + (s[0] === 0), 0);
+const isFresh = () => yourShots() === 0;
+const hasProgress = () => G.started && G.status === 'playing' && !isFresh();
+const yourTurn = () => G.started && G.status === 'playing' && turn() === 0;
+const rulesChanged = () => S.level !== G.level || S.fleet !== G.rules.fleet || S.again !== G.rules.again;
+// before the battle the opponent and "again" change at once and your arranged ships stay; only another fleet needs a
+// new placement
+const changesHere = () => !G.started && S.fleet === G.rules.fleet;
+function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, stats: ST }));
+    if (hasProgress()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {} // rule: storage may be full or blocked; the game goes on
+}
+const cleanFleet = f => f.map(s => ({ r: s.r, c: s.c, len: s.len, v: s.v }));
+// rule: corrupted data never crashes the game; the end comes from the shots, never from the save
+function validGame(g) {
+  try {
+    if (!g || !LEVELS.some(l => l.id === g.level) || !g.rules || !FLEETS.some(f => f.id === g.rules.fleet) || typeof g.rules.again !== 'boolean') return false;
+    if (![0, 1].includes(g.starter) || !Number.isInteger(g.seed)) return false;
+    const L = E.FLEETS[g.rules.fleet];
+    if (!E.validFleet(g.mine, L) || !E.validFleet(g.theirs, L)) return false;
+    g.rules = { fleet: g.rules.fleet, again: g.rules.again };
+    g.mine = cleanFleet(g.mine); g.theirs = cleanFleet(g.theirs);
+    g.started = g.started === true;
+    if (g.started || !Array.isArray(g.hist) || !g.hist.every(f => E.validFleet(f, L))) g.hist = [];
+    g.hist = g.hist.slice(-40).map(cleanFleet);
+    if (!g.started || !Array.isArray(g.shots)) g.shots = [];
+    const b = E.battle(g.mine, g.theirs, g.starter, g.rules.again, g.shots);
+    g.shots = g.shots.slice(0, b.n).map(s => [s[0], s[1]]); // a broken shot ends the list there
+    if (!O.valid(g.foe)) g.foe = O.create(rnd);
+    g.helped = g.helped === true;
+    g.status = b.winner === 0 ? 'won' : b.winner === 1 ? 'lost' : 'playing';
+    g.counted = g.counted === true || g.status !== 'playing';
+    g.record = g.record === true && g.status === 'won';
+    return true;
+  } catch (e) { return false; }
+}
+function normalize(s) {
+  if (!LEVELS.some(l => l.id === s.level)) s.level = DEFAULTS.level;
+  if (!FLEETS.some(f => f.id === s.fleet)) s.fleet = DEFAULTS.fleet;
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  if (!SPEEDS.some(t => t.id === s.speed)) s.speed = DEFAULTS.speed;
+  s.again = !!s.again; s.vibrate = !!s.vibrate;
+}
+// played / won games and the fewest shots of a win without Poradit, per opponent level and fleet
+const stKey = (level, fleet) => `${level}.${fleet}`;
+function validStats(v) {
+  const n = x => Number.isInteger(x) && x >= 0 ? x : 0;
+  const out = {};
+  for (const l of LEVELS) for (const f of FLEETS) {
+    const k = stKey(l.id, f.id), x = v && v[k], played = n(x && x.played);
+    out[k] = { played, won: Math.min(n(x && x.won), played), best: x && Number.isInteger(x.best) && x.best > 0 && x.best <= 100 ? x.best : null };
+  }
+  return out;
+}
+// the end goes into the statistics once (also when Nová hra comes right after it)
+function count() {
+  if (G.counted || G.status === 'playing') return;
+  G.counted = true;
+  const st = ST[stKey(G.level, G.rules.fleet)];
+  st.played++;
+  if (G.status !== 'won') return;
+  st.won++;
+  const n = yourShots();
+  if (!G.helped && (st.best == null || n < st.best)) { G.record = st.best != null; st.best = n; }
+}
+// a new game: the starter changes every game (a game in which you did not shoot yet keeps its starter)
+function newGame(msg) {
+  stopThinking();
+  const starter = !G ? 0 : isFresh() ? G.starter : 1 - G.starter;
+  const seed = rnd(2 ** 31), L = E.FLEETS[S.fleet];
+  G = { level: S.level, rules: { fleet: S.fleet, again: S.again }, foe: O.create(rnd, G && G.foe ? [G.foe.name] : []), seed, starter,
+        mine: E.randomFleet(L, randUnit), theirs: E.randomFleet(L, E.rng(seed)), hist: [], started: false, shots: [],
+        helped: false, counted: false, record: false, status: 'playing' };
+  hintCell = -1; drag = null; fresh = -1;
+  sync(); save(); render();
+  if (msg) toast(msg);
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) {
+  // Chrome refuses vibration (with a console error) before the first real tap
+  if (!S.vibrate || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+  try { navigator.vibrate(ms); } catch (e) {}
+}
+let toastT;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  // its top at the top of the bottom buttons: it grows down over them, never over the seas
+  const row = [...document.querySelectorAll('.tray .row')].find(r => !r.hidden);
+  if (row) { t.style.bottom = 'auto'; t.style.top = Math.round(row.getBoundingClientRect().top) + 'px'; }
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('');
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+  $('#modal').hidden = false;
+}
+const plural = (n, a, b, c) => `${n} ${n === 1 ? a : n >= 2 && n <= 4 ? b : c}`;
+
+/* ---------- Shots ----------
+   The computer shoots after a short pause (Rychlost soupeře); its square depends only on what it knows, the game's seed
+   and the shot number, so a reload gives the same shot. */
+let thinking = false, cpuTimer = 0, hintCell = -1, fresh = -1; // fresh: the newest shot (its mark pops in once)
+function stopThinking() { clearTimeout(cpuTimer); thinking = false; }
+function cpuTurn() {
+  if (!G.started || G.status !== 'playing' || turn() !== 1 || thinking) return;
+  const g0 = G, n0 = G.shots.length, sp = SPEEDS.find(s => s.id === S.speed);
+  thinking = true; render();
+  cpuTimer = setTimeout(function go() {
+    if (G !== g0 || G.shots.length !== n0 || !thinking) return;
+    if (!nothingOpen()) { cpuTimer = setTimeout(go, 400); return; } // waits while Settings, Help or a dialog are open
+    thinking = false;
+    shoot(1, cpuAim());
+  }, sp.think);
+}
+const cpuAim = () => { const b = B.B[1]; return E.aim(b.k, E.afloat(b), G.level, E.rng(E.mix(G.seed, G.shots.length))); };
+function shoot(who, cell) {
+  G.shots.push([who, cell]); fresh = G.shots.length - 1;
+  hintCell = -1;
+  sync();
+  const res = B.res[B.res.length - 1];
+  count();
+  save(); render();
+  if (res !== 'miss') buzz(res === 'hit' ? 30 : [40, 60, 40]);
+  else if (who === 0) buzz(10);
+  if (G.status !== 'playing') { endDialog(); return; }
+  cpuTurn();
+}
+
+/* ---------- Placing your fleet: drag a ship, tap it to turn it ---------- */
+let drag = null, skipClick = false; // drag = { j, dr, dc, x0, y0, id, moved, pos, ok }
+const shipAt = i => G.mine.findIndex(s => E.cellsOf(s).includes(i));
+function pushHist() { G.hist.push(cleanFleet(G.mine)); if (G.hist.length > 40) G.hist.shift(); }
+// the square under the finger, also outside the sea (clamped later)
+function rowCol(e) {
+  const g = $('#grid').getBoundingClientRect(), pitch = LAY.cs + LAY.gl;
+  return { r: Math.floor((e.clientY - g.top - LAY.fw) / pitch), c: Math.floor((e.clientX - g.left - LAY.fw) / pitch) };
+}
+$('#grid').addEventListener('pointerdown', e => {
+  skipClick = false;
+  if (G.started || drag) return;
+  const b = e.target.closest('.c[data-i]'); if (!b) return;
+  const i = +b.dataset.i, j = shipAt(i); if (j < 0) return;
+  const s = G.mine[j];
+  drag = { j, dr: (i / N | 0) - s.r, dc: i % N - s.c, x0: e.clientX, y0: e.clientY, id: e.pointerId, moved: false, pos: null, ok: false };
+  try { $('#grid').setPointerCapture(e.pointerId); } catch (err) {}
+});
+$('#grid').addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.id) return;
+  if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 8) return;
+  drag.moved = true;
+  const s = G.mine[drag.j], p = rowCol(e);
+  // the ship always stays in the sea: near the edge it stops there
+  const r = Math.max(0, Math.min(s.v ? N - s.len : N - 1, p.r - drag.dr)), c = Math.max(0, Math.min(s.v ? N - 1 : N - s.len, p.c - drag.dc));
+  if (!drag.pos || drag.pos.r !== r || drag.pos.c !== c) {
+    drag.pos = { r, c, len: s.len, v: s.v }; drag.ok = E.fits(G.mine, drag.pos, drag.j);
+    renderBoards();
+  }
+});
+function endDrag(e, cancel) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const d = drag; drag = null; skipClick = true;
+  const s = G.mine[d.j];
+  if (cancel) { renderBoards(); return; }
+  if (!d.moved) { rotate(d.j, s.v ? d.dr : d.dc); return; }
+  if (d.pos && d.ok && (d.pos.r !== s.r || d.pos.c !== s.c)) { pushHist(); G.mine[d.j] = d.pos; buzz(); save(); }
+  else if (d.pos && !d.ok) toast('Sem ne: lodě se nesmí dotýkat, ani rohem');
+  render();
+}
+$('#grid').addEventListener('pointerup', e => endDrag(e, false));
+$('#grid').addEventListener('pointercancel', e => endDrag(e, true));
+// turn a ship round the tapped square; where it does not fit, it slides along so that it still covers that square
+function rotate(j, t) {
+  const s = G.mine[j];
+  if (s.len === 1) { toast('Loď o jednom poli stačí přesunout'); return; }
+  const r0 = s.r + (s.v ? t : 0), c0 = s.c + (s.v ? 0 : t), v = !s.v;
+  const offs = [...Array(s.len).keys()].sort((a, b) => Math.abs(a - t) - Math.abs(b - t) || a - b);
+  for (const o of offs) {
+    const n = { r: v ? r0 - o : r0, c: v ? c0 : c0 - o, len: s.len, v };
+    if (E.fits(G.mine, n, j)) { pushHist(); G.mine[j] = n; buzz(); save(); render(); return; }
+  }
+  toast('Tady se loď neotočí: nevešla by se nebo by se dotýkala jiné');
+}
+
+/* ---------- Rendering ---------- */
+function applyLook() {
+  root.dataset.theme = S.theme;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+}
+function render() {
+  applyLook();
+  renderBoards();
+  renderPanel();
+  renderHint();
+  $('#rowPlace').hidden = G.started; $('#rowBattle').hidden = !G.started;
+  $('#btnUndo').classList.toggle('dim', !G.hist.length);
+  $('#btnHint').classList.toggle('dim', !yourTurn() || thinking);
+  layout();
+}
+// the ship classes of every square: s (ship), h/v (across/down), f/l (its first/last square) + extra
+function hulls(fleet, extra, cls = 's') {
+  const out = new Array(E.CELLS).fill('');
+  fleet.forEach((s, j) => {
+    const x = extra(j); if (x === null) return;
+    E.cellsOf(s).forEach((i, t) => { out[i] = ` ${cls} ${s.v && s.len > 1 ? 'v' : 'h'}${t === 0 ? ' f' : ''}${t === s.len - 1 ? ' l' : ''}${x}`; });
+  });
+  return out;
+}
+const mark = (b, i) => b.k[i] === 1 ? (b.shot[i] ? ' o' : ' w') : b.k[i] >= 2 ? ' x' : '';
+const said = (b, i) => b.k[i] === 1 ? (b.shot[i] ? ', voda' : ', voda vedle potopené lodi') : b.k[i] === 2 ? ', zásah' : b.k[i] === 3 ? ', potopená loď' : '';
+const lastOf = who => { for (let n = G.shots.length - 1; n >= 0; n--) if (G.shots[n][0] === who) return G.shots[n][1]; return -1; };
+const isNew = (who, i) => fresh >= 0 && fresh < G.shots.length && G.shots[fresh][0] === who && G.shots[fresh][1] === i ? ' new' : '';
+function setHTML(el, html) { if (el._html !== html) { el.innerHTML = html; el._html = html; } }
+function renderBoards() {
+  let big = '', small = '';
+  if (!G.started) {
+    // before the battle: your fleet on the big sea (with the dragged ship), the computer's sea still hidden
+    const moving = drag && drag.moved && drag.pos ? drag : null;
+    const hull = hulls(G.mine, j => moving && j === moving.j ? ' dim' : '');
+    const ghost = moving ? hulls([moving.pos], () => moving.ok ? '' : ' bad', 'gh') : null;
+    const zone = moving ? E.blocked(G.mine, moving.j) : null;
+    for (let i = 0; i < E.CELLS; i++) {
+      const cls = ghost && ghost[i] ? ghost[i] : hull[i] + (zone && zone[i] && !hull[i] ? ' z' : '');
+      big += `<button class="c${cls}" data-i="${i}" aria-label="${coord(i)}${hull[i] ? ', tvoje loď' : ''}"></button>`;
+    }
+    small = '<i class="c fog"></i>'.repeat(E.CELLS);
+  } else {
+    const b0 = B.B[0], b1 = B.B[1], lost = G.status === 'lost';
+    // the computer's sea: your shots, its sunk ships (and after a loss where the others were)
+    const hull = hulls(G.theirs, j => b0.sunk[j] ? ' sk' : lost ? ' rv' : null);
+    const hint = yourTurn() && !thinking ? hintCell : -1;
+    for (let i = 0; i < E.CELLS; i++) {
+      big += `<button class="c${hull[i]}${mark(b0, i)}${i === hint ? ' hint' : ''}${isNew(0, i)}" data-i="${i}" aria-label="${coord(i)}${said(b0, i)}${i === hint ? ', rada' : ''}"></button>`;
+    }
+    // your sea: your fleet and the computer's shots, its last shot framed
+    const mine = hulls(G.mine, j => b1.sunk[j] ? ' sk' : ''), lc = lastOf(1);
+    for (let i = 0; i < E.CELLS; i++) small += `<i class="c${mine[i]}${mark(b1, i)}${i === lc ? ' last' : ''}${isNew(1, i)}"></i>`;
+  }
+  setHTML($('#grid'), big);
+  setHTML($('#mini'), small);
+  $('#grid').classList.toggle('on', yourTurn() && !thinking);
+  $('#grid').classList.toggle('place', !G.started);
+  $('#grid').setAttribute('aria-label', G.started ? 'Moře soupeře' : 'Tvoje moře');
+}
+function foeMood() {
+  if (thinking) return 'think';
+  if (G.status === 'lost') return 'happy';
+  if (G.status === 'won') return 'sad';
+  const n = G.shots.length;
+  if (!n) return 'calm';
+  const [who] = G.shots[n - 1], r = B.res[n - 1];
+  return who === 1 && r !== 'miss' ? 'happy' : who === 0 && r === 'sunk' ? 'sad' : 'calm';
+}
+function renderPanel() {
+  const head = O.head(G.foe, { mood: foeMood(), badge: O.levelBadge(LEVELS, lvIdx(G.level)) });
+  const ships = G.theirs.map((s, j) => ({ len: s.len, gone: G.started && B.B[0].sunk[j] })).sort((a, b) => b.len - a.len);
+  const ros = `<div class="ros" aria-label="Lodě soupeře: ${ships.filter(s => !s.gone).length} z ${ships.length} pluje">${ships.map(s => `<i class="${s.gone ? 'gone' : ''}" style="--n:${s.len}"></i>`).join('')}</div>`;
+  let tag, foot;
+  if (!G.started) {
+    tag = `<span class="tag off">${G.starter === 0 ? 'Začínáš ty' : `Začíná ${nm()}`}</span>`;
+    foot = '<div class="pl">Lodě se nesmí dotýkat, ani rohem.</div>';
+  } else {
+    tag = G.status !== 'playing' ? '<span class="tag off">Konec hry</span>'
+      : thinking ? `<span class="tag">${nm()} míří…</span>`
+      : `<span class="tag">${turn() === 0 ? 'Střílíš ty' : `Střílí ${nm()}`}</span>`;
+    foot = `<div class="pl">Tvé výstřely: <b>${yourShots()}</b></div>`;
+  }
+  setHTML($('#panel'), head + tag + ros + foot);
+}
+function renderHint() {
+  let t;
+  const n = G.shots.length, last = n ? G.shots[n - 1] : null, r = n ? B.res[n - 1] : null, past = (m, f) => O.past(G.foe, m, f);
+  if (!G.started) t = 'Posuň lodě tažením, otoč ťuknutím';
+  else if (G.status === 'won') t = '<b>Výhra!</b> Loďstvo soupeře je na dně.';
+  else if (G.status === 'lost') t = `${nm()} ${past('potopil', 'potopila')} všechny tvé lodě.`;
+  else if (!last) t = turn() === 0 ? 'Střílej: ťukni do moře soupeře' : `${nm()} začíná a míří…`;
+  else if (last[0] === 0) t = (r === 'miss' ? '<b>Voda.</b>' : r === 'hit' ? '<b>Zásah!</b>' : '<b>Zásah, potopena!</b>') + (turn() === 0 ? ' Střílíš znovu.' : ` Teď míří ${nm()}.`);
+  else {
+    const co = coord(last[1]);
+    if (turn() === 1) t = r === 'sunk' ? `${nm()} ${past('potopil', 'potopila')} loď, míří znovu…` : `${nm()}: ${co} zásah, míří znovu…`;
+    else t = r === 'miss' ? `${nm()}: ${co} voda. Jsi na tahu.` : r === 'hit' ? `${nm()}: ${co} zásah. Jsi na tahu.` : `${nm()} ${past('potopil', 'potopila')} loď. Jsi na tahu.`;
+  }
+  $('#hint').innerHTML = t;
+}
+// rule: the seas are sized from the room that is left, so they fit without scrolling. The big sea (with its letters
+// and numbers) as large as fits together with your small sea (half its squares) and the opponent's panel: in a row
+// under it (a phone), or in a column next to it when that gives bigger squares (a short, wide window).
+let LAY = { cs: 30, gl: 1, fw: 2 };
+function layout() {
+  if (!G) return;
+  const mid = $('#mid'), panel = $('#panel'), fw = 2, gl = 1;
+  const W = mid.clientWidth - 2 * GUT, H = mid.clientHeight - 24; // inside #mid's padding (12 px above and below)
+  const panelH = w => { if (panel.style.width !== w + 'px') panel.style.width = w + 'px'; return panel.scrollHeight; };
+  const size = cs => { const lab = Math.max(14, Math.round(cs * .45)), co = Math.max(8, Math.floor(cs / 2)); return { cs, lab, co, bigW: lab + 10 * cs + 9 * gl + 2 * fw, smallW: 10 * co + 9 + 2 * fw }; };
+  let pick = null;
+  for (let cs = 44; cs >= 10 && !pick; cs--) {
+    const z = size(cs); if (z.bigW > W && cs > 10) continue;
+    const pw = Math.max(80, z.bigW - z.smallW - 10), lowH = Math.max(z.smallW, panelH(pw));
+    if (z.bigW + 12 + lowH <= H || cs === 10) pick = Object.assign(z, { pw, lowH, side: false });
+  }
+  // a tall screen: the big sea is as wide as it can be, so the height left goes to your small sea
+  for (let co = pick.co + 1; co <= pick.cs; co++) {
+    const smallW = 10 * co + 9 + 2 * fw, pw = pick.bigW - smallW - 10;
+    if (pw < 140) break;
+    const lowH = Math.max(smallW, panelH(pw));
+    if (pick.bigW + 12 + lowH > H) break;
+    Object.assign(pick, { co, smallW, pw, lowH });
+  }
+  for (let cs = 44; cs > pick.cs; cs--) {
+    const z = size(cs), pw = Math.max(z.smallW, 150); if (z.bigW + 12 + pw > W) continue;
+    const lowH = z.smallW + 10 + panelH(pw);
+    if (Math.max(z.bigW, lowH) <= H) { pick = Object.assign(z, { pw, lowH, side: true }); break; }
+  }
+  panel.style.width = pick.pw + 'px';
+  mid.classList.toggle('side', pick.side);
+  const s = root.style;
+  s.setProperty('--cs', pick.cs + 'px'); s.setProperty('--co', pick.co + 'px'); s.setProperty('--lab', pick.lab + 'px');
+  s.setProperty('--lf', Math.max(10, Math.round(pick.cs * .42)) + 'px'); s.setProperty('--gl', gl + 'px'); s.setProperty('--fw', fw + 'px');
+  $('#low').style.width = (pick.side ? pick.pw : pick.bigW) + 'px'; $('#low').style.height = pick.lowH + 'px';
+  LAY = { cs: pick.cs, gl, fw };
+}
+
+/* ---------- Controls ---------- */
+$('#grid').addEventListener('click', e => {
+  const b = e.target.closest('.c[data-i]'); if (!b) return;
+  const i = +b.dataset.i;
+  if (!G.started) {
+    if (skipClick) { skipClick = false; return; }
+    if (shipAt(i) < 0) toast('Loď přesuneš tažením, ťuknutím na loď ji otočíš');
+    else rotate(shipAt(i), (() => { const s = G.mine[shipAt(i)]; return s.v ? (i / N | 0) - s.r : i % N - s.c; })()); // a click without a pointer (keyboard)
+    return;
+  }
+  if (G.status !== 'playing') { toast('Hra skončila. Ťukni na Nová hra.'); return; }
+  if (thinking || turn() !== 0) { toast(`Chvilku, ${nm()} míří`); return; }
+  const b0 = B.B[0];
+  if (b0.k[i]) { toast(b0.shot[i] ? 'Sem už se střílelo' : 'Tady je voda: vedle potopené lodi žádná loď být nemůže'); return; }
+  shoot(0, i);
+});
+$('#btnUndo').addEventListener('click', () => {
+  if (G.started) return;
+  if (!G.hist.length) { toast('Zatím není co vrátit'); return; }
+  G.mine = G.hist.pop();
+  buzz(); save(); render();
+});
+$('#btnShuffle').addEventListener('click', () => {
+  if (G.started) return;
+  pushHist(); G.mine = E.randomFleet(E.FLEETS[G.rules.fleet], randUnit);
+  buzz(); save(); render();
+});
+$('#btnStart').addEventListener('click', () => {
+  if (G.started) return;
+  G.started = true; G.hist = []; drag = null;
+  buzz(); save(); render();
+  toast(`Bitva začala! Tvoje lodě jsou ${$('#mid').classList.contains('side') ? 'vpravo' : 'dole vlevo'}.`);
+  cpuTurn();
+});
+// Poradit: the square the Mistr would shoot at, from what you know (a game with advice gives no record)
+$('#btnHint').addEventListener('click', () => {
+  if (G.status !== 'playing') { toast('Hra skončila'); return; }
+  if (!yourTurn() || thinking) { toast(`Chvilku, ${nm()} míří`); return; }
+  const b0 = B.B[0];
+  hintCell = E.aim(b0.k, E.afloat(b0), 'master', E.rng(E.mix(G.seed, G.shots.length, 0x51ED27)));
+  if (!G.helped) toast('Rada je orámovaná. Hra s radou se nepočítá do rekordu.', 3200);
+  G.helped = true;
+  save(); render();
+});
+// rule: a new game in the middle of one asks first
+$('#btnNew').addEventListener('click', () => {
+  if (hasProgress()) showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  else if (!G.started && G.hist.length) showModal('<h2>Začít novou hru?</h2><p>Tvoje lodě se rozmístí znovu náhodně.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  else newGame();
+});
+// rule: an end dialog only for the game that ended, never over Settings or Help (whenFree)
+function endDialog() {
+  const g0 = G, n = G.shots.length;
+  whenFree(g0, 700, () => {
+    if (G.shots.length !== n || G.status === 'playing') return;
+    let head, why;
+    if (G.status === 'won') {
+      head = 'Výhra! 🎉';
+      why = `Celé loďstvo soupeře je na dně. Stačilo ti <b>${plural(yourShots(), 'výstřel', 'výstřely', 'výstřelů')}</b>.`
+        + (G.record ? '<br>To je tvůj nový rekord!' : G.helped ? '<br>Hra s radou se do rekordu nepočítá.' : '');
+    } else {
+      const left = B.B[0].left;
+      head = `${O.past(G.foe, 'Vyhrál', 'Vyhrála')} ${nm()}`;
+      why = `${nm()} ${O.past(G.foe, 'potopil', 'potopila')} všechny tvé lodě. Tobě ${left === 1 ? 'chyběl jen jeden zásah' : left <= 4 ? `chyběly ještě ${left} zásahy` : `chybělo ještě ${left} zásahů`}. Zbylé lodě soupeře jsou teď v moři vidět.`;
+    }
+    showModal(`<h2>${head}</h2><p>${why}</p>`, [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]);
+  });
+}
+
+/* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
+const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+const swatch = id => `<span class="swatch" data-theme="${id}"><span class="cells"><i class="c s h f"></i><i class="c s h l x"></i><i class="c"></i><i class="c o"></i><i class="c"></i></span></span>`;
+function renderSettings() {
+  const changed = G && rulesChanged();
+  const notice = !changed ? '' : changesHere() ? '<div class="notice">Platí hned, tvoje rozmístěné lodě zůstávají.</div>'
+    : isFresh() ? `<div class="notice">Po návratu do hry začne <b>nová hra</b> s tímto nastavením${!G.started ? ' a lodě se rozmístí znovu' : ''}.</div>`
+    : `<div class="notice">Změna platí od příští hry.${hasProgress() ? ' Rozehraná hra zůstává.' : ''}</div>`;
+  const fl = FLEETS.find(f => f.id === S.fleet);
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Lodě<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Soupeř</h3>
+      <div class="field">
+        ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, O.levelName(LEVELS, i), l.desc)).join('')}
+        <div class="fnote">Soupeř má každou hru jiné jméno. Tvoje lodě nevidí, ví jen to, co se dozvěděl ze svých výstřelů. Kdo začíná, se každou hru střídá.</div>
+      </div>
+      <div class="field"><div class="flabel">Rychlost soupeře</div>
+        ${SPEEDS.map(s => opt('speed:' + s.id, S.speed === s.id, s.name, s.desc)).join('')}
+      </div>
+    </section>
+    <section class="card"><h3>Pravidla</h3>
+      <div class="field"><div class="flabel">Loďstvo</div>
+        ${FLEETS.map(f => opt('fleet:' + f.id, S.fleet === f.id, f.name, f.desc)).join('')}
+      </div>
+      ${toggleRow('again', 'Po zásahu střílíš znovu', 'Kdo zasáhne loď, střílí ještě jednou; platí pro oba. Vypnuté: střídáte se vždy po jedné ráně.')}
+      ${notice}
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}">${swatch(t.id)}${t.name}</button>`).join('')}</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <section class="card"><h3>Statistika</h3>
+      <div class="fnote" style="margin:0 0 8px">${fl.name}. Nejméně výstřelů se počítá jen ve vyhrané hře bez rady.</div>
+      ${LEVELS.map((l, i) => { const st = ST[stKey(l.id, S.fleet)]; return `<p class="stats"><b>${O.levelName(LEVELS, i)}</b><br>Odehráno ${plural(st.played, 'hra', 'hry', 'her')}, výher ${st.won}${st.best ? `, nejméně výstřelů ${st.best}` : ''}</p>`; }).join('')}
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'level') S.level = arg;
+  else if (act === 'speed') S.speed = arg;
+  else if (act === 'fleet') S.fleet = arg;
+  else if (act === 'theme') S.theme = arg;
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S); buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
+});
+function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+// the opponent and the rules apply from the next game; a game in which you have not shot yet is replaced at once
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  if (rulesChanged() && changesHere()) { // same opponent face and name, same ships
+    const msg = S.level !== G.level ? `Hraješ proti soupeři: ${O.levelName(LEVELS, lvIdx(S.level))}` : S.again ? 'Po zásahu se střílí znovu' : 'Střídáte se po jedné ráně';
+    G.level = S.level; G.rules.again = S.again;
+    sync(); save(); render(); toast(msg);
+  }
+  else if (rulesChanged() && isFresh()) newGame('Začala nová hra s novým nastavením'); // keeps the starter
+  else if (rulesChanged()) { render(); toast(`Změna platí od příští hry${hasProgress() ? '. Rozehraná hra zůstává.' : ''}`); }
+  else render();
+  cpuTurn();
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
+function renderHelp() {
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Lodě<small>Jak hrát</small></h2></div>
+    <section class="card help"><h3>Pravidla</h3><ul>
+      <li>Ty i soupeř máte moře 10 × 10 polí: sloupce A až J, řádky 1 až 10. V něm je schované loďstvo: ${FLEETS.map(f => `<b>${f.name.toLowerCase()}</b> (${f.desc.charAt(0).toLowerCase() + f.desc.slice(1, -1)})`).join(', nebo ')}, podle Nastavení.</li>
+      <li>Lodě jsou rovné, leží vodorovně nebo svisle a <b>nesmí se dotýkat</b>, ani rohem.</li>
+      <li>Střílíte na střídačku, každý jednou. <b>Kdo zasáhne loď, střílí znovu</b> (dá se vypnout v Nastavení). Kdo začíná, se každou hru střídá.</li>
+      <li><b>Voda</b>: vedle. <b>Zásah</b>: trefa do lodi. <b>Potopena</b>: loď má zasažená všechna pole. Kolem potopené lodi se voda označí sama, protože tam už žádná loď být nemůže.</li>
+      <li><b>Vyhrává, kdo první potopí celé loďstvo soupeře.</b></li>
+    </ul></section>
+    <section class="card help"><h3>Ovládání</h3><ol>
+      <li><b>Před bitvou</b> jsou tvoje lodě ve velkém moři rozmístěné náhodně. Loď přesuneš tažením prstem, ťuknutím ji otočíš. Zelená loď se tam vejde, červená ne. <b>Zamíchat</b> rozmístí všechny lodě znovu, <b>Zpět</b> vrátí poslední změnu. <b>Hrát</b> začne bitvu.</li>
+      <li><b>V bitvě</b> je velké moře soupeřovo: ťukni na pole a vystřel. Tečka je voda, křížek zásah, tmavá loď potopená. Proužky pod soupeřovým jménem jsou jeho lodě; potopené jsou bledé.</li>
+      <li>Malé moře pod ním (na širokém okně vedle něj) je tvoje: tvoje lodě a soupeřovy výstřely. Jeho poslední výstřel je orámovaný.</li>
+      <li>Výstřel se vrátit nedá (to už by bylo vidět, co tam je). Zpět funguje jen při rozmisťování lodí.</li>
+      <li><b>Poradit</b> orámuje pole, kam se nejvíc vyplatí střílet; ťukni na něj. Hra s radou se počítá, ale ne do rekordu nejméně výstřelů.</li>
+    </ol></section>
+    <section class="card help"><h3>Rady</h3><ul>
+      <li>Po zásahu zkoušej pole nahoře, dole, vlevo a vpravo. Šikmo od zásahu loď být nemůže.</li>
+      <li>Když hledáš, střílej ob jedno pole jako po šachovnici: žádná loď delší než jedno pole se mezi nimi neschová.</li>
+    </ul></section>
+    <section class="card help"><h3>Soupeř</h3>
+      <p>${LEVELS.map((l, i) => `<b>${O.levelName(LEVELS, i)}</b>: ${l.desc}`).join('<br><br>')}</p>
+      <p style="margin-top:12px">Soupeř hraje férově: tvoje lodě nevidí, ví jen to, co se dozvěděl ze svých výstřelů, stejně jako ty. Vybereš ho v Nastavení; každou hru má jiné jméno.</p>
+    </section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// rule: ask for persistent storage so the browser does not delete the saved game by itself
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+const savedSettings = saved && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+ST = validStats(saved && saved.stats);
+// rule: a change made just before the app was closed (Settings still open) is applied now, as closing Settings would
+if (saved && validGame(saved.game)) { G = saved.game; sync(); if (rulesChanged() && isFresh()) closeSettings(); else { render(); cpuTurn(); } }
+else newGame();
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// contract: opened from the launcher (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing: the engine, start the battle, shoot at a square (0..99, A1 = 0, B1 = 1, A2 = 10), the computer's ship
+// squares not hit yet, and skip(left, lose): plays on at once (your shots hit its ships, or with lose = true go into
+// the water, the computer aims as usual) until only `left` squares of the losing fleet are afloat
+window.Lode = {
+  E, get state() { return { S, G, ST, B }; }, get busy() { return thinking; },
+  start() { if (!G.started) $('#btnStart').click(); },
+  shoot(i) { if (yourTurn() && !thinking && !B.B[0].k[i]) shoot(0, i); },
+  targets: () => G.theirs.flatMap(s => E.cellsOf(s)).filter(i => B.B[0].k[i] < 2),
+  skip(left = 1, lose = false) {
+    if (G.status !== 'playing') return false;
+    if (!G.started) { G.started = true; G.hist = []; drag = null; }
+    stopThinking();
+    const own = E.shipMap(G.theirs);
+    for (let guard = 0; guard < 400 && G.status === 'playing' && (lose ? B.B[1] : B.B[0]).left > left; guard++) {
+      if (turn() === 0) {
+        const k = B.B[0].k;
+        let cell = -1;
+        for (let i = 0; i < E.CELLS && cell < 0; i++) if (!k[i] && (own[i] >= 0) !== lose) cell = i;
+        for (let i = 0; i < E.CELLS && cell < 0; i++) if (!k[i]) cell = i;
+        G.shots.push([0, cell]);
+      } else G.shots.push([1, cpuAim()]);
+      sync();
+    }
+    fresh = -1; hintCell = -1; count(); save(); render();
+    if (G.status !== 'playing') endDialog(); else cpuTurn();
+    return true;
+  },
+};
+})();
+</script>
+</body>
+</html>
