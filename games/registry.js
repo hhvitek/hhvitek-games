@@ -29,6 +29,7 @@ globalThis.GAMES = [
   { id: 'malovane-krizovky', name: 'Malované křížovky', description: 'Vybarvi políčka podle čísel a odhal obrázek' },
   { id: 'sipky-ven', name: 'Šipky ven', description: 'Pouštěj šipky z plochy, ať do sebe nenarazí' },
   { id: 'hledani-min', name: 'Hledání min', description: 'Odkryj políčka a vyhni se minám' },
+  { id: 'general', name: 'Generál', description: 'Kostky s tabulkou: postupky, full a generál' },
   // Kostky (user's wish: at the start of the card games), then the card solitaires.
   { id: 'kostky', name: 'Kostky', description: 'Házej kostkami proti soupeři' },
   { id: 'soliter', name: 'Solitér', description: 'Skládej karty od esa po krále' },

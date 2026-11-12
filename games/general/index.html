@@ -1,0 +1,1205 @@
+<!doctype html>
+<html lang="cs" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f4ebdf">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Generál">
+<title>Generál</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%237a4520'/%3E%3Crect x='14' y='14' width='36' height='36' rx='7' fill='%23fff'/%3E%3Ccircle cx='24' cy='24' r='4' fill='%232b1a0e'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%232b1a0e'/%3E%3Ccircle cx='40' cy='40' r='4' fill='%232b1a0e'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes: a solid colour; the score sheet and the dice tray follow the theme ---------- */
+[data-theme="paper"]{--page:#f4ebdf;--bar:rgba(122,69,32,.08);--line:#e6d8c6;--ink:#2b1a0e;--soft:#6f5a48;--accent:#c0561a;--chip:rgba(122,69,32,.07);--chip-line:rgba(122,69,32,.24);--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--undo-bg:rgba(122,69,32,.1);--felt:#e7d9c6;--die:#fff;--pip:#2b1a0e;--die-sh:#c9b49a;--sheet:#fffaf3;--sheet-line:#e6d8c6;--sheet-ink:#2b1a0e;--col-on:rgba(192,86,26,.09);--last:rgba(192,86,26,.2)}
+[data-theme="green"]{--page:#163d27;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.08);--ink:#eef7f0;--soft:#c5dccb;--accent:#ffd66b;--chip:rgba(255,255,255,.1);--chip-line:rgba(255,255,255,.18);--btn:#ffd66b;--btn-ink:#2a2200;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.25);--felt:#2a7346;--die:#fbfaf6;--pip:#1c1c1c;--die-sh:#b9b4a6;--sheet:#1f4d33;--sheet-line:rgba(255,255,255,.14);--sheet-ink:#eef7f0;--col-on:rgba(255,214,107,.1);--last:rgba(255,214,107,.26)}
+[data-theme="blue"]{--page:#132a45;--bar:rgba(0,0,0,.24);--line:rgba(255,255,255,.08);--ink:#eaf2fb;--soft:#c6d8ee;--accent:#ffd166;--chip:rgba(255,255,255,.1);--chip-line:rgba(255,255,255,.18);--btn:#ffd166;--btn-ink:#2a2000;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.28);--felt:#26578c;--die:#fbfaf6;--pip:#1c1c1c;--die-sh:#b9b4a6;--sheet:#1a3657;--sheet-line:rgba(255,255,255,.14);--sheet-ink:#eaf2fb;--col-on:rgba(255,209,102,.1);--last:rgba(255,209,102,.26)}
+[data-theme="night"]{--page:#0e1013;--bar:rgba(0,0,0,.35);--line:rgba(255,255,255,.06);--ink:#e6e8eb;--soft:#a9b0b9;--accent:#6fb7ff;--chip:rgba(255,255,255,.08);--chip-line:rgba(255,255,255,.16);--btn:#6fb7ff;--btn-ink:#0a1a2a;--btn-sh:#2e6aa3;--undo-bg:rgba(0,0,0,.35);--felt:#1d2b3a;--die:#dcd9d2;--pip:#111;--die-sh:#8d897f;--sheet:#171b21;--sheet-line:rgba(255,255,255,.1);--sheet-ink:#e6e8eb;--col-on:rgba(111,183,255,.09);--last:rgba(111,183,255,.24)}
+
+/* ---------- Base ---------- */
+:root{--gut:12px;--ds:60px;--rh:34px;--cw:44px;--lf:15px;--cf:17px} /* one side margin: top-bar buttons, panel, sheet, dice and bottom buttons line up */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{background:var(--page);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+#app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---------- Top bar ---------- */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);overflow-wrap:normal;word-break:normal;white-space:normal} /* a long name wraps to two lines between words, never inside one (rule) */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line);text-decoration:none}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:20px}
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:18px}
+}
+
+/* ---------- The opponent's panel: face, name with stars, what it says (a fixed height, so the sheet never jumps) ---------- */
+.pl{flex:none;margin:8px var(--gut) 0;display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:16px;background:var(--chip);box-shadow:inset 0 0 0 2px var(--chip-line);transition:box-shadow .25s} /* its height comes from the fixed-size name row and bubble */
+.pl.on{box-shadow:inset 0 0 0 3px var(--accent),0 0 12px color-mix(in srgb,var(--accent) 35%,transparent)}
+.ava{flex:none;width:52px;height:52px;border-radius:50%;background:var(--undo-bg);overflow:hidden;display:grid;place-items:center}
+.ava svg{width:100%;height:100%}
+.mid{flex:1;min-width:0}
+.nm{font-size:18px;font-weight:800;line-height:24px;height:24px;display:flex;flex-wrap:nowrap;align-items:center;column-gap:8px;white-space:nowrap;overflow:hidden}
+.nm .op-nm{flex-wrap:nowrap;line-height:24px}
+.nm .op-badge{font-size:15px}
+.tag{flex:none;font-size:14px;font-weight:700;line-height:20px;padding:0 8px;border-radius:10px;background:var(--accent);color:var(--page);white-space:nowrap}
+.bubble{position:relative;margin:4px 0 0 8px;padding:3px 9px;border-radius:10px;background:var(--die);color:var(--pip);font-size:16px;line-height:19px;height:44px;display:flex;align-items:center}
+.bubble span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.bubble::before{content:"";position:absolute;left:-7px;top:7px;border:7px solid transparent;border-left:0;border-right-color:var(--die)}
+
+/* ---------- The middle: the score sheet (two halves side by side) and the dice ---------- */
+#mid{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;gap:12px;padding:12px var(--gut)} /* rule: at least 12 px from the panel and from the bottom controls */
+#sheet{flex:none;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.half{display:grid;grid-template-columns:minmax(0,1fr) var(--cw) var(--cw);grid-auto-rows:var(--rh);background:var(--sheet);border-radius:12px;box-shadow:inset 0 0 0 1.5px var(--sheet-line);overflow:hidden;color:var(--sheet-ink)}
+.half > *{display:flex;align-items:center;min-width:0;border-top:1px solid var(--sheet-line)}
+.half > .hd{border-top:0}
+.lb{gap:4px;padding:0 2px 0 6px;font-size:var(--lf);font-weight:700;line-height:1.05;overflow:hidden}
+.lb span{min-width:0;overflow-wrap:normal}
+.lb svg{flex:none;width:calc(var(--lf) * 1.05);height:calc(var(--lf) * 1.05)}
+.lb.sm{font-weight:600;color:color-mix(in srgb,var(--sheet-ink) 72%,transparent)}
+.lb small{font-size:calc(var(--lf) * .8);font-weight:600;opacity:.8;white-space:nowrap}
+.hd.lb{font-size:calc(var(--lf) * .9);font-weight:700;color:color-mix(in srgb,var(--sheet-ink) 72%,transparent);white-space:nowrap}
+.c{justify-content:center;border-left:1px solid var(--sheet-line);font-size:var(--cf);font-weight:800;font-variant-numeric:tabular-nums;line-height:1;color:var(--sheet-ink)}
+.c.hd svg{width:calc(var(--rh) * .78);height:calc(var(--rh) * .78);max-width:90%;border-radius:50%}
+.c.hd.me{color:var(--accent)}
+.c.on{background:var(--col-on)}
+.c.hd.on{box-shadow:inset 0 -3px 0 var(--accent)}
+.c.zero{color:color-mix(in srgb,var(--sheet-ink) 45%,transparent);font-weight:700}
+.c.last{background:var(--last)}
+.c.poss{color:var(--accent)}
+.c.poss i{font-style:normal;font-size:calc(var(--cf) * .92);display:grid;place-items:center;width:calc(var(--cw) - 4px);height:calc(var(--rh) - 6px);border-radius:7px;outline:1.5px dashed color-mix(in srgb,var(--accent) 70%,transparent);outline-offset:-1.5px}
+.c.poss.z{color:color-mix(in srgb,var(--sheet-ink) 50%,transparent)}
+.c.poss.z i{outline-color:color-mix(in srgb,var(--sheet-ink) 25%,transparent)}
+.c.chosen{background:var(--accent);color:var(--page)}
+.tot{border-top:2px solid color-mix(in srgb,var(--sheet-ink) 40%,transparent)!important}
+.c.tot{font-size:calc(var(--cf) * 1.08)}
+
+/* ---------- Dice ---------- */
+#table{flex:none;display:flex;justify-content:center;align-items:center;border-radius:16px;background:var(--felt);height:calc(var(--ds) * 1.34)}
+#dice{display:flex;gap:calc(var(--ds) * .16)}
+.res{font-size:clamp(16px,calc(var(--ds) * .36),24px);font-weight:700;color:var(--ink);text-align:center;line-height:1.25}
+.res b{font-size:1.15em;font-variant-numeric:tabular-nums}
+.die{--d:var(--ds);flex:none;position:relative;width:var(--d);height:var(--d);border-radius:18%;background:var(--die);padding:calc(var(--d)*.1);
+  display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);
+  box-shadow:inset 0 calc(var(--d)*-.06) 0 rgba(0,0,0,.12),0 calc(var(--d)*.06) calc(var(--d)*.12) rgba(0,0,0,.4);transition:transform .18s,opacity .2s,box-shadow .18s}
+/* sizes from --d: a % padding or margin would be taken from the parent's width and shrink the pips */
+.die i{margin:calc(var(--d)*.03);border-radius:50%}
+.die i.on{background:var(--pip);box-shadow:inset 0 calc(var(--d)*.02) calc(var(--d)*.02) rgba(0,0,0,.45)}
+.die.held{transform:translateY(calc(var(--d) * -.1));box-shadow:0 0 0 calc(var(--d)*.07) var(--accent),0 calc(var(--d)*.12) calc(var(--d)*.16) rgba(0,0,0,.45)}
+.die.blank{opacity:.4}
+.die.blank::after{content:"?";position:absolute;inset:0;display:grid;place-items:center;font:700 calc(var(--d)*.5)/1 Georgia,"Times New Roman",serif;color:var(--pip)}
+.die.rolling{animation:tumble .16s ease-in-out infinite alternate}
+.die.rolling:nth-child(2n){animation-delay:-.08s}
+@keyframes tumble{from{transform:rotate(-16deg) translateY(-8%)}to{transform:rotate(18deg) translateY(6%)}}
+
+/* ---------- Bottom buttons ---------- */
+.tray{flex:none;display:flex;flex-direction:column;gap:6px;padding:8px var(--gut) 12px;background:var(--bar);border-top:1px solid var(--line)}
+#hint{text-align:center;font-size:17px;line-height:1.3;color:var(--soft);min-height:22px}
+.row{display:flex;gap:10px}
+.undo{flex:.8 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;height:58px;border-radius:16px;font-size:20px;font-weight:800;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.undo svg{flex:none;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.go{flex:1.2 1 0;min-width:0;height:58px;border-radius:18px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;background:var(--btn);color:var(--btn-ink);box-shadow:0 4px 0 var(--btn-sh);transition:transform .06s,box-shadow .06s}
+.go span{font-size:22px;font-weight:800}
+.go small{font-size:16px;font-weight:700}
+.go:active{transform:translateY(3px);box-shadow:0 1px 0 var(--btn-sh)}
+/* an unavailable action is only dimmed and explains itself when tapped */
+.undo.dim,.go.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px}
+
+/* short screens: a smaller panel and buttons, so the sheet keeps its size */
+@media (max-height:700px){
+  .pl{padding:4px 10px}
+  .ava{width:42px;height:42px}
+  .nm{font-size:16px;line-height:21px;height:21px}
+  .nm .op-nm{line-height:21px}
+  .bubble{font-size:14px;line-height:17px;height:40px;margin-top:3px}
+  .undo,.go{height:52px}
+  .round{width:42px;height:42px}
+  .pill{height:42px}
+}
+/* a very short window (a wide browser window): the bubble keeps one line */
+@media (max-height:560px){
+  .ava{width:36px;height:36px}
+  .bubble{height:23px}
+  .bubble span{-webkit-line-clamp:1;line-clamp:1}
+}
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+/* rule: the head with Zpět and the game name stays at the top while scrolling */
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);margin-top:16px}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink)}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{height:56px;border-radius:10px;background:var(--page);box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.mcard h2{font-size:28px;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 160px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+.srow{display:flex;justify-content:space-between;gap:12px;padding:8px 0;font-size:20px}
+.srow b{font-size:22px}
+.pts{width:100%;border-collapse:collapse;font-size:19px;margin-top:4px}
+.pts td{padding:8px 4px;border-top:2px solid var(--pline);vertical-align:top;line-height:1.35}
+.pts td:last-child{text-align:right;font-weight:800}
+.pts tr:first-child td{border-top:0}
+.swatch{height:60px;border-radius:10px;background:var(--felt);display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
+.swatch .ms{width:30px;height:40px;border-radius:6px;background:var(--sheet);box-shadow:inset 0 0 0 1.5px var(--sheet-line)}
+.swatch .mdie{width:30px;height:30px;border-radius:6px;background:var(--die);display:grid;place-items:center}
+.swatch .mdie::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--pip)}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Generál</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <section class="pl" id="pOpp" aria-label="Soupeř">
+    <div class="ava" id="avaOpp"></div>
+    <div class="mid"><div class="nm"><span id="nmOpp"></span><span class="tag" id="tagOpp" hidden></span></div><div class="bubble" aria-live="polite"><span id="say"></span></div></div>
+  </section>
+  <main id="mid">
+    <div id="sheet" aria-label="Tabulka bodů"><div class="half" id="hL"></div><div class="half" id="hR"></div></div>
+    <div id="table"><div id="dice" aria-label="Kostky"></div></div>
+  </main>
+  <footer class="tray">
+    <div id="hint"></div>
+    <div class="row">
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnRoll" class="go"><span id="rollTxt">Hodit</span><small id="rollSub"></small></button>
+    </div>
+  </footer>
+</div>
+<!-- Every layer is shown and hidden only through its hidden attribute; every screen has a [data-act="close"] button (Back button contract) -->
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+<script src="../_opponents/opponents.js"></script>
+<script>
+/* ---------- Visible height ---------- */
+// The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
+// enough: some browsers report it taller than what is visible (the app installed by Brave on Android counted the
+// status and navigation bars too and hid the bottom buttons). visualViewport follows what is shown; it is measured
+// again on every change and shortly after loading (a browser bar that hides itself may change it without an event),
+// and a changed height makes the game lay itself out again through a resize event.
+(() => {
+  const root = document.documentElement;
+  let last = 0;
+  const measure = () => {
+    const vv = window.visualViewport;
+    const h = Math.round(vv ? vv.height * vv.scale : innerHeight);
+    if (!(h > 0) || h === last) return;
+    const first = !last; last = h;
+    root.style.setProperty('--app-h', h + 'px');
+    if (!first) dispatchEvent(new Event('resize'));
+  };
+  measure();
+  addEventListener('resize', measure);
+  if (window.visualViewport) visualViewport.addEventListener('resize', measure);
+  addEventListener('pageshow', measure);
+  [100, 500, 1500].forEach(ms => setTimeout(measure, ms));
+  // TEMPORARY (2026-11-08): what this page measured, shown in the launcher's Nastavení → "Údaje o obrazovce"
+  setTimeout(() => { try {
+    const p = document.createElement('div'); p.style.cssText = 'position:absolute;left:-50px;top:0;width:1px;height:100dvh;padding-bottom:env(safe-area-inset-bottom)';
+    document.body.appendChild(p); const dvh = Math.round(p.getBoundingClientRect().height - parseFloat(getComputedStyle(p).paddingBottom)), sb = Math.round(parseFloat(getComputedStyle(p).paddingBottom)); p.remove();
+    const vv = window.visualViewport;
+    localStorage.setItem('games.launcher.diag', JSON.stringify({ page: location.pathname.split('/').slice(-2, -1)[0], vv: vv ? Math.round(vv.height) : null, inner: innerHeight, client: root.clientHeight, dvh, sb, appH: last, app: Math.round(document.getElementById('app').getBoundingClientRect().height) }));
+  } catch (e) {} }, 2000);
+})();
+
+/* ---------- Engine ---------- */
+// Scoring and the computer opponent of Generál, without the screen (tools/general-test.js runs this block in Node).
+// Boxes: 0–5 jedničky–šestky, 6 pár, 7 dva páry, 8 trojice, 9 čtveřice, 10 malá postupka, 11 velká postupka,
+// 12 full, 13 šance, 14 generál. A sheet is an array of 15 entries: null (free) or the points written there.
+function GeneralEngine() {
+  const N_BOX = 15, UPPER_NEED = 63, UPPER_BONUS = 50, GENERAL = 50;
+  const counts = dice => { const c = [0, 0, 0, 0, 0, 0, 0]; for (const v of dice) c[v]++; return c; };
+  const sum = c => { let s = 0; for (let f = 1; f <= 6; f++) s += f * c[f]; return s; };
+  // Points of the box b for the dice counts c (0 = the dice do not fit; writing it "škrtne" the box)
+  function scoreBox(b, c) {
+    if (b < 6) return (b + 1) * c[b + 1];
+    switch (b) {
+      case 6: for (let f = 6; f >= 1; f--) if (c[f] >= 2) return 2 * f; return 0;
+      case 7: { let a = 0; for (let f = 6; f >= 1; f--) if (c[f] >= 2) { if (a) return 2 * a + 2 * f; a = f; } return 0; }
+      case 8: for (let f = 6; f >= 1; f--) if (c[f] >= 3) return 3 * f; return 0;
+      case 9: for (let f = 6; f >= 1; f--) if (c[f] >= 4) return 4 * f; return 0;
+      case 10: return c[1] === 1 && c[2] === 1 && c[3] === 1 && c[4] === 1 && c[5] === 1 ? 15 : 0;
+      case 11: return c[2] === 1 && c[3] === 1 && c[4] === 1 && c[5] === 1 && c[6] === 1 ? 20 : 0;
+      case 12: { let three = 0, two = 0; for (let f = 1; f <= 6; f++) { if (c[f] === 3) three = f; else if (c[f] === 2) two = f; } return three && two ? sum(c) : 0; }
+      case 13: return sum(c);
+      case 14: for (let f = 1; f <= 6; f++) if (c[f] === 5) return GENERAL; return 0;
+    }
+    return 0;
+  }
+  const upperSum = sh => { let s = 0; for (let b = 0; b < 6; b++) s += sh[b] || 0; return s; };
+  const bonusOf = sh => upperSum(sh) >= UPPER_NEED ? UPPER_BONUS : 0;
+  const total = sh => sh.reduce((s, x) => s + (x || 0), 0) + bonusOf(sh);
+  const freeBoxes = sh => { const out = []; for (let b = 0; b < N_BOX; b++) if (sh[b] === null) out.push(b); return out; };
+  // Can the bonus still be reached (every free upper box with five dice)?
+  const bonusPossible = sh => { let s = upperSum(sh); for (let b = 0; b < 6; b++) if (sh[b] === null) s += 5 * (b + 1); return s >= UPPER_NEED; };
+
+  /* ---------- Multisets of dice: 462 of up to five dice, the 252 of five, what a roll of the rest gives ---------- */
+  const KEY = c => c[1] + 6 * c[2] + 36 * c[3] + 216 * c[4] + 1296 * c[5] + 7776 * c[6];
+  const MS = [], IDX = new Int16Array(46656).fill(-1);
+  (function gen(f, c, n) {
+    if (f > 6) { IDX[KEY(c)] = MS.length; MS.push({ c: c.slice(), n }); return; }
+    for (let k = 0; k + n <= 5; k++) { c[f] = k; gen(f + 1, c, n + k); }
+    c[f] = 0;
+  })(1, [0, 0, 0, 0, 0, 0, 0], 0);
+  const FIVE = MS.map((m, i) => i).filter(i => MS[i].n === 5);
+  const fact = [1, 1, 2, 6, 24, 120];
+  // ROLL[h] = the five-dice multisets that rolling the rest to the kept multiset h gives, with their probabilities
+  const ROLL = MS.map(h => {
+    const k = 5 - h.n, res = [], p = [];
+    for (const o of MS) {
+      if (o.n !== k) continue;
+      let q = fact[k]; for (let f = 1; f <= 6; f++) q /= fact[o.c[f]];
+      const c = h.c.map((x, f) => x + o.c[f]);
+      res.push(IDX[KEY(c)]); p.push(q / 6 ** k);
+    }
+    return { res: Int16Array.from(res), p: Float64Array.from(p) };
+  });
+  // HOLDS[i] (i of five dice) = every distinct sub-multiset that can be kept
+  const HOLDS = MS.map(m => {
+    if (m.n !== 5) return null;
+    const out = [];
+    (function gen(f, c) {
+      if (f > 6) { out.push(IDX[KEY(c)]); return; }
+      for (let k = 0; k <= m.c[f]; k++) { c[f] = k; gen(f + 1, c); }
+      c[f] = 0;
+    })(1, [0, 0, 0, 0, 0, 0, 0]);
+    return Int16Array.from(out);
+  });
+  const SCORES = FIVE.map(i => { const a = []; for (let b = 0; b < N_BOX; b++) a.push(scoreBox(b, MS[i].c)); return a; });
+  const SC = new Array(MS.length); FIVE.forEach((i, k) => { SC[i] = SCORES[k]; });
+
+  /* ---------- Mistr: the best play of this turn, valuing every box by its points against what it is worth open ---------- */
+  // PAR[b]: what a free box is worth on average for the rest of the game when played well (tuned by self-play)
+  const PAR = [1.6, 4.4, 7.4, 10.4, 13.2, 16.0, 9.6, 15.6, 12.2, 8.6, 8.0, 9.6, 15.0, 21.0, 12.0];
+  // the chance to reach 63 in the upper boxes with the upper sum s and the free upper boxes (normal approximation)
+  function pBonus(s, freeUpper) {
+    const need = UPPER_NEED - s;
+    if (need <= 0) return 1;
+    let mean = 0, v = 0;
+    for (const f of freeUpper) { mean += 3 * f; v += (0.95 * f) ** 2; }
+    if (!freeUpper.length) return 0;
+    const z = (mean - need + 0.5) / Math.sqrt(v);
+    return 1 / (1 + Math.exp(-1.7 * z));
+  }
+  // value of writing points pts into box b on the sheet sh (relative: what is gained against keeping the box free)
+  function boxValue(sh, b, pts, left) {
+    const scale = Math.min(1, (left - 1) / 6);         // with few turns left a free box is worth less
+    let v = pts - PAR[b] * (left > 1 ? 0.55 + 0.45 * scale : 0);
+    if (b < 6) {
+      const s = upperSum(sh), fu = []; for (let k = 0; k < 6; k++) if (sh[k] === null) fu.push(k + 1);
+      const before = pBonus(s, fu), after = pBonus(s + pts, fu.filter(f => f !== b + 1));
+      v += UPPER_BONUS * (after - before);
+    }
+    return v;
+  }
+  // The tables of one turn for a sheet: V[r][i] = the value of five dice i with r rolls left, E[r][h] = the value of
+  // keeping h and rolling the rest with r rolls left after that roll; BEST[i] = the best box for i
+  function plan(sh) {
+    const free = freeBoxes(sh), left = free.length;
+    const V0 = new Float64Array(MS.length), BEST = new Int8Array(MS.length);
+    for (const i of FIVE) {
+      let bv = -1e9, bb = free[0];
+      for (const b of free) { const v = boxValue(sh, b, SC[i][b], left); if (v > bv) { bv = v; bb = b; } }
+      V0[i] = bv; BEST[i] = bb;
+    }
+    const E = [], V = [V0];
+    for (let r = 1; r <= 2; r++) {
+      const Vp = V[r - 1], Er = new Float64Array(MS.length);
+      for (let h = 0; h < MS.length; h++) { const t = ROLL[h]; let e = 0; for (let k = 0; k < t.res.length; k++) e += t.p[k] * Vp[t.res[k]]; Er[h] = e; }
+      const Vr = new Float64Array(MS.length);
+      for (const i of FIVE) { let m = V0[i]; for (const h of HOLDS[i]) if (Er[h] > m) m = Er[h]; Vr[i] = m; }
+      E.push(Er); V.push(Vr);
+    }
+    return { V, E: [null, E[0], E[1]], BEST, free };
+  }
+  // the dice indices that make up the kept multiset h
+  function idxOf(dice, hc) {
+    const left = hc.slice(), out = [];
+    dice.forEach((v, i) => { if (left[v] > 0) { left[v]--; out.push(i); } });
+    return out;
+  }
+  const holdCounts = (dice, idx) => counts(idx.map(i => dice[i]));
+
+  /* ---------- Rules of thumb (Zkušený) ---------- */
+  function thumbHold(dice, sh, rng) {
+    const c = counts(dice);
+    // a straight is kept when 4 in a row are there and a straight box is free
+    const runs = [[1, 2, 3, 4, 5], [2, 3, 4, 5, 6]];
+    if (sh[10] === null && scoreBox(10, c) || sh[11] === null && scoreBox(11, c)) return dice.map((_, i) => i);
+    for (const [b, run] of [[11, runs[1]], [10, runs[0]]]) {
+      if (sh[b] !== null) continue;
+      const have = run.filter(f => c[f] > 0);
+      if (have.length >= 4) { const used = new Set(); return dice.map((v, i) => run.includes(v) && !used.has(v) && used.add(v) ? i : -1).filter(i => i >= 0); }
+    }
+    // a full house is kept whole while the box is free
+    if (sh[12] === null && scoreBox(12, c)) return dice.map((_, i) => i);
+    // two pairs with the full or two pairs box free: keep both pairs
+    const pairs = []; for (let f = 6; f >= 1; f--) if (c[f] >= 2) pairs.push(f);
+    if (pairs.length === 2 && (sh[12] === null || sh[7] === null) && c[pairs[0]] === 2 && c[pairs[1]] === 2) return dice.map((v, i) => pairs.includes(v) ? i : -1).filter(i => i >= 0);
+    // otherwise the most common face that still has a use (higher faces first)
+    let bestF = 0, bestW = -1;
+    for (let f = 6; f >= 1; f--) {
+      const use = sh[f - 1] === null || (c[f] >= 2 && (sh[6] === null || sh[8] === null || sh[9] === null || sh[14] === null || sh[13] === null));
+      const w = c[f] * 10 + f + (use ? 30 : 0) + (rng() < 0.15 ? 8 : 0);
+      if (w > bestW) { bestW = w; bestF = f; }
+    }
+    if (c[bestF] === 1 && bestF < 4) return []; // a single low die is not worth keeping
+    return dice.map((v, i) => v === bestF ? i : -1).filter(i => i >= 0);
+  }
+  function thumbBox(sh, c, rng, noise) {
+    const free = freeBoxes(sh), left = free.length;
+    const opts = free.map(b => {
+      const pts = scoreBox(b, c);
+      let v = pts - PAR[b] * (left > 1 ? 1 : 0);
+      if (b < 6) v += (pts - 3 * (b + 1)) * 2;               // three of a kind in the upper boxes keeps the bonus
+      return { b, v };
+    }).sort((a, b) => b.v - a.v);
+    if (opts.length > 1 && rng() < noise && opts[1].v > opts[0].v - 6) return opts[1].b;
+    return opts[0].b;
+  }
+
+  /* ---------- One decision of the opponent ---------- */
+  // o = { dice (5 values), roll (rolls done this turn, 1–3), sheet }, rng() in [0, 1).
+  // Returns { hold: [dice indices kept] } to roll again (a roll is left), or { box } to write the turn down.
+  // Every level writes a generál into a free generál box and never rolls away a finished generál.
+  let cache = null;
+  function decide(level, o, rng) {
+    const { dice, roll, sheet: sh } = o, c = counts(dice), canRoll = roll < 3;
+    if (sh[14] === null && scoreBox(14, c)) return { box: 14 };
+    if (level >= 2) {
+      const key = sh.map(x => x === null ? '-' : x).join(',');
+      if (!cache || cache.key !== key) cache = { key, t: plan(sh) };
+      const t = cache.t, i = IDX[KEY(c)];
+      if (canRoll) {
+        const r = 3 - roll, Er = t.E[r];
+        let best = -1, bv = t.V[0][i] + 1e-9;
+        for (const h of HOLDS[i]) if (Er[h] > bv + 1e-9) { bv = Er[h]; best = h; }
+        if (best >= 0) return { hold: idxOf(dice, MS[best].c) };
+      }
+      return { box: t.BEST[i] };
+    }
+    if (level === 1) {
+      if (canRoll) {
+        // write at once what is good already: a straight or a full house
+        const good = [10, 11, 12].find(b => sh[b] === null && scoreBox(b, c));
+        if (good !== undefined) return { box: good };
+        const h = thumbHold(dice, sh, rng);
+        if (h.length < 5) return { hold: h };
+      }
+      return { box: thumbBox(sh, c, rng, 0.12) };
+    }
+    // Začátečník: keeps the face it has most of (or a random one), writes where it gets the most points now
+    if (canRoll && rng() < 0.9) {
+      let bestF = 1 + Math.floor(rng() * 6);
+      if (rng() < 0.85) for (let f = 1; f <= 6; f++) if (c[f] >= c[bestF]) bestF = f;
+      const h = dice.map((v, i) => v === bestF ? i : -1).filter(i => i >= 0);
+      if (h.length < 5) return { hold: h };
+    }
+    const free = freeBoxes(sh);
+    if (rng() < 0.12) { const nz = free.filter(b => scoreBox(b, c) > 0); if (nz.length) return { box: nz[Math.floor(rng() * nz.length)] }; }
+    let bb = free[0], bv = -1;
+    // the šance is kept for later unless nothing else gives much
+    for (const b of free) { const v = scoreBox(b, c) * (b === 13 && free.length > 3 ? 0.4 : 1) + rng() * 0.5; if (v > bv) { bv = v; bb = b; } }
+    return { box: bb };
+  }
+
+  /* ---------- Randomness and self-play ---------- */
+  function rand01(g) {
+    g.seed = (g.seed + 0x6D2B79F5) | 0;
+    let t = g.seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+  const die = g => 1 + Math.floor(rand01(g) * 6);
+  // One whole turn of a level on the sheet sh (changed in place); returns the box written
+  function playTurn(level, sh, g) {
+    let dice = [die(g), die(g), die(g), die(g), die(g)];
+    for (let roll = 1; ; roll++) {
+      const d = decide(level, { dice, roll, sheet: sh }, () => rand01(g));
+      if (d.box !== undefined) { sh[d.box] = scoreBox(d.box, counts(dice)); return d.box; }
+      dice = dice.map((v, i) => d.hold.includes(i) ? v : die(g));
+    }
+  }
+  // Level a against level b: { a, b, draw, avgA, avgB } over n games (the starter alternates)
+  function simulate(a, b, n = 200, seed = 12345) {
+    const g = { seed }, res = { a: 0, b: 0, draw: 0, avgA: 0, avgB: 0 };
+    for (let k = 0; k < n; k++) {
+      const sh = [new Array(N_BOX).fill(null), new Array(N_BOX).fill(null)], lv = [a, b];
+      for (let t = 0; t < 2 * N_BOX; t++) { const p = (t + k) % 2; playTurn(lv[p], sh[p], g); }
+      const A = total(sh[0]), B = total(sh[1]);
+      res.avgA += A / n; res.avgB += B / n;
+      if (A > B) res.a++; else if (B > A) res.b++; else res.draw++;
+    }
+    res.avgA = Math.round(res.avgA * 10) / 10; res.avgB = Math.round(res.avgB * 10) / 10;
+    return res;
+  }
+  // The average score of a level playing alone
+  function solo(level, n = 200, seed = 777) {
+    const g = { seed }; let s = 0, bonus = 0, gen = 0;
+    for (let k = 0; k < n; k++) {
+      const sh = new Array(N_BOX).fill(null);
+      for (let t = 0; t < N_BOX; t++) playTurn(level, sh, g);
+      s += total(sh); if (bonusOf(sh)) bonus++; if (sh[14]) gen++;
+    }
+    return { avg: Math.round(s / n * 10) / 10, bonus: bonus / n, general: gen / n };
+  }
+  return { N_BOX, UPPER_NEED, UPPER_BONUS, GENERAL, PAR, counts, scoreBox, upperSum, bonusOf, bonusPossible, total, freeBoxes,
+           decide, rand01, playTurn, simulate, solo, holdCounts, MS };
+}
+/* ---------- Engine end ---------- */
+
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const E = GeneralEngine();
+const GUT = 12; // side margin in px, the same as --gut in the CSS
+
+/* ---------- Settings and storage ---------- */
+const ID = 'general';
+const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const THEMES = [
+  { id: 'paper', name: 'Papír',        meta: '#f4ebdf' },
+  { id: 'green', name: 'Zelené sukno', meta: '#163d27' },
+  { id: 'blue',  name: 'Modrá',        meta: '#132a45' },
+  { id: 'night', name: 'Noc',          meta: '#0e1013' },
+];
+const SPEEDS = { slow: 1700, normal: 1150, fast: 650 }; // one step of the opponent in ms
+// How well the opponent plays (levels 0, 1, 2); shown as stars next to its name (games/_opponents/opponents.js)
+const O = OPPONENTS;
+const LEVELS = [
+  { title: 'Začátečník', desc: 'Nechává si, čeho padlo nejvíc, a píše tam, kde je hned nejvíc bodů.' },
+  { title: 'Zkušený hráč', desc: 'Hraje podle osvědčených pravidel a myslí na prémii. Občas zaváhá.' },
+  { title: 'Mistr', desc: 'Počítá šance každého hodu a cenu každého okénka.' },
+];
+const lvName = i => O.levelName(LEVELS, i);
+const DEFAULTS = { level: 1, speed: 'normal', hints: true, theme: 'paper', vibrate: true };
+const N = E.N_BOX;
+// Box names: on the sheet, "zapíšu do …" (genitive) and "škrtnu …" (accusative)
+const BOX = ['Jedničky', 'Dvojky', 'Trojky', 'Čtyřky', 'Pětky', 'Šestky', 'Pár', 'Dva páry', 'Trojice', 'Čtveřice', 'Malá postupka', 'Velká postupka', 'Full', 'Šance', 'Generál'];
+const BOX_GEN = ['jedniček', 'dvojek', 'trojek', 'čtyřek', 'pětek', 'šestek', 'páru', 'dvou párů', 'trojice', 'čtveřice', 'malé postupky', 'velké postupky', 'fullu', 'šance', 'generála'];
+const BOX_ACC = ['jedničky', 'dvojky', 'trojky', 'čtyřky', 'pětky', 'šestky', 'pár', 'dva páry', 'trojici', 'čtveřici', 'malou postupku', 'velkou postupku', 'full', 'šanci', 'generála'];
+const FACE_ACC1 = ['', 'jedničku', 'dvojku', 'trojku', 'čtyřku', 'pětku', 'šestku'];
+const FACE_PL = ['', 'jedničky', 'dvojky', 'trojky', 'čtyřky', 'pětky', 'šestky'];
+const NUM_F = ['', 'jednu', 'dvě', 'tři', 'čtyři', 'pět'];
+// every value a box can hold (0 = škrtnuto), for checking a saved game
+const POSSIBLE = Array.from({ length: N }, () => new Set([0]));
+for (const m of E.MS) if (m.n === 5) for (let b = 0; b < N; b++) POSSIBLE[b].add(E.scoreBox(b, m.c));
+
+/* ---------- State ---------- */
+// G: rules {level}; foe; starter; turn 0 = the player, 1 = the opponent; sheets [player, opponent] of 15 entries
+// (null = free); dice (5 values, [] before the first roll of a turn); held (5 booleans: kept for the next roll);
+// roll = rolls done in this turn (0–3); rolls = rolls in the whole game (0 = an untouched game); phase start | pick |
+// chosen (the opponent has decided, plan = { hold } or { box }) | over; selUndo = earlier held choices of this roll
+// (Zpět); undoW = the player's last write, which Zpět takes back while the opponent has not rolled yet;
+// last = { p, b } the box written last; seed = the dice and the opponent's choices
+let S, G, stats = {}, busy = false, rollTimer = 0;
+const isFresh = () => G.rolls === 0;
+const inProgress = () => G && G.status === 'playing' && !isFresh();
+const foe = (g = G) => g.foe;
+const emptySheet = () => new Array(N).fill(null);
+const filled = sh => sh.filter(x => x !== null).length;
+function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, stats }));
+    if (G.status === 'playing' && !isFresh()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {} // storage may be full or blocked; the game goes on
+}
+const totals = g => [E.total(g.sheets[0]), E.total(g.sheets[1])];
+function statusOf(g) {
+  if (filled(g.sheets[0]) < N || filled(g.sheets[1]) < N) return 'playing';
+  const [a, b] = totals(g);
+  return a > b ? 'won' : a < b ? 'lost' : 'draw';
+}
+const losses = s => s.played - s.won - s.draw;
+const validStat = s => !!s && typeof s === 'object' && ['played', 'won', 'draw', 'best'].every(k => Number.isInteger(s[k]) && s[k] >= 0) && s.won + s.draw <= s.played && s.best <= 400;
+const isDie = v => Number.isInteger(v) && v >= 1 && v <= 6;
+const validDice = d => Array.isArray(d) && d.length === 5 && d.every(isDie);
+const validHeld = h => Array.isArray(h) && h.length === 5 && h.every(x => typeof x === 'boolean');
+const validSheet = sh => Array.isArray(sh) && sh.length === N && sh.every((x, b) => x === null || Number.isInteger(x) && POSSIBLE[b].has(x));
+const counts = d => E.counts(d);
+// Corrupted data never crashes the game; whose turn it is and the end are derived from the sheets
+function validGame(g) {
+  try {
+    if (!g || !g.rules || ![0, 1, 2].includes(g.rules.level) || ![0, 1].includes(g.starter)) return false;
+    if (!Array.isArray(g.sheets) || g.sheets.length !== 2 || !g.sheets.every(validSheet)) return false;
+    const f = [filled(g.sheets[0]), filled(g.sheets[1])], other = 1 - g.starter, d = f[g.starter] - f[other];
+    if (d !== 0 && d !== 1) return false;
+    const over = f[0] === N && f[1] === N;
+    if (!over && g.turn !== (d === 0 ? g.starter : other)) return false;
+    if (!Number.isInteger(g.roll) || g.roll < 0 || g.roll > 3 || !Number.isInteger(g.rolls) || g.rolls < 0) return false;
+    if (over) { g.phase = 'over'; g.dice = []; g.roll = 0; g.plan = null; if (![0, 1].includes(g.turn)) g.turn = g.starter; }
+    else {
+      if (!['start', 'pick', 'chosen'].includes(g.phase)) return false;
+      if ((g.phase === 'start') !== (g.roll === 0)) return false;
+      if (g.roll === 0 ? !(Array.isArray(g.dice) && g.dice.length === 0) : !validDice(g.dice)) return false;
+      if (g.phase === 'chosen') {
+        const p = g.plan;
+        if (g.turn !== 1 || !p || typeof p !== 'object') return false;
+        if ('box' in p ? !(Number.isInteger(p.box) && g.sheets[1][p.box] === null) : !(validHeld(p.held) && g.roll < 3)) return false;
+      } else g.plan = null;
+    }
+    if (!validHeld(g.held) || !g.dice.length) g.held = [false, false, false, false, false];
+    if (!Number.isInteger(g.seed)) g.seed = rnd(2 ** 31);
+    if (g.phase !== 'pick' || g.turn !== 0 || !Array.isArray(g.selUndo) || !g.selUndo.every(validHeld)) g.selUndo = [];
+    const u = g.undoW;
+    g.undoW = u && typeof u === 'object' && g.turn === 1 && g.roll === 0 && Number.isInteger(u.b) && u.b >= 0 && u.b < N && validDice(u.dice) && validHeld(u.held)
+      && Number.isInteger(u.roll) && u.roll >= 1 && u.roll <= 3 && g.sheets[0][u.b] === E.scoreBox(u.b, counts(u.dice)) ? u : null;
+    const l = g.last;
+    g.last = l && [0, 1].includes(l.p) && Number.isInteger(l.b) && l.b >= 0 && l.b < N && g.sheets[l.p][l.b] !== null ? { p: l.p, b: l.b } : null;
+    g.say = typeof g.say === 'string' ? g.say.slice(0, 120) : '';
+    g.mood = ['calm', 'happy', 'sad', 'think'].includes(g.mood) ? g.mood : 'calm';
+    g.counted = g.counted === true;
+    if (!O.valid(g.foe)) g.foe = O.create(rnd);
+    g.status = statusOf(g);
+    if (g.status !== 'playing') { g.counted = true; g.undoW = null; }
+    return true;
+  } catch (e) { return false; }
+}
+function normalize(s) {
+  s.level = [0, 1, 2].includes(+s.level) ? +s.level : DEFAULTS.level;
+  if (!(s.speed in SPEEDS)) s.speed = DEFAULTS.speed;
+  s.hints = !!s.hints; s.vibrate = !!s.vibrate;
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+}
+const rnd = n => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; } catch (e) { return Math.floor(Math.random() * n); } };
+const pick = a => a[rnd(a.length)];
+function newGame(msg) {
+  stopRolling();
+  // the player starts the first game, then it alternates; a game nobody rolled in is replaced with the same starter
+  const starter = !G ? 0 : isFresh() ? G.starter : 1 - G.starter;
+  G = { rules: { level: S.level }, foe: O.create(rnd, G && G.foe ? [G.foe.name] : []), starter, turn: starter,
+        sheets: [emptySheet(), emptySheet()], dice: [], held: [false, false, false, false, false], roll: 0, rolls: 0,
+        phase: 'start', plan: null, selUndo: [], undoW: null, last: null, seed: rnd(2 ** 31),
+        say: '', mood: 'calm', status: 'playing', counted: false };
+  G.say = starter ? pick(['Začínám já.', 'Tak já začnu.']) : pick(['Začínáš ty. Hodně štěstí!', 'Ty začínáš.']);
+  save(); render();
+  if (msg) toast(msg);
+  advance();
+}
+// A finished game goes into the statistics of its level once (its first end)
+function recordEnd() {
+  if (G.counted) return;
+  G.counted = true;
+  const k = String(G.rules.level), st = stats[k] ? { ...stats[k] } : { played: 0, won: 0, draw: 0, best: 0 };
+  st.played++;
+  if (G.status === 'won') st.won++; else if (G.status === 'draw') st.draw++;
+  st.best = Math.max(st.best, E.total(G.sheets[0]));
+  stats[k] = st;
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) {
+  // Chrome refuses vibration (with a console error) before the first real tap
+  if (!S.vibrate || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+  try { navigator.vibrate(ms); } catch (e) {}
+}
+let toastT;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  // above the bottom buttons, so the sheet's totals stay visible
+  const tray = $('.tray').getBoundingClientRect();
+  if (tray.height) t.style.bottom = Math.round(innerHeight - tray.top + 10) + 'px';
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('');
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+  $('#modal').hidden = false;
+}
+const ptsWord = n => n === 1 ? 'bod' : n >= 2 && n <= 4 ? 'body' : 'bodů';
+const rollsWord = n => n === 1 ? 'hod' : n >= 2 && n <= 4 ? 'hody' : 'hodů';
+const LINES = {
+  start: ['Tak hážu.', 'Jdeme na to.', 'Hážu!', 'Uvidíme…'],
+  all: ['Hážu znovu všemi.', 'Nic si nenechám.', 'Zkusím to znovu.'],
+  straight: ['Jdu na postupku.', 'Zkusím postupku.'],
+  general: ['Generál!', 'Pět stejných! Generál!'],
+  big: ['To se povedlo!', 'Výborně!', 'Pěkné!'],
+  scratch: ['To je smůla.', 'No nic.', 'Holt to nevyšlo.'],
+  yourGeneral: ['Generál! Gratuluju.', 'To je generál!'],
+  yourBig: ['Pěkné!', 'To se povedlo.', 'Tak to je dobré.'],
+  mine: ['Teď já.', 'Jsem na řadě.', 'Tak teď já.'],
+};
+function say(key, mood, extra) { G.say = [extra, key && pick(LINES[key])].filter(Boolean).join(' '); G.mood = mood || 'calm'; }
+// what the opponent says about the dice it keeps
+function holdLine(dice, held) {
+  const kept = dice.filter((_, i) => held[i]);
+  if (!kept.length) return pick(LINES.all);
+  const c = counts(kept), faces = [1, 2, 3, 4, 5, 6].filter(f => c[f]);
+  if (faces.length === 1) return `Nechám si ${kept.length === 1 ? FACE_ACC1[faces[0]] : NUM_F[kept.length] + ' ' + FACE_PL[faces[0]]}.`;
+  if (faces.length >= 3 && faces.every(f => c[f] === 1) && faces[faces.length - 1] - faces[0] <= 4) return pick(LINES.straight);
+  return `Nechám si ${NUM_F[kept.length]} ${kept.length < 5 ? 'kostky' : 'kostek'}.`;
+}
+
+/* ---------- Rendering ---------- */
+const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+function pips(v) { let s = ''; for (let i = 0; i < 9; i++) s += `<i${PIPS[v].includes(i) ? ' class="on"' : ''}></i>`; return s; }
+function setFace(el, v) { [...el.children].forEach((p, i) => p.classList.toggle('on', PIPS[v].includes(i))); }
+// a small die face for the labels of the upper boxes
+const PIP_XY = [[6, 6], [12, 6], [18, 6], [6, 12], [12, 12], [18, 12], [6, 18], [12, 18], [18, 18]];
+const miniDie = v => `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="5" style="fill:var(--die);stroke:var(--sheet-ink);stroke-opacity:.45;stroke-width:1.5"/>${PIPS[v].map(k => `<circle cx="${PIP_XY[k][0]}" cy="${PIP_XY[k][1]}" r="2.4" style="fill:var(--pip)"/>`).join('')}</svg>`;
+function applyLook() {
+  root.dataset.theme = S.theme;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+}
+const myTurn = () => G.status === 'playing' && G.turn === 0;
+const canWrite = () => myTurn() && G.phase === 'pick' && !busy;
+const canUndoWrite = () => !!G.undoW && G.status === 'playing' && G.turn === 1 && G.roll === 0 && !busy;
+// One score cell of player p for box b
+function cell(p, b, on) {
+  const g = G, v = g.sheets[p][b], cls = ['c', p ? 'op' : 'me'];
+  if (on) cls.push('on');
+  if (g.last && g.last.p === p && g.last.b === b) cls.push('last');
+  if (v !== null) {
+    if (v === 0) cls.push('zero');
+    return `<div class="${cls.join(' ')}" aria-label="${BOX[b]}: ${v}">${v}</div>`;
+  }
+  if (p === 1 && g.phase === 'chosen' && g.plan && g.plan.box === b) {
+    cls.push('chosen');
+    return `<div class="${cls.join(' ')}">${E.scoreBox(b, counts(g.dice))}</div>`;
+  }
+  if (p === 0) {
+    const write = canWrite(), pts = write ? E.scoreBox(b, counts(g.dice)) : 0;
+    if (write && S.hints) cls.push('poss', pts ? 'nz' : 'z');
+    return `<button class="${cls.join(' ')}" data-b="${b}" aria-label="${BOX[b]}${write ? `: zapsat ${pts}` : ', volné'}">${write && S.hints ? `<i>${pts}</i>` : ''}</button>`;
+  }
+  return `<div class="${cls.join(' ')}"></div>`;
+}
+function renderSheet() {
+  const g = G, f = foe(g), act = g.status === 'playing' ? g.turn : -1;
+  const on = p => act === p;
+  const round = g.status === 'playing' ? Math.min(N, filled(g.sheets[g.turn]) + 1) : N;
+  const head = lb => `<div class="hd lb">${lb}</div><div class="c hd me${on(0) ? ' on' : ''}" aria-label="Ty">${O.ME_SVG}</div><div class="c hd op${on(1) ? ' on' : ''}" aria-label="${f.name}">${O.face(f, 'calm')}</div>`;
+  const row = (b, label) => `<div class="lb">${label}</div>${cell(0, b, on(0))}${cell(1, b, on(1))}`;
+  let L = head(g.status === 'playing' ? `Kolo ${round}/${N}` : 'Konec');
+  for (let b = 0; b < 6; b++) L += row(b, `${miniDie(b + 1)}<span>${BOX[b]}</span>`);
+  const up = [E.upperSum(g.sheets[0]), E.upperSum(g.sheets[1])];
+  const bonusCell = p => { const sh = g.sheets[p], won = E.bonusOf(sh), gone = !won && !E.bonusPossible(sh);
+    return `<div class="c sum ${p ? 'op' : 'me'}${on(p) ? ' on' : ''}${won ? '' : ' zero'}">${won ? E.UPPER_BONUS : gone || sh.slice(0, 6).every(x => x !== null) ? 0 : ''}</div>`; };
+  L += `<div class="lb sm"><span>Součet</span></div><div class="c sum me${on(0) ? ' on' : ''}">${up[0]}</div><div class="c sum op${on(1) ? ' on' : ''}">${up[1]}</div>`;
+  L += `<div class="lb sm"><span>Prémie <small>od ${E.UPPER_NEED}</small></span></div>${bonusCell(0)}${bonusCell(1)}`;
+  const t = totals(g);
+  L += `<div class="lb tot"><span>Celkem</span></div><div class="c sum tot me${on(0) ? ' on' : ''}">${t[0]}</div><div class="c sum tot op${on(1) ? ' on' : ''}">${t[1]}</div>`;
+  let R = head('');
+  for (let b = 6; b < N; b++) R += row(b, `<span>${BOX[b]}</span>`);
+  $('#hL').innerHTML = L; $('#hR').innerHTML = R;
+}
+function render() {
+  applyLook();
+  const g = G, f = foe(g), playing = g.status === 'playing', mine = myTurn(), theirs = playing && g.turn === 1;
+  // the opponent's panel
+  $('#avaOpp').innerHTML = O.face(f, g.mood);
+  $('#nmOpp').innerHTML = O.name(f, O.levelBadge(LEVELS, g.rules.level));
+  $('#say').textContent = g.say || '…';
+  const tag = $('#tagOpp');
+  tag.hidden = playing ? !theirs : g.status !== 'lost';
+  tag.textContent = playing ? 'Na tahu' : 'Vítěz';
+  $('#pOpp').classList.toggle('on', theirs);
+  renderSheet();
+
+  // dice: blank before the first roll, the held ones lifted with a frame
+  const held = g.phase === 'chosen' && g.plan && g.plan.held ? g.plan.held : g.held;
+  const dice = $('#dice');
+  const t = totals(g), res = g.status === 'won' ? 'Výhra!' : g.status === 'lost' ? `${O.past(f, 'Vyhrál', 'Vyhrála')} ${f.name}` : 'Remíza';
+  if (!g.dice.length) dice.innerHTML = playing ? Array.from({ length: 5 }, (_, i) => `<button class="die blank" data-i="${i}" aria-label="Kostka čeká na hod"></button>`).join('')
+    : `<div class="res">${res}<br>Ty <b>${t[0]}</b> : <b>${t[1]}</b> ${f.name}</div>`; // after the end: the result instead of the dice
+  else dice.innerHTML = g.dice.map((v, i) => `<button class="die${held[i] ? ' held' : ''}${busy && !held[i] ? ' rolling' : ''}" data-i="${i}" aria-label="Kostka ${v}${held[i] ? ', necháváš si ji' : ''}">${pips(busy && !held[i] ? 1 + rnd(6) : v)}</button>`).join('');
+
+  // hint and buttons
+  const hint = $('#hint'), heldN = g.held.filter(Boolean).length, lastRound = mine && filled(g.sheets[0]) === N - 1;
+  if (!playing) hint.textContent = g.status === 'won' ? 'Výhra! Ťukni na Nová hra' : g.status === 'lost' ? `${O.past(f, 'Vyhrál', 'Vyhrála')} ${f.name}. Ťukni na Nová hra` : 'Remíza. Ťukni na Nová hra';
+  else if (theirs) hint.textContent = canUndoWrite() ? `Hraje ${f.name}. Zpět vrátí tvůj zápis.` : busy ? `${f.name} hází…` : `Hraje ${f.name}`;
+  else if (busy) hint.textContent = 'Kostky se kutálejí…';
+  else if (g.phase === 'start') hint.textContent = lastRound ? 'Poslední kolo! Hoď kostkami' : 'Ťukni na Hodit, nebo na kostky';
+  else if (g.roll >= 3) hint.textContent = 'Zapiš body do volného okénka';
+  else if (!heldN) hint.textContent = 'Ťukni na kostky, které si necháš';
+  else hint.textContent = 'Hoď znovu, nebo zapiš do tabulky';
+
+  const left = 3 - g.roll;
+  $('#rollTxt').textContent = playing ? 'Hodit' : 'Nová hra';
+  $('#rollSub').textContent = !playing ? '' : mine && left ? `${g.roll ? 'ještě' : 'máš'} ${left} ${rollsWord(left)}` : mine ? 'už nejde' : '';
+  const canRoll = mine && !busy && left > 0 && (g.phase === 'start' || heldN < 5);
+  $('#btnRoll').classList.toggle('dim', playing && !canRoll);
+  $('#btnUndo').classList.toggle('dim', !((mine && g.phase === 'pick' && !busy && g.selUndo.length) || canUndoWrite()));
+  layout();
+}
+// Sizes from the room that is left: the dice row, then ten rows of the sheet (so nothing scrolls)
+function layout() {
+  const m = $('#mid');
+  if (!G || !m) return;
+  const W = m.clientWidth - 2 * GUT, H = m.clientHeight - 24 - 12; // inside #mid's padding, without the gap between sheet and dice
+  const ds = Math.max(34, Math.min(72, W / 5.8, H * 0.17));
+  const sheetH = H - ds * 1.34;
+  const rh = Math.max(16, Math.min(46, Math.floor(sheetH / 10)));
+  const half = (W - 8) / 2, cw = Math.max(32, Math.min(56, Math.floor(half * 0.22)));
+  const lw = half - 2 * cw;
+  const lf = Math.max(10, Math.min(17, (lw - 12) / 5.7, (rh - 2) / 2.2));
+  const cf = Math.max(11, Math.min(20, rh * 0.52, cw * 0.42));
+  for (const [k, v] of [['--ds', ds], ['--rh', rh], ['--cw', cw], ['--lf', lf], ['--cf', cf]]) root.style.setProperty(k, v.toFixed(1) + 'px');
+}
+
+/* ---------- Game flow ---------- */
+// Automatic steps (the opponent) wait while Settings, Help or a dialog is open
+let autoTok = 0;
+function later(ms, fn) {
+  const tok = ++autoTok, g0 = G;
+  setTimeout(function wait() {
+    if (tok !== autoTok || G !== g0) return;
+    if (!nothingOpen() || busy) { setTimeout(wait, 400); return; }
+    fn();
+  }, ms);
+}
+function advance(ms) {
+  autoTok++;
+  if (busy || G.status !== 'playing' || G.turn !== 1) return;
+  later(ms || SPEEDS[S.speed], aiStep);
+}
+function stopRolling() { clearInterval(rollTimer); busy = false; }
+function doRoll() {
+  const g = G;
+  if (!g.dice.length) { g.dice = [1, 1, 1, 1, 1]; g.held = [false, false, false, false, false]; }
+  if (g.phase === 'chosen' && g.plan && g.plan.held) g.held = g.plan.held.slice();
+  for (let i = 0; i < 5; i++) if (!g.held[i]) g.dice[i] = 1 + Math.floor(E.rand01(g) * 6);
+  g.roll++; g.rolls++; g.phase = 'pick'; g.plan = null; g.selUndo = [];
+  if (g.turn === 1) g.undoW = null; // the opponent rolled: the player's write stays
+  if (g.last && g.last.p !== g.turn) g.last = null;
+  save(); // the result is saved before the animation, so a reload cannot roll again
+  busy = true; render(); buzz(10);
+  rollTimer = setInterval(() => document.querySelectorAll('#dice .die.rolling').forEach(d => setFace(d, 1 + rnd(6))), 90);
+  setTimeout(() => {
+    if (G !== g) return;
+    stopRolling(); render(); buzz(15);
+    if (g.turn === 0 && g.roll === 3) toast('Poslední hod: zapiš body do tabulky');
+    advance();
+  }, S.speed === 'fast' ? 450 : 650);
+}
+// Writes the turn into box b of player p
+function writeBox(p, b) {
+  const g = G, pts = E.scoreBox(b, counts(g.dice));
+  if (p === 0) g.undoW = { b, dice: g.dice.slice(), held: g.held.slice(), roll: g.roll };
+  g.sheets[p][b] = pts; g.last = { p, b };
+  if (p === 0) {
+    if (b === 14 && pts) say('yourGeneral', 'think');
+    else if (pts >= 25 || (b === 10 || b === 11) && pts) say('yourBig', 'calm');
+    else say('mine', 'calm');
+  }
+  endTurn();
+}
+function endTurn() {
+  const g = G;
+  g.dice = []; g.held = [false, false, false, false, false]; g.roll = 0; g.plan = null; g.selUndo = [];
+  if (statusOf(g) !== 'playing') { gameOver(); return; }
+  g.turn = 1 - g.turn; g.phase = 'start';
+  buzz(12); save(); render();
+  // after the player's write the opponent waits a little longer, so Zpět can still take an accidental box back
+  advance(g.turn === 1 ? Math.max(2000, SPEEDS[S.speed] + 600) : 0);
+}
+let endDue = null; // the game whose end dialog has not been shown yet
+function gameOver() {
+  const g = G, f = foe(g);
+  g.phase = 'over'; g.status = statusOf(g); g.undoW = null;
+  if (g.status === 'won') say('', 'sad', 'Gratuluju!');
+  else if (g.status === 'lost') say('', 'happy', O.past(f, 'Vyhrál jsem!', 'Vyhrála jsem!'));
+  else say('', 'happy', 'Remíza! To se nestává.');
+  recordEnd();
+  buzz(g.status === 'won' ? [40, 60, 40, 60, 80] : 30); save(); render();
+  endDue = g;
+  whenFree(g, 1100, showEnd);
+}
+// The opponent plays one step at a time: roll, decide (keep some dice, or a box), then roll again or write
+function aiStep() {
+  const g = G;
+  if (g.turn !== 1 || g.status !== 'playing' || busy) return;
+  if (g.phase === 'start') { say('start', 'think'); doRoll(); return; }
+  if (g.phase === 'pick') {
+    const d = E.decide(g.rules.level, { dice: g.dice, roll: g.roll, sheet: g.sheets[1] }, () => E.rand01(g));
+    if (d.box !== undefined) {
+      const pts = E.scoreBox(d.box, counts(g.dice));
+      g.plan = { box: d.box };
+      if (d.box === 14 && pts) say('general', 'happy');
+      else if (!pts) say('scratch', 'sad', `Škrtnu ${BOX_ACC[d.box]}.`);
+      else say(pts >= 25 || d.box === 10 || d.box === 11 ? 'big' : '', pts >= 25 || d.box === 10 || d.box === 11 ? 'happy' : 'calm', `Zapíšu ${pts} do ${BOX_GEN[d.box]}.`);
+    } else {
+      const held = g.dice.map((_, i) => d.hold.includes(i));
+      g.plan = { held };
+      say('', 'think', holdLine(g.dice, held));
+    }
+    g.phase = 'chosen';
+    buzz(8); save(); render(); advance();
+    return;
+  }
+  if (g.phase === 'chosen') {
+    if (g.plan.box !== undefined) writeBox(1, g.plan.box); else doRoll();
+  }
+}
+
+/* ---------- Controls ---------- */
+const busyMsg = () => toast(G.turn === 1 ? `Chvilku, hraje ${foe().name}` : 'Chvilku, kostky se ještě kutálejí');
+function ended() { toast('Hra skončila – ťukni na Nová hra'); }
+function myMove() {
+  if (G.status !== 'playing') { ended(); return false; }
+  if (busy || G.turn !== 0) { busyMsg(); return false; }
+  return true;
+}
+$('#dice').addEventListener('click', e => {
+  const b = e.target.closest('.die'); if (!b || !myMove()) return;
+  if (G.phase === 'start') { doRoll(); return; } // the dice waiting for the roll: a tap on one rolls
+  if (G.roll >= 3) { toast('Už nejde házet: zapiš body do tabulky'); return; }
+  const i = +b.dataset.i;
+  G.selUndo.push(G.held.slice());
+  G.held[i] = !G.held[i];
+  buzz(8); save(); render();
+});
+$('#table').addEventListener('click', e => {
+  if (e.target.closest('.die') || G.status !== 'playing') return;
+  if (busy || G.turn !== 0) { busyMsg(); return; }
+  if (G.phase === 'start') doRoll();
+});
+function tapRoll() {
+  if (G.status !== 'playing') { if (endDue === G) showEnd(); else newGame(); return; } // a quick tap shows the waiting end dialog first
+  if (!myMove()) return;
+  if (G.roll >= 3) { toast('Tři hody jsou za tebou: zapiš body do tabulky'); return; }
+  if (G.phase === 'pick' && G.held.every(Boolean)) { toast('Necháváš si všechny kostky: ťukni na některou, nebo zapiš'); return; }
+  doRoll();
+}
+$('#btnRoll').addEventListener('click', tapRoll);
+// A tap on a free box of the player's column writes the turn there (0 when the dice do not fit = škrtnuto)
+$('#sheet').addEventListener('click', e => {
+  const c = e.target.closest('.c'); if (!c || c.classList.contains('hd') || c.classList.contains('sum')) return;
+  if (c.classList.contains('op')) { toast(`To je sloupec soupeře (${foe().name})`); return; }
+  if (!c.dataset.b) { if (G.status === 'playing') toast('Tohle okénko už je zapsané'); return; }
+  if (!myMove()) return;
+  if (G.phase !== 'pick') { toast('Nejdřív hoď kostkami'); return; }
+  const b = +c.dataset.b, pts = E.scoreBox(b, counts(G.dice));
+  writeBox(0, b);
+  if (!pts && G.status === 'playing') toast(`Škrtnuto: ${BOX[b]}. Zpět to ještě vrátí.`);
+});
+// Zpět: the held dice of this roll, or the box just written while the opponent has not rolled yet.
+// A roll and the opponent's turn cannot be taken back.
+function undo() {
+  if (G.status !== 'playing') { ended(); return; }
+  if (canUndoWrite()) {
+    const u = G.undoW;
+    G.sheets[0][u.b] = null; G.dice = u.dice; G.held = u.held; G.roll = u.roll;
+    G.turn = 0; G.phase = 'pick'; G.plan = null; G.undoW = null; G.selUndo = []; G.last = null;
+    say('', 'calm', 'Dobře, rozmysli si to.');
+    autoTok++; buzz(); save(); render(); toast(`Zápis do ${BOX_GEN[u.b]} je vrácený`);
+    return;
+  }
+  if (busy || G.turn !== 0) { toast(G.turn === 1 ? `Hraje ${foe().name}, tah soupeře vrátit nejde` : 'Chvilku, kostky se ještě kutálejí'); return; }
+  if (G.phase === 'pick' && G.selUndo.length) { G.held = G.selUndo.pop(); buzz(); save(); render(); return; }
+  toast(G.rolls ? 'Hozené kostky už vrátit nejde' : 'Zatím není co vrátit');
+}
+$('#btnUndo').addEventListener('click', undo);
+// the end dialog comes a moment later; a quick tap on Nová hra meanwhile shows it at once
+function showEnd() {
+  if (endDue !== G) return;
+  endDue = null;
+  const g = G, f = foe(g), st = stats[String(g.rules.level)], lv = lvName(g.rules.level).toLowerCase(), t = totals(g);
+  const head = g.status === 'won' ? 'Výhra! 🎉' : g.status === 'lost' ? `Tentokrát ${O.past(f, 'vyhrál', 'vyhrála')} ${f.name}` : 'Remíza';
+  const html = `<h2>${head}</h2><p>Ty <b>${t[0]}</b> : <b>${t[1]}</b> ${f.name}</p>`
+    + (st ? `<p>Tvoje výsledky proti soupeři ${lv}: výhry <b>${st.won}</b>, prohry <b>${losses(st)}</b>${st.draw ? `, remízy <b>${st.draw}</b>` : ''}. Nejlepší skóre: <b>${st.best}</b></p>` : '');
+  showModal(html, [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout tabulku', cls: 'alt' }]);
+}
+$('#btnNew').addEventListener('click', () => {
+  if (inProgress()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else if (endDue === G) showEnd(); // the result dialog of the finished game has not been shown yet: it comes first
+  else newGame();
+});
+
+/* ---------- Settings (a separate screen, applied at once, no Save button) ---------- */
+const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
+const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+function renderSettings() {
+  const st = stats[String(S.level)];
+  const changed = S.level !== G.rules.level;
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Generál<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Soupeř</h3>
+      <div class="field">
+        ${LEVELS.map((l, i) => opt('level:' + i, S.level === i, lvName(i), l.desc)).join('')}
+        <div class="fnote">Jméno soupeře je v každé hře jiné.</div>
+        ${changed && !isFresh() ? (inProgress()
+          ? '<div class="notice">Rozehraná hra se dohraje s původním soupeřem. Změna platí od příští hry.</div>'
+          : '<div class="notice">Po návratu do hry začne <b>nová hra</b>.</div>') : ''}
+      </div>
+      <div class="field"><div class="flabel">Jak rychle soupeř hraje</div>
+        ${opt('speed:slow', S.speed === 'slow', 'Pomalu', 'Je dost času všechno sledovat.')}
+        ${opt('speed:normal', S.speed === 'normal', 'Normálně', '')}
+        ${opt('speed:fast', S.speed === 'fast', 'Rychle', '')}
+      </div>
+    </section>
+    <section class="card"><h3>Nápověda</h3>
+      ${toggleRow('hints', 'Ukazovat možné body')}
+      <div class="fnote" style="margin-top:-6px">Po hodu jsou ve volných okénkách vidět body, které by tam padly.</div>
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch" data-theme="${t.id}"><span class="ms"></span><span class="mdie"></span></span>${t.name}</button>`).join('')}</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <section class="card"><h3>Statistika</h3>
+      <div class="fnote" style="margin:0 0 6px">Soupeř ${lvName(S.level).toLowerCase()}</div>
+      <div class="srow"><span>Odehrané hry</span><b>${st ? st.played : 0}</b></div>
+      <div class="srow"><span>Výhry</span><b>${st ? st.won : 0}</b></div>
+      <div class="srow"><span>Prohry</span><b>${st ? losses(st) : 0}</b></div>
+      <div class="srow"><span>Remízy</span><b>${st ? st.draw : 0}</b></div>
+      <div class="srow"><span>Nejlepší skóre</span><b>${st && st.played ? st.best : '–'}</b></div>
+      <button class="link" data-act="clearStats">Smazat statistiku</button>
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'clearStats') {
+    showModal('<h2>Smazat statistiku?</h2><p>Smažou se výsledky proti všem soupeřům.</p>', [
+      { text: 'Ano, smazat', fn: () => { stats = {}; save(); renderSettings(); toast('Statistika je smazaná'); } },
+      { text: 'Ne, nechat', cls: 'alt' }]);
+    return;
+  }
+  if (act === 'level') S.level = +arg;
+  else if (act === 'speed') S.speed = arg;
+  else if (act === 'theme') S.theme = arg;
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S); buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
+});
+function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+// A new opponent level: a game in progress is played to the end, otherwise a new game starts (and says so)
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  if (S.level !== G.rules.level && !inProgress()) newGame(!isFresh() ? 'Začala nová hra s novým soupeřem' : '');
+  else { render(); advance(); }
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help (only behind "?", never opens by itself) ---------- */
+function renderHelp() {
+  const f = foe();
+  const rows = [
+    ['Jedničky až šestky', 'součet kostek s tím číslem (tři pětky = 15)'],
+    ['Prémie', `+${E.UPPER_BONUS}, když je v jedničkách až šestkách dohromady aspoň ${E.UPPER_NEED} (třeba tři od každého čísla)`],
+    ['Pár', 'dvě stejné, součet těch dvou (nejvyšší pár)'],
+    ['Dva páry', 'dva různé páry, součet těch čtyř kostek'],
+    ['Trojice', 'tři stejné, součet těch tří'],
+    ['Čtveřice', 'čtyři stejné, součet těch čtyř'],
+    ['Malá postupka', '1 2 3 4 5 = 15'],
+    ['Velká postupka', '2 3 4 5 6 = 20'],
+    ['Full', 'tři stejné a dvě jiné stejné, součet všech kostek'],
+    ['Šance', 'cokoli, součet všech kostek'],
+    ['Generál', `pět stejných = ${E.GENERAL}`],
+  ];
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Generál<small>Jak hrát</small></h2></div>
+    <section class="card help"><ol>
+      <li>Hraješ proti soupeři (teď ${f.name} ${O.stars(G.rules.level, LEVELS.length)}). Střídáte se, každý má <b>${N} kol</b> – jedno na každé okénko tabulky. Vyhrává, kdo má na konci víc bodů.</li>
+      <li>Ťukni na <b>Hodit</b> (nebo rovnou na kostky). V jednom kole můžeš házet <b>až třikrát</b>.</li>
+      <li>Mezi hody ťukni na kostky, které si chceš <b>nechat</b> (zvednou se a mají rámeček). Ostatními se hodí znovu. Další ťuknutí kostku zase pustí.</li>
+      <li>Kolo skončíš tak, že ťukneš do <b>volného okénka ve svém sloupci</b> (první sloupec s postavou). Zapsat můžeš kdykoli po prvním hodu.</li>
+      <li>Když kostky do okénka nesedí, zapíše se tam <b>0</b> – okénko se škrtne. Někdy je to lepší než zkazit cennější okénko.</li>
+      <li>Po hodu jsou ve volných okénkách vidět body, které by tam padly (vypnout jde v Nastavení).</li>
+      <li><b>Zpět</b> vrátí výběr kostek v tomto hodu. A když se ti zápis nepovede, vrátí i ten – ale jen dokud soupeř nehodil. Hozené kostky vrátit nejde.</li>
+      <li>Soupeř hraje sám a říká, co dělá. Když otevřeš Nastavení nebo tuto nápovědu, počká.</li>
+    </ol></section>
+    <section class="card help"><h3>Okénka a body</h3>
+      <table class="pts">${rows.map(r => `<tr><td><b>${r[0]}</b></td><td>${r[1]}</td></tr>`).join('')}</table>
+      <p class="fnote">Postupky platí jen takhle, celé. Generál se nepočítá jako full ani jako dva páry, čtveřice se nepočítá jako dva páry. Do šance a do jedniček až šestek jde zapsat cokoli.</p>
+    </section>
+    <section class="card help"><h3>Proč tato pravidla</h3>
+      <p>Generál se hraje v mnoha obměnách. Tady je ta s tabulkou, jak ji znají české bloky na kostky: jedničky až šestky s prémií, pár, dva páry, trojice, čtveřice, dvě postupky, full, šance a generál.</p>
+    </section>
+    <section class="card help"><h3>Soupeři</h3>
+      ${LEVELS.map((x, i) => `<p><b>${lvName(i)}:</b> ${x.desc}</p>`).join('')}
+      <p>Soupeř má v každé hře jiné jméno. Jak dobře hraje, ukazují hvězdičky u jména a volí se v Nastavení. Hry se střídají: jednou začínáš ty, podruhé soupeř.</p>
+    </section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// ask for persistent storage so the browser does not delete the saved game by itself
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+const savedSettings = saved && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+if (saved && saved.stats && typeof saved.stats === 'object') {
+  for (const [k, v] of Object.entries(saved.stats)) if (/^[012]$/.test(k) && validStat(v)) stats[k] = { played: v.played, won: v.won, draw: v.draw, best: v.best };
+}
+if (saved && validGame(saved.game)) {
+  G = saved.game;
+  // a new opponent level chosen just before the app was closed: applied now, as closing Settings would
+  if (S.level !== G.rules.level && !inProgress()) newGame(!isFresh() ? 'Začala nová hra s novým soupeřem' : '');
+  else { render(); advance(); }
+}
+else newGame();
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// contract: opened from the launcher (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+
+// For testing. nearEnd() plays the first 14 rounds of both players (Mistr's moves for the player too), so one round
+// is left: the player's turn when the player started this game, else the opponent's.
+function nearEnd() {
+  stopRolling();
+  const g = G, sim = { seed: g.seed };
+  for (let r = 0; r < N - 1; r++) for (const p of [g.starter, 1 - g.starter]) if (filled(g.sheets[p]) <= r) E.playTurn(2, g.sheets[p], sim);
+  g.seed = sim.seed; g.rolls = Math.max(g.rolls, 1);
+  g.turn = g.starter; g.phase = 'start'; g.dice = []; g.held = [false, false, false, false, false]; g.roll = 0;
+  g.plan = null; g.undoW = null; g.last = null; g.selUndo = [];
+  save(); render(); advance();
+}
+window.General = { E, scoreBox: E.scoreBox, decide: E.decide, simulate: E.simulate, nearEnd, get state() { return { S, G, stats }; } };
+})();
+</script>
+</body>
+</html>

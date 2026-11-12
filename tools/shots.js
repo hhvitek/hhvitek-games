@@ -161,6 +161,11 @@ async (page) => {
       await tap('#btnMode'); await wait(300); await tap('#grid .c.h:not(:has(svg))'); await wait(500);
     },
     'kostky': async () => { await tap('#btnRoll'); await wait(1200); await tap('#roll .die:not(.dead)'); await wait(400); },
+    // a roll, two dice kept, the second roll, the šance box written; then the opponent's first steps
+    'general': async () => {
+      await tap('#btnRoll'); await wait(1000); await tap('#dice .die:nth-child(1)'); await wait(200); await tap('#dice .die:nth-child(2)'); await wait(300);
+      await tap('#btnRoll'); await wait(1000); await tap('#sheet button[data-b="13"]'); await wait(3500);
+    },
     // the advised move (its piece, then its square), the opponent's reply, then the next advice and its piece chosen
     'dama': async () => { await tap('#btnHint'); await wait(1200); await tap('.sq.hint:has(.pc)'); await wait(300); await tap('.sq.hint.to'); await wait(4000); await tap('#btnHint'); await wait(1200); await tap('.sq.hint:has(.pc)'); await wait(300); },
     // the advised cell (a tap plays it), the opponent's reply, the next advice
