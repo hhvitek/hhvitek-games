@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Nová hra Kočka: starej se o kočku Koxu podle skutečných hodin. Hlaď ji prstem, krm ji, hraj si s ní, vezmi si ji na klín, pěstuj zahrádku a pouštěj ji na toulky; obchůdek, minihry, výcvik triků a návštěvy sousedovic koček.
+- Výběr her: v Nastavení jde zapnout „Koxa a ostatní hry“ – za každou jinou hru dostane Koxa pamlsek a nahoře je vidět, jak se má.
 - Nová hra Spojování obrázků: spojuj dvojice stejných kamenů čárou, která se zalomí nejvýš dvakrát; stejné kameny a obrázky jako Mahjong, každé rozdání jde dohrát.
 
 ## 1.0.13 – 2026-11-12

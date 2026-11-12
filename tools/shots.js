@@ -66,8 +66,18 @@ async (page) => {
     const kids = [...col.children].filter(k => k !== bar && !k.matches('.screen, #modal, #toast, .toast, script, style') && k.getBoundingClientRect().height > 0);
     const tray = [...kids].reverse().find(k => k.querySelector('button') || k.matches('button'));
     const top = bar.getBoundingClientRect().bottom, bottom = tray ? tray.getBoundingClientRect().top : innerHeight;
+    // what is really seen of an element: its box cut by every ancestor (up to k) that hides its overflow
+    const visible = (el, k) => {
+      let r = el.getBoundingClientRect(), L = r.left, T = r.top, R = r.right, B = r.bottom;
+      for (let a = el.parentElement; a && a !== k.parentElement; a = a.parentElement) {
+        const s = getComputedStyle(a);
+        if (s.overflow === 'visible' && s.overflowX === 'visible' && s.overflowY === 'visible') continue;
+        const q = a.getBoundingClientRect(); L = Math.max(L, q.left); T = Math.max(T, q.top); R = Math.min(R, q.right); B = Math.min(B, q.bottom);
+      }
+      return { left: L, top: T, right: R, bottom: B, width: Math.max(0, R - L), height: Math.max(0, B - T) };
+    };
     for (const k of kids) if (k !== tray && k.getBoundingClientRect().top < bottom) for (const el of [k, ...k.querySelectorAll('*')]) {
-      const r = el.getBoundingClientRect(), cs = getComputedStyle(el);
+      const r = visible(el, k), cs = getComputedStyle(el);
       if (!r.width || !r.height || cs.visibility === 'hidden' || cs.display === 'none' || cs.opacity === '0') continue;
       if (r.top < top - 1 || r.bottom > bottom + 1 || r.left < -1 || r.right > vw + 1) { probs.push(`play area goes outside (${el.className || el.tagName} ${Math.round(r.top - top)}/${Math.round(bottom - r.bottom)})`); break; }
     }
@@ -121,6 +131,16 @@ async (page) => {
     // a mirror turned, then the hint, a tap on the hinted mirror, and the next hint shown
     'paprsek': async () => { await tap('#taps .cell[aria-label^="Zrcadlo"]'); await wait(400); await tapButton(/Poradit/); await wait(600); await tap(HINTED); await wait(600); await tapButton(/Poradit/); await wait(600); },
     // the hint (dotted way, the next arrow framed), a tap on the framed arrow, the hint again
+    // granule dragged into the bowl (she walks there and eats), then a stroke along her back; the hint stays visible
+    'kocka': async () => {
+      await page.evaluate(() => { const st = window.Kocka.state.G.st; st.asleep = false; st.needs.food = 25; if (window.Kocka.go) window.Kocka.go('kitchen', -1); window.Kocka.settle(); });
+      const drag = async (a, b) => { await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move(a.x + 10, a.y - 14, { steps: 3 }); await page.mouse.move(b.x, b.y, { steps: 12 }); await page.mouse.up(); };
+      await drag(await page.evaluate(() => window.Kocka.itemPoint('food')), await page.evaluate(() => window.Kocka.spotPoint('bowl')));
+      await wait(5500); await page.evaluate(() => window.Kocka.settle());
+      const pts = await page.evaluate(() => window.Kocka.strokePath('back'));
+      if (pts) { await page.mouse.move(pts[0].x, pts[0].y); await page.mouse.down(); for (const p of pts.slice(1)) { await page.mouse.move(p.x, p.y); await wait(8); } await page.mouse.up(); }
+      await wait(600);
+    },
     'kulicka': async () => { await tap('#btnHint'); await wait(400); await tap('.arrow.hint'); await wait(1200); await tap('#btnHint'); await wait(500); },
     'patnactka': async () => { await page.evaluate(() => { const P = window.Patnactka, G = P.state.G, n = G.rules.n, z = G.board.indexOf(0); P.tryMove(z % n ? z - 1 : z + 1); }); await wait(500); },
     'kostky': async () => { await tap('#btnRoll'); await wait(1200); await tap('#roll .die:not(.dead)'); await wait(400); },

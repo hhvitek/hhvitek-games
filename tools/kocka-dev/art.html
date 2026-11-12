@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kočka – art sheet (dev)</title>
+<style>
+body{margin:0;padding:16px;font:14px system-ui,sans-serif;background:#ddd;color:#222}
+h2{margin:24px 0 8px;font-size:18px}
+.grid{display:grid;gap:8px}
+.cell{border-radius:10px;padding:4px;text-align:center;font-size:12px}
+.cell .box{aspect-ratio:1;position:relative}
+.paper{background:#f4ebdf;color:#2b1a0e}
+.cottage{background:#3b2a1e;color:#fff3e3}
+.room{aspect-ratio:2/3;position:relative;border-radius:10px;overflow:hidden}
+.room .cat{position:absolute;left:15%;bottom:6%;width:70%;aspect-ratio:1}
+.reg path{fill-opacity:.35;stroke:#000;stroke-width:.6}
+.still *{animation-play-state:paused!important}
+</style>
+</head>
+<body>
+<p>Dev sheet for <code>src/art.js</code>. Add <code>?still</code> to pause the animations.</p>
+<div id="out"></div>
+<script src="src/art.js"></script>
+<script>
+const A = KockaArt();
+document.head.appendChild(Object.assign(document.createElement('style'), { textContent: A.css }));
+if (/still/.test(location.search)) document.body.classList.add('still');
+const MOODS = ['happy', 'calm', 'grumpy', 'sad'];
+const out = document.getElementById('out');
+const cell = (svg, label, cls = 'paper') => `<div class="cell ${cls}"><div class="box">${svg}</div>${label}</div>`;
+let h = '';
+// every pose × mood, on paper and on the dark cottage page
+for (const bg of ['paper', 'cottage']) {
+  h += `<h2>Poses × moods on ${bg}</h2><div class="grid" style="grid-template-columns:repeat(10,1fr)">`;
+  for (const m of MOODS) for (const p of A.poses) h += cell(A.cat(p, { mood: m }), `${p} ${m}`, bg);
+  h += '</div>';
+}
+h += '<h2>Variants</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">';
+const V = [['sit', { thin: true }, 'thin'], ['sit', { chubby: true }, 'chubby'], ['sit', { ill: 'fleas' }, 'fleas'], ['sit', { ill: 'tummy', mood: 'sad' }, 'tummy'], ['sit', { ill: 'cold' }, 'cold'],
+  ['sit', { ears: 'turned' }, 'ears turned'], ['sit', { ears: 'back', mood: 'happy' }, 'ears back'], ['sit', { meow: true }, 'meow'], ['loaf', { asleep: true }, 'loaf asleep'], ['loaf', { thin: true }, 'loaf thin'],
+  ['loaf', { chubby: true }, 'loaf chubby'], ['sleep', { ill: 'fleas' }, 'sleep fleas'], ['belly', { mood: 'happy', purring: true }, 'belly purring'], ['carried', { thin: true }, 'carried thin'], ['eat', { chubby: true }, 'eat chubby'], ['loaf', { ill: 'cold', mood: 'sad' }, 'loaf cold']];
+for (const [p, o, l] of V) h += cell(A.cat(p, o), l);
+h += '</div>';
+// regions
+h += '<h2>Regions (hit-test order; arrow = fur direction)</h2><div class="grid" style="grid-template-columns:repeat(10,1fr)">';
+const COL = { ears: '#e33', chin: '#f90', paws: '#3a3', head: '#36f', tail: '#a3f', tailBase: '#fd0', belly: '#f3c', back: '#0cc' };
+for (const p of A.poses) {
+  const rg = A.regions(p);
+  const ov = `<svg viewBox="0 0 200 200" class="reg" style="position:absolute;inset:0;overflow:visible">${rg.slice().reverse().map(r => `<path d="${r.path}" fill="${COL[r.id]}"/>`).join('')}${rg.map((r, i) => { const x = 14 + i * 26, y = 12; return `<g><text x="${x}" y="${y - 2}" font-size="7" text-anchor="middle">${r.id}</text><path d="M${x - r.fur[0] * 9} ${y + 10 - r.fur[1] * 9}L${x + r.fur[0] * 9} ${y + 10 + r.fur[1] * 9}" stroke="${COL[r.id]}" stroke-width="2.5" marker-end="url(#ah)"/></g>`; }).join('')}<defs><marker id="ah" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L6 3L0 6Z"/></marker></defs></svg>`;
+  h += `<div class="cell paper"><div class="box">${A.cat(p, 'calm')}${ov}</div>${p}</div>`;
+}
+h += '</div>';
+// rooms
+// gait and outdoor poses (animated unless ?still); the slider sets --kx-step
+h += '<h2>Gait (animated): walk, trot, the four walk frames, crouch → jumpUp → jumpDown</h2><label>--kx-step <input id="step" type="range" min="0.3" max="1.4" step="0.05" value="0.8"> <span id="stepv">0.8 s</span></label><div class="grid" id="gait" style="grid-template-columns:repeat(9,1fr)">';
+for (const p of ['walk', 'trot', 'walk1', 'walk2', 'walk3', 'walk4', 'crouch', 'jumpUp', 'jumpDown']) h += cell(A.cat(p, 'calm'), p);
+h += '</div><h2>Outdoor poses and the wet coat</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">';
+for (const [p, o, l] of [['climb', 'calm', 'climb'], ['onBranch', 'happy', 'onBranch'], ['stalk', 'calm', 'stalk'], ['shakePaw', 'grumpy', 'shakePaw (snow)'], ['shakePaw', { mood: 'grumpy', wet: true }, 'shakePaw wet'], ['sit', { mood: 'grumpy', wet: true }, 'sit wet'], ['walk', { mood: 'sad', wet: true }, 'walk wet'], ['loaf', { mood: 'grumpy', wet: true }, 'loaf wet']])
+  h += cell(A.cat(p, o), l) ;
+h += '</div>';
+// the four places × day phases, the garden by season and weather
+const placeCell = (o, l) => `<div><div class="room">${A.room(o)}</div>${l}</div>`;
+h += '<h2>Places × day phases (Obývák, Kuchyně, Předsíň, Zahrada)</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';
+for (const id of Object.keys(A.rooms)) for (const ph of ['morning', 'day', 'evening', 'night']) h += placeCell({ id, phase: ph, season: 'autumn', sunX: 0.6 }, `${A.rooms[id].name} – ${ph}`);
+h += '</div><h2>Zahrada: seasons, weather, summer night, holidays</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';
+for (const [o, l] of [[{ season: 'spring', phase: 'morning', sunX: 0.1 }, 'spring morning'], [{ season: 'summer', phase: 'day', sunX: 0.5 }, 'summer day'], [{ season: 'autumn', phase: 'day', weather: 'rain' }, 'autumn rain'], [{ season: 'winter', phase: 'day', weather: 'snow' }, 'winter snow'],
+  [{ season: 'summer', phase: 'night' }, 'summer night (fireflies)'], [{ season: 'winter', phase: 'evening' }, 'winter evening'], [{ id: 'hall', season: 'winter', phase: 'day', flap: true, holiday: 'vanoce', weather: 'snow' }, 'Předsíň: flap, Vánoce, snow'], [{ id: 'kitchen', season: 'spring', phase: 'day', weather: 'rain' }, 'Kuchyně: rain']])
+  h += placeCell(Object.assign({ id: 'garden' }, o), l);
+h += '</div>';
+// spots of every place with their names
+h += '<h2>Spots of the places (red dots)</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';
+for (const id of Object.keys(A.rooms)) h += `<div><div class="room">${A.room({ id, phase: 'day', season: 'summer' })}<svg viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%">${Object.entries(A.rooms[id].spots).map(([k, p]) => `<circle cx="${p.x}" cy="${p.y}" r="5" fill="red"/><text x="${p.x + 7}" y="${p.y - 4}" font-size="13" fill="#000" stroke="#fff" stroke-width="3" paint-order="stroke">${k}</text>`).join('')}</svg></div>${A.rooms[id].name}</div>`;
+h += '</div>';
+// lap close-ups
+const onLap = (o, pose, mo) => { const L = A.lapSpot, k = L.size / 200; return `<div><div class="room">${A.lap(o)}<div style="position:absolute;left:${(L.x - 100 * k) / 4}%;top:${(L.y - 186 * k) / 6}%;width:${L.size / 4}%;aspect-ratio:1">${A.cat(pose, mo)}</div></div>${pose} ${JSON.stringify(o)}</div>`; };
+h += '<h2>Lap: armchair and bench (lapSpot)</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">' +
+  onLap({ phase: 'evening', season: 'autumn' }, 'lapLoaf', { mood: 'happy', purring: true }) + onLap({ phase: 'night', season: 'winter' }, 'lapCurl', 'calm') + onLap({ phase: 'day', season: 'summer', place: 'bench' }, 'lapBelly', 'happy') + onLap({ phase: 'morning', season: 'winter', place: 'bench' }, 'lapLoaf', 'calm') + '</div>';
+h += '<h2>Lap regions</h2><div class="grid" style="grid-template-columns:repeat(6,1fr)">';
+for (const p of ['lapLoaf', 'lapCurl', 'lapBelly']) { const rg = A.regions(p); h += cell(A.cat(p, 'calm') + `<svg viewBox="0 0 200 200" class="reg" style="position:absolute;inset:0;overflow:visible">${rg.slice().reverse().map(r => `<path d="${r.path}" fill="${COL[r.id]}"/>`).join('')}</svg>`, p); }
+h += '</div><h2>Crops (stage 0–3)</h2><div class="grid" style="grid-template-columns:repeat(12,1fr)">';
+for (const n of A.crops) for (let i = 0; i < 4; i++) h += cell(A.crop(n, i), `${n} ${i}`);
+h += '</div>';
+// Phase 3 and 5: tricks, minigames, shop, neighbours, album
+h += '<h2>Tricks and the box</h2><div class="grid" style="grid-template-columns:repeat(6,1fr)">';
+for (const [p, m] of [['trickSit', 'calm'], ['trickPaw', 'happy'], ['trickSpin', 'happy'], ['trickBeg', 'calm'], ['inBox', 'happy'], ['inBox', 'grumpy']]) h += cell(A.cat(p, m), p + ' ' + m);
+h += '</div><h2>Minigames: mouse hole, peeking mouse (phase 0 … 1), fish, rods, checkpoints</h2><div class="grid" style="grid-template-columns:repeat(10,1fr)">';
+h += cell(A.mouseHole(), 'mouseHole') + [0.25, 0.5, 0.75, 1].map(t => cell(A.mousePeek(t), 'mousePeek ' + t)).join('') + A.fishes.map(k => cell(A.fish(k), k)).join('') + cell(A.marker(false), 'marker') +
+  cell(A.marker(true), 'marker done') + ['fishingRod', 'featherWand', 'featherBunch'].map(k => cell(A.item(k) + `<svg viewBox="0 0 100 100" style="position:absolute;inset:0">${Object.values(A.itemPoints[k] || {}).filter(p => p.x != null).map(p => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="red"/>`).join('')}</svg>`, k)).join('');
+h += '</div><h2>Shop items (with itemSize in room units; cat tree platforms in red)</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">';
+for (const k of ['pouchPack', 'chickenPack', 'tunaPack', 'treatBag', 'ballBell', 'box', 'tunnel', 'scratcher', 'catTree', 'sillCushion', 'bedDeluxe', 'rugRound', 'lamp', 'birdFeeder', 'catFlap'])
+  h += cell(A.item(k) + (k === 'catTree' ? `<svg viewBox="0 0 100 100" style="position:absolute;inset:0">${A.itemPoints.catTree.platforms.map(p => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="red"/>`).join('')}</svg>` : ''), `${k} ${A.itemSize[k].w}`);
+h += '</div><h2>Furniture at its natural size in the living room</h2><div style="width:320px"><div class="room">' + A.room({ id: 'living', phase: 'day', season: 'summer' }) +
+  [['catTree', 70, 470], ['scratcher', 190, 470], ['box', 260, 560], ['rugRound', 150, 590], ['lamp', 30, 410], ['sillCushion', 130, 268]].map(([k, x, y]) => { const w = A.itemSize[k].w; return `<div style="position:absolute;left:${(x - w / 2) / 4}%;top:${(y - 0.9 * w) / 6}%;width:${w / 4}%;aspect-ratio:1">${A.item(k)}</div>`; }).join('') + '</div></div>';
+h += '<h2>Obchůdek (shop) and the album frames</h2><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start"><div style="width:260px"><div class="room">' + A.shop() + '</div></div>' +
+  `<div style="width:300px;position:relative"><div style="position:absolute;left:${A.postcardHole.x / 3}%;top:${A.postcardHole.y / 2}%;width:${A.postcardHole.w / 3}%;height:${A.postcardHole.h / 2}%;background:linear-gradient(#9fc6dc,#79ad5e)"></div>${A.postcardFrame('Byla jsem u zámku v Náchodě')}</div>` +
+  `<div style="width:160px;position:relative"><div style="position:absolute;left:${A.photoHole.x / 2}%;top:${A.photoHole.y / 2.36}%;width:${A.photoHole.w / 2}%;height:${A.photoHole.h / 2.36}%;background:#3b2a1e">${A.cat('sit', 'happy')}</div>${A.photoFrame()}</div></div>`;
+h += '<h2>Neighbour cats: sit, walk, loaf, onFence</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">';
+for (const id of Object.keys(A.neighbours)) for (const [p, bg] of [['sit', 'paper'], ['walk', 'cottage'], ['loaf', 'paper'], ['onFence', 'cottage']]) h += cell(A.neighbour(id, p, 'calm'), `${A.neighbours[id].name} ${p}`, bg);
+h += '</div><h2>Neighbours on the garden fence</h2><div style="width:320px"><div class="room">' + A.room({ id: 'garden', phase: 'day', season: 'summer' }) +
+  [['mourek', 60], ['liza', 160], ['bivoj', 360]].map(([id, x]) => { const f = A.rooms.garden.spots.fence, w = 110; return `<div style="position:absolute;left:${(x - w / 2) / 4}%;top:${(f.y - 186 / 200 * w) / 6}%;width:${w / 4}%;aspect-ratio:1">${A.neighbour(id, 'onFence', 'calm')}</div>`; }).join('') + '</div></div>';
+h += '<h2>Room: phase × season</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';
+const SEAS = ['spring', 'summer', 'autumn', 'winter'], PH = ['morning', 'day', 'evening', 'night'];
+for (const se of SEAS) for (const ph of PH) h += `<div><div class="room">${A.room({ phase: ph, season: se, sunX: (PH.indexOf(ph) + SEAS.indexOf(se)) / 6 })}<div class="cat">${A.cat(ph === 'night' ? 'sleep' : ['sit', 'loaf', 'window', 'sit'][PH.indexOf(ph)], 'happy')}</div></div>${ph} ${se}</div>`;
+h += '</div><h2>Holidays</h2><div class="grid" style="grid-template-columns:repeat(5,1fr)">';
+const HOL = [['advent', 'winter', 'day'], ['mikulas', 'winter', 'evening'], ['vanoce', 'winter', 'evening'], ['silvestr', 'winter', 'night'], ['masopust', 'winter', 'day'], ['velikonoce', 'spring', 'morning'], ['carodejnice', 'spring', 'evening'], ['dusicky', 'autumn', 'evening'], ['narozeniny', 'summer', 'day'], [null, 'summer', 'day', true]];
+for (const [hol, se, ph, flap] of HOL) h += `<div><div class="room">${A.room({ phase: ph, season: se, holiday: hol, flap })}</div>${hol || 'flap'} (${ph})</div>`;
+h += '</div>';
+// spots: the items at their spots as the game sizes them (cat 212 room units, items bowl 58, water 52, litter 104, bed 150),
+// Koxa eating / drinking where the game puts her, and the sun patch at sunX 0, .5, 1 with its middle (sunPatch) marked
+const ITEMW = { bowl: 58, water: 52, litter: 104, bed: 150 }, KC = 212 / 200;
+const at = (k, it) => { const p = A.spots[k], b = ITEMW[k]; return `<div style="position:absolute;left:${(p.x - b / 2) / 4}%;top:${(p.y - 0.9 * b) / 6}%;width:${b / 4}%;aspect-ratio:1">${A.item(it)}</div>`; };
+const catAt = (pose, fx, fy, ax, ay, o) => `<div style="position:absolute;left:${(fx - ax * KC) / 4}%;top:${(fy - ay * KC) / 6}%;width:${212 / 4}%;aspect-ratio:1">${A.cat(pose, o)}</div>`;
+const spotRoom = (sunX, cats) => `<div style="width:300px"><div class="room">${A.room({ phase: 'day', season: 'autumn', sunX })}${at('bowl', 'bowlFull')}${at('water', 'waterBowl')}${at('litter', 'litterDirty')}${at('bed', 'bed')}` +
+  `<div style="position:absolute;left:${A.sunPatch(sunX).x / 4}%;top:${A.sunPatch(sunX).y / 6}%;width:8px;height:8px;margin:-4px;border-radius:50%;background:red"></div>${cats || ''}</div>sunX ${sunX}</div>`;
+h += '<h2>Spots: eating, drinking, sun patch</h2><div style="display:flex;gap:8px;flex-wrap:wrap">' +
+  spotRoom(0, catAt('eat', A.spots.bowl.x, A.spots.bowl.y, 58, 188, { noProp: true }) + catAt('drink', A.spots.water.x, A.spots.water.y, 47, 188, { noProp: true })) +
+  spotRoom(0.5) + spotRoom(1, catAt('loaf', A.sunPatch(1).x, A.sunPatch(1).y + 26, 115, 186, 'happy')) + '</div>';
+h += '<h2>Bowls: empty and full</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">' + ['bowl', 'bowlEmpty', 'bowlFull', 'waterBowlEmpty', 'waterBowl'].map(it => cell(A.item(it), it)).join('') + '</div>';
+h += '<h2>Items</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">';
+for (const it of A.items) h += cell(A.item(it), it);
+h += '</div><h2>Faces</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">';
+for (const m of MOODS) h += cell(A.face(m), m) + cell(A.face(m), m, 'cottage');
+h += '</div><h2>Items held (itemHeld)</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">';
+for (const it of ['foodBag', 'jug', 'pouch', 'chicken', 'tuna', 'scoop', 'brush', 'pill']) h += cell(A.itemHeld(it), it);
+h += '</div><h2>Icons (24 px and 20 px, currentColor)</h2><div style="display:flex;flex-wrap:wrap;gap:6px">';
+for (const ic of A.icons) h += `<div class="cell paper" style="width:84px">${A.icon(ic)} <span style="display:inline-block;width:20px;height:20px">${A.icon(ic).replace('kx-icon', 'kx-icon" style="width:20px;height:20px')}</span><br>${ic}</div><div class="cell cottage" style="width:44px">${A.icon(ic)}</div>`;
+h += '</div><h2>FX</h2><div class="grid" style="grid-template-columns:repeat(10,1fr)">';
+for (const f of A.fxs) h += cell(`<div style="width:60%;margin:20% auto">${A.fx(f)}</div>`, f) + cell(`<div style="width:60%;margin:20% auto">${A.fx(f)}</div>`, f, 'cottage');
+h += '</div><h2>Vet (vetSpots.table) and mouth points (red dot)</h2><div style="display:flex;gap:8px;flex-wrap:wrap">';
+const onTable = (pose, o) => { const t = A.vetSpots.table, m = A.mouth(pose, o); // cat ground y≈186 of 200 placed on the table top; box 60 % of the room width
+  const w = 60, left = t.x / 4 - w / 2, top = (t.y / 600) * 100 - (186 / 200) * w * (400 / 600);
+  return `<div style="width:260px"><div class="room">${A.vet()}<div style="position:absolute;left:${left}%;top:${top}%;width:${w}%;aspect-ratio:1">${A.cat(pose, o)}${m ? `<svg viewBox="0 0 200 200" style="position:absolute;inset:0;overflow:visible"><circle cx="${m.x}" cy="${m.y}" r="4" fill="red"/></svg>` : ''}</div></div>${pose} ${JSON.stringify(o)}</div>`; };
+h += onTable('sit', { mood: 'sad', ill: 'cold', openMouth: true }) + onTable('wriggle', { mood: 'grumpy', openMouth: true }) + onTable('sit', { mood: 'grumpy', ill: 'tummy' });
+h += '</div><h2>Mouth points per pose</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">';
+for (const p of A.poses) { const m = A.mouth(p, { openMouth: true }); h += cell(A.cat(p, { openMouth: true }) + (m ? `<svg viewBox="0 0 200 200" style="position:absolute;inset:0;overflow:visible"><circle cx="${m.x}" cy="${m.y}" r="4" fill="red"/></svg>` : ''), p); }
+h += '</div><h2>Big (phone size, 250 px)</h2><div style="display:flex;gap:8px;flex-wrap:wrap">';
+for (const [p, m, bg] of [['sit', 'happy', 'cottage'], ['sit', 'calm', 'paper'], ['loaf', 'calm', 'cottage'], ['sleep', 'calm', 'paper']]) h += `<div class="cell ${bg}" style="width:250px">${A.cat(p, m)}</div>`;
+h += '</div>';
+out.innerHTML = h;
+const st = document.getElementById('step'); st.oninput = () => { document.getElementById('gait').style.setProperty('--kx-step', st.value + 's'); document.getElementById('stepv').textContent = st.value + ' s'; };
+</script>
+</body>
+</html>

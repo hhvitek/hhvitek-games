@@ -8,6 +8,7 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 - [ ] Dáma: how long the Mistr thinks on the Xiaomi (on a computer about 0.5 s on average, 2.7 s at most; it stops at 20 s at the latest (8 s without a worker), and only then could the same position give a different move after Zpět).
 
 - [ ] Brave on Android (the Samsung S25 of the report): check that the bottom buttons are no longer cut off in the app installed by Brave; Nastavení → "Údaje o obrazovce" in the launcher shows what the last game measured. By the table in CLAUDE.md ("Visible height") Brave reports the same height for `visualViewport` as for `100dvh`, so the 1.0.4 rule alone may not be enough. When it is settled, remove both TEMPORARY parts: the card in `index.html` and the `games.launcher.diag` write in every game and the template.
+- [ ] Kočka: listen to the meows, purr and the other sounds on the phone (synthesized, never heard by anyone yet) — if they still don't sound like a cat, record a few meows of the real cat and use them instead; feel the stroking, the two-finger scratch, the long press and the trick cues on a real touch screen (thresholds in src/input.js `T`); tilt rolling the yarn; the microphone call (Android and iOS permission paths); vibration patterns; animation smoothness and battery with the game left open.
 - [ ] Kulička: try the tilt on the Xiaomi (sensitivity, dead zone, auto-levelling when coming back); the iOS permission path was never run on iOS.
 - [ ] Open the launcher on the target phone (Xiaomi 13T/14T/15T), add it to the home screen and play each game once.
 - [ ] Turn on airplane mode and check that all games and the image sets (Mahjong: Kočky, Náchodsko, Znaky obcí, Houby, Ptáci, Ovoce a zelenina) still load offline.
@@ -15,6 +16,8 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 - [ ] Open a game straight from disk once (double-click `games/<id>/index.html`): the Playwright MCP blocks `file:///`, so this is not tested automatically.
 
 ## Open questions for the user
+
+- [ ] Kočka (choices made while building, keep?): two tray rows (care items above, toys + Laser + Zavolat + Víc below; labels 12.5 px); the toast at the top of the room; "Vysát pokoj" in Nastavení → Pokoj; the Veterinář button only while she is ill; toys stay on the floor until picked up; a wide short window shows the room narrower with the wall continuing at the sides; neighbour cats are stroked with a button (no gesture); the album shows the newest 24 photos; gardening pays a little (a seed pack sells for 1.5× its price) but far less than the minigames.
 
 - [ ] Dáma: is the default opponent "Běžný hráč" about right for the players (not too easy, not frustrating)? It looks two half-moves ahead with noise and sometimes plays the second best move; tune it after playing on the phone.
 

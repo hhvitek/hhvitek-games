@@ -19,6 +19,7 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 
 | Hra             | Složka                   | Co to je                                                                                                                  |
 | --------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Kočka           | `games/kocka/`           | Starej se o kočku Koxu podle skutečných hodin: krm ji, hlaď prstem, hraj si s ní, pěstuj zahrádku; když se o ni nikdo nestará, zhubne a může onemocnět |
 | Logik           | `games/logik/`           | Uhodni tajný barevný kód                                                                                                  |
 | Sudoku          | `games/sudoku/`          | Klasické sudoku 9×9 (nebo 6×6) s poznámkami a nápovědou                                                                   |
 | Skládání kostek | `games/skladani-kostek/` | Skládačka: přetahuj tvary do mřížky a plň celé řady                                                                       |

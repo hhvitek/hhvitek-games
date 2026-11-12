@@ -57,6 +57,12 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
 .logo{flex:none;width:72px;height:72px;border-radius:18px;display:block}
 /* Games: one column of rows (icon, name, description), two columns on wide screens */
 .list{display:grid;gap:10px}
+/* a hidden element stays hidden whatever display its class sets (the empty Koxa box of 2026-11-12) */
+[hidden]{display:none!important}
+/* Koxa's line under the header (the cross-game link with Kočka, off by default) */
+.cat{display:flex;align-items:center;gap:12px;margin:-6px 4px 14px;padding:8px 14px 8px 8px;border-radius:16px;background:#fff;border:2px solid #e6d8c6;color:#2b1a0e;text-decoration:none;font-size:19px;line-height:1.3}
+.cat img{flex:none;width:44px;height:44px;border-radius:12px}
+.cat b{font-weight:800}
 @media (min-width:760px){.wrap{max-width:900px}.list{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .game{display:flex;align-items:center;gap:14px;min-height:80px;padding:10px;border-radius:18px;background:#fff;border:2px solid #e6d8c6;text-decoration:none;color:inherit;transition:transform .08s}
 .game:active{transform:scale(.98);border-color:#7a4520;background:#fbf5ec}
@@ -148,6 +154,7 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
 <body>
 <div class="wrap">
   <header><div><h1 id="day">Vítkovy hry</h1><p class="date" id="date">Vyber si hru</p></div><img class="logo" src="icon.svg" alt=""></header>
+  <a class="cat" id="catLine" href="games/kocka/index.html?menu" hidden></a>
   <main class="list" id="grid"></main>
   <button class="install" id="btnInstall" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11M7 9.5l5 5 5-5M4.5 16v3.5h15V16"/></svg>Nainstalovat do zařízení</button>
   <button class="toSettings" id="btnSettings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg>Nastavení</button>
@@ -158,6 +165,8 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
   <section class="card"><h3>Výběr her</h3>
     <p>Hry, které se hrají nejčastěji, se posouvají nahoru.</p>
     <div class="field trow"><div class="flabel">Ukazovat počet hraní</div><button class="sw" id="swPlays" aria-pressed="false">Vypnuto</button></div>
+    <div class="field trow" id="rowCat" hidden><div class="flabel">Koxa a ostatní hry</div><button class="sw" id="swCat" aria-pressed="false">Vypnuto</button></div>
+    <div class="fnote" id="noteCat" hidden>Za každou jinou hru, kterou odsud spustíš, dostane kočka Koxa pamlsek (nejvýš 5 za den), a nahoře uvidíš, jak se má.</div>
   </section>
   <section class="card"><h3>Uložená data</h3>
     <p>Rozehrané hry, nastavení her, rekordy a počty hraní jsou uložené jen v tomto zařízení.</p>
@@ -270,7 +279,7 @@ const rank = g => g.plays >= MIN_PLAYS_TO_RISE ? g.plays : 0;
 
 // The launcher's own settings (the play count on each row is off by default); invalid data = defaults
 const LAUNCHER_KEY = 'games.launcher.settings';
-const LDEFAULTS = { showPlays: false };
+const LDEFAULTS = { showPlays: false, catLink: false }; // catLink: the cross-game link with Kočka (user's decision: off by default)
 function loadLauncher() {
   const s = { ...LDEFAULTS };
   try { const v = JSON.parse(store.get(LAUNCHER_KEY)); if (v && typeof v === 'object') for (const k of Object.keys(LDEFAULTS)) if (typeof v[k] === typeof LDEFAULTS[k]) s[k] = v[k]; } catch (e) {}
@@ -278,12 +287,52 @@ function loadLauncher() {
 }
 let L = loadLauncher();
 const swPlays = document.getElementById('swPlays');
-function renderSwitch() { swPlays.setAttribute('aria-pressed', String(L.showPlays)); swPlays.textContent = L.showPlays ? 'Zapnuto' : 'Vypnuto'; }
+const swCat = document.getElementById('swCat');
+const hasCat = () => (globalThis.GAMES || []).some(g => g.id === 'kocka');
+function renderSwitch() {
+  swPlays.setAttribute('aria-pressed', String(L.showPlays)); swPlays.textContent = L.showPlays ? 'Zapnuto' : 'Vypnuto';
+  document.getElementById('rowCat').hidden = document.getElementById('noteCat').hidden = !hasCat();
+  swCat.setAttribute('aria-pressed', String(L.catLink)); swCat.textContent = L.catLink ? 'Zapnuto' : 'Vypnuto';
+}
 swPlays.addEventListener('click', () => {
   L.showPlays = !L.showPlays;
   store.set(LAUNCHER_KEY, JSON.stringify(L));
   renderSwitch(); render(); // applies at once, behind the settings screen
 });
+swCat.addEventListener('click', () => {
+  L.catLink = !L.catLink;
+  store.set(LAUNCHER_KEY, JSON.stringify(L));
+  renderSwitch(); render();
+});
+
+/* ---------- Kočka link (off by default) ---------- */
+// When it is on, every other game started from here leaves Koxa one treat in games.kocka.treats = { n, day, taken }
+// (n waiting, taken = already moved into the game today; at most CAT_TREATS a day), and the line under the header
+// shows how she is from games.kocka.mood = { name, mood, wants, ill } (written by the game on every save).
+const CAT_TREATS = 5;
+const catDay = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+function giveCatTreat() {
+  let T = null;
+  try { T = JSON.parse(store.get('games.kocka.treats')); } catch (e) {}
+  const today = catDay();
+  if (!T || typeof T !== 'object' || T.day !== today) T = { n: 0, day: today, taken: 0 };
+  const n = Math.max(0, Number(T.n) || 0), taken = Math.max(0, Number(T.taken) || 0);
+  if (n + taken >= CAT_TREATS) return;
+  store.set('games.kocka.treats', JSON.stringify({ n: n + 1, day: today, taken }));
+}
+const CAT_WANTS = { food: 'má hlad', water: 'chce pít', litter: 'potřebuje uklidit záchod', coat: 'chce učesat', love: 'chce pomazlit', fun: 'se nudí' };
+const CAT_MOODS = { happy: 'je šťastná', calm: 'je spokojená', grumpy: 'je mrzutá', sad: 'je smutná' };
+function renderCat() {
+  const el = document.getElementById('catLine');
+  let M = null;
+  try { M = JSON.parse(store.get('games.kocka.mood')); } catch (e) {}
+  if (!L.catLink || !hasCat() || !M || typeof M !== 'object') { el.hidden = true; return; }
+  const name = typeof M.name === 'string' && M.name.trim() ? M.name.trim().slice(0, 20) : 'Koxa';
+  const what = M.ill ? 'je nemocná' : CAT_WANTS[M.wants] || CAT_MOODS[M.mood] || 'je doma';
+  el.innerHTML = `<img src="games/kocka/icon.svg" alt=""><span><b>${esc(name)}</b> ${what}</span>`;
+  el.hidden = false;
+}
+document.getElementById('catLine').addEventListener('click', () => store.set('games.kocka.plays', String(plays('kocka') + 1)));
 
 /* ---------- Error reports ---------- */
 const ERROR_KEY = 'games.errors';
@@ -465,7 +514,7 @@ btnUpdate.addEventListener('click', async () => {
 btnReload.addEventListener('click', () => location.reload());
 
 function render() {
-  renderDate();
+  renderDate(); renderCat();
   const games = (globalThis.GAMES || []).map((g, i) => ({ ...g, order: i, plays: plays(g.id) }));
   if (!games.length) { grid.outerHTML = '<p class="empty">Zatím tu nejsou žádné hry.</p>'; return; }
   // Most played first (counting only games opened MIN_PLAYS_TO_RISE+ times); ties keep the order from registry.js
@@ -484,19 +533,20 @@ function render() {
 grid.addEventListener('click', e => {
   const a = e.target.closest('a.game');
   if (a) store.set(`games.${a.dataset.id}.plays`, String(plays(a.dataset.id) + 1));
+  if (a && L.catLink && a.dataset.id !== 'kocka' && hasCat()) giveCatTreat();
 });
 // Reset: deletes everything these games saved in the browser (games in progress, settings,
 // records, play counts) after a confirmation. Cached files for offline mode stay.
 // Only our own keys: GitHub Pages serves all projects of one user from the same origin
 // (and file:// is shared too), so localStorage.clear() would wipe other projects' data.
-// Exactly our keys, for each game of the registry: games.<id>.state / .inProgress / .plays, the old Czech
+// Exactly our keys, for each game of the registry: games.<id>.state / .inProgress / .plays (and Kočka's .mood / .treats), the old Czech
 // badge hry.<id>.rozehrano and the older per-game key '<id>.v1' (still read once by the games, see OLD_KEY).
 // Older keys whose name differs from the game id:
 const OTHER_KEY_NAMES = ['solitaire', 'pyramid', 'spider', 'skladaniKostek'];
 const ownKey = k => {
   if (k === LAUNCHER_KEY) return true;
   const ids = (globalThis.GAMES || []).map(g => g.id);
-  return ids.some(id => [`games.${id}.state`, `games.${id}.inProgress`, `games.${id}.plays`, `hry.${id}.rozehrano`, `${id}.v1`].includes(k))
+  return ids.some(id => [`games.${id}.state`, `games.${id}.inProgress`, `games.${id}.plays`, `games.${id}.mood`, `games.${id}.treats`, `hry.${id}.rozehrano`, `${id}.v1`].includes(k))
     || OTHER_KEY_NAMES.some(n => k === `${n}.v1` || k === `hry.${n}.rozehrano`);
 };
 // Settings screen: opened by the button below the tiles, closed by Zpět (or the phone's Back)

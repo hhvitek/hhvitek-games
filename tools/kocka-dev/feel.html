@@ -1,0 +1,441 @@
+<!doctype html>
+<!--
+  Kočka gesture lab (developer page, not deployed): tries every gesture of tools/kocka-dev/src/input.js.
+  Open http://localhost:8765/tools/kocka-dev/feel.html (node tools/serve.js). Tilt and the microphone need a secure
+  page on the phone (https or localhost). Uses the cat and regions of src/art.js when it has regions, otherwise its
+  own simple cat.
+-->
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kočka – laboratoř gest</title>
+<style>
+  :root { --bg: #f4ebdf; --ink: #2b1a0e; --soft: #6f5a48; --line: #e6d8c6; --btn: #7a4520; --pane: #fffaf3; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.35 system-ui, sans-serif; padding: 12px 12px 190px; }
+  h1 { font-size: 20px; margin: 4px 0 8px; }
+  h2 { font-size: 17px; margin: 0 0 4px; }
+  p.note { margin: 0 0 8px; color: var(--soft); font-size: 14px; }
+  section { background: var(--pane); border: 1px solid var(--line); border-radius: 12px; padding: 10px; margin: 0 0 14px; }
+  .area { position: relative; height: 300px; border-radius: 10px; background: #efe2cf; overflow: hidden;
+    touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; align-items: center; }
+  button { font: inherit; font-size: 15px; min-height: 40px; padding: 6px 12px; border-radius: 9px; border: 0;
+    background: var(--btn); color: #fff; box-shadow: 0 2px 0 #3f220e; }
+  button[aria-pressed="false"] { background: transparent; color: var(--ink); box-shadow: none; outline: 2px dashed var(--ink); outline-offset: -2px; }
+  select { font: inherit; font-size: 15px; min-height: 40px; border-radius: 9px; border: 1px solid var(--soft); background: #fff; color: var(--ink); }
+  .stat { font: 13px/1.3 ui-monospace, monospace; color: var(--soft); }
+  #catBox { position: absolute; left: 20px; top: 10px; width: 300px; height: 200px; transition: transform .2s; }
+  #catBox.lift { transition: none; filter: drop-shadow(0 12px 8px rgba(0,0,0,.35)); }
+  #catBox svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #regions path { fill: transparent; stroke: rgba(0,0,0,.25); stroke-dasharray: 3 3; transition: fill .25s; }
+  #regions.hide path, #regions.hide .fur { visibility: hidden; }
+  #regions path.along { fill: rgba(40,160,60,.45); } #regions path.against { fill: rgba(200,40,30,.45); }
+  #regions path.sideways { fill: rgba(220,170,0,.45); } #regions path.scratch { fill: rgba(130,60,200,.45); }
+  .fur { stroke: #ffcf4a; stroke-width: 2.4; fill: none; stroke-linecap: round; }
+  .tgt { position: absolute; bottom: 8px; width: 31%; height: 70px; border: 2px dashed var(--soft); border-radius: 10px;
+    display: grid; place-items: center; color: var(--soft); font-size: 14px; background: rgba(255,255,255,.35); }
+  .tgt.ready { border-color: var(--btn); color: var(--ink); }
+  .tgt.hot { background: rgba(122,69,32,.25); border-style: solid; }
+  .item { position: absolute; width: 56px; height: 56px; border-radius: 12px; display: grid; place-items: center;
+    font-size: 13px; color: #fff; background: var(--btn); box-shadow: 0 2px 0 #3f220e; }
+  .item.dragging { box-shadow: 0 10px 14px rgba(0,0,0,.35); z-index: 2; }
+  .ball { position: absolute; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #f6c15b, #c8621c); }
+  .dot { position: absolute; width: 14px; height: 14px; margin: -7px; border-radius: 50%; background: #ff2a2a;
+    box-shadow: 0 0 10px 4px rgba(255,40,40,.6); }
+  .chaser { position: absolute; width: 44px; height: 44px; margin: -22px; border-radius: 50%; background: #1b1512; }
+  .chaser::before, .chaser::after { content: ''; position: absolute; top: 14px; width: 8px; height: 8px; border-radius: 50%; background: #b5c93a; }
+  .chaser::before { left: 11px; } .chaser::after { right: 11px; }
+  .meter { position: relative; height: 26px; border-radius: 8px; background: #efe2cf; overflow: hidden; margin-top: 8px; }
+  .meter i { position: absolute; left: 0; top: 0; bottom: 0; background: #6a9a3a; width: 0; }
+  .meter b { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); }
+  #log { position: fixed; left: 0; right: 0; bottom: 0; height: 170px; overflow: auto; margin: 0; padding: 6px 12px;
+    background: #2b1a0e; color: #f4ebdf; font: 12px/1.35 ui-monospace, monospace; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Kočka – laboratoř gest</h1>
+<p class="note">Vývojářská stránka: zkouší <code>src/input.js</code>. Události se vypisují dole.</p>
+
+<section>
+  <h2>1. Hlazení, drbání, zvednutí</h2>
+  <p class="note">Hlaď po srsti (zelená), proti srsti (červená), napříč (žlutá). Dvěma prsty drbej hlavu sem a tam.
+    Podrž prst na kočce, zvedni ji a pusť nad místem.</p>
+  <div class="area" id="careArea">
+    <div id="catBox"><div id="catArt"></div><svg id="regions"></svg></div>
+    <div class="tgt" data-t="pelisek" style="left:2%">Pelíšek</div>
+    <div class="tgt" data-t="parapet" style="left:34.5%">Parapet</div>
+    <div class="tgt" data-t="gauc" style="left:67%">Gauč</div>
+  </div>
+  <div class="row"><button id="tgRegions" aria-pressed="true">Oblasti a srst</button><select id="pose" aria-label="Póza"></select><span class="stat" id="careStat"></span></div>
+</section>
+
+<section>
+  <h2>2. Přetáhni věc na cíl</h2>
+  <p class="note">Granule do misky, konvici k misce s vodou. Cíl, kam věc patří, se zvýrazní.</p>
+  <div class="area" id="dragArea" style="height:260px">
+    <div class="item" data-item="granule" style="left:14px;top:14px">Granule</div>
+    <div class="item" data-item="konvice" style="left:84px;top:14px">Konvice</div>
+    <div class="item" data-item="hrebinek" style="left:154px;top:14px">Hřeben</div>
+    <div class="tgt" data-t="miska" data-accepts="granule" style="left:2%">Miska</div>
+    <div class="tgt" data-t="voda" data-accepts="konvice" style="left:34.5%">Voda</div>
+    <div class="tgt" data-t="kocka" data-accepts="hrebinek" style="left:67%">Kočka</div>
+  </div>
+</section>
+
+<section>
+  <h2>3. Odpal míček</h2>
+  <p class="note">Chyť míček a švihni (rychleji než 600 px/s). Pomalé puštění ho jen položí.</p>
+  <div class="area" id="flickArea"><div class="ball" id="ball"></div></div>
+  <div class="row"><span class="stat" id="flickStat"></span></div>
+</section>
+
+<section>
+  <h2>4. Laser</h2>
+  <p class="note">Tečka jde za prstem s malým zpožděním, kočka za tečkou.</p>
+  <div class="area" id="laserArea" style="background:#3b2a1e"><div class="chaser" id="chaser"></div><div class="dot" id="dot" hidden></div></div>
+</section>
+
+<section>
+  <h2>5. Naklápění</h2>
+  <p class="note">Klubíčko se kutálí podle náklonu telefonu. Na počítači stav „none“.</p>
+  <div class="area" id="tiltArea" style="height:240px"><div class="ball" id="tball"></div></div>
+  <div class="row"><button id="tiltOn">Zapnout</button><button id="tiltOff">Vypnout</button><button id="tiltLevel">Vyrovnat</button>
+    <button id="tiltAsk" hidden>Povolit naklápění</button><span class="stat" id="tiltStat">off</span></div>
+</section>
+
+<section>
+  <h2>6. Mikrofon</h2>
+  <p class="note">Jen hlasitost, nic se nenahrává ani neodesílá. Hlasité zavolání (¼ s nad čarou) = kočka slyší.</p>
+  <div class="meter"><i id="micBar"></i><b id="micLine"></b></div>
+  <div class="row"><button id="micOn">Poslouchat</button><button id="micOff">Vypnout</button><span class="stat" id="micStat">off</span></div>
+</section>
+
+<section>
+  <h2>7. Zvuky</h2>
+  <p class="note">Každé zahrání je trochu jiné (výška ±15 %, délka, průběh, hlasitost). Mňau podle nálady nikdy
+    nezopakuje stejnou variantu dvakrát za sebou.</p>
+  <div class="row" id="kinds"></div>
+  <div class="row"><button id="rand5">Náhodně ×5</button><span class="stat" id="sayStat"></span></div>
+  <div class="row"><button data-meow="happy">Nálada: šťastná</button><button data-meow="calm">klidná</button>
+    <button data-meow="grumpy">mrzutá</button><button data-meow="sad">smutná</button><button data-meow="want">chce něco</button>
+    <button data-meow="offended">uražená</button></div>
+  <div class="row"><button id="purr" aria-pressed="false">Předení</button>
+    <label class="stat">síla <input type="range" id="purrInt" min="0" max="1" step="0.05" value="0.6"></label></div>
+  <h2 style="margin-top:12px">Vibrace a vypínače</h2>
+  <div class="row"><button id="sndOn" aria-pressed="true">Zvuky</button><button id="vibOn" aria-pressed="true">Vibrace</button>
+    <button data-buzz="tap">Ťuk</button><button data-buzz="purr">Vrnění</button><button data-buzz="bite">Kousnutí</button></div>
+</section>
+
+<section>
+  <h2>8. Výcvik</h2>
+  <p class="note">Povely mimo kočku: přejetí nahoru = sedni, 2× nahoru do 1 s = panáček, kruh = otoč se,
+    ťuk na tlapku = dej pac. Přepínač dole zkouší režim minihry (surové doteky, každý prst jako tečka).</p>
+  <div class="area" id="trainArea">
+    <svg id="trail" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"><polyline fill="none" stroke="#7a4520" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points=""/></svg>
+    <div id="paw" style="position:absolute;left:12px;bottom:12px;width:70px;height:50px;border-radius:50% 50% 40% 40%;background:#1b1512;color:#fff;font-size:13px;display:grid;place-items:center">tlapka</div>
+    <div id="cue" style="position:absolute;left:0;right:0;top:12px;text-align:center;font-size:22px;font-weight:800"></div>
+  </div>
+  <div class="row"><button id="trainMode" aria-pressed="false">Režim minihry</button><span class="stat" id="trainStat">train</span></div>
+</section>
+
+<pre id="log"></pre>
+
+<script src="src/input.js"></script>
+<script src="src/art.js"></script>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const I = KockaInput();
+const NS = 'http://www.w3.org/2000/svg';
+
+/* ---------- Log ---------- */
+const LOG = [], counts = {};
+const QUIET = new Set(['carry', 'dragMove', 'laser']);   // too many to list one by one
+function log(ev, where) {
+  counts[ev.type] = (counts[ev.type] || 0) + 1;
+  LOG.push(Object.assign({ where }, ev));
+  if (LOG.length > 500) LOG.shift();
+  if (QUIET.has(ev.type)) return;
+  const d = Object.assign({}, ev); delete d.type;
+  if (d.region) d.region = d.region.id;
+  for (const k in d) if (typeof d[k] === 'number') d[k] = Math.round(d[k]);
+  const line = `${where} ${ev.type} ${JSON.stringify(d)}`;
+  const el = $('#log'); el.textContent = line + '\n' + el.textContent.slice(0, 6000);
+}
+const local = (area, el) => { const a = area.getBoundingClientRect(), r = el.getBoundingClientRect(); return { x: r.left - a.left, y: r.top - a.top, w: r.width, h: r.height }; };
+const inside = (p, r) => p.x >= r.x && p.x <= r.x + r.w && p.y >= r.y && p.y <= r.y + r.h;
+
+/* ---------- 1. The cat: art.js when it has regions, else a placeholder ---------- */
+// placeholder: a cat lying, facing left, viewBox 0 0 300 200; regions first match wins
+const ell = (cx, cy, rx, ry) => `M${cx - rx} ${cy}a${rx} ${ry} 0 1 0 ${2 * rx} 0a${rx} ${ry} 0 1 0 ${-2 * rx} 0z`;
+const PH = {
+  viewBox: '0 0 300 200',
+  svg: `<svg viewBox="0 0 300 200"><path d="M240 130q60-10 45-80" stroke="#1b1512" stroke-width="16" fill="none" stroke-linecap="round"/>
+    <ellipse cx="165" cy="125" rx="85" ry="45" fill="#1b1512"/><ellipse cx="190" cy="105" rx="30" ry="14" fill="#c8621c"/>
+    <circle cx="75" cy="88" r="38" fill="#1b1512"/><path d="M48 66 52 28 74 54zM86 52 104 26 106 66z" fill="#1b1512"/>
+    <path d="M74 54q4-6 8 0l-2 26h-4z" fill="#d9822b"/><circle cx="62" cy="88" r="6" fill="#b5c93a"/><circle cx="90" cy="88" r="6" fill="#b5c93a"/></svg>`,
+  regions: [
+    { id: 'ears', shape: 'M44 70 50 22 78 56zM82 56 106 20 110 70z', fur: [0, -1] },
+    { id: 'chin', shape: ell(76, 116, 22, 11), fur: [0.3, 1] },
+    { id: 'head', shape: ell(75, 88, 38, 38), fur: [1, -0.3] },
+    { id: 'belly', shape: ell(165, 155, 60, 14), fur: [1, 0] },
+    { id: 'back', shape: ell(165, 125, 85, 45), fur: [1, 0.1] },
+    { id: 'tail', shape: 'M232 120q60-6 42-76l22 4q16 84-58 92z', fur: [0.4, -1] },
+  ],
+};
+// the cat comes from art.js (regions(pose, opts) → [{ id, path, fur }] in hit-test order) or is the placeholder
+let ART = null;
+try { const A = KockaArt(); if (typeof A.regions === 'function' && typeof A.cat === 'function') ART = A; } catch (e) { console.warn('art.js not usable, placeholder cat', e); }
+if (ART) { const st = document.createElement('style'); st.textContent = ART.css || ''; document.head.appendChild(st); }
+const regSvg = $('#regions');
+let CAT = PH, regPaths = [], vbW = 300;
+function buildCat(pose) {
+  CAT = PH;
+  if (ART && pose !== 'placeholder') {
+    try {
+      const o = { mood: 'calm' }, regs = ART.regions(pose, o);
+      if (Array.isArray(regs) && regs.length) {
+        const svg = ART.cat(pose, o), vb = (svg.match(/viewBox="([^"]+)"/) || [])[1] || '0 0 200 200';
+        CAT = { viewBox: vb, svg, regions: regs, art: true };
+      }
+    } catch (e) { console.warn('art.js pose failed, placeholder cat', e); }
+  }
+  $('#catArt').innerHTML = CAT.svg;
+  regSvg.innerHTML = '';
+  regSvg.setAttribute('viewBox', CAT.viewBox);
+  vbW = Number(CAT.viewBox.split(/[ ,]+/)[2]) || 300;
+  // first the region paths (art: path; placeholder: shape), then the fur arrows from their boxes
+  regPaths = CAT.regions.map(r => {
+    const p = document.createElementNS(NS, 'path'); p.setAttribute('d', r.path || r.shape || ''); regSvg.appendChild(p); return p;
+  });
+  regPaths.forEach((p, i) => {
+    const b = p.getBBox(), f = CAT.regions[i].fur || [0, 0], l = Math.hypot(f[0], f[1]);
+    if (!l || !b.width) return;
+    const ux = f[0] / l, uy = f[1] / l, s = Math.max(6, Math.min(16, b.width / 3, b.height / 2 + 6));
+    for (const k of [-1, 0, 1]) {
+      const cx = b.x + b.width / 2 + k * uy * s * 0.9, cy = b.y + b.height / 2 - k * ux * s * 0.9;
+      const a = document.createElementNS(NS, 'path'); a.setAttribute('class', 'fur');
+      const x1 = cx - ux * s / 2, y1 = cy - uy * s / 2, x2 = cx + ux * s / 2, y2 = cy + uy * s / 2;
+      a.setAttribute('d', `M${x1} ${y1}L${x2} ${y2}M${x2 - ux * 5 - uy * 4} ${y2 - uy * 5 + ux * 4}L${x2} ${y2}L${x2 - ux * 5 + uy * 4} ${y2 - uy * 5 - ux * 4}`);
+      regSvg.appendChild(a);
+    }
+  });
+  regSvg.classList.toggle('hide', $('#tgRegions').getAttribute('aria-pressed') !== 'true');
+}
+const poseSel = $('#pose');
+poseSel.innerHTML = (ART && Array.isArray(ART.poses) ? ART.poses : []).map(p => `<option>${p}</option>`).join('') + '<option value="placeholder">zástupná</option>';
+poseSel.value = ART && (ART.poses || []).includes('sit') ? 'sit' : 'placeholder';
+poseSel.onchange = () => buildCat(poseSel.value);
+buildCat(poseSel.value);
+// Koxa's drawn width in px (the stroke step follows it)
+const catWidth = () => { const m = regSvg.getScreenCTM(); return m ? Math.abs(m.a) * vbW : 300; };
+const careArea = $('#careArea'), catBox = $('#catBox');
+let catPos = { x: 20, y: 10 };
+function placeCat(x, y, lift) { catBox.style.transform = `translate(${x - 20}px,${y - 10}px)${lift ? ' scale(1.06)' : ''}`; }
+// el px → the art's viewBox, then the first region whose shape holds the point
+function hitRegion(x, y) {
+  const a = careArea.getBoundingClientRect(), m = regSvg.getScreenCTM();
+  if (!m) return null;
+  const pt = new DOMPoint(a.left + x, a.top + y).matrixTransform(m.inverse());
+  for (let i = 0; i < regPaths.length; i++) if (regPaths[i].isPointInFill(pt)) return CAT.regions[i];
+  return null;
+}
+const careTargets = [...careArea.querySelectorAll('.tgt')];
+const tgtAt = (area, list, x, y, item) => {
+  for (const t of list) if ((!t.dataset.accepts || t.dataset.accepts === item) && inside({ x, y }, local(area, t))) return t.dataset.t;
+  return null;
+};
+function flash(reg, cls) {
+  const i = CAT.regions.indexOf(reg); if (i < 0) return;
+  const p = regPaths[i]; p.setAttribute('class', cls);
+  clearTimeout(p._t); p._t = setTimeout(() => p.setAttribute('class', ''), 350);
+}
+let purrT = 0, grab = null;
+function purrFor(ms) { I.sound.purr(true); $('#purr').setAttribute('aria-pressed', 'true'); clearTimeout(purrT); purrT = setTimeout(() => { I.sound.purr(false); $('#purr').setAttribute('aria-pressed', 'false'); }, ms); }
+const careStat = { along: 0, against: 0, sideways: 0, rough: 0, scratch: 0 };
+function showCare() { $('#careStat').textContent = Object.entries(careStat).map(([k, v]) => `${k} ${v}`).join(' · '); }
+I.attach(careArea, {
+  mode: 'care',
+  hitRegion,
+  hitCat: (x, y) => !!hitRegion(x, y),
+  catWidth,
+  hitTarget: (x, y) => tgtAt(careArea, careTargets, x, y),
+  on(ev) {
+    log(ev, 'care');
+    if (ev.type === 'stroke') {
+      careStat[ev.along]++; if (ev.rough) careStat.rough++;
+      flash(ev.region, ev.along);
+      if (ev.along === 'along' && !ev.rough) purrFor(1200);
+      if (ev.along === 'against' && careStat.against % 3 === 1) I.sound.meow('grumpy');
+    } else if (ev.type === 'scratchStart') purrFor(1500);
+    else if (ev.type === 'scratch') { careStat.scratch++; flash(ev.region, 'scratch'); purrFor(1500); I.vibrate('purr'); }
+    else if (ev.type === 'pickup') { grab = { dx: ev.x - catPos.x, dy: ev.y - catPos.y }; catBox.classList.add('lift'); placeCat(catPos.x, catPos.y, true); I.sound.chirp(); I.vibrate('tap'); }
+    else if (ev.type === 'carry') {
+      placeCat(ev.x - grab.dx, ev.y - grab.dy, true);
+      careTargets.forEach(t => t.classList.toggle('hot', t.dataset.t === ev.target));
+    } else if (ev.type === 'drop' || ev.type === 'cancel') {
+      catBox.classList.remove('lift'); careTargets.forEach(t => t.classList.remove('hot'));
+      const t = ev.type === 'drop' && careTargets.find(x => x.dataset.t === ev.target);
+      if (t) { const r = local(careArea, t); catPos = { x: r.x + r.w / 2 - 150, y: r.y - 150 }; I.sound.meow('happy'); }
+      else catPos = { x: 20, y: 10 };
+      placeCat(catPos.x, catPos.y, false);
+    } else if (ev.type === 'tap' && ev.cat) I.sound.meow('calm');
+    showCare();
+  },
+});
+$('#tgRegions').onclick = e => { const on = e.currentTarget.getAttribute('aria-pressed') !== 'true'; e.currentTarget.setAttribute('aria-pressed', on); regSvg.classList.toggle('hide', !on); };
+showCare();
+
+/* ---------- 2. Drag items to targets ---------- */
+const dragArea = $('#dragArea'), dragTargets = [...dragArea.querySelectorAll('.tgt')];
+const itemEl = id => dragArea.querySelector(`[data-item="${id}"]`);
+let held = null;
+I.attach(dragArea, {
+  mode: 'drag',
+  hitItem(x, y) { for (const el of dragArea.querySelectorAll('.item')) if (inside({ x, y }, local(dragArea, el))) return el.dataset.item; return null; },
+  hitTarget: (x, y, item) => tgtAt(dragArea, dragTargets, x, y, item),
+  canFlick: () => false,
+  on(ev) {
+    log(ev, 'drag');
+    if (ev.type === 'dragStart') {
+      const el = itemEl(ev.item), r = local(dragArea, el);
+      held = { el, dx: ev.x - r.x, dy: ev.y - r.y, home: { left: el.style.left, top: el.style.top } };
+      el.classList.add('dragging');
+      dragTargets.forEach(t => t.classList.toggle('ready', t.dataset.accepts === ev.item));
+    } else if (ev.type === 'dragMove' && held) {
+      held.el.style.left = ev.x - held.dx + 'px'; held.el.style.top = ev.y - held.dy + 'px';
+      dragTargets.forEach(t => t.classList.toggle('hot', t.dataset.t === ev.target));
+    } else if ((ev.type === 'dragEnd' || ev.type === 'cancel') && held) {
+      if (ev.type === 'dragEnd' && ev.target) { if (ev.item === 'granule') I.sound.nom(); else if (ev.item === 'hrebinek') I.sound.purr(true), setTimeout(() => I.sound.purr(false), 1200); else I.sound.chirp(); I.vibrate('tap'); }
+      held.el.classList.remove('dragging'); Object.assign(held.el.style, held.home); held = null;
+      dragTargets.forEach(t => t.classList.remove('ready', 'hot'));
+    }
+  },
+});
+
+/* ---------- 3. Flick a ball ---------- */
+const flickArea = $('#flickArea'), ballEl = $('#ball');
+const ball = { x: 160, y: 150, vx: 0, vy: 0, r: 26 };
+let ballHeld = null;
+function drawBall() { Object.assign(ballEl.style, { left: ball.x - ball.r + 'px', top: ball.y - ball.r + 'px', width: 2 * ball.r + 'px', height: 2 * ball.r + 'px' }); }
+I.attach(flickArea, {
+  mode: 'drag',
+  hitItem: (x, y) => (Math.hypot(x - ball.x, y - ball.y) <= ball.r + 12 ? 'ball' : null),
+  on(ev) {
+    log(ev, 'flick');
+    if (ev.type === 'dragStart') { ballHeld = { dx: ev.x - ball.x, dy: ev.y - ball.y }; ball.vx = ball.vy = 0; }
+    else if (ev.type === 'dragMove' && ballHeld) { ball.x = ev.x - ballHeld.dx; ball.y = ev.y - ballHeld.dy; drawBall(); }
+    else if (ev.type === 'flick') { ballHeld = null; ball.vx = ev.vx; ball.vy = ev.vy; $('#flickStat').textContent = `švih ${Math.round(Math.hypot(ev.vx, ev.vy))} px/s`; }
+    else if (ev.type === 'dragEnd' || ev.type === 'cancel') { ballHeld = null; $('#flickStat').textContent = 'položeno'; }
+  },
+});
+
+/* ---------- 4. Laser ---------- */
+const laserArea = $('#laserArea'), dotEl = $('#dot'), chaserEl = $('#chaser');
+const dot = { x: 160, y: 120 }, chaser = { x: 60, y: 200 };
+let laser = null;
+I.attach(laserArea, { mode: 'laser', on(ev) { log(ev, 'laser'); laser = ev.on ? { x: ev.x, y: ev.y } : null; if (ev.on && dotEl.hidden) { dot.x = ev.x; dot.y = ev.y; } dotEl.hidden = !ev.on; } });
+
+/* ---------- 5. Tilt ---------- */
+const tiltArea = $('#tiltArea'), tballEl = $('#tball');
+const tb = { x: 150, y: 120, vx: 0, vy: 0, r: 18 };
+let tiltA = { ax: 0, ay: 0 };
+function tiltState(s) {
+  $('#tiltStat').textContent = s;
+  $('#tiltAsk').hidden = s !== 'ask';
+  log({ type: 'tiltState', state: s }, 'tilt');
+}
+$('#tiltOn').onclick = () => I.tilt.start(a => { tiltA = a; $('#tiltStat').textContent = `${I.tilt.state()} ax ${a.ax.toFixed(2)} ay ${a.ay.toFixed(2)}`; }, tiltState);
+$('#tiltOff').onclick = () => { I.tilt.stop(); tiltA = { ax: 0, ay: 0 }; };
+$('#tiltLevel').onclick = () => I.tilt.level();
+$('#tiltAsk').onclick = () => I.tilt.askPermission();
+
+/* ---------- 6. Microphone ---------- */
+$('#micLine').style.left = I.mic.threshold * 100 + '%';
+$('#micOn').onclick = () => I.mic.start(
+  lv => { $('#micBar').style.width = lv * 100 + '%'; },
+  () => { log({ type: 'call' }, 'mic'); $('#micStat').textContent = 'ok – kočka slyší!'; I.sound.chirp(); I.vibrate('call'); },
+  s => { $('#micStat').textContent = s; log({ type: 'micState', state: s }, 'mic'); if (s !== 'ok') $('#micBar').style.width = 0; },
+);
+$('#micOff').onclick = () => I.mic.stop();
+
+/* ---------- 7. Sounds and vibration ---------- */
+const KIND_NAME = { mew: 'Mňouk (koťátko)', meow: 'Mňau', demand: 'Dožadování', plaintive: 'Naříkání', chirp: 'Mrrp',
+  trill: 'Trylek', question: 'Mrr? (otázka)', yowl: 'Vytí', hiss: 'Syčení', purr: 'Předení (krátce)', nom: 'Chroupání', lap: 'Spokojené mručení' };
+const sayStat = s => { $('#sayStat').textContent = s; log({ type: 'sound', what: s }, 'sound'); };
+$('#kinds').innerHTML = I.sound.KINDS.map(k => `<button data-say="${k}">${KIND_NAME[k] || k}</button>`).join('');
+document.querySelectorAll('[data-say]').forEach(b => b.onclick = () => { I.sound.unlock(); sayStat(`${b.dataset.say}: ${I.sound.say(b.dataset.say) ? 'hraje' : 'ticho'}`); });
+document.querySelectorAll('[data-meow]').forEach(b => b.onclick = () => { I.sound.unlock(); sayStat(`${b.dataset.meow} → ${I.sound.meow(b.dataset.meow)}`); });
+// five random variants one after another (never the same twice in a row)
+$('#rand5').onclick = () => {
+  I.sound.unlock();
+  const pool = I.sound.KINDS.filter(k => k !== 'purr'), list = [];
+  while (list.length < 5) { const k = pool[Math.floor(Math.random() * pool.length)]; if (k !== list[list.length - 1]) list.push(k); }
+  sayStat(list.join(' · '));
+  list.forEach((k, i) => setTimeout(() => I.sound.say(k), i * 1500));
+};
+$('#purr').onclick = e => { I.sound.unlock(); const on = !I.sound.purring(); I.sound.purr(on, +$('#purrInt').value); e.currentTarget.setAttribute('aria-pressed', on); };
+$('#purrInt').oninput = e => { if (I.sound.purring()) I.sound.purr(true, +e.target.value); };
+$('#sndOn').onclick = e => { const on = !I.sound.enabled(); I.sound.setEnabled(on); e.currentTarget.setAttribute('aria-pressed', on); };
+let vibOn = true;
+$('#vibOn').onclick = e => { vibOn = !vibOn; I.setVibrate(vibOn); e.currentTarget.setAttribute('aria-pressed', vibOn); };
+document.querySelectorAll('[data-buzz]').forEach(b => b.onclick = () => log({ type: 'vibrate', ok: I.vibrate(b.dataset.buzz) }, 'buzz'));
+
+/* ---------- 8. Training cues and the minigame mode ---------- */
+const trainArea = $('#trainArea'), cueEl = $('#cue'), trailLine = $('#trail polyline'), pawEl = $('#paw');
+const DIRS = { up: 'nahoru', down: 'dolů', left: 'doleva', right: 'doprava' };
+let trailPts = [], cueT = 0;
+const cue = s => { cueEl.textContent = s; clearTimeout(cueT); cueT = setTimeout(() => { cueEl.textContent = ''; }, 2500); };
+// the finger's trace (drawn by the page itself: train mode reports only the recognized cues)
+trainArea.addEventListener('pointerdown', e => { const r = trainArea.getBoundingClientRect(); trailPts = [[e.clientX - r.left, e.clientY - r.top]]; trailLine.setAttribute('points', ''); });
+trainArea.addEventListener('pointermove', e => { if (!e.buttons && e.pointerType === 'mouse') return; const r = trainArea.getBoundingClientRect(); trailPts.push([e.clientX - r.left, e.clientY - r.top]); if (trailPts.length > 400) trailPts.shift(); trailLine.setAttribute('points', trailPts.map(p => p.join(',')).join(' ')); });
+const dots = new Map();
+const trainCtl = I.attach(trainArea, {
+  mode: 'train',
+  hitRegion: (x, y) => (inside({ x, y }, local(trainArea, pawEl)) ? { id: 'paws', fur: [0, 1] } : null),
+  on(ev) {
+    if (ev.type !== 'pmove') log(ev, 'train');
+    if (ev.type === 'swipe') cue(ev.dir === 'up' ? 'Sedni (přejetí nahoru)' : `Přejetí ${DIRS[ev.dir]}`);
+    else if (ev.type === 'doubleSwipe') cue(ev.dir === 'up' ? 'Panáček (2× nahoru)' : `2× ${DIRS[ev.dir]}`);
+    else if (ev.type === 'circle') cue(`Otoč se (kruh ${ev.dir === 'cw' ? 'po směru' : 'proti směru'} hodin, r ${ev.radius} px)`);
+    else if (ev.type === 'tap') cue(ev.region && ev.region.id === 'paws' ? 'Dej pac' : 'ťuk');
+    else if (ev.type === 'trainMiss') cue({ slow: 'Pomalu – zkus to rychleji', short: 'Krátké – táhni dál', notStraight: 'Křivě – táhni rovně', notRound: 'Kruh není kulatý', tooSmall: 'Kruh je moc malý' }[ev.reason] || ev.reason);
+    else if (ev.type === 'pdown') {
+      const d = document.createElement('div'); d.className = 'dot'; trainArea.appendChild(d); dots.set(ev.id, d);
+      d.style.left = ev.x + 'px'; d.style.top = ev.y + 'px'; $('#trainStat').textContent = `minigame: ${dots.size} prst(y)`;
+    } else if (ev.type === 'pmove') { const d = dots.get(ev.id); if (d) { d.style.left = ev.x + 'px'; d.style.top = ev.y + 'px'; } }
+    else if (ev.type === 'pup') { const d = dots.get(ev.id); if (d) d.remove(); dots.delete(ev.id); $('#trainStat').textContent = `minigame: ${dots.size} prst(y)`; }
+  },
+});
+$('#trainMode').onclick = e => {
+  const mini = trainCtl.mode() !== 'minigame';
+  trainCtl.setMode(mini ? 'minigame' : 'train');
+  e.currentTarget.setAttribute('aria-pressed', mini);
+  $('#trainStat').textContent = trainCtl.mode();
+};
+
+/* ---------- Animation ---------- */
+let lastT = performance.now();
+function frame(t) {
+  const dt = Math.min(50, t - lastT); lastT = t;
+  if (!ballHeld && I.stepToy(ball, dt / 1000, flickArea.clientWidth, flickArea.clientHeight) && Math.hypot(ball.vx, ball.vy) > 150) I.vibrate(8);
+  drawBall();
+  if (laser) I.follow(dot, laser, dt);
+  I.follow(chaser, dot, dt, 400);
+  dotEl.style.left = dot.x + 'px'; dotEl.style.top = dot.y + 'px';
+  chaserEl.style.left = chaser.x + 'px'; chaserEl.style.top = chaser.y + 'px';
+  tb.vx += tiltA.ax * 1400 * dt / 1000; tb.vy += tiltA.ay * 1400 * dt / 1000;
+  I.stepToy(tb, dt / 1000, tiltArea.clientWidth, tiltArea.clientHeight, 0.8, 0.4);
+  tballEl.style.cssText = `left:${tb.x - tb.r}px;top:${tb.y - tb.r}px;width:${2 * tb.r}px;height:${2 * tb.r}px`;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+placeCat(catPos.x, catPos.y, false);
+
+// for tests
+window.Feel = { I, LOG, counts, hitRegion, trainCtl, get CAT() { return CAT; }, catWidth, buildCat, ball, chaser, dot };
+</script>
+</body>
+</html>

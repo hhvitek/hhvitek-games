@@ -9,6 +9,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
 const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -68,6 +69,15 @@ function timeouts(code) {
   return out;
 }
 
+// every inline <script> must at least compile (a duplicate const or a typo stops the whole page)
+function syntaxErrors(html) {
+  const out = [];
+  for (const m of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) {
+    const line = html.slice(0, m.index).split('\n').length;
+    try { new vm.Script(m[1]); } catch (e) { out.push(`script at line ${line} does not compile: ${e.message}`); }
+  }
+  return out;
+}
 let failed = 0;
 const report = (id, problems) => {
   if (!problems.length) { console.log(`ok    ${id}`); return; }
@@ -161,6 +171,7 @@ for (const id of ids) {
 
   // "Patterns every game follows" (CLAUDE.md) that went wrong in real games
   const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
+  P.push(...syntaxErrors(html));
   // an end dialog never opens over Settings, Help or another dialog: it waits for them (whenFree) or checks nothingOpen()
   need(/const nothingOpen = /.test(scripts) && /function whenFree\(/.test(scripts), 'the nothingOpen() and whenFree() helpers (copy them from the template, section Helpers)');
   for (const t of timeouts(scripts)) {
@@ -191,9 +202,14 @@ for (const id of ids) {
 // launcher and offline mode
 if (!ONLY || ONLY === 'launcher') {
   const P = [], idx = read('index.html'), sw = read('sw.js');
+  P.push(...syntaxErrors(idx).map(e => 'launcher: ' + e));
   const code = idx.split('\n').filter(l => !/^\s*\/\//.test(l)).join('\n'); // comments may mention localStorage.clear()
   if (!/OTHER_KEY_NAMES/.test(idx) || /localStorage\.clear\(\)/.test(code)) P.push('reset must remove only our keys (no localStorage.clear())');
   if (!/Back button ----/.test(idx)) P.push('launcher: the "Back button" block for its dialog');
+  if (!/\[hidden\]\{display:none!important\}/.test(idx)) P.push('launcher: [hidden]{display:none!important}, so a class with its own display cannot show a hidden element');
+  // the cross-game link with Kočka is off by default (user's decision) and its keys are removed by the reset
+  if (!/LDEFAULTS = \{[^}]*catLink: false/.test(idx)) P.push('launcher: the Kočka link setting catLink must default to false');
+  if (!/`games\.\$\{id\}\.mood`, `games\.\$\{id\}\.treats`/.test(idx)) P.push('launcher: "Smazat uložená data" must also remove games.<id>.mood and games.<id>.treats');
   if (/viewport-fit=cover/.test(idx)) P.push('launcher: no viewport-fit=cover in the viewport meta (the installed app would draw under the navigation bar)');
   if (!ERRLOG || !idx.includes(ERRLOG) || idx.search(/<script\b/) !== idx.indexOf(ERRLOG)) P.push('launcher: the shared Error log block must be the first <script>');
   if (!(Buffer.from(idx).indexOf('<meta charset="utf-8">') >= 0 && Buffer.from(idx).indexOf('<meta charset="utf-8">') < 1024)) P.push('launcher: <meta charset="utf-8"> in the first 1024 bytes');

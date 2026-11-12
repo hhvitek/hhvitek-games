@@ -3,6 +3,7 @@
 // The launcher sorts tiles by how often each game is played, but only games opened at least
 // 5 times move up; the rest (and ties) keep the order given here.
 globalThis.GAMES = [
+  { id: 'kocka', name: 'Kočka', description: 'Starej se o kočku Koxu a její zahrádku' },
   { id: 'logik', name: 'Logik', description: 'Uhodni tajný barevný kód' },
   { id: 'sudoku', name: 'Sudoku', description: 'Doplň čísla do mřížky' },
   { id: 'skladani-kostek', name: 'Skládání kostek', description: 'Skládej tvary do mřížky' },
