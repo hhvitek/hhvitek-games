@@ -1,6 +1,7 @@
 // Screenshot pass for the games: the agent LOOKS at every game instead of only checking numbers.
 // Run it with the Playwright MCP tool `browser_run_code_unsafe`, parameter filename = tools/shots.js,
-// while a local server runs in the repository root:  node tools/serve.js  (port 8765)
+// while a local server runs in the repository root:  node tools/serve.js  (port 8765). Another port (e.g. two worktrees
+// at once: node tools/serve.js 8771): first navigate the Playwright page to http://localhost:8771/ and the pass uses it.
 // Only some games: first write .playwright-mcp/shots.json = {"ids": ["zavri-cisla"]} (the Write tool), then run this
 // file; without that file every game of games/registry.js is shot (about 3 minutes). Delete the file afterwards.
 // For each game, at 393×873: start, after a few real taps (`play` below), settings, help; at 393×760: start.
@@ -10,7 +11,8 @@
 // 1024×768) a play area that reaches under the bars, a cut or broken title, or a scrolling page.
 // A new game adds its own entry to `play` (a move, the hint, a tap on the hinted piece and on its place).
 async (page) => {
-  const BASE = 'http://localhost:8765/';
+  // the server of the page that is open (localhost or 127.0.0.1, any port), else port 8765
+  const BASE = (/^http:\/\/(localhost|127\.0\.0\.1):\d+\//.exec(page.url()) || ['http://localhost:8765/'])[0];
   const OUT = '.playwright-mcp/';
   const errors = [];
   page.on('pageerror', e => errors.push(`${page.url().split('/').slice(-2)[0]}: ${e.message}`));

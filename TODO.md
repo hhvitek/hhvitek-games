@@ -32,16 +32,14 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 
 ## Ideas
 
-New games (user's picks 2026-11-12 from the genres popular on Google Play; our own version of the genre, never a copy of a particular game's name, look or levels):
+New games (user's picks 2026-11-12 from the genres popular on Google Play; our own version of the genre, never a copy of a particular game's name, look or levels; the user does not want Člověče, nezlob se nor any game that needs a word list):
 - [ ] Šroubky (screw / nut sort): coloured nuts are moved between bolts until every bolt holds one colour. One of the fastest-growing genres in 2026 and very simple; the puzzle generation and Zpět can largely come from Přelévání.
 - [ ] Šipky ven (arrow puzzle): pieces with arrows on the board; a tapped piece slides off in its arrow's direction when nothing blocks the way; clear the board. In fashion now, simple rules, puzzles can be generated so they are always solvable.
 - [ ] Šestiúhelníkové věžičky (hexa sort): stacks of hexagons are placed on the board and matching colours move together; ten of one colour vanish. A bit more complex.
 - [ ] Malované křížovky (nonograms): fill cells by the numbers to reveal a picture. Very popular, good for a finger; the pictures (a cat, the castle…) drawn by the agent.
 - [ ] Hledání min (minesweeper): simple and well known; the first tap never explodes.
-- [ ] Člověče, nezlob se against 1–3 computer opponents (the shared `games/_opponents/opponents.js`, as in Kostky and Prší).
 - [ ] Generál (dice with a score sheet: three of a kind, straight, generál) against the computer; goes well with Kostky.
 - [ ] Reversi, Mlýn, Lodě against the computer; follow on from Dáma and Piškvorky.
-- [ ] Osmisměrka (word search) or Šibenice (hangman): need a Czech word list of our own (written by the agent), so more work.
 
 - [ ] Patnáctka: a picture variant (a photo cut into tiles). Needs larger images than the shared ones (about 132×176 px).
 - [ ] Mahjong: a closer photo of the Náchod castle (the current one is a telephoto view from a distance).

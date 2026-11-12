@@ -67,7 +67,7 @@ process.stdin.on('end', () => {
   });
   if (stale.length) reasons.push(
     `Not looked at since the last change: ${stale.join(', ')}. Run tools/shots.js for them (a headless Playwright MCP only, see Testing in CLAUDE.md: ` +
-    `write .playwright-mcp/shots.json = ${JSON.stringify({ ids: stale })}, a local server on port 8765, browser_run_code_unsafe with filename tools/shots.js) and look at ` +
+    `write .playwright-mcp/shots.json = ${JSON.stringify({ ids: stale })}, a local server on port 8765 or the port you were given, browser_run_code_unsafe with filename tools/shots.js) and look at ` +
     `.playwright-mcp/sheet-<id>.png; keep the pictures until the change is committed (this check reads their time). ` +
     `Or say in your answer why it is not needed (e.g. a comment-only change).`);
 

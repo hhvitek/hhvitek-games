@@ -223,7 +223,7 @@ takes no focus), but it cannot register service workers: test offline mode and u
 the browser keeps serving the cached version until `version.js` changes: to see a launcher change there, raise the
 version in `version.js` temporarily (then press "Zkontrolovat aktualizace") and restore the file afterwards.
 
-First `node tools/check.js` (must pass). Then Playwright against a local server (`node tools/serve.js` in the repo root, port 8765; Node only, so it is the same on Linux and Windows); the Playwright MCP blocks `file:///`, so check that nothing needs a server (no `fetch` of local files):
+First `node tools/check.js` (must pass). Then Playwright against a local server (`node tools/serve.js` in the repo root, port 8765, or another port when two worktrees test at once: `tools/shots.js` uses the server of the page open in Playwright; Node only, so it is the same on Linux and Windows); the Playwright MCP blocks `file:///`, so check that nothing needs a server (no `fetch` of local files):
 - the screenshot pass: `tools/shots.js` (run it with `browser_run_code_unsafe`, `filename: tools/shots.js`; for some games only, first write `.playwright-mcp/shots.json` = `{"ids": [...]}` and delete it afterwards). It removes the service worker first (opening the launcher installs `sw.js`, which then serves old files from its cache), takes the start, a few real taps (its `play` steps), settings, help and the 393×760 start of each game, and makes `.playwright-mcp/sheet-<id>.png`,
 - really look at the sheets with the Read tool: a script that only checks numbers misses layout problems (an empty half of the screen, tiny dice pips),
 - sizes 393×873, 412×915, 393×760 (and extreme game settings): fits, no horizontal scroll,

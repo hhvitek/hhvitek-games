@@ -42,7 +42,8 @@ Add an entry for `<id>` to `play` in `tools/shots.js`: a move, the hint (if any)
 
 ## 5. Check
 - `node tools/check.js <id>` must pass.
-- Start a server in the repo root (`node tools/serve.js`, port 8765), write `.playwright-mcp/shots.json` = `{"ids": ["<id>"]}`,
+- Start a server in the repo root (`node tools/serve.js`, port 8765; another port when told so, e.g. `node tools/serve.js 8771`,
+  then first navigate the Playwright page to `http://localhost:8771/` so the pass uses that server), write `.playwright-mcp/shots.json` = `{"ids": ["<id>"]}`,
   run the Playwright MCP tool `browser_run_code_unsafe` with `filename: tools/shots.js`, delete `shots.json`.
   Use the project's headless Playwright MCP from `.mcp.json` (see "Playwright" in CLAUDE.md), never a visible
   browser window. Use it while building the game too, not only at this step.
