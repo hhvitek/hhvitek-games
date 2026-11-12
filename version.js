@@ -1,7 +1,16 @@
 // The app version, shown in the launcher's Nastavení and used by sw.js to name its cache.
 // Written by tools/release.js from CHANGELOG.md: never edit by hand.
-globalThis.APP_VERSION = { version: '1.0.12', date: '2026-11-12' };
+globalThis.APP_VERSION = { version: '1.0.13', date: '2026-11-12' };
 globalThis.APP_CHANGES = [
+  {
+    "version": "1.0.13",
+    "date": "2026-11-12",
+    "items": [
+      "Nová hra Paprsek: otáčej zrcadly a doveď paprsky světla do terčů; barevné paprsky se mísí.",
+      "Nová hra Kulička: nakláněj telefon a doveď kuličku bludištěm do cíle, nebo ji posílej šipkami. Po pádu do díry začíná kulička znovu od startu.",
+      "Cesta ven: úroveň vybraná v Nastavení po vyřešené úloze se po zavření a otevření hry opravdu spustí."
+    ]
+  },
   {
     "version": "1.0.12",
     "date": "2026-11-12",
