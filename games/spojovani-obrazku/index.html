@@ -571,7 +571,7 @@ function validGame(x) {
     if (!okR(x.r0)) x.r0 = x.r.slice();
     if (!Number.isInteger(x.seed)) x.seed = rnd(2 ** 31);
     if (!Number.isInteger(x.seed0)) x.seed0 = x.seed;
-    // {p:[a,b]} = a pair taken away, {s,r,seed} = a shuffle (the faces, ranks and seed before it)
+    // {p:[a,b]} = a pair taken away, {s,r,seed,m} = a shuffle (the faces, ranks, seed and "mixed" before it; older saves lack m)
     const okI = i => Number.isInteger(i) && i >= 0 && i < n;
     const okH = h => h && (Array.isArray(h.p) ? h.p.length === 2 && okI(h.p[0]) && okI(h.p[1]) && h.p[0] !== h.p[1] && !x.a[h.p[0]] && !x.a[h.p[1]]
       : okF(h.s) && okR(h.r) && Number.isInteger(h.seed));
@@ -719,7 +719,7 @@ function undo() {
   if (!G.hist.length) { toast('Zatím není co vrátit'); return; }
   const h = G.hist.pop();
   if (h.p) G.a[h.p[0]] = G.a[h.p[1]] = 1;
-  else { G.f = h.s; G.r = h.r; G.seed = h.seed; }
+  else { G.f = h.s; G.r = h.r; G.seed = h.seed; if (typeof h.m === 'boolean') G.mixed = h.m; } // an undone shuffle no longer counts as one
   G.status = 'playing'; G.sel = -1; hintPair = hintLine = null;
   buzz(); save(); render();
   if (!h.p) toast('Zamíchání je vrácené');
@@ -741,7 +741,7 @@ function doShuffle() {
   }
   const f = G.f.slice(), r = G.r.slice();
   for (let i = 0; i < G.a.length; i++) if (G.a[i]) { f[i] = d.f[i]; r[i] = d.r[i]; }
-  G.hist.push({ s: G.f, r: G.r, seed: before });
+  G.hist.push({ s: G.f, r: G.r, seed: before, m: G.mixed }); // m: shuffled before, so Zpět can take "mixed" back too
   G.f = f; G.r = r; G.sel = -1; G.mixed = true; hintPair = hintLine = null;
   buzz(); save(); render();
   toast('Kameny jsou zamíchané. Teď to jde dohrát.');

@@ -4333,19 +4333,36 @@ const A = KockaArt(), I = KockaInput(), E = KockaEngine();
 let S, G;
 const now = () => (window.__kockaNow != null ? window.__kockaNow : Date.now()); // tests may move the clock (setNow)
 function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
-function save() {
+// ahead: how she will be while the game is closed (see forecast), written when the page is left
+function save(ahead) {
   if (!G) return;
   try {
     localStorage.setItem(KEY, JSON.stringify({ v: 1, settings: S, st: G.st, unread: G.unread || 0, view: G.view, her: G.her, seat: G.seat || null }));
     const w = E.wants(G.st), h = E.health(G.st);
     // contract: "Rozehráno" while she wants something or is ill
     if (w || h.ill) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
-    localStorage.setItem(MOOD, JSON.stringify({ name: G.st.name, mood: E.mood(G.st), wants: w, ill: h.ill }));
+    localStorage.setItem(MOOD, JSON.stringify({ name: G.st.name, mood: E.mood(G.st), wants: w, ill: h.ill, ahead: Array.isArray(ahead) ? ahead : [] }));
   } catch (e) {} // rule: storage may be full or blocked; the game goes on
+}
+// Her needs go on while the game is closed, but the launcher cannot run the engine: so on leaving, a copy of her is
+// moved on in time (every half hour for 12 h, then every hour up to 48 h) and every change of what the launcher shows
+// is written as [time, mood, wants, ill]; the launcher takes the last one that has come (its line and the badge).
+function forecast() {
+  const out = [], t0 = G.st.t, status = st => { const h = E.health(st); return [E.mood(st), E.wants(st), h.ill]; };
+  let last = JSON.stringify(status(G.st));
+  try {
+    for (let h = 0.5; h <= 48; h += h < 12 ? 0.5 : 1) {
+      const c = JSON.parse(JSON.stringify(G.st)), t = t0 + h * 3600000;
+      E.advance(c, t);
+      const s = status(c), k = JSON.stringify(s);
+      if (k !== last) { out.push([t, ...s]); last = k; }
+    }
+  } catch (e) {} // a forecast is only a nicety for the launcher
+  return out;
 }
 // leaving the page: saved only while our save is still there (the launcher's "Smazat uložená data" or a test may
 // have removed it meanwhile; then the next start is a fresh one)
-function saveKept() { let kept = false; try { kept = localStorage.getItem(KEY) !== null; } catch (e) {} if (kept) save(); }
+function saveKept() { let kept = false; try { kept = localStorage.getItem(KEY) !== null; } catch (e) {} if (kept) save(forecast()); }
 function normalize(s) {
   s.name = typeof s.name === 'string' && s.name.trim() ? s.name.trim().slice(0, 20) : DEFAULTS.name;
   if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
@@ -6469,15 +6486,19 @@ applySettings();
 drawDiaryPill();
 layout();
 drawRoom();
-// pamlsky from the launcher link (SPEC §10): the launcher counts them in n, the game takes them over
-try {
-  const T = JSON.parse(localStorage.getItem(TREATS));
-  if (T && typeof T === 'object' && Number(T.n) > 0) {
-    const r = E.consumeTreats(G.st, Number(T.n), now()); G.st = r.st;
-    localStorage.setItem(TREATS, JSON.stringify({ n: 0, day: T.day, taken: (Number(T.taken) || 0) + Number(T.n) }));
-    handle(r.events);
-  }
-} catch (e) {}
+// pamlsky from the launcher link (SPEC §10): the launcher counts them in n, the game takes them over; also when the
+// page comes back from the browser's back-forward cache or another app (games may have been played meanwhile)
+function takeTreats() {
+  try {
+    const T = JSON.parse(localStorage.getItem(TREATS));
+    if (T && typeof T === 'object' && Number(T.n) > 0) {
+      const r = E.consumeTreats(G.st, Number(T.n), now()); G.st = r.st;
+      localStorage.setItem(TREATS, JSON.stringify({ n: 0, day: T.day, taken: (Number(T.taken) || 0) + Number(T.n) }));
+      handle(r.events);
+    }
+  } catch (e) {}
+}
+takeTreats();
 tick();
 update(true);
 try { if (sessionStorage.getItem(RESTARTED)) { sessionStorage.removeItem(RESTARTED); toast(`Všechno začíná znovu. ${G.st.name} je u tebe doma.`, 3200); } } catch (e) {}
@@ -6485,10 +6506,10 @@ setInterval(() => { if (!document.hidden && nothingOpen()) tick(); }, 30000);
 setInterval(lifeTick, 3000);   // she moves on by herself now and then
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) { tick(); if (hiddenAt && Date.now() - hiddenAt > 60000 && !K.gone && !E.health(G.st).asleep) { say('trill'); bubble('Mrrp!'); } }
+  if (!document.hidden) { takeTreats(); tick(); if (hiddenAt && Date.now() - hiddenAt > 60000 && !K.gone && !E.health(G.st).asleep) { say('trill'); bubble('Mrrp!'); } }
   else { hiddenAt = Date.now(); saveKept(); I.sound.purr(false); }
 });
-addEventListener('pageshow', () => tick());
+addEventListener('pageshow', () => { takeTreats(); tick(); });
 addEventListener('pagehide', saveKept);
 
 window.addEventListener('resize', layout);

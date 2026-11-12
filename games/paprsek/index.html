@@ -69,7 +69,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 #app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 
-/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings; touch targets ≥ 45 px) ---------- */
+/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings) ---------- */
 .topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
 .topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
 .pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
@@ -793,7 +793,7 @@ function layout() {
   const b = $('#board'), bs = getComputedStyle(b);
   const w = b.clientWidth - parseFloat(bs.paddingLeft) - parseFloat(bs.paddingRight);   // without the side margin (--gut)
   const h = b.clientHeight - parseFloat(bs.paddingTop) - parseFloat(bs.paddingBottom) - 2; // 12 px above and below
-  // rule: cells ≥ 45 px (0.8 cm) on every phone; only a very short window (desktop) shrinks them further rather than overflow
+  // cells as big as the room allows (up to 96 px); a very short window (desktop) shrinks them down to 24 px rather than overflow
   const cs = Math.max(24, Math.min(96, Math.floor(Math.min(w, h) / (G.n + 0.3))));
   root.style.setProperty('--cs', cs + 'px');
   // the frame takes what is left, so the board reaches the side margin (but stays a thin frame)

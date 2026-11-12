@@ -322,11 +322,23 @@ function giveCatTreat() {
 }
 const CAT_WANTS = { food: 'má hlad', water: 'chce pít', litter: 'potřebuje uklidit záchod', coat: 'chce učesat', love: 'chce pomazlit', fun: 'se nudí' };
 const CAT_MOODS = { happy: 'je šťastná', calm: 'je spokojená', grumpy: 'je mrzutá', sad: 'je smutná' };
-function renderCat() {
-  const el = document.getElementById('catLine');
+// How she is now: the state at Kočka's last save, moved on by its forecast (ahead = [[time, mood, wants, ill], …],
+// written when Kočka is left: her needs go on while the game is closed). null = no valid data.
+function catNow() {
   let M = null;
   try { M = JSON.parse(store.get('games.kocka.mood')); } catch (e) {}
-  if (!L.catLink || !hasCat() || !M || typeof M !== 'object') { el.hidden = true; return; }
+  if (!M || typeof M !== 'object') return null;
+  const c = { name: M.name, mood: M.mood, wants: M.wants, ill: M.ill }, t = Date.now();
+  if (Array.isArray(M.ahead)) for (const a of M.ahead) {
+    if (!Array.isArray(a) || a.length !== 4 || !Number.isFinite(a[0])) continue;
+    if (a[0] > t) break;
+    [c.mood, c.wants, c.ill] = a.slice(1);
+  }
+  return c;
+}
+function renderCat() {
+  const el = document.getElementById('catLine'), M = catNow();
+  if (!L.catLink || !hasCat() || !M) { el.hidden = true; return; }
   const name = typeof M.name === 'string' && M.name.trim() ? M.name.trim().slice(0, 20) : 'Koxa';
   const what = M.ill ? 'je nemocná' : CAT_WANTS[M.wants] || CAT_MOODS[M.mood] || 'je doma';
   el.innerHTML = `<img src="games/kocka/icon.svg" alt=""><span><b>${esc(name)}</b> ${what}</span>`;
@@ -517,13 +529,15 @@ function render() {
   renderDate(); renderCat();
   const games = (globalThis.GAMES || []).map((g, i) => ({ ...g, order: i, plays: plays(g.id) }));
   if (!games.length) { grid.outerHTML = '<p class="empty">Zatím tu nejsou žádné hry.</p>'; return; }
+  // Kočka's badge ("Rozehráno" while she wants something or is ill) follows her forecast, not only her last save
+  const cat = catNow(), badge = id => id === 'kocka' && cat ? !!(cat.wants || cat.ill) : inProgress(id);
   // Most played first (counting only games opened MIN_PLAYS_TO_RISE+ times); ties keep the order from registry.js
   games.sort((a, b) => rank(b) - rank(a) || a.order - b.order);
   grid.innerHTML = games.map(g => `
     <a class="game" href="games/${encodeURIComponent(g.id)}/index.html?menu" data-id="${esc(g.id)}">
       <span class="icon"><img src="games/${encodeURIComponent(g.id)}/icon.svg" alt="" onerror="this.replaceWith(document.createTextNode('${esc(g.name).charAt(0)}'))"></span>
       <span class="text">
-        <span class="top"><span class="name">${esc(g.name)}</span>${inProgress(g.id) ? '<span class="badge">Rozehráno</span>' : ''}${L.showPlays && g.plays ? `<span class="plays">hráno ${g.plays}×</span>` : ''}</span>
+        <span class="top"><span class="name">${esc(g.name)}</span>${badge(g.id) ? '<span class="badge">Rozehráno</span>' : ''}${L.showPlays && g.plays ? `<span class="plays">hráno ${g.plays}×</span>` : ''}</span>
         ${g.description ? `<span class="desc">${esc(g.description)}</span>` : ''}
       </span>
       <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
@@ -614,7 +628,7 @@ render();
 // (back-forward cache): refresh badges and order. A normal load has already rendered above.
 window.addEventListener('pageshow', e => { if (e.persisted) render(); });
 // The launcher left open overnight: the date is right again when it is shown
-document.addEventListener('visibilitychange', () => { if (!document.hidden) renderDate(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { renderDate(); renderCat(); } });
 
 // Hosted version: install to home screen and offline mode for all games
 if (/^https?:$/.test(location.protocol)) {

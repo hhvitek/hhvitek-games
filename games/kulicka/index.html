@@ -70,7 +70,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 #app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;
   padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 
-/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings; touch targets ≥ 45 px) ---------- */
+/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings) ---------- */
 .topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
 .topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
 .pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
@@ -604,7 +604,7 @@ function pushPoint(i) {
   if (M.hole[i] || i === M.goal || G.history[G.history.length - 1] === i) return;
   G.history.push(i);
   if (G.history.length > HIST_MAX) G.history.shift();
-  save(); render();
+  save(); updateUndo(); // only Zpět changes here (called while the ball rolls: no full render)
 }
 // a fall sends the ball back to the start (user's decision): Zpět then has nothing before it
 function fall(i) {
@@ -762,7 +762,7 @@ function render() {
     : 'Nakloň telefon a kulička pojede';
   updateUndo();
   $('#btnHint').classList.toggle('dim', G.status !== 'playing');
-  if (M) drawBase();
+  if (M && (M !== baseM || S.theme !== baseTheme)) drawBase(); // the walls are drawn again only for a new maze or theme (layout() redraws on resize)
   // the arrows came or went: the board gets the room that is left now (and the toast its place)
   if (arrows !== lastArrows) { lastArrows = arrows; layout(); }
 }
@@ -785,7 +785,9 @@ function layout() {
 }
 const toCells = ctx => ctx.setTransform(dpr * cs, 0, 0, dpr * cs, dpr * WALL * cs, dpr * WALL * cs);
 function circle(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); }
+let baseM = null, baseTheme = '';  // what the base canvas shows now
 function drawBase() {
+  baseM = M; baseTheme = S.theme;
   const ctx = ctxBase;
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cvBase.width, cvBase.height);
   toCells(ctx);

@@ -186,7 +186,7 @@ v okně), Koxa's birthday = adoption day each year (dortík, bond +10).
 - `games.kocka.state` = `{ v: 1, settings, st }`; settings whitelist `DEFAULTS = { name: 'Koxa', theme, vibrate,
   sound, mic, tilt }`; `st` validated field by field (bad field → default; Koxa herself is never reset by a bad field).
 - `games.kocka.inProgress` = '1' while she wants something or is ill.
-- `games.kocka.mood` = `{ name, mood, wants, ill }` written on every save (read by the launcher, link on only).
+- `games.kocka.mood` = `{ name, mood, wants, ill, ahead }` written on every save (read by the launcher, link on only; the badge always). `ahead` = `[[time, mood, wants, ill], …]` is filled when the page is left: a copy of her moved on up to 48 h, every change of what the launcher shows.
 - `games.kocka.treats` = number written by the launcher (link on): +1 per other game started from the launcher,
   at most 5 a day (`{ n, day }`); the game moves them into pamlsky on opening.
 - Launcher: Nastavení card "Koxa a ostatní hry" (switch, off by default) in `games.launcher.settings`; when on, the

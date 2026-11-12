@@ -1068,6 +1068,7 @@ $('#btnZoom').addEventListener('click', () => {
   const dist = () => { const [a, b] = [...pts.values()]; return Math.hypot(a.x - b.x, a.y - b.y) || 1; };
   const midp = () => { const [a, b] = [...pts.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
   view.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return; // only the main mouse button plays (a right click is no move)
     try { view.setPointerCapture(e.pointerId); } catch (er) {}
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pts.size === 1) { start = { x: e.clientX, y: e.clientY, tx, ty }; moved = false; pinch = null; }
