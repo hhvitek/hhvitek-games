@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="cs" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f4ebdf">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Šipky ven">
+<title>Šipky ven</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f4ebdf'/%3E%3Cpath d='M14 32h26' stroke='%234a2c17' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M52 32 36 20v24z' fill='%234a2c17'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
+[data-theme="paper"]{--page:#f4ebdf;--bar:rgba(122,69,32,.06);--line:#e6d8c6;--ink:#2b1a0e;--soft:#6f5a48;--chip:#fff;--chip-line:#e6d8c6;--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--undo-bg:rgba(122,69,32,.1);
+  --field:#fbf6ee;--field-line:#e6d8c6;--dot:rgba(122,69,32,.3);--arrow:#4a2c17;--hintc:#1f5fd6;--bump:#c62828;--heart:#c62828}
+[data-theme="night"]{--page:#131c2e;--bar:rgba(0,0,0,.25);--line:rgba(255,255,255,.08);--ink:#eef3fb;--soft:#b9c6dc;--chip:rgba(255,255,255,.12);--chip-line:rgba(255,255,255,.2);--btn:#ffd166;--btn-ink:#2a2000;--btn-sh:#a3842a;--undo-bg:rgba(0,0,0,.28);
+  --field:#1c2842;--field-line:rgba(255,255,255,.1);--dot:rgba(255,255,255,.24);--arrow:#e9eefb;--hintc:#ffd166;--bump:#ff6b6b;--heart:#ff6b6b}
+[data-theme="sky"]{--page:#d8e9f5;--bar:rgba(20,60,100,.06);--line:#bcd5e8;--ink:#12324a;--soft:#3f6580;--chip:#fff;--chip-line:#bcd5e8;--btn:#1d5f8f;--btn-ink:#fff;--btn-sh:#0f3a5a;--undo-bg:rgba(20,60,100,.08);
+  --field:#f3f9fd;--field-line:#bcd5e8;--dot:rgba(20,60,100,.28);--arrow:#1d4f75;--hintc:#e07a00;--bump:#d32f2f;--heart:#d32f2f}
+
+/* ---------- Base ---------- */
+:root{--gut:12px} /* one side margin: bar buttons, board and bottom buttons line up (the safe areas are on #app) */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{background:var(--page);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+/* rule: 100dvh + safe areas, the board is sized from the room that is left (see layout()) */
+#app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings) ---------- */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line);text-decoration:none}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:20px}
+/* narrow phones (360 px): less room between the bar buttons, so the name fits whole at 18 px; the outer margin stays */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:18px;letter-spacing:0}
+  .stats{font-size:18px}
+}
+
+/* ---------- Score row (rule: info goes on its own row, not in place of the name) ---------- */
+.stats{flex:none;text-align:center;padding:8px var(--gut) 0;font-size:20px;font-weight:700;line-height:1.3;color:var(--soft);white-space:nowrap}
+.stats b{color:var(--ink)}
+.hearts{display:inline-flex;gap:3px;vertical-align:-3px}
+.hearts svg{width:20px;height:20px}
+.hearts .full{fill:var(--heart)}
+.hearts .empty{fill:none;stroke:var(--soft);stroke-width:2.2px}
+
+/* ---------- GAME: the board ---------- */
+#board{flex:1;min-height:0;display:grid;place-items:center;padding:12px var(--gut)} /* rule: at least 12 px between the board and the rows above and below, on every screen */
+#field{width:var(--fw);height:var(--fh);display:grid;place-items:center;background:var(--field);border-radius:16px;box-shadow:inset 0 0 0 2px var(--field-line)}
+#field.won{box-shadow:inset 0 0 0 4px var(--btn)}
+#svg{display:block;width:var(--sw);height:var(--sh);overflow:hidden;cursor:pointer}
+
+/* the dots and the arrows (SVG, 100 units per cell; px in SVG are its units) */
+.fld{fill:var(--field);stroke:var(--field-line);stroke-width:6px}
+.dot{fill:var(--dot)}
+.pc{color:var(--arrow)}
+.pc .sh{fill:none;stroke:currentColor;stroke-width:19px;stroke-linecap:round}
+.pc .hd{fill:currentColor;stroke:currentColor;stroke-width:7px;stroke-linejoin:round}
+.pc .halo{display:none;fill:color-mix(in srgb,var(--hintc) 16%,transparent);stroke:var(--hintc);stroke-width:7px}
+.pc.hint{color:var(--hintc)}
+.pc.hint .halo{display:inline;animation:blink 1.1s ease-in-out infinite}
+.pc.bump{color:var(--bump)}
+.pc.blk .halo{display:inline;fill:color-mix(in srgb,var(--bump) 14%,transparent);stroke:var(--bump)}
+.pc.out{pointer-events:none}
+@keyframes blink{50%{stroke-opacity:.3;fill-opacity:.4}}
+
+/* ---------- Bottom buttons ---------- */
+.tray{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px var(--gut) 12px;background:var(--bar);border-top:1px solid var(--line)}
+#hint{text-align:center;font-size:19px;font-weight:600;line-height:1.3;color:var(--ink);min-height:25px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row{display:flex;gap:10px}
+.undo{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:16px;font-size:21px;font-weight:800;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.undo svg{flex:none;width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.go{flex:1.4 1 0;min-width:0;display:flex;align-items:center;justify-content:center;gap:8px;height:64px;border-radius:16px;font-size:21px;font-weight:800;background:var(--btn);color:var(--btn-ink);box-shadow:0 4px 0 var(--btn-sh);white-space:nowrap}
+.go:active{transform:translateY(3px);box-shadow:0 1px 0 var(--btn-sh)}
+.go svg{flex:none;width:26px;height:26px;fill:currentColor}
+/* an unavailable action: dimmed, explains itself when tapped */
+.undo.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
+
+@media (max-height:800px){
+  .topbar{height:54px}
+  .stats{padding-top:6px}
+  .tray{gap:6px;padding:6px var(--gut) 10px}
+  .undo,.go{height:58px}
+}
+@media (prefers-reduced-motion:reduce){
+  .pc.hint .halo{animation:none}
+}
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+/* rule: the head with Zpět and the game name stays at the top while scrolling */
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);margin-top:16px}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink)}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.stepper{display:flex;align-items:center;gap:12px}
+.sbtn{flex:none;width:60px;height:60px;border-radius:50%;background:var(--pbtn);color:var(--pbtn-ink);font-size:36px;font-weight:700;line-height:1;display:grid;place-items:center;box-shadow:0 3px 0 var(--pbtn-sh)}
+.sbtn.dim{background:var(--psw);box-shadow:none;color:var(--psoft)}
+.sval{flex:1;text-align:center;font-size:25px;font-weight:800}
+.sval small{display:block;font-size:20px;letter-spacing:2px;color:var(--pbtn)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+/* a small board in the theme tiles and the help pictures */
+.mini{display:flex;justify-content:center;align-items:center;gap:10px;border-radius:12px;background:var(--page);padding:8px}
+.mini svg{display:block;flex:none}
+.tile .mini svg{width:92px;height:69px}
+.help .mini{margin:10px 0 4px;flex-wrap:wrap}
+.help .mini svg{width:120px;height:90px}
+.help .mini .arrow{font-size:20px;font-weight:800;line-height:1.2;text-align:center;color:var(--ink)}
+.stars{font-size:40px;letter-spacing:6px;color:var(--pbtn);margin:-4px 0 6px}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.mcard h2{font-size:28px;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+/* the toast sits over the row of bottom buttons (toast()), never over the board: a big board fills the screen;
+   one or two lines fit the row (keep the messages short) */
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 12px);transform:translateX(-50%);z-index:60;width:max-content;max-width:min(90vw,520px);background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;line-height:1.25;padding:10px 18px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="app">
+  <header class="topbar">
+    <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Šipky ven</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <div class="stats" id="stats">&nbsp;</div>
+  <main id="board"><div id="field"><svg id="svg" role="img" aria-label="Plocha se šipkami"></svg></div></main>
+  <footer class="tray">
+    <div id="hint"></div>
+    <div class="row">
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnGo" class="go"></button>
+    </div>
+  </footer>
+</div>
+<!-- Every layer is shown and hidden only through its hidden attribute; every screen has a [data-act="close"] button (Back button contract) -->
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+<script>
+/* ---------- Visible height ---------- */
+// The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
+// enough: some browsers report it taller than what is visible (the app installed by Brave on Android counted the
+// status and navigation bars too and hid the bottom buttons). visualViewport follows what is shown; it is measured
+// again on every change and shortly after loading (a browser bar that hides itself may change it without an event),
+// and a changed height makes the game lay itself out again through a resize event.
+(() => {
+  const root = document.documentElement;
+  let last = 0;
+  const measure = () => {
+    const vv = window.visualViewport;
+    const h = Math.round(vv ? vv.height * vv.scale : innerHeight);
+    if (!(h > 0) || h === last) return;
+    const first = !last; last = h;
+    root.style.setProperty('--app-h', h + 'px');
+    if (!first) dispatchEvent(new Event('resize'));
+  };
+  measure();
+  addEventListener('resize', measure);
+  if (window.visualViewport) visualViewport.addEventListener('resize', measure);
+  addEventListener('pageshow', measure);
+  [100, 500, 1500].forEach(ms => setTimeout(measure, ms));
+  // TEMPORARY (2026-11-08): what this page measured, shown in the launcher's Nastavení → "Údaje o obrazovce"
+  setTimeout(() => { try {
+    const p = document.createElement('div'); p.style.cssText = 'position:absolute;left:-50px;top:0;width:1px;height:100dvh;padding-bottom:env(safe-area-inset-bottom)';
+    document.body.appendChild(p); const dvh = Math.round(p.getBoundingClientRect().height - parseFloat(getComputedStyle(p).paddingBottom)), sb = Math.round(parseFloat(getComputedStyle(p).paddingBottom)); p.remove();
+    const vv = window.visualViewport;
+    localStorage.setItem('games.launcher.diag', JSON.stringify({ page: location.pathname.split('/').slice(-2, -1)[0], vv: vv ? Math.round(vv.height) : null, inner: innerHeight, client: root.clientHeight, dvh, sb, appH: last, app: Math.round(document.getElementById('app').getBoundingClientRect().height) }));
+  } catch (e) {} }, 2000);
+})();
+
+/* ---------- Engine ---------- */
+// Everything about the puzzle that does not touch the page (tested in Node by extracting this block).
+// A board is cols × rows cells; mask[c] = 1 for the cells of its shape (drawn), the pieces are straight arrows
+// [x, y, d, len]: (x, y) is the head cell, d the direction (0 up, 1 right, 2 down, 3 left), len the cells it covers
+// backwards from the head. A piece can go out when every cell from its head to the edge of the board is empty.
+function SipkyEngine() {
+  const DX = [0, 1, 0, -1], DY = [-1, 0, 1, 0];
+  const MAX_LEVEL = 999, MAX_COLS = 10, MAX_ROWS = 14;
+
+  function rng(seed) {
+    let a = seed >>> 0;
+    const f = () => { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    f.int = k => Math.floor(f() * k);
+    f.shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = f.int(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    return f;
+  }
+  const seedOf = level => (Math.imul(level, 2654435761) ^ 0x5a1f7e) >>> 0;
+
+  // the cells of a piece, head first
+  function cellsOf(p) {
+    const out = [];
+    for (let k = 0; k < p[3]; k++) out.push([p[0] - DX[p[2]] * k, p[1] - DY[p[2]] * k]);
+    return out;
+  }
+  // occ[c] = index + 1 of the piece on cell c (0 = empty); gone[i] true = piece i is already out
+  function occupancy(B, gone) {
+    const occ = new Int16Array(B.cols * B.rows);
+    B.pieces.forEach((p, i) => { if (!gone || !gone[i]) for (const [x, y] of cellsOf(p)) occ[y * B.cols + x] = i + 1; });
+    return occ;
+  }
+  // what is in the way of piece i: { by: the index of the first piece on its way out (-1 = free), dist: free cells before it }
+  function blocker(B, occ, i) {
+    const p = B.pieces[i], dx = DX[p[2]], dy = DY[p[2]];
+    let x = p[0] + dx, y = p[1] + dy, dist = 0;
+    while (x >= 0 && y >= 0 && x < B.cols && y < B.rows) {
+      const o = occ[y * B.cols + x];
+      if (o) return { by: o - 1, dist };
+      x += dx; y += dy; dist++;
+    }
+    return { by: -1, dist };
+  }
+  // cells from the head to the edge (how far it slides out)
+  const exitDist = (B, p) => [p[1], B.cols - 1 - p[0], B.rows - 1 - p[1], p[0]][p[2]] + 1;
+  const isFree = (B, occ, i) => blocker(B, occ, i).by < 0;
+  // every piece that can go out now
+  function freePieces(B, gone) {
+    const occ = occupancy(B, gone), out = [];
+    B.pieces.forEach((p, i) => { if (!gone[i] && isFree(B, occ, i)) out.push(i); });
+    return out;
+  }
+  // Removing a piece never blocks another, so taking any free piece is always right: the board can be cleared exactly
+  // when taking free pieces one by one empties it. Returns { order, rounds } or null (stuck).
+  function solve(B, gone0) {
+    const gone = gone0 ? gone0.slice() : B.pieces.map(() => false), order = [];
+    let rounds = 0;
+    for (;;) {
+      const f = freePieces(B, gone);
+      if (!f.length) break;
+      rounds++;
+      for (const i of f) { gone[i] = true; order.push(i); }
+    }
+    return gone.every(Boolean) ? { order, rounds } : null;
+  }
+
+  /* ---------- Levels ---------- */
+  // from which level: board size, the longest piece, how many pieces point inwards at first (more = harder).
+  // The board stops growing at 10 × 14, so a cell stays about 0.6 cm wide on the phone (a miss costs a mistake);
+  // after that the arrows get longer, more levels have a cut shape and more tries are made for a harder board.
+  const PLAN = [
+    { from: 1, cols: 3, rows: 4, len: 2, inward: .2 },
+    { from: 2, cols: 4, rows: 5, len: 2, inward: .3 },
+    { from: 4, cols: 5, rows: 6, len: 3, inward: .4 },
+    { from: 7, cols: 6, rows: 8, len: 3, inward: .5 },
+    { from: 11, cols: 7, rows: 9, len: 3, inward: .55 },
+    { from: 16, cols: 8, rows: 10, len: 4, inward: .6 },
+    { from: 22, cols: 8, rows: 11, len: 4, inward: .65 },
+    { from: 29, cols: 9, rows: 12, len: 4, inward: .7 },
+    { from: 37, cols: 10, rows: 13, len: 4, inward: .7 },
+    { from: 47, cols: 10, rows: 14, len: 5, inward: .75 },
+    { from: 60, cols: 10, rows: 14, len: 6, inward: .8, tries: 16 },
+  ];
+  const SHAPES = ['rect', 'corners', 'octagon', 'waist', 'hole'];
+  function planFor(level) {
+    let P = PLAN[0];
+    for (const q of PLAN) if (level >= q.from) P = q;
+    // from level 5 every third level has another shape than a rectangle, from level 60 every second
+    const cut = level >= 60 ? level % 2 === 0 : level >= 5 && level % 3 === 2;
+    const shape = cut ? SHAPES[1 + (level / (level >= 60 ? 2 : 3) | 0) % (SHAPES.length - 1)] : 'rect';
+    return Object.assign({ shape }, P);
+  }
+  function makeMask(cols, rows, shape) {
+    const m = Array(cols * rows).fill(1);
+    const edge = (x, y) => Math.min(x, cols - 1 - x) + Math.min(y, rows - 1 - y);
+    const k = Math.max(1, Math.floor(Math.min(cols, rows) / 3));
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      const c = y * cols + x, dx = Math.min(x, cols - 1 - x), dy = Math.min(y, rows - 1 - y);
+      if (shape === 'corners' && edge(x, y) < 1) m[c] = 0;
+      if (shape === 'octagon' && edge(x, y) < k) m[c] = 0;
+      if (shape === 'waist' && dx < 1 && dy >= Math.floor(rows / 3)) m[c] = 0;
+      if (shape === 'hole' && dx >= Math.floor((cols - 1) / 2) - (cols > 7 ? 1 : 0) && dy >= Math.floor((rows - 1) / 2) - (rows > 9 ? 1 : 0)) m[c] = 0;
+    }
+    return m;
+  }
+
+  // lengths: mostly 2 and 3
+  const LEN_W = [0, 2, 4, 4, 3, 2, 2];
+  function pickLen(r, max) {
+    let sum = 0;
+    for (let l = 1; l <= max; l++) sum += LEN_W[l];
+    let v = r() * sum;
+    for (let l = 1; l <= max; l++) { v -= LEN_W[l]; if (v < 0) return l; }
+    return 1;
+  }
+  // One try: the shape is covered with straight pieces, then pointed (partly inwards); while taking free pieces gets
+  // stuck, a stuck piece is turned round to a free way out (or, rarely, left out), so the result can always be cleared.
+  function build(P, r) {
+    const { cols, rows } = P, mask = makeMask(cols, rows, P.shape), used = new Uint8Array(cols * rows), pieces = [];
+    const cellsInMask = [];
+    for (let c = 0; c < cols * rows; c++) if (mask[c]) cellsInMask.push(c);
+    for (const c of r.shuffle(cellsInMask)) {
+      if (used[c]) continue;
+      const x0 = c % cols, y0 = c / cols | 0;
+      let len = pickLen(r, P.len), horiz = r() < .5, best = null;
+      for (let tries = 0; tries < 2 && !best; tries++, horiz = !horiz) {
+        // the longest run of free cells through c in this orientation, then a piece of up to len cells inside it
+        const dx = horiz ? 1 : 0, dy = horiz ? 0 : 1, ok = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows && mask[y * cols + x] && !used[y * cols + x];
+        let a = 0, b = 0;
+        while (a < len - 1 && ok(x0 - dx * (a + 1), y0 - dy * (a + 1))) a++;
+        while (b < len - 1 && ok(x0 + dx * (b + 1), y0 + dy * (b + 1))) b++;
+        const L = Math.min(len, a + b + 1);
+        if (L >= 2 || tries === 1) {
+          const start = -Math.min(a, L - 1) + r.int(Math.min(a, L - 1) - Math.max(0, L - 1 - b) + 1);
+          best = { dx, dy, s: start, L };
+        }
+      }
+      const { dx, dy, s, L } = best;
+      // the piece covers c + s .. c + s + L - 1 along (dx, dy); its head is at one end
+      const cx = x0 + dx * s, cy = y0 + dy * s;
+      for (let k = 0; k < L; k++) used[(cy + dy * k) * cols + cx + dx * k] = 1;
+      let d;
+      if (L === 1) d = r.int(4);
+      else d = dx ? (r() < .5 ? 1 : 3) : (r() < .5 ? 0 : 2);
+      // inwards: towards the middle of the board
+      if (r() < P.inward) {
+        const mx = cx + dx * (L - 1) / 2, my = cy + dy * (L - 1) / 2;
+        if (L === 1 ? r() < .5 : dx) d = mx < (cols - 1) / 2 ? 1 : mx > (cols - 1) / 2 ? 3 : d;
+        else d = my < (rows - 1) / 2 ? 2 : my > (rows - 1) / 2 ? 0 : d;
+      }
+      const forward = d === 1 || d === 2;  // head at the far end
+      const hx = forward ? cx + dx * (L - 1) : cx, hy = forward ? cy + dy * (L - 1) : cy;
+      pieces.push([hx, hy, d, L]);
+    }
+    const B = { cols, rows, mask, pieces };
+    // repair: take free pieces; when stuck, turn a piece so its way out is free
+    const gone = pieces.map(() => false);
+    let dropped = 0;
+    for (;;) {
+      const f = freePieces(B, gone);
+      if (f.length) { for (const i of f) gone[i] = true; continue; }
+      const left = [];
+      gone.forEach((g, i) => { if (!g) left.push(i); });
+      if (!left.length) break;
+      const occ = occupancy(B, gone), cand = [];
+      for (const i of left) {
+        const p = pieces[i];
+        for (const d of p[3] === 1 ? [0, 1, 2, 3] : [(p[2] + 2) % 4]) {
+          if (d === p[2]) continue;
+          const tail = cellsOf(p)[p[3] - 1];
+          const q = [tail[0], tail[1], d, p[3]];
+          if (p[3] === 1) { q[0] = p[0]; q[1] = p[1]; }
+          const save = pieces[i]; pieces[i] = q;
+          if (isFree(B, occ, i)) cand.push([i, q]);
+          pieces[i] = save;
+        }
+      }
+      if (cand.length) { const [i, q] = cand[r.int(cand.length)]; pieces[i] = q; continue; }
+      // nothing can turn out: leave one piece out (an empty place on the board)
+      const i = left[r.int(left.length)];
+      gone[i] = true; pieces[i] = null; dropped++;
+    }
+    B.pieces = pieces.filter(Boolean);
+    return { B, dropped };
+  }
+
+  // the level of a number: always the same for the same number, and it can always be cleared (seed: only for the tests)
+  function generate(level, seed = seedOf(level)) {
+    const P = planFor(level);
+    let best = null;
+    for (let attempt = 0; attempt < (P.tries || 8); attempt++) {
+      const r = rng(seed + attempt * 104729);
+      const { B, dropped } = build(P, r);
+      const sol = solve(B);
+      if (!sol) continue;
+      const free0 = freePieces(B, B.pieces.map(() => false)).length / B.pieces.length;
+      // fewer pieces free at the start and more rounds = harder; empty places are not wanted
+      const score = sol.rounds - free0 * 10 - dropped * 3;
+      if (!best || score > best.score) best = { score, B, rounds: sol.rounds, free0, dropped };
+    }
+    const B = best.B;
+    return { level, seed, cols: B.cols, rows: B.rows, mask: B.mask.join(''), pieces: B.pieces, rounds: best.rounds, free0: best.free0, dropped: best.dropped, shape: P.shape };
+  }
+
+  // a saved board must be whole: pieces inside, straight, not overlapping
+  function validBoard(B) {
+    if (!B || !Number.isInteger(B.cols) || !Number.isInteger(B.rows) || B.cols < 2 || B.rows < 2 || B.cols > MAX_COLS || B.rows > MAX_ROWS) return false;
+    if (!Array.isArray(B.pieces) || !B.pieces.length || B.pieces.length > B.cols * B.rows) return false;
+    const seen = new Uint8Array(B.cols * B.rows);
+    for (const p of B.pieces) {
+      if (!Array.isArray(p) || p.length !== 4 || !p.every(Number.isInteger) || p[2] < 0 || p[2] > 3 || p[3] < 1 || p[3] > 6) return false;
+      for (const [x, y] of cellsOf(p)) {
+        if (x < 0 || y < 0 || x >= B.cols || y >= B.rows || seen[y * B.cols + x]) return false;
+        seen[y * B.cols + x] = 1;
+      }
+    }
+    return true;
+  }
+
+  return { DX, DY, MAX_LEVEL, MAX_COLS, MAX_ROWS, PLAN, rng, seedOf, cellsOf, occupancy, blocker, exitDist, isFree, freePieces, solve, planFor, makeMask, generate, validBoard };
+}
+/* ---------- Engine end ---------- */
+
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+const E = SipkyEngine();
+const DX = E.DX, DY = E.DY;
+
+/* ---------- Settings and storage ---------- */
+const ID = 'sipky-ven';                                   // = the folder name
+const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const THEMES = [
+  { id: 'paper', name: 'Papír', meta: '#f4ebdf' },
+  { id: 'night', name: 'Noc',   meta: '#131c2e' },
+  { id: 'sky',   name: 'Obloha', meta: '#d8e9f5' },
+];
+// lives: 0 = no limit (mistakes are only counted), else the level starts over after that many bumps
+const LIVES = [0, 3, 1];
+const DEFAULTS = { theme: 'paper', lives: 0, vibrate: true };
+const MAX_LEVEL = E.MAX_LEVEL;
+
+/* ---------- State ---------- */
+// level = the level to play next (after a win the following one), top = the highest level open to play,
+// bests[level] = the fewest slips (bumps + hints) a win of that level had. G = the level being played:
+// the board (cols, rows, mask, pieces), history = the pieces taken out in order, bumps, hints, lives, status,
+// hint = the arrow Poradit framed (kept until it goes out or Zpět, saved with the game).
+let S, G, level = 1, top = 1, bests = {}, openLevel = null;
+const isFresh = () => G.history.length === 0 && G.bumps === 0 && G.hints === 0;
+const inProgress = () => G && G.status === 'playing' && !isFresh();
+function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, level, top, bests, game: G }));
+    if (inProgress()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {} // rule: storage may be full or blocked; the game goes on
+}
+const clampLevel = v => Math.max(1, Math.min(MAX_LEVEL, v));
+const count = (v, max) => Number.isInteger(v) && v >= 0 && v <= max ? v : 0;
+// the pieces already out (from the history)
+function goneOf(g) { const gone = g.pieces.map(() => false); for (const i of g.history) gone[i] = true; return gone; }
+const leftCount = () => G.pieces.length - G.history.length;
+function statusOf(g) {
+  if (g.history.length === g.pieces.length) return 'won';
+  return g.lives && g.bumps >= g.lives ? 'lost' : 'playing';
+}
+// rule: corrupted data never crashes the game; a broken history keeps only its valid start; the end comes from the board
+function validGame(g) {
+  try {
+    if (!g || typeof g !== 'object' || !Number.isInteger(g.level) || g.level < 1 || g.level > MAX_LEVEL) return false;
+    if (!E.validBoard(g) || typeof g.mask !== 'string' || g.mask.length !== g.cols * g.rows || !/^[01]+$/.test(g.mask)) return false;
+    if (!E.solve(g)) return false;                       // a board that cannot be cleared is not taken
+    if (!Number.isInteger(g.seed)) g.seed = E.seedOf(g.level);
+    // the history: each piece once, each free when it went out; from the first wrong entry on it is dropped
+    const hist = Array.isArray(g.history) ? g.history : [], gone = g.pieces.map(() => false), ok = [];
+    for (const i of hist) {
+      if (!Number.isInteger(i) || i < 0 || i >= g.pieces.length || gone[i]) break;
+      if (!E.isFree(g, E.occupancy(g, gone), i)) break;
+      gone[i] = true; ok.push(i);
+    }
+    g.history = ok;
+    g.bumps = count(g.bumps, 9999); g.hints = count(g.hints, 9999);
+    if (!LIVES.includes(g.lives)) g.lives = 0;
+    g.status = statusOf(g);
+    // the framed arrow must still be on the board, free and the game going on; else no frame (the hint stays counted)
+    if (!(Number.isInteger(g.hint) && g.status === 'playing' && E.freePieces(g, goneOf(g)).includes(g.hint))) g.hint = null;
+    return true;
+  } catch (e) { return false; }
+}
+function normalize(s) {
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  s.lives = +s.lives;
+  if (!LIVES.includes(s.lives)) s.lives = DEFAULTS.lives;
+  s.vibrate = !!s.vibrate;
+}
+// starts level lv from its beginning (the same board every time for the same number)
+function newGame(lv, msg) {
+  const r = E.generate(clampLevel(lv));
+  G = { level: r.level, seed: r.seed, cols: r.cols, rows: r.rows, mask: r.mask, pieces: r.pieces, history: [], bumps: 0, hints: 0, lives: S.lives, status: 'playing', hint: null };
+  level = G.level;
+  save(); build(); render();
+  if (msg) toast(msg);
+}
+// the same level again: every arrow back, mistakes and hints back to zero, the lives from the settings
+function restart(msg) {
+  // a new object, so a dialog still waiting for the old attempt (whenFree) is dropped
+  G = Object.assign({}, G, { history: [], bumps: 0, hints: 0, lives: S.lives, status: 'playing', hint: null });
+  buzz(); save(); build(); render();
+  toast(msg || `Úroveň ${G.level} začíná znovu`);
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) {
+  // Chrome refuses vibration (with a console error) before the first real tap
+  if (!S.vibrate || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+  try { navigator.vibrate(ms); } catch (e) {}
+}
+let toastT;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  // over the row of bottom buttons (taps go through it), never over the hint line or the board
+  const row = $('.tray .row').getBoundingClientRect();
+  if (row.height) { t.style.top = Math.round(row.top) + 'px'; t.style.bottom = 'auto'; }
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('');
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+  $('#modal').hidden = false;
+}
+const plural = (n, one, few, many) => n === 1 ? one : n >= 2 && n <= 4 ? few : many;
+const livesWord = n => `${n} ${plural(n, 'život', 'životy', 'životů')}`;
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+// stars of a win: no bump and no hint = 3, at most two together = 2, else 1
+const starsOf = slips => slips === 0 ? 3 : slips <= 2 ? 2 : 1;
+const starText = n => '★'.repeat(n) + '☆'.repeat(3 - n);
+
+/* ---------- Drawing (SVG, 100 units per cell) ---------- */
+// one arrow, drawn pointing right around the centre of its head cell and turned to its direction
+function pieceSVG(p, i, cls) {
+  const [x, y, d, len] = p, back = (len - 1) * 100;
+  return `<g class="pc${cls ? ' ' + cls : ''}" data-i="${i}"><g transform="translate(${x * 100 + 50} ${y * 100 + 50}) rotate(${(d - 1) * 90})">`
+    + `<rect class="halo" x="${-back - 46}" y="-46" width="${back + 92}" height="92" rx="20"/>`
+    + `<line class="sh" x1="${-back - 30}" y1="0" x2="0" y2="0"/><path class="hd" d="M40 0-2-25V25Z"/></g></g>`;
+}
+function dotsSVG(cols, rows, mask) {
+  let s = '';
+  for (let c = 0; c < cols * rows; c++) if (mask[c] === '1' || mask[c] === 1) s += `<circle class="dot" cx="${c % cols * 100 + 50}" cy="${(c / cols | 0) * 100 + 50}" r="7"/>`;
+  return s;
+}
+// a small board for the help and the theme tiles; cls = { index: class } marks pieces
+function miniSVG(cols, rows, pieces, cls = {}) {
+  return `<svg viewBox="-20 -20 ${cols * 100 + 40} ${rows * 100 + 40}" aria-hidden="true"><rect class="fld" x="-17" y="-17" width="${cols * 100 + 34}" height="${rows * 100 + 34}" rx="30"/>`
+    + dotsSVG(cols, rows, Array(cols * rows).fill(1)) + pieces.map((p, i) => p ? pieceSVG(p, i, cls[i]) : '').join('') + '</svg>';
+}
+// the help pictures: the arrow up on the right can go out; the long one is blocked by it until it is gone
+const EX = [[3, 1, 0, 1], [2, 1, 1, 2], [1, 0, 3, 2], [0, 2, 2, 1], [2, 2, 3, 2]];
+const exWithout = k => EX.map((p, i) => i === k ? null : p);
+
+/* ---------- Rendering ---------- */
+let pcsEl = null;          // the <g> that holds the arrows of the board
+const leaving = {};        // arrows still sliding out (index: element), so Zpět can take one back at once
+function applyLook() {
+  root.dataset.theme = S.theme;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+}
+const pieceEl = i => pcsEl && pcsEl.querySelector(`.pc[data-i="${i}"]:not(.out)`);
+// the board is drawn once per level; a move only takes an arrow out or puts one back
+function build() {
+  const sv = $('#svg'), gone = goneOf(G);
+  sv.setAttribute('viewBox', `0 0 ${G.cols * 100} ${G.rows * 100}`);
+  sv.innerHTML = `<g>${dotsSVG(G.cols, G.rows, G.mask)}</g><g class="pcs">${G.pieces.map((p, i) => gone[i] ? '' : pieceSVG(p, i)).join('')}</g>`;
+  pcsEl = sv.querySelector('.pcs');
+  for (const k of Object.keys(leaving)) delete leaving[k];
+  layout();
+}
+const HEART = '<path d="M12 21s-7.5-4.6-9.6-9.3C1 8.4 3 5 6.4 5c2.1 0 3.6 1.2 5.6 3.3C14 6.2 15.5 5 17.6 5 21 5 23 8.4 21.6 11.7 19.5 16.4 12 21 12 21z"/>';
+function render() {
+  applyLook();
+  if (!G) return;
+  const won = G.status === 'won', lost = G.status === 'lost';
+  pcsEl.querySelectorAll('.pc.hint').forEach(el => el.classList.remove('hint'));
+  if (G.hint !== null) { const el = pieceEl(G.hint); if (el) el.classList.add('hint'); }
+  $('#field').classList.toggle('won', won);
+  const left = G.lives ? Math.max(0, G.lives - G.bumps) : 0;
+  const tail = G.lives
+    ? `<span class="hearts" aria-label="Životy: ${left} z ${G.lives}">${Array.from({ length: G.lives }, (_, k) => `<svg viewBox="0 0 24 24" class="${k < left ? 'full' : 'empty'}">${HEART}</svg>`).join('')}</span>`
+    : `Chyby: <b>${G.bumps}</b>`;
+  $('#stats').innerHTML = `Úroveň <b>${G.level}</b> · Zbývá <b>${leftCount()}</b> · ${tail}`;
+  $('#hint').textContent = won ? `Vyřešeno! ${starText(starsOf(G.bumps + G.hints))}`
+    : lost ? 'Došly životy, zkus to znovu'
+    : G.hint !== null ? 'Ťukni na šipku v rámečku'
+    : 'Pusť ven šipku s volnou cestou';
+  $('#btnUndo').classList.toggle('dim', won || lost || !G.history.length);
+  $('#btnGo').innerHTML = won ? nextLabel() : lost ? 'Zkusit znovu'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2zm-3 18h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/></svg>Poradit';
+  layout(); // the score row may have changed its height (hearts)
+}
+// rule: the board size comes from the room that is left, so it fits without scrolling
+const PAD = 10; // the field around the cells
+function layout() {
+  if (!G) return;
+  const b = $('#board'), bs = getComputedStyle(b);
+  const w = b.clientWidth - parseFloat(bs.paddingLeft) - parseFloat(bs.paddingRight);   // without the side margin (--gut)
+  const h = b.clientHeight - parseFloat(bs.paddingTop) - parseFloat(bs.paddingBottom) - 2; // 12 px above and below
+  // cells as big as the room allows (up to 84 px); a very short window (desktop) shrinks them down to 12 px rather than overflow
+  const cs = Math.max(12, Math.min(84, Math.floor(Math.min((w - 2 * PAD) / G.cols, (h - 2 * PAD) / G.rows))));
+  root.style.setProperty('--sw', G.cols * cs + 'px');
+  root.style.setProperty('--sh', G.rows * cs + 'px');
+  // the field reaches the side margin; it is only as tall as the cells need
+  root.style.setProperty('--fw', Math.max(w, 0) + 'px');
+  root.style.setProperty('--fh', Math.min(Math.max(h, 0), G.rows * cs + 2 * PAD) + 'px');
+}
+
+/* ---------- Animations ---------- */
+const at = (d, u) => `translate(${DX[d] * u}px,${DY[d] * u}px)`;
+// slides an arrow out over the edge (or, back = true, in from there)
+function slide(el, p, back) {
+  const far = (E.exitDist(G, p) + p[3]) * 100 + 60, ms = reducedMotion() ? 0 : Math.min(560, 170 + far * .28);
+  if (!ms || !el.animate) return null;
+  const frames = [{ transform: at(p[2], 0), opacity: 1 }, { transform: at(p[2], far * .7), opacity: 1, offset: .7 }, { transform: at(p[2], far), opacity: 0 }];
+  return el.animate(back ? frames.reverse() : frames, { duration: ms, easing: back ? 'cubic-bezier(0,0,.4,1)' : 'cubic-bezier(.5,0,1,1)' });
+}
+// a bump: forward up to what is in the way and back
+function bumpAnim(el, p, dist) {
+  if (reducedMotion() || !el.animate) return;
+  const u = dist * 100 + 34;
+  el.animate([{ transform: at(p[2], 0) }, { transform: at(p[2], u), offset: .45 }, { transform: at(p[2], u - 12), offset: .6 }, { transform: at(p[2], 0) }],
+    { duration: 300 + dist * 45, easing: 'ease-in-out' });
+}
+function flash(el, cls, ms) {
+  if (!el) return;
+  el.classList.add(cls);
+  setTimeout(() => el.classList.remove(cls), ms);
+}
+
+/* ---------- Playing ---------- */
+const nextLabel = () => G.level < MAX_LEVEL ? 'Další úroveň' : 'Hrát znovu';
+const wonToast = () => toast(`Vyřešeno – ťukni na ${nextLabel()}`);
+const lostToast = () => toast('Došly životy – ťukni na Zkusit znovu');
+function takeOut(i) {
+  const p = G.pieces[i];
+  G.history.push(i);
+  if (G.hint === i) G.hint = null;   // another arrow out keeps the frame: the framed one stays free
+  hideToast();                       // an older toast (a bump, the hint) no longer fits
+  const el = pieceEl(i);
+  if (el) {
+    el.classList.remove('hint', 'bump', 'blk'); el.classList.add('out');
+    pcsEl.appendChild(el);                          // above the others while it slides
+    const a = slide(el, p, false);
+    if (a) { leaving[i] = el; a.onfinish = () => { el.remove(); if (leaving[i] === el) delete leaving[i]; }; }
+    else el.remove();
+  }
+  G.status = statusOf(G);
+  if (G.status === 'won') { win(); return; }
+  buzz(); save(); render();
+}
+function bump(i, b) {
+  G.bumps++;
+  const el = pieceEl(i);
+  if (el) { bumpAnim(el, G.pieces[i], b.dist); flash(el, 'bump', 650); }
+  flash(pieceEl(b.by), 'blk', 650);
+  buzz(70);
+  G.status = statusOf(G);
+  save(); render();
+  if (G.status === 'lost') { lose(); return; }
+  toast(G.lives ? `Náraz! ${G.lives - G.bumps === 1 ? 'Zbývá poslední život' : `Zbývají ${livesWord(G.lives - G.bumps)}`}` : 'Náraz! Té šipce stojí v cestě jiná', 1800);
+}
+// a tap on arrow i: out when its way is free, else it bumps and stays
+function tapPiece(i) {
+  if (!G || !Number.isInteger(i) || i < 0 || i >= G.pieces.length) return;
+  if (G.status === 'won') { wonToast(); return; }
+  if (G.status === 'lost') { lostToast(); return; }
+  const gone = goneOf(G);
+  if (gone[i]) return;
+  const b = E.blocker(G, E.occupancy(G, gone), i);
+  if (b.by < 0) takeOut(i); else bump(i, b);
+}
+function win() {
+  const slips = G.bumps + G.hints, prev = bests[G.level];
+  if (prev === undefined || slips < prev) bests[G.level] = slips;
+  top = Math.max(top, clampLevel(G.level + 1));
+  level = clampLevel(G.level + 1);
+  hideToast(); save(); render();
+  buzz([40, 60, 40, 60, 80]);
+  // rule: an end dialog only for the game that ended (not over a new game started meanwhile)
+  whenFree(G, reducedMotion() ? 400 : 900, () => showWin(prev));
+}
+function showWin(prev) {
+  const slips = G.bumps + G.hints, st = starsOf(slips);
+  const how = !slips ? 'bez jediné chyby a bez rady' : `Chyby: ${G.bumps}, rady: ${G.hints}`;
+  showModal(`<h2>Výborně!</h2><div class="stars" aria-label="Hvězdy: ${st} ze 3">${starText(st)}</div><p>Úroveň ${G.level} je vyřešená${slips ? '.</p><p>' + how + '.' : ' ' + how + '.'}</p>`
+    + (prev === undefined || slips >= prev ? '' : st > starsOf(prev) ? `<p>Víc hvězd než minule (${starText(starsOf(prev))}).</p>`
+      : `<p>Lepší než minule: chyb a rad ${slips}, minule ${prev}.</p>`),
+    [{ text: nextLabel(), fn: () => newGame(level) }, { text: 'Zavřít', cls: 'alt' }]);
+}
+function lose() {
+  hideToast();
+  buzz([80, 60, 120]);
+  whenFree(G, reducedMotion() ? 300 : 700, () => G.status === 'lost' && showModal(`<h2>Došly životy</h2><p>Šipka narazila už ${G.bumps}×. Úroveň ${G.level} můžeš zkusit znovu od začátku.</p>`,
+    [{ text: 'Zkusit znovu', fn: () => restart() }, { text: 'Prohlédnout', cls: 'alt' }]));
+}
+// the arrow under a tap: the one on the tapped cell, else the nearest one a little beside it (small cells)
+function pieceAt(ux, uy) {
+  const gone = goneOf(G), occ = E.occupancy(G, gone);
+  const cx = Math.floor(ux / 100), cy = Math.floor(uy / 100);
+  // a tap on a cell: its arrow, or nothing on an empty cell (never the neighbour: a bump would count)
+  if (cx >= 0 && cy >= 0 && cx < G.cols && cy < G.rows) return occ[cy * G.cols + cx] - 1;
+  // just outside the cells (the field's edge): the nearest arrow close to it
+  let best = -1, bd = 30;
+  G.pieces.forEach((p, i) => {
+    if (gone[i]) return;
+    for (const [x, y] of E.cellsOf(p)) {
+      const dx = Math.max(0, Math.abs(ux - (x * 100 + 50)) - 50), dy = Math.max(0, Math.abs(uy - (y * 100 + 50)) - 50), dd = Math.hypot(dx, dy);
+      if (dd < bd) { bd = dd; best = i; }
+    }
+  });
+  return best;
+}
+// on the whole field, so a tap just beside the cells still finds the arrow next to it
+$('#field').addEventListener('click', e => {
+  if (!G) return;
+  const r = $('#svg').getBoundingClientRect();
+  if (!r.width || !r.height) return;
+  const i = pieceAt((e.clientX - r.left) / r.width * G.cols * 100, (e.clientY - r.top) / r.height * G.rows * 100);
+  if (i >= 0) tapPiece(i);
+});
+// rule: Undo ("Zpět") puts the last arrow back; mistakes and hints stay counted
+$('#btnUndo').addEventListener('click', () => {
+  if (G.status === 'won') { wonToast(); return; }
+  if (G.status === 'lost') { lostToast(); return; }
+  if (!G.history.length) { toast('Zatím není co vrátit'); return; }
+  const i = G.history.pop(); G.hint = null;   // the arrow put back may stand in the framed one's way
+  hideToast();
+  if (leaving[i]) { leaving[i].getAnimations().forEach(a => a.cancel()); leaving[i].remove(); delete leaving[i]; }
+  pcsEl.insertAdjacentHTML('beforeend', pieceSVG(G.pieces[i], i));
+  slide(pieceEl(i), G.pieces[i], true);
+  G.status = statusOf(G);
+  buzz(); save(); render();
+});
+// Poradit: an arrow that can go out now; a tap on it takes it out (frame, class hint)
+function freeNow() { return E.freePieces(G, goneOf(G)); }
+$('#btnGo').addEventListener('click', () => {
+  if (G.status === 'won') { newGame(level); return; }
+  if (G.status === 'lost') { restart(); return; }
+  if (G.hint === null) {
+    const f = freeNow();
+    if (!f.length) { toast('Poradit se teď nepovedlo, zkus Zpět'); return; }
+    G.hint = f[0]; G.hints++;
+    save();
+  }
+  hideToast(); buzz(8); render(); // the hint line says what to do
+});
+// rule: a new game in the middle of one asks first. Nová hra = this level again from its start; after a win the next level
+$('#btnNew').addEventListener('click', () => {
+  if (G.status === 'won') { newGame(level); return; }
+  if (G.status === 'lost') { restart(); return; }
+  if (inProgress()) {
+    showModal(`<h2>Začít znovu?</h2><p>Úroveň ${G.level} začne od začátku, všechny šipky se vrátí a chyby se vynulují.</p>`, [
+      { text: 'Ano, od začátku', fn: () => restart() },
+      { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else toast(`Úroveň ${G.level} je na začátku, jinou vybereš v Nastavení`, 3200);
+});
+
+/* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
+const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
+const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+const LIVES_TEXT = { 0: ['Bez omezení', 'Nárazy se jen počítají jako chyby.'], 3: ['3 životy', 'Po třetím nárazu začíná úroveň znovu.'], 1: ['1 život', 'Jediný náraz a úroveň začíná znovu.'] };
+function renderSettings() {
+  const solved = Object.keys(bests).length, b = bests[level];
+  const stars = Object.values(bests).reduce((s, v) => s + starsOf(v), 0);
+  // the lives apply from the next game; an untouched level takes them at once (closeSettings)
+  const livesNote = G && S.lives !== G.lives && !isFresh()
+    ? `<div class="notice">Platí od příští hry.${inProgress() ? ' Rozehraná úroveň zůstává.' : ''}</div>` : '';
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Šipky ven<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Úroveň</h3>
+      <div class="field"><div class="stepper">
+        <button class="sbtn${level > 1 ? '' : ' dim'}" data-act="dec" aria-label="Nižší úroveň">−</button>
+        <div class="sval">Úroveň ${level}${b !== undefined ? `<small aria-label="Hvězdy: ${starsOf(b)} ze 3">${starText(starsOf(b))}</small>` : ''}</div>
+        <button class="sbtn${level < top ? '' : ' dim'}" data-act="inc" aria-label="Vyšší úroveň">+</button>
+      </div>
+      <div class="fnote">${b !== undefined ? 'Vyřešeno.' : 'Zatím nevyřešeno.'} Vyřešených úrovní: ${solved}, hvězd: ${stars}${solved ? ` z ${solved * 3}` : ''}. Každá vyřešená úroveň otevře další.</div>
+      ${openLevel !== null && level !== openLevel ? `<div class="notice">Po návratu do hry začne <b>úroveň ${level}</b>${inProgress() ? ' a rozehraná úroveň se ztratí' : ''}.</div>` : ''}
+      </div>
+    </section>
+    <section class="card"><h3>Životy</h3>
+      <div class="field">
+        ${LIVES.map(n => opt('lives:' + n, S.lives === n, LIVES_TEXT[n][0], LIVES_TEXT[n][1])).join('')}
+        ${livesNote}
+      </div>
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="mini" data-theme="${t.id}">${miniSVG(4, 3, EX)}</span>${t.name}</button>`).join('')}</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'dec' || act === 'inc') {
+    const v = level + (act === 'inc' ? 1 : -1);
+    if (v < 1) { toast('Nižší úroveň už není'); return; }
+    if (v > MAX_LEVEL) { toast('Vyšší úroveň už není'); return; }
+    if (v > top) { toast(`Úroveň ${v} se otevře, až vyřešíš úroveň ${top}`); return; }
+    level = v;
+  }
+  else if (act === 'lives') S.lives = +arg;
+  else if (act === 'theme') S.theme = arg;
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí (úrovně zůstávají)'); }
+  normalize(S); buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
+});
+function openSettings() {
+  hideToast(); openLevel = level;
+  renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0;
+}
+// a change of the level starts it after returning and says so; other lives apply to an untouched level at once (rule)
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  const changed = openLevel !== null && level !== openLevel, had = inProgress();
+  openLevel = null;
+  if (changed) { newGame(level, had ? `Začala úroveň ${level}, rozehraná se ztratila` : `Úroveň ${level}`); return; }
+  if (S.lives !== G.lives) {
+    if (isFresh() && G.status === 'playing') { G.lives = S.lives; save(); }
+    else toast('Nové životy platí od příští hry');
+  }
+  render();
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
+function renderHelp() {
+  const th = S.theme;
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Šipky ven<small>Jak hrát</small></h2></div>
+    <section class="card help"><ol>
+      <li><b>Ťukni na šipku.</b> Když jí až k okraji plochy nic nestojí v cestě, vyjede ven ve směru, kam ukazuje.
+        <div class="mini" data-theme="${th}">${miniSVG(4, 3, EX, { 0: 'hint' })}<span class="arrow">ťuk<br>→</span>${miniSVG(4, 3, exWithout(0))}</div></li>
+      <li>Když jí v cestě stojí jiná šipka, <b>narazí</b> a zůstane na místě. To je chyba.
+        <div class="mini" data-theme="${th}">${miniSVG(4, 3, EX, { 1: 'bump', 0: 'blk' })}</div></li>
+      <li>Vyveď ven <b>všechny šipky</b>. Každá úroveň jde vyřešit a pořadí je na tobě: šipka, která jednou může ven, může i později.</li>
+      <li>Za vyřešenou úroveň dostaneš hvězdy: <b>★★★</b> bez chyby a bez rady, <b>★★☆</b> nejvýš se dvěma chybami nebo radami dohromady, jinak <b>★☆☆</b>.</li>
+      <li><b>Poradit</b> ukáže v rámečku šipku, která může ven; ťukni na ni. <b>Zpět</b> vrátí poslední šipku na plochu, chyby a rady zůstávají.</li>
+      <li>V Nastavení si můžeš zapnout <b>životy</b>: se třemi nebo s jedním životem začíná úroveň po posledním nárazu znovu.</li>
+      <li>Úrovně jsou postupně větší a těžší: víc šipek, delší šipky a plochy různých tvarů. <b>Nová hra</b> začne úroveň znovu od začátku, po vyřešení přejde na další. Vyřešené úrovně si můžeš znovu zahrát v Nastavení.</li>
+    </ol></section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// rule: ask for persistent storage so the browser does not delete the saved game by itself
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+const saved = load();
+const savedSettings = saved && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+// records: only whole levels with a sensible number of slips
+if (saved && saved.bests && typeof saved.bests === 'object') for (const [k, v] of Object.entries(saved.bests)) {
+  const lv = +k;
+  if (Number.isInteger(lv) && lv >= 1 && lv <= MAX_LEVEL && Number.isInteger(v) && v >= 0 && v < 10000) bests[lv] = v;
+}
+const solvedTop = Object.keys(bests).reduce((m, k) => Math.max(m, +k + 1), 1);
+top = clampLevel(Math.max(solvedTop, saved && Number.isInteger(saved.top) ? saved.top : 1));
+// the level to play: the saved one, else the one of the saved game (a broken game is made again from its number)
+const savedLevel = !saved ? 1 : Number.isInteger(saved.level) ? saved.level : saved.game && Number.isInteger(saved.game.level) ? saved.game.level : 1;
+level = Math.min(clampLevel(savedLevel), top);
+// contract: opened from the launcher (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
+applyLook();
+if (saved && validGame(saved.game)) {
+  G = saved.game;
+  if (G.level > top) top = G.level;
+  build();
+  // the level was changed in Settings and the page closed before returning: apply it now, as closing Settings would
+  // (after a win the expected level is the next one, so only a real change in Settings starts another level)
+  if (level !== (G.status === 'won' ? clampLevel(G.level + 1) : G.level)) newGame(level, inProgress() ? `Začala úroveň ${level}, rozehraná se ztratila` : `Úroveň ${level}`);
+  else { if (S.lives !== G.lives && isFresh() && G.status === 'playing') G.lives = S.lives; render(); }
+}
+else newGame(level);
+
+window.addEventListener('resize', layout);
+if (window.visualViewport) visualViewport.addEventListener('resize', layout);
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// For testing: SipkyVen.solve() takes every arrow out in a right order (a win), freeNow() lists the arrows that can go
+window.SipkyVen = { E, tapPiece, freeNow, solve() { const s = E.solve(G, goneOf(G)); if (s) s.order.forEach(i => tapPiece(i)); }, get state() { return { S, G, level, top, bests, hint: G ? G.hint : null }; } };
+})();
+</script>
+</body>
+</html>

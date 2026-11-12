@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- background: the "Papír" theme -->
+  <rect width="512" height="512" fill="#f4ebdf"/>
+  <!-- the field: 4 × 4 cells of 90 (centres x 95…365, y 131…401); dots where an arrow has left -->
+  <rect x="40" y="76" width="380" height="380" rx="34" fill="#fbf6ee" stroke="#e6d8c6" stroke-width="6"/>
+  <g fill="#7a4520" fill-opacity=".3"><circle cx="275" cy="131" r="7"/><circle cx="275" cy="221" r="7"/></g>
+  <!-- the arrows: a shaft and a head each -->
+  <g fill="none" stroke="#4a2c17" stroke-width="17" stroke-linecap="round">
+    <path d="M212 131H95M365 104V221M68 221H185M95 338V311M158 311H275M365 428V311M302 401H95"/>
+  </g>
+  <g fill="#4a2c17" stroke="#4a2c17" stroke-width="6" stroke-linejoin="round">
+    <path d="M59 131L97 109V153Z"/>
+    <path d="M365 257L343 219H387Z"/>
+    <path d="M221 221L183 199V243Z"/>
+    <path d="M95 275L73 313H117Z"/>
+    <path d="M311 311L273 289V333Z"/>
+    <path d="M365 275L343 313H387Z"/>
+    <path d="M59 401L97 379V423Z"/>
+  </g>
+  <!-- the arrow on its way out over the top edge, with speed lines -->
+  <path d="M243 132V176M307 132V176" stroke="#1f5fd6" stroke-opacity=".45" stroke-width="9" stroke-linecap="round"/>
+  <path d="M275 178V61" stroke="#1f5fd6" stroke-width="19" stroke-linecap="round"/>
+  <path d="M275 23L251 64H299Z" fill="#1f5fd6" stroke="#1f5fd6" stroke-width="7" stroke-linejoin="round"/>
+</svg>

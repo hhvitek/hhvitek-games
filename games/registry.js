@@ -19,6 +19,7 @@ globalThis.GAMES = [
   { id: 'hanojske-veze', name: 'Hanojské věže', description: 'Přenes věž z disků na pravou tyč' },
   { id: 'spojovani-cisel', name: 'Spojování čísel', description: 'Posouvej a spojuj stejná čísla' },
   { id: 'cesta-ven', name: 'Cesta ven', description: 'Posouvej auta, ať červené vyjede ven' },
+  { id: 'sipky-ven', name: 'Šipky ven', description: 'Pouštěj šipky z plochy, ať do sebe nenarazí' },
   { id: 'patnactka', name: 'Patnáctka', description: 'Posouvej čísla, až budou po řadě' },
   { id: 'paprsek', name: 'Paprsek', description: 'Otáčej zrcadly a doveď světlo do terčů' },
   { id: 'kulicka', name: 'Kulička', description: 'Nakláněj telefon a doveď kuličku do cíle' },

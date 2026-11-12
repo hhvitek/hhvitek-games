@@ -137,6 +137,8 @@ async (page) => {
     },
     'hanojske-veze': async () => { await tap('[data-r="0"]'); await wait(300); await tap('[data-r="2"]'); await wait(500); await tap('#btnHint'); await wait(500); },
     'spojovani-cisel': async () => { for (const k of ['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp']) { await page.keyboard.press(k); await wait(250); } },
+    // an arrow tapped (out or a bump), then the hint, a tap on the hinted arrow, and the next hint shown
+    'sipky-ven': async () => { await tap('#svg .pc'); await wait(700); await tapButton(/Poradit/); await wait(500); await tap('#svg .pc.hint'); await wait(800); await tapButton(/Poradit/); await wait(500); },
     'cesta-ven': async () => { await tap('#btnGo'); await wait(500); await tap(HINTED); await wait(800); await tap('#btnGo'); await wait(500); },
     // a mirror turned, then the hint, a tap on the hinted mirror, and the next hint shown
     'paprsek': async () => { await tap('#taps .cell[aria-label^="Zrcadlo"]'); await wait(400); await tapButton(/Poradit/); await wait(600); await tap(HINTED); await wait(600); await tapButton(/Poradit/); await wait(600); },
