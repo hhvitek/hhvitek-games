@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.15 – 2026-11-12
+
 - Výběr her: řádek s Koxou i štítek „Rozehráno“ u Kočky ukazují, jak se má teď, ne jak se měla při posledním hraní (třeba že už má hlad).
 - Kočka: pamlsky za ostatní hry dostane i po návratu do hry tlačítkem Zpět, nejen při novém otevření.
 - Spojování obrázků: zamíchání vrácené tlačítkem Zpět se už nepočítá, výhra se pak počítá jako „bez míchání“.

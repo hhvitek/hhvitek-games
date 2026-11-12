@@ -1,7 +1,18 @@
 // The app version, shown in the launcher's Nastavení and used by sw.js to name its cache.
 // Written by tools/release.js from CHANGELOG.md: never edit by hand.
-globalThis.APP_VERSION = { version: '1.0.14', date: '2026-11-12' };
+globalThis.APP_VERSION = { version: '1.0.15', date: '2026-11-12' };
 globalThis.APP_CHANGES = [
+  {
+    "version": "1.0.15",
+    "date": "2026-11-12",
+    "items": [
+      "Výběr her: řádek s Koxou i štítek „Rozehráno“ u Kočky ukazují, jak se má teď, ne jak se měla při posledním hraní (třeba že už má hlad).",
+      "Kočka: pamlsky za ostatní hry dostane i po návratu do hry tlačítkem Zpět, nejen při novém otevření.",
+      "Spojování obrázků: zamíchání vrácené tlačítkem Zpět se už nepočítá, výhra se pak počítá jako „bez míchání“.",
+      "Piškvorky: na počítači značku kreslí jen levé tlačítko myši, pravé už tah neudělá.",
+      "Kulička: plynulejší kutálení na pomalejších telefonech."
+    ]
+  },
   {
     "version": "1.0.14",
     "date": "2026-11-12",
