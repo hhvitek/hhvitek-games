@@ -1,0 +1,989 @@
+<!doctype html>
+<html lang="cs" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<script>
+/* ---------- Error log ---------- */
+(() => {
+  const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
+  const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
+  const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  // the game's last saved state (usually the one before the move that failed), so the error can be repeated
+  function savedState() {
+    if (GAME === 'launcher') return '';
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+  }
+  let writes = 0;
+  function log(type, message, where, stack) {
+    if (writes >= 20) return;
+    writes++;
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    let list = [];
+    try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
+    const last = list[list.length - 1];
+    if (last && last.game === entry.game && last.type === entry.type && last.msg === entry.msg && last.where === entry.where) { last.n = (Number(last.n) || 1) + 1; last.t = entry.t; }
+    else { const s = savedState(); if (s) entry.state = s; list.push(entry); }
+    list = list.slice(-50);
+    // only the newest few entries keep a state, so the log stays small next to the games' own saves
+    let kept = 0;
+    for (let i = list.length - 1; i >= 0; i--) if (list[i].state && ++kept > KEEP_STATES) delete list[i].state;
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { try { list.forEach(x => { delete x.state; }); localStorage.setItem(KEY, JSON.stringify(list)); } catch (e2) {} }
+  }
+  addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
+  addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
+  // test: open any game or the launcher with ?testError to record one test error
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f4ebdf">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Šroubky">
+<title>Šroubky</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2327323d'/%3E%3Crect x='28' y='8' width='8' height='46' rx='4' fill='%23c9d0d6'/%3E%3Crect x='14' y='40' width='36' height='12' rx='2' fill='%231f5fd6'/%3E%3Crect x='14' y='27' width='36' height='12' rx='2' fill='%23ffd31a'/%3E%3C/svg%3E">
+<style>
+/* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
+[data-theme="paper"]{--page:#f4ebdf;--bar:rgba(122,69,32,.08);--line:#e6d8c6;--ink:#2b1a0e;--soft:#6f5a48;--accent:#c0561a;--chip:rgba(122,69,32,.08);--chip-line:rgba(122,69,32,.24);--btn:#7a4520;--btn-ink:#fff;--btn-sh:#3f220e;--undo-bg:rgba(122,69,32,.12);--plate:#cdb79b;--plate-hi:rgba(255,255,255,.45);--plate-lo:rgba(90,50,20,.3)}
+[data-theme="workshop"]{--page:#3b2718;--bar:rgba(0,0,0,.25);--line:rgba(255,255,255,.08);--ink:#f7ecdc;--soft:#dcc6a8;--accent:#ffb347;--chip:rgba(255,255,255,.1);--chip-line:rgba(255,255,255,.2);--btn:#ffb347;--btn-ink:#2a1600;--btn-sh:#a0661a;--undo-bg:rgba(0,0,0,.25);--plate:#6a4a30;--plate-hi:rgba(255,255,255,.18);--plate-lo:rgba(0,0,0,.35)}
+[data-theme="steel"]{--page:#26313c;--bar:rgba(0,0,0,.22);--line:rgba(255,255,255,.08);--ink:#eef3f7;--soft:#b9c7d3;--accent:#7cc4ff;--chip:rgba(255,255,255,.12);--chip-line:rgba(255,255,255,.2);--btn:#e9eef2;--btn-ink:#1f262c;--btn-sh:#8c979f;--undo-bg:rgba(0,0,0,.26);--plate:#465664;--plate-hi:rgba(255,255,255,.2);--plate-lo:rgba(0,0,0,.35)}
+[data-theme="white"]{--page:#ffffff;--bar:rgba(0,0,0,.04);--line:rgba(0,0,0,.1);--ink:#101418;--soft:#4b5560;--accent:#1f5fd6;--chip:rgba(0,0,0,.06);--chip-line:rgba(0,0,0,.25);--btn:#1f5fd6;--btn-ink:#fff;--btn-sh:#123a85;--undo-bg:rgba(0,0,0,.07);--plate:#d3d8dd;--plate-hi:rgba(255,255,255,.7);--plate-lo:rgba(0,0,0,.2)}
+
+/* ---------- Base ---------- */
+:root{--gut:12px;--w:60px;--h:24px} /* --gut: one side margin; top-bar buttons, the bolts and the bottom buttons line up */
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overscroll-behavior:none}
+html{background:var(--page)}
+body{background:var(--page);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;touch-action:manipulation;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+[hidden]{display:none!important}
+/* rule: 100dvh + safe areas, the board is sized from the room that is left (see layout()) */
+#app{height:100vh;height:100dvh;height:var(--app-h,100dvh);max-width:560px;margin:0 auto;display:flex;flex-direction:column;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings) ---------- */
+.topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
+.topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
+.pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line);text-decoration:none}
+.round svg{width:28px;height:28px;fill:currentColor}
+.top-right{flex:none;display:flex;gap:8px}
+.topbar:has(#btnHome:not([hidden])){gap:8px}
+.topbar:has(#btnHome:not([hidden])) h1{font-size:20px}
+/* narrow phones (360 px): less room between the bar buttons, so the name fits whole; the outer margin stays */
+@media (max-width:380px){
+  .topbar,.topbar:has(#btnHome:not([hidden])){gap:4px}
+  .top-right{gap:4px}
+  .pill{padding:0 8px}
+  .topbar:has(#btnHome:not([hidden])) h1{font-size:18px;letter-spacing:0}
+  .act{font-size:16px}
+}
+
+/* ---------- Score row (rule: info goes on its own row, not in place of the name) ---------- */
+.info{flex:none;text-align:center;font-size:19px;font-weight:700;color:var(--soft);padding:6px var(--gut) 0;line-height:26px}
+.info b{color:var(--ink)}
+
+/* ---------- Board: rows of bolts on base plates ---------- */
+.board{flex:1;min-height:0;display:flex;overflow:hidden;padding:12px 0} /* 12 px from the score row and the tray; layout() sizes the bolts inside this padding and inside --gut */
+.rows{margin:auto;display:flex;flex-direction:column;align-items:center;gap:var(--rg,10px)}
+.brow{position:relative;display:flex;justify-content:center}
+.plate{position:absolute;left:calc(var(--w)*.05);right:calc(var(--w)*.05);bottom:0;height:var(--pl);border-radius:calc(var(--w)*.07);background:var(--plate);box-shadow:inset 0 2px 0 var(--plate-hi),inset 0 -3px 0 var(--plate-lo)}
+/* A bolt: the button is the whole column (tap area), drawn from the bottom up: washer (hex head), threaded rod, nuts */
+.bolt{position:relative;display:block;flex:none;width:var(--bw);height:var(--bh);padding:0}
+.bolt::before{content:"";position:absolute;inset:0 calc(var(--w)*.03) calc(var(--pl)*.2);border-radius:calc(var(--w)*.18);pointer-events:none}
+.bolt.sel::before{background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.bolt.dst::before{background:color-mix(in srgb,var(--accent) 16%,transparent);outline:3px dashed var(--accent);outline-offset:-3px}
+.washer{position:absolute;left:50%;bottom:var(--y0);width:calc(var(--w)*1.02);height:var(--wa);margin-left:calc(var(--w)*-.51)}
+.rod{position:absolute;left:50%;bottom:var(--nb);width:calc(var(--w)*.22);height:var(--rod);margin-left:calc(var(--w)*-.11);border-radius:calc(var(--w)*.11) calc(var(--w)*.11) 0 0;
+  background:repeating-linear-gradient(162deg,rgba(0,0,0,.28) 0 1.5px,transparent 1.5px 4.5px),linear-gradient(90deg,#5f676e,#dfe4e8 38%,#b4bcc3 58%,#6a737a);box-shadow:inset 0 0 0 1px rgba(0,0,0,.35)}
+.nut{position:absolute;left:50%;bottom:calc(var(--nb) + var(--k) * var(--h));width:var(--w);height:var(--h);margin-left:calc(var(--w)/-2);overflow:visible;transition:bottom .16s ease-out}
+.nut.up{filter:drop-shadow(0 calc(var(--h)*.18) calc(var(--h)*.14) rgba(0,0,0,.35))}
+.nut .sym{display:none}
+.show-syms .nut .sym{display:inline}
+.acorn{position:absolute;left:50%;bottom:calc(var(--nb) + var(--k) * var(--h) - var(--h)*.05);width:calc(var(--w)*.9);height:calc(var(--w)*.45);margin-left:calc(var(--w)*-.45);overflow:visible}
+.acorn.pop{animation:screw .6s ease-out}
+@keyframes screw{0%{transform:translateY(-140%) scaleX(.55);opacity:0}35%{transform:translateY(-35%) scaleX(1);opacity:1}55%{transform:translateY(-18%) scaleX(.6)}75%{transform:translateY(-6%) scaleX(1)}88%{transform:scaleX(.8)}100%{transform:none}}
+.arrow{position:absolute;left:50%;bottom:calc(var(--nb) + var(--rod) + var(--h)*.4);width:calc(var(--w)*.5);height:calc(var(--w)*.34);margin-left:calc(var(--w)*-.25);fill:none;stroke:var(--accent);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round;animation:bob 1s ease-in-out infinite}
+@keyframes bob{50%{transform:translateY(25%)}}
+.won .bolt{animation:hop .55s ease-in-out 2}
+@keyframes hop{50%{transform:translateY(calc(var(--h)*-.6))}}
+
+/* ---------- Bottom tray ---------- */
+.tray{flex:none;display:flex;flex-direction:column;gap:8px;padding:8px var(--gut) 12px;background:var(--bar);border-top:1px solid var(--line)}
+/* always two lines high: a longer hint wraps instead of being cut, and the board keeps its size when the text changes */
+.hint{display:flex;align-items:center;justify-content:center;text-align:center;font-size:19px;font-weight:600;line-height:24px;height:48px;overflow:hidden;color:var(--ink)}
+.actions{display:flex;gap:10px}
+.act{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:64px;border-radius:16px;font-size:17px;font-weight:800;line-height:1.1;white-space:nowrap;color:var(--ink);background:var(--undo-bg);box-shadow:inset 0 0 0 2px var(--chip-line);transition:transform .06s}
+.act svg{flex:none;width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.act:active{transform:scale(.98)}
+.act.main{background:var(--btn);color:var(--btn-ink);box-shadow:0 4px 0 var(--btn-sh)}
+/* an unavailable action: readable text, no fill, a dashed outline (not only opacity); it explains itself when tapped */
+.act.dim{background:transparent;box-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px}
+.pulse{animation:pulse 1.3s ease-in-out infinite}
+@keyframes pulse{50%{transform:scale(1.04);box-shadow:inset 0 0 0 2px var(--chip-line),0 0 0 4px var(--accent)}}
+
+@media (max-height:800px){
+  .topbar{height:52px}
+  .pill{height:44px}.round{width:44px;height:44px}
+  .topbar h1{font-size:24px}
+  .info{padding-top:4px}
+  .tray{gap:6px;padding:6px var(--gut) 10px}
+  .act{height:58px}
+}
+@media (prefers-reduced-motion:reduce){
+  .nut,.acorn.pop,.arrow,.won .bolt,.pulse{animation:none!important;transition:none!important}
+}
+
+/* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
+.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}
+.screen{position:fixed;inset:0;z-index:20;overflow-y:auto;background:var(--pp);color:var(--pink);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overscroll-behavior:contain}
+.screen-in{max-width:560px;margin:0 auto}
+/* rule: the head with Zpět and the game name stays at the top while scrolling */
+.screen-head{position:sticky;top:0;z-index:2;background:var(--pp);display:flex;align-items:center;gap:14px;padding:calc(env(safe-area-inset-top) + 10px) 0 10px;border-bottom:2px solid var(--pline)}
+.screen-head h2{font-size:26px;line-height:1.15;min-width:0}
+.screen-head h2 small{display:block;font:700 18px system-ui,sans-serif;color:var(--psoft)}
+.back{flex:none;height:52px;padding:0 20px;border-radius:26px;background:var(--pbtn);color:var(--pbtn-ink);font-size:20px;font-weight:700;box-shadow:0 3px 0 var(--pbtn-sh)}
+.big{display:block;width:100%;height:62px;border-radius:18px;font-size:23px;font-weight:800;background:var(--pbtn);color:var(--pbtn-ink);box-shadow:0 4px 0 var(--pbtn-sh);margin-top:16px}
+.big.alt{background:var(--psw);color:var(--pink);box-shadow:0 4px 0 var(--pline)}
+.card{background:var(--pcard);border-radius:18px;padding:16px;margin:16px 0}
+.card h3{font-size:23px;margin-bottom:4px;color:var(--pink)}
+.field{padding:14px 0;border-top:2px solid var(--pline)}
+.card h3 + .field{border-top:0}
+.flabel{font-size:20px;font-weight:700;margin-bottom:6px}
+.fnote{font-size:18px;color:var(--psoft);margin-top:8px;line-height:1.35}
+.opt{display:flex;gap:14px;align-items:flex-start;width:100%;text-align:left;padding:14px;border-radius:16px;border:3px solid var(--pline);margin-top:10px;background:var(--popt);color:var(--pink)}
+.opt[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.radio{flex:none;width:30px;height:30px;border-radius:50%;border:3px solid var(--pbtn);display:grid;place-items:center;margin-top:1px}
+.opt[aria-pressed="true"] .radio::after{content:"";width:14px;height:14px;border-radius:50%;background:var(--pbtn)}
+.opt b{display:block;font-size:20px;margin-bottom:3px}
+.opt .d{font-size:18px;color:var(--psoft);line-height:1.3}
+.trow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.trow .flabel{margin:0}
+.sw{flex:none;min-width:124px;height:54px;border-radius:27px;font-size:19px;font-weight:800;background:var(--psw);color:var(--pink)}
+.sw[aria-pressed="true"]{background:var(--pon);color:var(--pon-ink)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
+.tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
+.tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.swatch{display:flex;align-items:flex-end;justify-content:center;height:96px;border-radius:10px;background:var(--page);box-shadow:inset 0 0 0 1px rgba(0,0,0,.2);overflow:hidden}
+.swatch .brow{margin-bottom:6px}
+.notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
+.link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
+.stat{width:100%;border-collapse:collapse;font-size:18px;margin-top:6px}
+.stat th,.stat td{padding:10px 4px;text-align:right;border-top:2px solid var(--pline)}
+.stat th:first-child,.stat td:first-child{text-align:left}
+.stat thead th{border-top:0;font-size:16px;color:var(--psoft)}
+.help p,.help li{font-size:20px;line-height:1.45}
+.help ol{padding-left:26px}
+.help li{margin:10px 0}
+.modal{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.mcard{width:100%;max-width:380px;background:var(--pp);color:var(--pink);border-radius:22px;padding:24px 20px 20px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.mcard h2{font-size:28px;margin-bottom:10px}
+.mcard p{font-size:20px;line-height:1.4;margin-bottom:12px}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 160px);transform:translateX(-50%);z-index:60;width:max-content;max-width:90vw;background:color-mix(in srgb,var(--ink) 94%,var(--page));color:var(--page);font-size:19px;font-weight:600;line-height:1.35;padding:14px 20px;border-radius:16px;box-shadow:0 6px 20px rgba(0,0,0,.5);text-align:center;transition:opacity .25s;pointer-events:none}
+#toast.hide{opacity:0}
+/* Where supported, the toast text is pushed away from the ink colour, so it stays readable on every theme */
+@supports (color: rgb(from red r g b)){
+  #toast{background:var(--ink);color:color-mix(in srgb,var(--page) 35%,rgb(from var(--ink) calc(255 - r) calc(255 - g) calc(255 - b)))}
+}
+/* Rotate notice: the games are made for a phone held upright. Turned sideways (a short landscape window), a calm
+   notice in the paper look covers the game until the phone is turned back; the game underneath stays as it was. */
+#rotate{display:none}
+@media (orientation:landscape) and (max-height:500px){
+  #rotate{display:flex;position:fixed;inset:0;z-index:1000;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:16px;text-align:center;background:var(--pp);color:var(--pink)}
+  #rotate svg{width:88px;height:88px;fill:none;stroke:var(--pbtn);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+  #rotate b{font:700 26px Georgia,"Times New Roman",serif;color:#5a3214}
+  #rotate span{font-size:20px;color:var(--psoft)}
+}
+</style>
+</head>
+<body>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<!-- the nut drawings, one per colour, filled in by the script (drawDefs) and used by every nut through <use> -->
+<svg id="defs" width="0" height="0" style="position:absolute" aria-hidden="true"></svg>
+<div id="app">
+  <header class="topbar">
+    <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
+    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill">Nová hra</button>
+    <h1>Šroubky</h1>
+    <div class="top-right">
+      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
+      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+    </div>
+  </header>
+  <div class="info" id="info"></div>
+  <main class="board" id="board"><div class="rows" id="rows"></div></main>
+  <footer class="tray">
+    <div class="hint" id="hint"></div>
+    <div class="actions">
+      <button id="btnUndo" class="act"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnRestart" class="act"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12a7.5 7.5 0 1 0 2.2-5.3"/><path d="M4 3.5V9h5.5"/></svg>Od začátku</button>
+      <button id="btnHint" class="act"></button>
+    </div>
+  </footer>
+</div>
+<!-- Every layer is shown and hidden only through its hidden attribute; every screen has a [data-act="close"] button (Back button contract) -->
+<div id="screenSettings" class="screen paper" hidden><div class="screen-in" id="settingsIn"></div></div>
+<div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
+<div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
+<div id="toast" class="hide"></div>
+<script>
+/* ---------- Visible height ---------- */
+// The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
+// enough: some browsers report it taller than what is visible (the app installed by Brave on Android counted the
+// status and navigation bars too and hid the bottom buttons). visualViewport follows what is shown; it is measured
+// again on every change and shortly after loading (a browser bar that hides itself may change it without an event),
+// and a changed height makes the game lay itself out again through a resize event.
+(() => {
+  const root = document.documentElement;
+  let last = 0;
+  const measure = () => {
+    const vv = window.visualViewport;
+    const h = Math.round(vv ? vv.height * vv.scale : innerHeight);
+    if (!(h > 0) || h === last) return;
+    const first = !last; last = h;
+    root.style.setProperty('--app-h', h + 'px');
+    if (!first) dispatchEvent(new Event('resize'));
+  };
+  measure();
+  addEventListener('resize', measure);
+  if (window.visualViewport) visualViewport.addEventListener('resize', measure);
+  addEventListener('pageshow', measure);
+  [100, 500, 1500].forEach(ms => setTimeout(measure, ms));
+  // TEMPORARY (2026-11-08): what this page measured, shown in the launcher's Nastavení → "Údaje o obrazovce"
+  setTimeout(() => { try {
+    const p = document.createElement('div'); p.style.cssText = 'position:absolute;left:-50px;top:0;width:1px;height:100dvh;padding-bottom:env(safe-area-inset-bottom)';
+    document.body.appendChild(p); const dvh = Math.round(p.getBoundingClientRect().height - parseFloat(getComputedStyle(p).paddingBottom)), sb = Math.round(parseFloat(getComputedStyle(p).paddingBottom)); p.remove();
+    const vv = window.visualViewport;
+    localStorage.setItem('games.launcher.diag', JSON.stringify({ page: location.pathname.split('/').slice(-2, -1)[0], vv: vv ? Math.round(vv.height) : null, inner: innerHeight, client: root.clientHeight, dvh, sb, appH: last, app: Math.round(document.getElementById('app').getBoundingClientRect().height) }));
+  } catch (e) {} }, 2000);
+})();
+
+(() => {
+'use strict';
+const $ = s => document.querySelector(s);
+const root = document.documentElement;
+
+/* ---------- Settings and storage ---------- */
+const ID = 'sroubky';                                     // = the folder name
+const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const THEMES = [
+  { id: 'paper',    name: 'Papír', meta: '#f4ebdf' },
+  { id: 'workshop', name: 'Dílna', meta: '#3b2718' },
+  { id: 'steel',    name: 'Ocel',  meta: '#26313c' },
+  { id: 'white',    name: 'Bílá',  meta: '#ffffff' },
+];
+const DEFAULTS = { level: 'normal', theme: 'paper', syms: false, vibrate: true };
+const HISTORY_MAX = 400;
+// Nut colours, the easiest to tell apart first (the levels use the first ones); dk = how dark the side faces are
+const COLORS = [
+  { name: 'modrá',     c: '#1f5fd6', t: '#fff' },
+  { name: 'žlutá',     c: '#ffd31a', t: '#3a2a00' },
+  { name: 'červená',   c: '#e0302a', t: '#fff' },
+  { name: 'fialová',   c: '#8e3bc4', t: '#fff' },
+  { name: 'zelená',    c: '#2fa84f', t: '#fff' },
+  { name: 'oranžová',  c: '#ff8a1c', t: '#3a1a00' },
+  { name: 'tyrkysová', c: '#22c3d6', t: '#003a40' },
+  { name: 'růžová',    c: '#ff7eb9', t: '#4a0026' },
+  { name: 'černá',     c: '#2c2f35', t: '#fff', lt: .2 },
+  { name: 'bílá',      c: '#f3f1ec', t: '#333', dk: .16 },
+];
+// Symbols for players who tell colours apart badly (setting "Značky na matkách"), drawn on the middle face
+const SYMBOLS = [
+  'M10 3a7 7 0 1 0 0 14a7 7 0 1 0 0-14z',
+  'M10 2 18.5 17h-17z',
+  'M3 3h14v14H3z',
+  'M10 1 19 10 10 19 1 10z',
+  'M10 1.5l2.6 5.6 6 .7-4.5 4.1 1.2 6-5.3-3-5.3 3 1.2-6L1.4 7.8l6-.7z',
+  'M7 2h6v5h5v6h-5v5H7v-5H2V7h5z',
+  'M10 18 2.6 10.4A4.6 4.6 0 0 1 10 4.6a4.6 4.6 0 0 1 7.4 5.8z',
+  'M10 2a8 8 0 1 0 0 16a8 8 0 1 0 0-16zm0 4a4 4 0 1 1 0 8a4 4 0 1 1 0-8z',
+  'M4 2l6 6 6-6 2 2-6 6 6 6-2 2-6-6-6 6-2-2 6-6-6-6z',
+  'M13 2a8 8 0 1 0 5 13A7 7 0 0 1 13 2z',
+];
+
+/* ---------- Logic ---------- */
+// Pure game logic (no DOM): a bolt is an array of colour indexes, the bottom nut first.
+const LEVELS = [
+  { id: 'easy',   name: 'Lehká',   colors: 4,  cap: 4, bolts: 6 },
+  { id: 'normal', name: 'Střední', colors: 6,  cap: 4, bolts: 8 },
+  { id: 'hard',   name: 'Těžká',   colors: 8,  cap: 5, bolts: 10 },
+  { id: 'master', name: 'Mistr',   colors: 10, cap: 5, bolts: 12 },
+];
+const levelOf = id => LEVELS.find(l => l.id === id);
+// seeded random numbers (mulberry32): a deal is a pure function of (seed, level)
+function prng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+const cloneB = bolts => bolts.map(b => b.slice());
+const topOf = b => b[b.length - 1];
+const oneColor = b => b.length > 0 && b.every(x => x === b[0]);
+const isDone = (b, cap) => b.length === cap && oneColor(b);
+const isWon = (bolts, cap) => bolts.every(b => b.length === 0 || isDone(b, cap));
+function topRun(b) { let k = 0; for (let i = b.length - 1; i >= 0 && b[i] === b[b.length - 1]; i--) k++; return k; }
+// why nuts cannot go from bolt a to bolt b (null = they can)
+function moveError(bolts, cap, a, b) {
+  const s = bolts[a], d = bolts[b];
+  if (a === b || !s.length) return 'same';
+  if (d.length >= cap) return isDone(d, cap) ? 'done' : 'full';
+  if (d.length && topOf(d) !== topOf(s)) return 'color';
+  return null;
+}
+// all nuts of the top colour go, as many as fit; the rest stay
+const moveAmount = (bolts, cap, a, b) => Math.min(topRun(bolts[a]), cap - bolts[b].length);
+function applyMove(bolts, cap, a, b) {
+  const n = moveAmount(bolts, cap, a, b);
+  for (let i = 0; i < n; i++) bolts[b].push(bolts[a].pop());
+  return n;
+}
+// Moves that can help: nothing out of a finished bolt, no one-colour stack into an empty bolt, and only the first
+// empty bolt as a target (the others are the same). Each left-out move only leads to an equal position, so a
+// position without useful moves is stuck, and the solver's "lost" is a proof.
+function usefulMoves(bolts, cap) {
+  const out = [];
+  const firstEmpty = bolts.findIndex(b => b.length === 0);
+  for (let a = 0; a < bolts.length; a++) {
+    const s = bolts[a];
+    if (!s.length || isDone(s, cap)) continue;
+    for (let b = 0; b < bolts.length; b++) {
+      if (moveError(bolts, cap, a, b) !== null) continue;
+      if (!bolts[b].length && (b !== firstEmpty || oneColor(s))) continue;
+      out.push([a, b]);
+    }
+  }
+  return out;
+}
+// the same position whatever the order of the bolts
+const stateKey = bolts => bolts.map(b => b.map(c => String.fromCharCode(97 + c)).join('')).sort().join('|');
+// how far from solved: every nut above the lowest colour change of its bolt must move, and every colour that sits
+// at the bottom of more bolts needs those extra bottoms moved too
+function distance(bolts) {
+  let h = 0;
+  const bottoms = new Map();
+  for (const b of bolts) {
+    if (!b.length) continue;
+    let i = 1; while (i < b.length && b[i] === b[0]) i++;
+    h += b.length - i;
+    bottoms.set(b[0], (bottoms.get(b[0]) || 0) + 1);
+  }
+  for (const n of bottoms.values()) h += n - 1;
+  return h;
+}
+// Search for a solution: depth first with a visited set and a node limit, the moves that bring the position
+// closest to solved first. Deterministic: the same position always gives the same moves (the same hint).
+// Returns { moves } (solved), { lost: true } (every way was tried: it cannot be solved from here)
+// or { unknown: true } (the limit came first).
+function solve(start, cap, limit = 60000) {
+  const seen = new Set(), path = [];
+  let nodes = 0, cut = false;
+  function rec(t) {
+    if (isWon(t, cap)) return true;
+    if (++nodes > limit) { cut = true; return false; }
+    const k = stateKey(t);
+    if (seen.has(k)) return false;
+    seen.add(k);
+    const ms = usefulMoves(t, cap).map(([a, b]) => {
+      const nt = cloneB(t); applyMove(nt, cap, a, b);
+      // closer to solved first, into an empty bolt last, finishing a bolt earlier
+      return { a, b, nt, s: distance(nt) * 4 + (t[b].length ? 0 : 2) - (isDone(nt[b], cap) ? 3 : 0) };
+    }).sort((x, y) => x.s - y.s || x.a - y.a || x.b - y.b);
+    for (const m of ms) {
+      path.push([m.a, m.b]);
+      if (rec(m.nt)) return true;
+      path.pop();
+      if (cut) return false;
+    }
+    return false;
+  }
+  if (rec(cloneB(start))) return { moves: path };
+  return cut ? { unknown: true } : { lost: true };
+}
+// A random deal: every colour `cap` times over the full bolts, the last bolts empty. No bolt may start finished
+// or with three of one colour in a row (too easy); null = try again.
+function randomDeal(L, rand) {
+  const pool = [];
+  for (let c = 0; c < L.colors; c++) for (let i = 0; i < L.cap; i++) pool.push(c);
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  const bolts = [];
+  for (let i = 0; i < L.colors; i++) bolts.push(pool.slice(i * L.cap, (i + 1) * L.cap));
+  for (let i = L.colors; i < L.bolts; i++) bolts.push([]);
+  const tooEasy = bolts.some(b => { for (let i = 0; i + 2 < b.length; i++) if (b[i] === b[i + 1] && b[i] === b[i + 2]) return true; return false; });
+  return tooEasy ? null : bolts;
+}
+// Fallback (very rare): scramble backwards from the solved position with moves that can be played forwards
+// again, so the deal can be solved by construction.
+function scrambleDeal(L, rand) {
+  const cap = L.cap, bolts = [];
+  for (let i = 0; i < L.bolts; i++) bolts.push(i < L.colors ? new Array(cap).fill(i) : []);
+  for (let step = 0, done = 0; step < 6000 && done < L.colors * cap * 3; step++) {
+    // the reverse of "k nuts of colour c went from x to y": k nuts of y's top run go back onto x
+    const y = Math.floor(rand() * bolts.length), x = Math.floor(rand() * bolts.length);
+    const by = bolts[y], bx = bolts[x];
+    if (x === y || !by.length) continue;
+    const c = topOf(by), run = topRun(by), k = 1 + Math.floor(rand() * run);
+    if (!(k < run || k === by.length)) continue;        // forwards, y was empty or had c on top
+    if (bx.length + k > cap) continue;
+    if (bx.length && topOf(bx) === c && by.length !== cap) continue; // forwards, exactly k nuts went (y got full)
+    for (let i = 0; i < k; i++) bx.push(by.pop());
+    done++;
+  }
+  return bolts;
+}
+// Every deal can be solved: random deals are checked by the solver (a few ms each, the browser gets a turn in
+// between); if none is proved within 4 s, a backward scramble from the solved position is used.
+const nextTick = () => new Promise(r => setTimeout(r, 0));
+async function generate(L, seed, ms = 4000) {
+  const rand = prng(seed), end = Date.now() + ms;
+  for (let tries = 0; ; tries++) {
+    const b = randomDeal(L, rand);
+    if (!b) continue;
+    if (solve(b, L.cap, 60000).moves) return b;
+    if (Date.now() > end) return scrambleDeal(L, rand);
+    await nextTick();
+  }
+}
+/* ---------- Logic end ---------- */
+
+/* ---------- State ---------- */
+let S, G, bests = {}, sel = null, hint = null, busy = false, moving = false;
+let popCap = -1;      // bolt finished by the last move: only its cap nut screws on
+let verdict = null;   // what the solver says about the current position (cached per position)
+// rule: while a game is prepared or nuts move, a tap explains itself instead of doing nothing
+const busyToast = () => moving ? toast('Chvilku, matky se ještě přesouvají') : toast('Chvilku, připravuji hru…', 60000);
+const L = () => levelOf(G.level);
+const cap = () => L().cap;
+// a game counts as played from its first move (G.counted); before that it is untouched and may be replaced
+const isFresh = () => !G.counted;
+const inProgress = () => G && G.status === 'playing' && G.counted;
+const stat = id => bests[id] || (bests[id] = { played: 0, won: 0, best: null });
+
+function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
+function save() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, bests }));
+    if (inProgress()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+  } catch (e) {} // rule: storage may be full or blocked; the game goes on
+}
+function validBolts(bs, lv) {
+  if (!Array.isArray(bs) || bs.length !== lv.bolts) return false;
+  const cnt = new Array(lv.colors).fill(0);
+  for (const b of bs) {
+    if (!Array.isArray(b) || b.length > lv.cap) return false;
+    for (const c of b) { if (!Number.isInteger(c) || c < 0 || c >= lv.colors) return false; cnt[c]++; }
+  }
+  return cnt.every(n => n === lv.cap);
+}
+// rule: corrupted data never crashes the game; a broken history only loses Undo, the end comes from the bolts
+function validGame(g) {
+  try {
+    if (!g || typeof g !== 'object') return false;
+    const lv = levelOf(g.level);
+    if (!lv || !validBolts(g.bolts, lv)) return false;
+    if (!validBolts(g.start, lv)) g.start = cloneB(g.bolts); // only "Od začátku" starts from here then
+    g.seed = Number.isInteger(g.seed) ? g.seed >>> 0 : 0;
+    if (!Array.isArray(g.history) || !g.history.every(h => h && typeof h === 'object' && validBolts(h.b, lv) && Number.isInteger(h.m) && h.m >= 0)) g.history = [];
+    if (g.history.length > HISTORY_MAX) g.history = g.history.slice(-HISTORY_MAX);
+    if (!Number.isInteger(g.moves) || g.moves < 0) g.moves = g.history.length;
+    g.hinted = g.hinted === true;
+    g.counted = g.counted === true || g.moves > 0 || g.history.length > 0;
+    g.wonCounted = g.wonCounted === true;
+    g.status = isWon(g.bolts, lv.cap) ? 'won' : 'playing'; // never trusted from the save
+    if (g.status === 'won') g.counted = true;
+    return true;
+  } catch (e) { return false; }
+}
+const okStat = s => s && typeof s === 'object' && Number.isInteger(s.played) && s.played >= 0 && Number.isInteger(s.won) && s.won >= 0 && s.won <= s.played && (s.best === null || (Number.isInteger(s.best) && s.best > 0));
+function normalize(s) {
+  if (!levelOf(s.level)) s.level = DEFAULTS.level;
+  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  s.syms = !!s.syms; s.vibrate = !!s.vibrate;
+  return s;
+}
+function newSeed() {
+  try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0]; } catch (e) { return Math.floor(Math.random() * 2 ** 32) >>> 0; }
+}
+// Generates in the background; taps explain themselves meanwhile (busy) and a second "Nová hra" is ignored
+async function newGame(msg) {
+  if (busy) return;
+  busy = true; sel = null; hint = null;
+  const slow = setTimeout(() => toast('Připravuji hru…', 60000), 250);
+  const lv = levelOf(S.level), seed = newSeed();
+  const bolts = await generate(lv, seed);
+  clearTimeout(slow);
+  G = { level: lv.id, seed, start: cloneB(bolts), bolts, history: [], moves: 0, status: 'playing', counted: false, wonCounted: false, hinted: false };
+  busy = false;
+  hideToast(); save(); render(true);
+  if (msg) toast(msg);
+}
+function restart() {
+  G.bolts = cloneB(G.start); G.history = []; G.moves = 0; G.status = 'playing';
+  sel = null; hint = null; buzz(); save(); render(true);
+  toast('Hra je zase na začátku');
+}
+
+/* ---------- Helpers ---------- */
+function buzz(ms = 12) {
+  // Chrome refuses vibration (with a console error) before the first real tap
+  if (!S.vibrate || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+  try { navigator.vibrate(ms); } catch (e) {}
+}
+let toastT;
+function toast(msg, ms = 2600) {
+  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  // just above the bottom tray, so it never covers the score row or the buttons (the CSS bottom is the fallback)
+  const tr = document.querySelector('.tray').getBoundingClientRect(); if (tr.height) t.style.bottom = Math.round(innerHeight - tr.top + 10) + 'px';
+  clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
+}
+function hideToast() { $('#toast').classList.add('hide'); }
+// rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
+// whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
+const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
+function whenFree(g0, ms, fn) {
+  setTimeout(function wait() {
+    if (G !== g0) return;
+    if (nothingOpen()) fn(); else setTimeout(wait, 400);
+  }, ms);
+}
+function showModal(html, buttons) {
+  hideToast();
+  const card = $('#modalCard');
+  card.innerHTML = html + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('');
+  card.onclick = e => {
+    const b = e.target.closest('[data-i]'); if (!b) return;
+    $('#modal').hidden = true;
+    const fn = buttons[+b.dataset.i].fn; if (fn) fn();
+  };
+  $('#modal').hidden = false;
+}
+const plural = (n, one, few, many) => n === 1 ? one : n >= 2 && n <= 4 ? few : many;
+const tahu = n => `${n} ${plural(n, 'tah', 'tahy', 'tahů')}`;
+
+/* ---------- Drawing ---------- */
+// colour arithmetic for the shaded faces of a nut
+const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const mix = (h, to, f) => '#' + hex2rgb(h).map((v, i) => Math.round(v + ((to === '#fff' ? 255 : 0) - v) * f).toString(16).padStart(2, '0')).join('');
+// A hex nut seen from the side (viewBox 0 0 100 40): three faces (the middle one lit), chamfered top and bottom
+const NUT_OUT = 'M5 1H95L99 7V33L95 39H5L1 33V7Z';
+function nutDef(id, c, dk = .3, lt = .14) {
+  return `<g id="${id}">`
+    + `<path d="M5 1H27V39H5L1 33V7Z" fill="${mix(c, '#000', dk)}"/><rect x="27" y="1" width="46" height="38" fill="${mix(c, '#fff', lt)}"/><path d="M73 1H95L99 7V33L95 39H73Z" fill="${mix(c, '#000', dk * .5)}"/>`
+    + '<path d="M1 7Q14 3 27 6Q50 1 73 6Q86 3 99 7L95 1H5Z" fill="#fff" fill-opacity=".4"/>'
+    + '<path d="M1 33Q14 37 27 34Q50 39 73 34Q86 37 99 33L95 39H5Z" fill="#000" fill-opacity=".24"/>'
+    + `<path d="${NUT_OUT}" fill="url(#sheen)"/>`
+    + '<path d="M27 6V34M73 6V34" stroke="#000" stroke-opacity=".3" stroke-width="1.3"/>'
+    + `<path d="${NUT_OUT}" fill="none" stroke="#16181b" stroke-opacity=".8" stroke-width="2" stroke-linejoin="round"/></g>`;
+}
+function drawDefs() {
+  const steel = '#b9c1c8';
+  $('#defs').innerHTML = '<defs>'
+    + '<linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".3"/><stop offset=".38" stop-color="#fff" stop-opacity="0"/><stop offset=".7" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".2"/></linearGradient>'
+    + '<linearGradient id="dome" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6a737a"/><stop offset=".4" stop-color="#eef1f3"/><stop offset=".65" stop-color="#b3bbc2"/><stop offset="1" stop-color="#5d656c"/></linearGradient>'
+    + COLORS.map((k, i) => nutDef('n' + i, k.c, k.dk, k.lt)).join('')
+    + COLORS.map((k, i) => `<g id="s${i}"><svg x="38" y="8" width="24" height="24" viewBox="0 0 20 20"><path fill-rule="evenodd" d="${SYMBOLS[i]}" fill="${k.t}"/></svg></g>`).join('')
+    + nutDef('steel', steel, .38, .25)
+    // the cap nut of a finished bolt (viewBox 0 0 100 50): a dome on a short hex part
+    + `<g id="acorn"><path d="M13 25C13 7 30 2 50 2C70 2 87 7 87 25Z" fill="url(#dome)" stroke="#16181b" stroke-opacity=".8" stroke-width="2"/>`
+    + '<path d="M30 9Q40 5 50 5" stroke="#fff" stroke-opacity=".7" stroke-width="3" stroke-linecap="round" fill="none"/>'
+    + `<path d="M5 23H27V49H5L1 44V28Z" fill="${mix(steel, '#000', .38)}"/><rect x="27" y="23" width="46" height="26" fill="${mix(steel, '#fff', .25)}"/><path d="M73 23H95L99 28V44L95 49H73Z" fill="${mix(steel, '#000', .19)}"/>`
+    + '<path d="M27 26V46M73 26V46" stroke="#000" stroke-opacity=".3" stroke-width="1.3"/>'
+    + '<path d="M5 23H95L99 28V44L95 49H5L1 44V28Z" fill="none" stroke="#16181b" stroke-opacity=".8" stroke-width="2" stroke-linejoin="round"/></g>'
+    + '</defs>';
+}
+// Bolt geometry in multiples of the nut width w: nut height, washer, plate, rod, the room above for lifted nuts
+const NUT_H = .4, PLATE = .18, Y0 = .09, WASHER = .16, BOLT_W = 1.14, ROW_GAP = .12;
+const LIFT = .3;  // lifted nuts float this many nut heights above the rod tip
+const TIP = .45;  // the rod reaches this many nut heights above a full stack
+const ROOM = 2;   // room above the tip for this many lifted nuts; a longer run floats lower, still over the rod
+function geom(capN) {
+  const nb = Y0 + WASHER, rod = (capN + TIP) * NUT_H;
+  return { nb, rod, bh: nb + rod + (LIFT + ROOM) * NUT_H + .08 };
+}
+// nut slot (in nut heights) of the j-th of `run` lifted nuts: just above the tip, never above the column
+const liftK = (capN, j, run) => capN + TIP + LIFT + Math.min(0, ROOM - run) + j;
+// the CSS variables of one size of bolts (the board, or a small preview)
+function geomVars(w, capN) {
+  const g = geom(capN), px = v => (v * w).toFixed(1) + 'px';
+  return { '--w': px(1), '--h': px(NUT_H), '--pl': px(PLATE), '--y0': px(Y0), '--wa': px(WASHER), '--nb': px(g.nb), '--rod': px(g.rod), '--bh': px(g.bh), '--bw': px(BOLT_W), '--rg': px(ROW_GAP) };
+}
+const nutHTML = (c, k, up) => `<svg class="nut${up ? ' up' : ''}" style="--k:${k}" viewBox="0 0 100 40" aria-hidden="true"><use href="#n${c}"/><use class="sym" href="#s${c}"/></svg>`;
+// tag 'span' = a picture only (theme previews in the settings, which are buttons themselves)
+function boltHTML(b, i, capN, opts = {}) {
+  const lifted = opts.lift ? topRun(b) : 0, done = isDone(b, capN);
+  let nuts = '';
+  b.forEach((c, k) => {
+    const j = k - (b.length - lifted);
+    nuts += nutHTML(c, j >= 0 ? liftK(capN, j, lifted) : k, j >= 0);
+  });
+  const cls = 'bolt' + (opts.lift ? ' sel' : '') + (opts.dst ? ' dst' : '');
+  const tag = opts.tag || 'button';
+  const label = tag === 'button' ? ` data-i="${i}" aria-label="Šroub ${i + 1}: ${done ? 'hotový' : b.length ? b.map(c => COLORS[c].name).join(', ') + ' (odspodu)' : 'prázdný'}"` : '';
+  return `<${tag} class="${cls}"${label}><svg class="washer" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><use href="#steel"/></svg><span class="rod"></span>${nuts}`
+    + (done ? `<svg class="acorn${opts.pop ? ' pop' : ''}" style="--k:${capN}" viewBox="0 0 100 50" aria-hidden="true"><use href="#acorn"/></svg>` : '')
+    + (opts.dst ? '<svg class="arrow" viewBox="0 0 30 20" aria-hidden="true"><path d="M4 4l11 11L26 4"/></svg>' : '')
+    + `</${tag}>`;
+}
+// rows of bolts, longer rows first, each on its own base plate
+function rowsHTML(bolts, capN, rows, opts = () => ({})) {
+  const n = bolts.length, base = Math.floor(n / rows), extra = n % rows;
+  let html = '', i = 0;
+  for (let r = 0; r < rows; r++) {
+    const k = base + (r < extra ? 1 : 0);
+    html += '<div class="brow"><span class="plate"></span>';
+    for (let j = 0; j < k; j++, i++) html += boltHTML(bolts[i], i, capN, opts(i));
+    html += '</div>';
+  }
+  return html;
+}
+
+/* ---------- Rendering ---------- */
+function applyLook() {
+  root.dataset.theme = S.theme;
+  root.classList.toggle('show-syms', S.syms);
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+}
+// what the solver says about the current position: 'ok' (with the next move of a solution), 'lost' (proved),
+// 'nomove' (no useful move at all) or 'unknown' (too big to tell quickly); cached, so it runs once per position
+// A solution found once is followed on (`plan`, `next` = the position after its first move): solving every
+// position anew could pick a path that starts by undoing the previous hint, and the hints would go back and forth.
+const posKey = bolts => G.level + ':' + bolts.map(b => b.join('.')).join('|');
+function analyse(limit = 40000) {
+  const key = posKey(G.bolts);
+  if (verdict && verdict.key === key && (verdict.kind !== 'unknown' || verdict.limit >= limit)) return verdict;
+  let kind = 'unknown', plan = null;
+  if (G.status === 'won') kind = 'won';
+  else if (!usefulMoves(G.bolts, cap()).length) kind = 'nomove';
+  else if (verdict && verdict.kind === 'ok' && verdict.next === key && verdict.plan.length > 1) { kind = 'ok'; plan = verdict.plan.slice(1); }
+  else {
+    const r = solve(G.bolts, cap(), limit);
+    if (r.moves && r.moves.length) { kind = 'ok'; plan = r.moves; } else if (r.lost) kind = 'lost';
+  }
+  let next = null;
+  if (plan) { const nb = cloneB(G.bolts); applyMove(nb, cap(), plan[0][0], plan[0][1]); next = posKey(nb); }
+  return (verdict = { key, kind, move: plan ? plan[0] : null, plan, next, limit });
+}
+const stuck = () => G.status === 'playing' && ['lost', 'nomove'].includes(analyse().kind);
+function renderInfo() {
+  const st = bests[G.level], best = st && st.best;
+  $('#info').innerHTML = `${L().name} · Tahy: <b>${G.moves}</b> · Rekord: <b>${best || '–'}</b>`;
+}
+function renderHint() {
+  const won = G.status === 'won', v = won ? null : analyse();
+  $('#hint').textContent = won ? 'Všechny šrouby jsou hotové! 🎉'
+    : v.kind === 'nomove' ? 'Už není kam táhnout. Vrať pár tahů Zpět.'
+    : v.kind === 'lost' ? 'Odsud už to vyřešit nejde. Vrať pár tahů Zpět.'
+    : hint ? 'Ťukni na označený šroub'
+    : sel !== null ? 'Teď ťukni na šroub, kam je dát'
+    : 'Ťukni na šroub, ze kterého chceš vzít matky';
+}
+function render(redraw) {
+  applyLook();
+  renderInfo();
+  renderHint();
+  const won = G.status === 'won';
+  $('#btnHint').innerHTML = won ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13M13 6l6 6-6 6"/></svg>Další hra'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg>Poradit';
+  $('#btnHint').classList.toggle('main', won);
+  $('#btnUndo').classList.toggle('dim', won || !G.history.length);
+  $('#btnUndo').classList.toggle('pulse', stuck() && G.history.length > 0);
+  $('#btnRestart').classList.toggle('dim', G.moves === 0 && !G.history.length);
+  $('#board').classList.toggle('won', won);
+  layout(true);
+}
+// Picks the number of rows (1-3) that gives the biggest nuts in the room left, and draws the bolts
+let lastRows = 0;
+function layout(redraw) {
+  if (!G) return;
+  const board = $('#board'), bs = getComputedStyle(board);
+  const gut = parseFloat(getComputedStyle(root).getPropertyValue('--gut')) || 12;
+  // the bolts stay inside the side margin and inside the board's 12 px padding above and below
+  const W = board.clientWidth - 2 * gut, H = board.clientHeight - parseFloat(bs.paddingTop) - parseFloat(bs.paddingBottom);
+  const n = G.bolts.length, g = geom(cap());
+  let best = null;
+  for (let r = 1; r <= 3; r++) {
+    const per = Math.ceil(n / r);
+    if (per * (r - 1) >= n) continue;
+    const w = Math.min(W / (per * BOLT_W), H / (r * g.bh + (r - 1) * ROW_GAP), 100);
+    if (!best || w > best.w + .5) best = { r, w };
+  }
+  const w = Math.max(16, Math.floor(best.w * 2) / 2);
+  for (const [k, v] of Object.entries(geomVars(w, cap()))) root.style.setProperty(k, v);
+  if (!redraw && best.r === lastRows) return;
+  lastRows = best.r;
+  $('#rows').innerHTML = rowsHTML(G.bolts, cap(), best.r, i => ({ lift: i === sel, dst: !!hint && hint[1] === i, pop: i === popCap }));
+  popCap = -1;
+}
+
+/* ---------- Playing ---------- */
+const boltEl = i => document.querySelector(`.bolt[data-i="${i}"]`);
+const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+function tapBolt(i) {
+  if (busy) { busyToast(); return; }
+  if (G.status !== 'playing') { toast('Hotovo! Ťukni na Další hra'); return; }
+  // pattern: a tap on the hinted bolt (its source or its target) does the hinted move
+  if (hint && (i === hint[0] || i === hint[1])) { doMove(hint[0], hint[1]); return; }
+  hint = null;
+  const b = G.bolts[i];
+  if (sel === null) {
+    if (!b.length) { toast('Na tomhle šroubu nic není'); render(true); return; }
+    if (isDone(b, cap())) { toast('Tenhle šroub je už hotový'); render(true); return; }
+    sel = i; buzz(8); render(true); return;
+  }
+  if (sel === i) { sel = null; buzz(8); render(true); return; } // put them back
+  const err = moveError(G.bolts, cap(), sel, i);
+  if (err === 'done') { toast('Tenhle šroub je už hotový'); render(true); return; }
+  if (err === 'full') { toast('Tenhle šroub je plný'); render(true); return; }
+  if (err === 'color') { toast('Nahoře je jiná barva – sem to nejde'); render(true); return; }
+  doMove(sel, i);
+}
+// The lifted nuts fly over the target bolt and slide down onto it; those that do not fit drop back
+function doMove(a, b) {
+  hint = null;
+  if (sel !== a) { sel = a; render(true); } // a hinted move tapped on its target: lift first, so they fly from there
+  busy = true; moving = true;
+  const n = moveAmount(G.bolts, cap(), a, b), run = topRun(G.bolts[a]), dLen = G.bolts[b].length;
+  const sEl = boltEl(a), dEl = boltEl(b);
+  buzz(15);
+  if (!reduced() && sEl && dEl) {
+    const ups = [...sEl.querySelectorAll('.nut.up')];   // bottom first
+    const dr = dEl.getBoundingClientRect(), hpx = parseFloat(getComputedStyle(root).getPropertyValue('--h'));
+    const nb = parseFloat(getComputedStyle(root).getPropertyValue('--nb'));
+    ups.forEach((el, j) => {
+      const r = el.getBoundingClientRect();
+      if (j < run - n) { el.classList.remove('up'); el.style.setProperty('--k', G.bolts[a].length - run + j); return; } // stays
+      const jj = j - (run - n); // the moved nuts keep their order
+      const dx = dr.left + dr.width / 2 - (r.left + r.width / 2);
+      const yAt = k => dr.bottom - nb - k * hpx - hpx - r.top; // from the nut's top now to slot k on the target
+      el.style.zIndex = 5;
+      el.animate([{ transform: 'none' }, { transform: `translate(${dx}px,${yAt(liftK(cap(), jj, n))}px)`, offset: .55 }, { transform: `translate(${dx}px,${yAt(dLen + jj)}px)` }],
+        { duration: 380, easing: 'ease-in-out', fill: 'forwards' });
+    });
+    setTimeout(() => finishMove(a, b), 400);
+  } else finishMove(a, b);
+}
+function finishMove(a, b) {
+  G.history.push({ b: cloneB(G.bolts), m: G.moves });
+  if (G.history.length > HISTORY_MAX) G.history.shift();
+  applyMove(G.bolts, cap(), a, b);
+  G.moves++;
+  if (!G.counted) { G.counted = true; stat(G.level).played++; } // a game counts as played from its first move
+  sel = null; busy = false; moving = false;
+  if (isDone(G.bolts[b], cap())) popCap = b;
+  if (isWon(G.bolts, cap())) {
+    G.status = 'won';
+    const res = recordWin();
+    save(); render(true);
+    buzz([40, 60, 40, 60, 80]);
+    whenFree(G, 1300, () => { if (!busy) showWin(res); });
+    return;
+  }
+  if (popCap === b) buzz([20, 40, 20]);
+  save(); render(true);
+  if (stuck()) toast(analyse().kind === 'nomove' ? 'Už není kam táhnout – zkus Zpět' : 'Odsud už to vyřešit nejde – zkus pár tahů Zpět', 3500);
+}
+// The record is set only at the win and Undo is not possible after it, so it cannot be inflated by undoing
+// (no record-before-the-move needs to be kept in the history). A won game is counted once; replaying it
+// "Od začátku" may still improve the record.
+function recordWin() {
+  const st = stat(G.level), prev = st.best;
+  if (!G.wonCounted) { G.wonCounted = true; st.won++; }
+  let rec = false;
+  if (!G.hinted && (prev === null || G.moves < prev)) { st.best = G.moves; rec = true; }
+  return { moves: G.moves, prev, rec, hinted: G.hinted };
+}
+function showWin(res) {
+  if (G.status !== 'won') return;
+  const line = res.hinted ? 'S radou se rekord nepočítá.' : res.rec ? (res.prev ? `<b>Nový rekord!</b> Předtím ${tahu(res.prev)}.` : '<b>První rekord!</b>') : `Rekord: ${tahu(res.prev)}.`;
+  showModal(`<h2>Hotovo! 🎉</h2><p>Všechny šrouby jsou hotové za <b>${tahu(res.moves)}</b>.</p><p>${line}</p>`,
+    [{ text: 'Další hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]);
+}
+
+$('#board').addEventListener('click', e => {
+  const t = e.target.closest('.bolt');
+  if (t) { tapBolt(+t.dataset.i); return; }
+  // a tap next to the bolts puts the lifted nuts back
+  if (busy || G.status !== 'playing' || (sel === null && !hint)) return;
+  sel = null; hint = null; render(true);
+});
+// rule: Undo where it makes sense; it ends with the win (the win dialog offers Další hra)
+$('#btnUndo').addEventListener('click', () => {
+  if (busy) { busyToast(); return; }
+  if (G.status !== 'playing') { toast('Hotovo! Ťukni na Další hra'); return; }
+  if (!G.history.length) { toast('Zatím není co vrátit'); return; }
+  const h = G.history.pop();
+  G.bolts = h.b; G.moves = h.m;
+  sel = null; hint = null; buzz(); save(); render(true);
+});
+$('#btnRestart').addEventListener('click', () => {
+  if (busy) { busyToast(); return; }
+  if (G.moves === 0 && !G.history.length) { toast('Hra je na začátku'); return; }
+  showModal('<h2>Začít tuhle hru znovu?</h2><p>Matky se vrátí tam, kde byly na začátku, a tahy se vynulují.</p>',
+    [{ text: 'Ano, od začátku', fn: restart }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+});
+// Poradit: the solver's next move from here; the nuts lift and the target is marked (a tap on it plays the move)
+$('#btnHint').addEventListener('click', () => {
+  if (busy) { busyToast(); return; }
+  if (G.status !== 'playing') { newGame(); return; }
+  let v = analyse();
+  if (v.kind === 'unknown') v = analyse(400000);
+  if (v.kind === 'lost' || v.kind === 'nomove') { toast('Odsud už to vyřešit nejde – vrať pár tahů Zpět', 3500); return; }
+  if (v.kind !== 'ok') { toast('Tady si nevím rady – zkus pár tahů Zpět', 3500); return; }
+  sel = v.move[0]; hint = v.move;
+  if (!G.hinted) { G.hinted = true; save(); }
+  buzz(8); render(true);
+});
+// rule: a new game in the middle of one asks first
+$('#btnNew').addEventListener('click', () => {
+  if (busy) { busyToast(); return; }
+  if (inProgress()) {
+    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  } else newGame();
+});
+
+/* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
+const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
+const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+const levelDesc = l => `${l.colors} ${plural(l.colors, 'barva', 'barvy', 'barev')}, ${l.cap} ${plural(l.cap, 'matka', 'matky', 'matek')} na šroub, ${l.bolts} šroubů (${l.bolts - l.colors} prázdné).`;
+// a small picture of the theme: a mixed bolt, a finished one and an empty one
+function mini(theme) {
+  const v = Object.entries(geomVars(26, 4)).map(([k, x]) => `${k}:${x}`).join(';');
+  return `<span class="swatch" data-theme="${theme}" style="${v}">${rowsHTML([[0, 1, 1], [2, 2, 2, 2], []], 4, 1, () => ({ tag: 'span' }))}</span>`;
+}
+function renderSettings() {
+  // a new difficulty: an untouched game is replaced after returning, otherwise it applies from the next game
+  const pending = S.level === G.level ? '' : isFresh()
+    ? '<div class="notice">Po návratu do hry začne <b>nová hra</b> s touto obtížností.</div>'
+    : `<div class="notice">Nová obtížnost platí od <b>příští hry</b>.${inProgress() ? ' Rozehraná hra zůstává.' : ''}</div>`;
+  const rows = LEVELS.map(l => { const s = bests[l.id] || { played: 0, won: 0, best: null }; return `<tr><td>${l.name}</td><td>${s.played}</td><td>${s.won}</td><td>${s.best || '–'}</td></tr>`; }).join('');
+  $('#settingsIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Šroubky<small>Nastavení</small></h2></div>
+    <section class="card"><h3>Obtížnost</h3>
+      <div class="field">
+        ${LEVELS.map(l => opt('level:' + l.id, S.level === l.id, l.name, levelDesc(l))).join('')}
+        ${pending}
+      </div>
+    </section>
+    <section class="card"><h3>Vzhled</h3>
+      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}">${mini(t.id)}${t.name}</button>`).join('')}</div>
+      ${toggleRow('syms', 'Značky na matkách')}
+      <div class="fnote" style="margin-top:-6px">Pomůže, když se barvy špatně rozlišují.</div>
+      ${toggleRow('vibrate', 'Vibrace')}
+    </section>
+    <section class="card"><h3>Statistika</h3>
+      <table class="stat"><thead><tr><th>Obtížnost</th><th>Hráno</th><th>Vyřešeno</th><th>Rekord</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="fnote">Rekord je nejmenší počet tahů. Hra s radou se do rekordu nepočítá.</div>
+    </section>
+    <button class="big" data-act="close">Zpět ke hře</button>
+    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+}
+$('#settingsIn').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const [act, arg] = b.dataset.act.split(':');
+  if (act === 'close') { closeSettings(); return; }
+  if (act === 'level') S.level = arg;
+  else if (act === 'theme') S.theme = arg;
+  else if (act === 'toggle') S[arg] = !S[arg];
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  normalize(S); buzz(8); applyLook(); save();
+  const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
+});
+let levelAtOpen = null;
+function openSettings() {
+  if (busy) { busyToast(); return; }
+  hideToast(); levelAtOpen = S.level;
+  renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0;
+}
+// A new difficulty replaces an untouched game at once; a touched (or finished) one stays and the difficulty
+// applies from the next game, which the toast says (rule: !isFresh(), also after a finished game)
+function closeSettings() {
+  $('#screenSettings').hidden = true;
+  const changed = levelAtOpen !== null && levelAtOpen !== S.level;
+  levelAtOpen = null;
+  if (S.level !== G.level && isFresh()) newGame();
+  else { render(true); if (changed && S.level !== G.level && !isFresh()) toast('Nová obtížnost platí od příští hry'); }
+}
+$('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
+function renderHelp() {
+  $('#helpIn').innerHTML = `
+    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Šroubky<small>Jak hrát</small></h2></div>
+    <section class="card help"><ol>
+      <li>Na šroubech jsou našroubované barevné matky. Přesouvej je tak, aby na každém šroubu byla <b>jen jedna barva</b>.</li>
+      <li>Ťukni na šroub – horní matky jedné barvy se zvednou nad něj. Potom ťukni na šroub, kam je chceš dát. Když si to rozmyslíš, ťukni znovu na stejný šroub nebo vedle a matky se vrátí.</li>
+      <li>Matky jdou jen na <b>prázdný</b> šroub, nebo na matku <b>stejné barvy</b>. Přesunou se najednou všechny stejné matky shora, kolik se jich vejde; zbytek zůstane.</li>
+      <li>Na šroub se vejdou 4 matky (Lehká a Střední), nebo 5 (Těžká a Mistr).</li>
+      <li>Plný šroub jedné barvy dostane navrch kloboučkovou matku. Ten je hotový a už se nemění.</li>
+      <li><b>Zpět</b> vrátí poslední tah, klidně i víckrát. <b>Od začátku</b> rozehraje stejnou hru znovu.</li>
+      <li><b>Poradit</b> zvedne matky a označí šroub, kam s nimi – stačí na něj ťuknout. S radou se rekord nepočítá.</li>
+      <li>Když už se z pozice vyřešit nedá, hra to hned řekne. Pak vrať pár tahů Zpět.</li>
+      <li>Obtížnost se mění v Nastavení: Lehká má 4 barvy, Střední 6, Těžká 8 a Mistr 10, vždy se dvěma prázdnými šrouby navíc. Každá hra jde vyřešit, hra to před začátkem ověří.</li>
+      <li>Statistika v Nastavení ukazuje pro každou obtížnost, kolik her bylo rozehráno a vyřešeno, a rekord: nejmenší počet tahů.</li>
+      <li><b>Značky na matkách</b> v Nastavení přidají na každou barvu jiný tvar, když se barvy špatně rozlišují.</li>
+    </ol></section>
+    <button class="big" data-act="close">Rozumím, hrát</button>`;
+}
+function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
+$('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
+$('#btnHelp').addEventListener('click', openHelp);
+
+/* ---------- Back button ---------- */
+// Android Back (gesture or button) closes the topmost open screen or dialog, like its own Zpět button,
+// instead of leaving the game. Each open layer gets one history entry.
+(() => {
+  const LAYERS = ['#modal', '#screenCredits', '#screenHelp', '#screenSettings']; // topmost first
+  const openLayers = () => LAYERS.map(s => document.querySelector(s)).filter(el => el && !el.hidden);
+  let pushed = 0, skip = 0;
+  const sync = () => {
+    const n = openLayers().length;
+    while (pushed < n) history.pushState({ layer: ++pushed }, '');
+    if (pushed > n) { history.go(n - pushed); pushed = n; skip++; } // closed by its own button: drop our entries
+  };
+  new MutationObserver(sync).observe(document.body, { subtree: true, attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('popstate', () => {
+    if (skip) { skip--; return; }
+    pushed = Math.max(0, pushed - 1);
+    const top = openLayers()[0]; if (!top) return;
+    const btn = top.querySelector('[data-act="close"]');
+    if (btn) btn.click();     // a screen: same as tapping its Zpět (settings apply their changes)
+    else top.hidden = true;   // a dialog: dismissed without choosing, like "Ne, hrát dál" / "Prohlédnout"
+  });
+  // reloaded while a screen was open: leftover entries of ours would swallow one Back press
+  if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
+})();
+
+/* ---------- Start ---------- */
+// rule: ask for persistent storage so the browser does not delete the saved game by itself
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
+drawDefs();
+const saved = load();
+const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
+S = Object.assign({}, DEFAULTS);
+for (const k of Object.keys(DEFAULTS)) if (k in savedSettings) S[k] = savedSettings[k];
+normalize(S);
+if (saved && typeof saved === 'object' && saved.bests && typeof saved.bests === 'object') for (const l of LEVELS) if (okStat(saved.bests[l.id])) bests[l.id] = saved.bests[l.id];
+// rule: a difficulty chosen just before the app was closed (Settings still open) is applied now, as closing Settings would
+if (saved && typeof saved === 'object' && validGame(saved.game)) { G = saved.game; if (S.level !== G.level && isFresh()) newGame(); else render(true); }
+else { applyLook(); $('#hint').textContent = 'Připravuji hru…'; newGame(); } // the saved theme shows while the first game is prepared
+
+window.addEventListener('resize', () => layout(false));
+if (window.visualViewport) visualViewport.addEventListener('resize', () => layout(false));
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+// contract: opened from the launcher (?menu) = show the home button
+if (/[?&]menu(=|&|$)/.test(location.search)) { $('#btnHome').hidden = false; layout(false); }
+
+// For testing
+window.Sroubky = { LEVELS, prng, solve, usefulMoves, applyMove, moveError, isWon, isDone, randomDeal, scrambleDeal, generate, validGame, stateKey, analyse: () => analyse(), get state() { return { S, G, bests, sel, hint }; } };
+})();
+</script>
+</body>
+</html>

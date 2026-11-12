@@ -127,6 +127,12 @@ async (page) => {
     },
     'spoj-tri': async () => { await tap('#btnHint'); await wait(500); await tap('.hinted'); await wait(2500); },
     'prelevani': async () => { const t = page.locator('.tube'); await t.nth(0).click({ force: true }); await wait(300); await t.nth(3).click({ force: true }); await wait(1200); },
+    // a move (a bolt, then a target it fits on), the hint, a tap on the marked target, the next hint shown
+    'sroubky': async () => {
+      const [a, b] = await page.evaluate(() => { const R = window.Sroubky, G = R.state.G, cap = R.LEVELS.find(l => l.id === G.level).cap; return R.solve(G.bolts, cap).moves[0]; });
+      await tap(`.bolt[data-i="${a}"]`); await wait(300); await tap(`.bolt[data-i="${b}"]`); await wait(900);
+      await tap('#btnHint'); await wait(500); await tap('.bolt.dst'); await wait(900); await tap('#btnHint'); await wait(600);
+    },
     'hanojske-veze': async () => { await tap('[data-r="0"]'); await wait(300); await tap('[data-r="2"]'); await wait(500); await tap('#btnHint'); await wait(500); },
     'spojovani-cisel': async () => { for (const k of ['ArrowLeft', 'ArrowDown', 'ArrowRight', 'ArrowUp']) { await page.keyboard.press(k); await wait(250); } },
     'cesta-ven': async () => { await tap('#btnGo'); await wait(500); await tap(HINTED); await wait(800); await tap('#btnGo'); await wait(500); },

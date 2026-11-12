@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Nová hra Šroubky: přesouvej barevné matky mezi šrouby, dokud na každém nezůstane jen jedna barva. Čtyři obtížnosti, každá hra jde vyřešit, s tlačítkem Poradit.
+
 ## 1.0.15 – 2026-11-12
 
 - Výběr her: řádek s Koxou i štítek „Rozehráno“ u Kočky ukazují, jak se má teď, ne jak se měla při posledním hraní (třeba že už má hlad).

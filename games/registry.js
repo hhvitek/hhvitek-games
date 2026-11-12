@@ -14,6 +14,7 @@ globalThis.GAMES = [
   { id: 'spoj-tri', name: 'Spoj tři', description: 'Prohazuj kameny a skládej řady po třech' },
   { id: 'kocka', name: 'Kočka', description: 'Starej se o kočku Koxu a její zahrádku' },
   { id: 'prelevani', name: 'Přelévání', description: 'Přelévej barvy, ať je v každé zkumavce jedna' },
+  { id: 'sroubky', name: 'Šroubky', description: 'Přesouvej matky, ať je na každém šroubu jedna barva' },
   { id: 'hanojske-veze', name: 'Hanojské věže', description: 'Přenes věž z disků na pravou tyč' },
   { id: 'spojovani-cisel', name: 'Spojování čísel', description: 'Posouvej a spojuj stejná čísla' },
   { id: 'cesta-ven', name: 'Cesta ven', description: 'Posouvej auta, ať červené vyjede ven' },

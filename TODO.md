@@ -30,6 +30,8 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 
 - [ ] Spojování obrázků: chosen by the agent (2026-11-12): sizes 6 × 8 / 7 × 10 / 8 × 12 (Velký has tiles about 0.8 cm wide on a short screen), the Mahjong defaults (Znaky obcí on Dřevo), Zamíchat any time without asking, Zpět also after the win. Keep? A gravity variant (tiles slide down after a pair) could come later.
 
+- [ ] Šroubky: chosen by the agent (2026-11-12): levels Lehká 4 colours × 4 nuts / Střední 6 × 4 (default) / Těžká 8 × 5 / Mistr 10 × 5, always 2 empty bolts; default theme Papír (also Dílna, Ocel, Bílá); "Značky na matkách" off; Zpět not after a win; "Od začátku" replays the same deal (can improve the record); the record (fewest moves) never counts a game in which Poradit was used; the game says "odsud už to vyřešit nejde" as soon as the solver proves a position lost (may spoil the challenge); random deals are solvable at once, so even Mistr may feel easy to experienced players (harder deals could be picked by solution length); Mistr on a tall phone is 3 rows of 4 bolts. Keep?
+
 ## Ideas
 
 New games (user's picks 2026-11-12 from the genres popular on Google Play; our own version of the genre, never a copy of a particular game's name, look or levels; the user does not want Člověče, nezlob se nor any game that needs a word list):

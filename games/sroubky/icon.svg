@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".3"/><stop offset=".38" stop-color="#fff" stop-opacity="0"/><stop offset=".7" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".2"/></linearGradient>
+    <linearGradient id="rod" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5f676e"/><stop offset=".38" stop-color="#dfe4e8"/><stop offset=".58" stop-color="#b4bcc3"/><stop offset="1" stop-color="#6a737a"/></linearGradient>
+    <!-- hex nuts seen from the side (100 x 40), as drawn in the game -->
+    <g id="blue"><path d="M5 1H27V39H5L1 33V7Z" fill="#164296"/><rect x="27" y="1" width="46" height="38" fill="#3e75dc"/><path d="M73 1H95L99 7V33L95 39H73Z" fill="#1a51b6"/><path d="M1 7Q14 3 27 6Q50 1 73 6Q86 3 99 7L95 1H5Z" fill="#fff" fill-opacity=".4"/><path d="M1 33Q14 37 27 34Q50 39 73 34Q86 37 99 33L95 39H5Z" fill="#000" fill-opacity=".24"/><path d="M5 1H95L99 7V33L95 39H5L1 33V7Z" fill="url(#sheen)"/><path d="M27 6V34M73 6V34" stroke="#000" stroke-opacity=".3" stroke-width="1.3"/><path d="M5 1H95L99 7V33L95 39H5L1 33V7Z" fill="none" stroke="#16181b" stroke-opacity=".8" stroke-width="2" stroke-linejoin="round"/></g>
+    <g id="yellow"><path d="M5 1H27V39H5L1 33V7Z" fill="#b29412"/><rect x="27" y="1" width="46" height="38" fill="#ffd93a"/><path d="M73 1H95L99 7V33L95 39H73Z" fill="#d9b316"/><path d="M1 7Q14 3 27 6Q50 1 73 6Q86 3 99 7L95 1H5Z" fill="#fff" fill-opacity=".4"/><path d="M1 33Q14 37 27 34Q50 39 73 34Q86 37 99 33L95 39H5Z" fill="#000" fill-opacity=".24"/><path d="M5 1H95L99 7V33L95 39H5L1 33V7Z" fill="url(#sheen)"/><path d="M27 6V34M73 6V34" stroke="#000" stroke-opacity=".3" stroke-width="1.3"/><path d="M5 1H95L99 7V33L95 39H5L1 33V7Z" fill="none" stroke="#16181b" stroke-opacity=".8" stroke-width="2" stroke-linejoin="round"/></g>
+    <g id="green"><path d="M5 1H27V39H5L1 33V7Z" fill="#217637"/><rect x="27" y="1" width="46" height="38" fill="#4cb468"/><path d="M73 1H95L99 7V33L95 39H73Z" fill="#288f43"/><path d="M1 7Q14 3 27 6Q50 1 73 6Q86 3 99 7L95 1H5Z" fill="#fff" fill-opacity=".4"/><path d="M1 33Q14 37 27 34Q50 39 73 34Q86 37 99 33L95 39H5Z" fill="#000" fill-opacity=".24"/><path d="M5 1H95L99 7V33L95 39H5L1 33V7Z" fill="url(#sheen)"/><path d="M27 6V34M73 6V34" stroke="#000" stroke-opacity=".3" stroke-width="1.3"/><path d="M5 1H95L99 7V33L95 39H5L1 33V7Z" fill="none" stroke="#16181b" stroke-opacity=".8" stroke-width="2" stroke-linejoin="round"/></g>
+    <g id="red"><path d="M5 1H27V39H5L1 33V7Z" fill="#9d221d"/><rect x="27" y="1" width="46" height="38" fill="#e44d48"/><path d="M73 1H95L99 7V33L95 39H73Z" fill="#be2924"/><path d="M1 7Q14 3 27 6Q50 1 73 6Q86 3 99 7L95 1H5Z" fill="#fff" fill-opacity=".4"/><path d="M1 33Q14 37 27 34Q50 39 73 34Q86 37 99 33L95 39H5Z" fill="#000" fill-opacity=".24"/><path d="M5 1H95L99 7V33L95 39H5L1 33V7Z" fill="url(#sheen)"/><path d="M27 6V34M73 6V34" stroke="#000" stroke-opacity=".3" stroke-width="1.3"/><path d="M5 1H95L99 7V33L95 39H5L1 33V7Z" fill="none" stroke="#16181b" stroke-opacity=".8" stroke-width="2" stroke-linejoin="round"/></g>
+    <g id="steel"><path d="M5 1H27V39H5L1 33V7Z" fill="#73787c"/><rect x="27" y="1" width="46" height="38" fill="#cad0d6"/><path d="M73 1H95L99 7V33L95 39H73Z" fill="#969ca2"/><path d="M1 7Q14 3 27 6Q50 1 73 6Q86 3 99 7L95 1H5Z" fill="#fff" fill-opacity=".4"/><path d="M1 33Q14 37 27 34Q50 39 73 34Q86 37 99 33L95 39H5Z" fill="#000" fill-opacity=".24"/><path d="M5 1H95L99 7V33L95 39H5L1 33V7Z" fill="url(#sheen)"/><path d="M27 6V34M73 6V34" stroke="#000" stroke-opacity=".3" stroke-width="1.3"/><path d="M5 1H95L99 7V33L95 39H5L1 33V7Z" fill="none" stroke="#16181b" stroke-opacity=".8" stroke-width="2" stroke-linejoin="round"/></g>
+  </defs>
+
+  <!-- background: the "Ocel" theme -->
+  <rect width="512" height="512" fill="#26313c"/>
+
+  <!-- base plate -->
+  <rect x="40" y="438" width="432" height="40" rx="12" fill="#465664"/>
+  <rect x="40" y="438" width="432" height="5" rx="2" fill="#fff" fill-opacity=".2"/>
+
+  <!-- the threaded rod with its rounded tip -->
+  <path d="M232 440V134a24 24 0 0 1 48 0V440z" fill="url(#rod)" stroke="#16181b" stroke-opacity=".6" stroke-width="3"/>
+  <g stroke="#000" stroke-opacity=".3" stroke-width="3">
+    <path d="M233 128l46-8M233 142l46-8M233 156l46-8"/>
+  </g>
+
+  <!-- the hex head and three nuts on the bolt, bottom first -->
+  <use href="#steel" transform="translate(141 412) scale(2.3 .7)"/>
+  <use href="#blue" transform="translate(146 326) scale(2.2)"/>
+  <use href="#yellow" transform="translate(146 238) scale(2.2)"/>
+  <use href="#blue" transform="translate(146 150) scale(2.2)"/>
+
+  <!-- one nut lifted above the tip, as when a bolt is chosen -->
+  <g transform="rotate(-6 256 60)">
+    <ellipse cx="256" cy="104" rx="96" ry="7" fill="#000" fill-opacity=".25"/>
+    <use href="#red" transform="translate(146 16) scale(2.2)"/>
+  </g>
+</svg>

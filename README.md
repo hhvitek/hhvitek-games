@@ -30,6 +30,7 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Pexeso          | `games/pexeso/`          | Otáčej karty a hledej dvojice stejných obrázků; fotky (Náchodsko, kočky, znaky obcí), kresby (houby, ptáci, ovoce a zelenina) nebo obrázky, 6 až 21 dvojic, bez spěchu |
 | Spoj tři        | `games/spoj-tri/`        | Prohazuj sousední kameny a skládej řady po třech; tvary, sady fotek (kočky, Náchodsko, znaky obcí) nebo kreseb (houby, ptáci, ovoce a zelenina) |
 | Přelévání       | `games/prelevani/`       | Přelévej barevné vrstvy mezi zkumavkami, dokud v každé nezůstane jedna barva; úrovně postupně přidávají barvy             |
+| Šroubky         | `games/sroubky/`         | Přesouvej barevné matky mezi šrouby, dokud na každém nezůstane jedna barva; čtyři obtížnosti, každá hra jde vyřešit, Poradit, Zpět a Od začátku |
 | Hanojské věže   | `games/hanojske-veze/`   | Přesouvej disky mezi třemi tyčemi, větší nikdy na menší; 3 až 8 disků, Poradit a Zpět                                     |
 | Spojování čísel | `games/spojovani-cisel/` | Posouvej a spojuj stejná čísla (jako 2048): šipky nebo tah prstem, Zpět, volitelně fotky nebo kresby na kostkách         |
 | Cesta ven       | `games/cesta-ven/`       | Posouvej auta (nebo kostky) na parkovišti, ať červené vyjede ven; úrovně postupně těžší, Poradit a Zpět                   |
