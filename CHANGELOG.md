@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Nová hra Spojování obrázků: spojuj dvojice stejných kamenů čárou, která se zalomí nejvýš dvakrát; stejné kameny a obrázky jako Mahjong, každé rozdání jde dohrát.
+
 ## 1.0.13 – 2026-11-12
 
 - Nová hra Paprsek: otáčej zrcadly a doveď paprsky světla do terčů; barevné paprsky se mísí.

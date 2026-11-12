@@ -25,6 +25,7 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Padající tvary  | `games/padajici-tvary/`  | Tvary ovládané tlačítky místo gest; pomalu padají a postupně zrychlují, hru jde kdykoli zastavit tlačítkem Pauza; v nastavení jde padání vypnout |
 | Barevné kostky  | `games/barevne-kostky/`  | SameGame: ťukej na skupiny stejně barevných kostek, zbytek spadne dolů; volitelně vždy řešitelné hrací plochy             |
 | Mahjong         | `games/mahjong/`         | Mahjong solitér: odebírej dvojice volných kamenů; klasické kameny, obrázky, sady fotek (kočky, Náchodsko, znaky obcí) nebo kreseb (houby, ptáci, ovoce a zelenina) |
+| Spojování obrázků | `games/spojovani-obrazku/` | Spojuj dvojice stejných kamenů čárou, která se zalomí nejvýš dvakrát a nevede přes jiný kámen; stejné kameny a obrázky jako Mahjong, každé rozdání jde dohrát, Poradit, Zamíchat a Zpět |
 | Pexeso          | `games/pexeso/`          | Otáčej karty a hledej dvojice stejných obrázků; fotky (Náchodsko, kočky, znaky obcí), kresby (houby, ptáci, ovoce a zelenina) nebo obrázky, 6 až 21 dvojic, bez spěchu |
 | Spoj tři        | `games/spoj-tri/`        | Prohazuj sousední kameny a skládej řady po třech; tvary, sady fotek (kočky, Náchodsko, znaky obcí) nebo kreseb (houby, ptáci, ovoce a zelenina) |
 | Přelévání       | `games/prelevani/`       | Přelévej barevné vrstvy mezi zkumavkami, dokud v každé nezůstane jedna barva; úrovně postupně přidávají barvy             |
@@ -90,7 +91,7 @@ Fotky a znaky obcí ve složce `images/` pocházejí z [Wikimedia Commons](https
 pod svobodnými licencemi (CC BY, CC BY-SA, CC0, volné dílo). Byly zmenšené a oříznuté.
 Kresby hub, ptáků a ovoce a zeleniny (`images/mushrooms/`, `images/birds/`, `images/produce/`) vznikly pro tyto hry
 a jsou volným dílem ([CC0](https://creativecommons.org/publicdomain/zero/1.0/)). Autoři, licence
-a odkazy na zdroj jsou v `images/sets.js` a ve hrách: Mahjong, Pexeso, Spoj tři a Spojování čísel → Nastavení → Autoři obrázků;
+a odkazy na zdroj jsou v `images/sets.js` a ve hrách: Mahjong, Spojování obrázků, Pexeso, Spoj tři a Spojování čísel → Nastavení → Autoři obrázků;
 karetní hry uvádějí autory fotky zámku a erbu Náchoda v nastavení u rubu karet.
 
 ## Kontakt

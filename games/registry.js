@@ -9,6 +9,7 @@ globalThis.GAMES = [
   { id: 'padajici-tvary', name: 'Padající tvary', description: 'Otáčej padající tvary a plň řady' },
   { id: 'barevne-kostky', name: 'Barevné kostky', description: 'Odebírej skupiny stejných barev' },
   { id: 'mahjong', name: 'Mahjong', description: 'Odebírej dvojice stejných kamenů' },
+  { id: 'spojovani-obrazku', name: 'Spojování obrázků', description: 'Spojuj dvojice čárou nejvýš se dvěma ohyby' },
   { id: 'pexeso', name: 'Pexeso', description: 'Hledej dvojice stejných obrázků' },
   { id: 'spoj-tri', name: 'Spoj tři', description: 'Prohazuj kameny a skládej řady po třech' },
   { id: 'prelevani', name: 'Přelévání', description: 'Přelévej barvy, ať je v každé zkumavce jedna' },

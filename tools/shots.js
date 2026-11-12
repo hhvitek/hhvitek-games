@@ -107,6 +107,7 @@ async (page) => {
     'padajici-tvary': async () => { await tapButton(/^Hrát$/); await wait(500); await tapButton(/Shodit/); await wait(1500); },
     'barevne-kostky': async () => { const b = await page.locator('#board, #field, .board').first().boundingBox(); if (b) await page.mouse.click(b.x + b.width / 2, b.y + b.height - 20); await wait(900); },
     'mahjong': async () => { await tap('[data-a="hint"]'); await wait(1500); await tap('.t.hl'); await wait(900); },
+    'spojovani-obrazku': async () => { await tap('[data-a="hint"]'); await wait(1200); await tap('.t.hl'); await wait(900); await tap('[data-a="hint"]'); await wait(1200); },
     'pexeso': async () => {
       // a found pair (card 0 and its twin), then two different cards that stay face up
       const [a, b, c, d] = await page.evaluate(() => { const f = window.Pexeso.state.G.faces, t = f.indexOf(f[0], 1), o = f.findIndex((x, i) => i > 0 && i !== t), p = f.findIndex((x, i) => i > 0 && i !== t && x !== f[o]); return [0, t, o, p]; });

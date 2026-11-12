@@ -25,10 +25,10 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 - [ ] Paprsek: default theme "Noc" (others Břidlice, Papír)? "Nová hra" restarts the current level (other levels in Settings → Úroveň)? Show "Nejméně" (fewest turns) from the start, or only after the win? Zpět unavailable after a win?
 - [ ] Kulička: the neutral tilt is re-taken every time play resumes; default theme "Dřevo" (also Papír, Zelená); holes only off the way to the goal (gentler than a real labyrinth); fixed sizes 5×7 / 7×10 / 9×13. Keep?
 
+- [ ] Spojování obrázků: chosen by the agent (2026-11-12): sizes 6 × 8 / 7 × 10 / 8 × 12 (Velký has tiles about 0.8 cm wide on a short screen), the Mahjong defaults (Znaky obcí on Dřevo), Zamíchat any time without asking, Zpět also after the win. Keep? A gravity variant (tiles slide down after a pair) could come later.
+
 ## Ideas
 
-- [ ] New game "Drápky" (Figury) from the user's sheet "Pravidla her v kostky": up to 3 rolls per turn to make one of 14 figures, unused rolls carry over ("čárky k dobru"); could reuse the Kostky opponent.
-- [ ] New game "Spojování" (Shisen-Sho / Mahjong Connect): flat grid, connect pairs with a line with at most two bends.
 - [ ] Patnáctka: a picture variant (a photo cut into tiles). Needs larger images than the shared ones (about 132×176 px).
 - [ ] Mahjong: a closer photo of the Náchod castle (the current one is a telephoto view from a distance).
 - [ ] Mahjong: optional "no dead ends" mode (each picture only twice, so wrong choices can never get the game stuck).

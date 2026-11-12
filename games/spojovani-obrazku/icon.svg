@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- background like the Dřevo theme -->
+  <rect width="512" height="512" fill="#6e4a2c"/>
+  <!-- a tile in the way -->
+  <rect x="196" y="236" width="128" height="170" rx="18" fill="#000" opacity=".3" transform="translate(10 12)"/>
+  <rect x="196" y="236" width="128" height="170" rx="18" fill="#2f7a63" transform="translate(8 8)"/>
+  <rect x="196" y="236" width="128" height="170" rx="18" fill="#fbf8ee"/>
+  <g fill="#1f4fa3"><circle cx="236" cy="290" r="18"/><circle cx="284" cy="352" r="18"/></g>
+  <g fill="#fbf8ee"><circle cx="236" cy="290" r="9"/><circle cx="284" cy="352" r="9"/></g>
+  <!-- left tile (red dragon shape) -->
+  <rect x="44" y="236" width="128" height="170" rx="18" fill="#000" opacity=".3" transform="translate(10 12)"/>
+  <rect x="44" y="236" width="128" height="170" rx="18" fill="#2f7a63" transform="translate(8 8)"/>
+  <rect x="44" y="236" width="128" height="170" rx="18" fill="#fbf8ee"/>
+  <g fill="#c62828"><rect x="99" y="262" width="18" height="118" rx="4"/><path d="M68 292h80v58H68zM84 307v28h48v-28z" fill-rule="evenodd"/></g>
+  <!-- right tile (the same) -->
+  <rect x="348" y="236" width="128" height="170" rx="18" fill="#000" opacity=".3" transform="translate(10 12)"/>
+  <rect x="348" y="236" width="128" height="170" rx="18" fill="#2f7a63" transform="translate(8 8)"/>
+  <rect x="348" y="236" width="128" height="170" rx="18" fill="#fbf8ee"/>
+  <g fill="#c62828"><rect x="403" y="262" width="18" height="118" rx="4"/><path d="M372 292h80v58H372zM388 307v28h48v-28z" fill-rule="evenodd"/></g>
+  <!-- the connecting line with two bends, round the top -->
+  <path d="M108 236V120h304v116" fill="none" stroke="#000" stroke-opacity=".45" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M108 236V120h304v116" fill="none" stroke="#ffd257" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
