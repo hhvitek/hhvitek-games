@@ -3,7 +3,6 @@
 // The launcher sorts tiles by how often each game is played, but only games opened at least
 // 5 times move up; the rest (and ties) keep the order given here.
 globalThis.GAMES = [
-  { id: 'kocka', name: 'Kočka', description: 'Starej se o kočku Koxu a její zahrádku' },
   { id: 'logik', name: 'Logik', description: 'Uhodni tajný barevný kód' },
   { id: 'sudoku', name: 'Sudoku', description: 'Doplň čísla do mřížky' },
   { id: 'skladani-kostek', name: 'Skládání kostek', description: 'Skládej tvary do mřížky' },
@@ -13,6 +12,7 @@ globalThis.GAMES = [
   { id: 'spojovani-obrazku', name: 'Spojování obrázků', description: 'Spojuj dvojice čárou nejvýš se dvěma ohyby' },
   { id: 'pexeso', name: 'Pexeso', description: 'Hledej dvojice stejných obrázků' },
   { id: 'spoj-tri', name: 'Spoj tři', description: 'Prohazuj kameny a skládej řady po třech' },
+  { id: 'kocka', name: 'Kočka', description: 'Starej se o kočku Koxu a její zahrádku' },
   { id: 'prelevani', name: 'Přelévání', description: 'Přelévej barvy, ať je v každé zkumavce jedna' },
   { id: 'hanojske-veze', name: 'Hanojské věže', description: 'Přenes věž z disků na pravou tyč' },
   { id: 'spojovani-cisel', name: 'Spojování čísel', description: 'Posouvej a spojuj stejná čísla' },
@@ -21,11 +21,11 @@ globalThis.GAMES = [
   { id: 'paprsek', name: 'Paprsek', description: 'Otáčej zrcadly a doveď světlo do terčů' },
   { id: 'kulicka', name: 'Kulička', description: 'Nakláněj telefon a doveď kuličku do cíle' },
   { id: 'zavri-cisla', name: 'Zavři čísla', description: 'Házej kostkami a zavírej čísla' },
-  { id: 'kostky', name: 'Kostky', description: 'Házej kostkami proti soupeři' },
   // Board games against the computer.
   { id: 'dama', name: 'Dáma', description: 'Klasická dáma proti počítači' },
   { id: 'piskvorky', name: 'Piškvorky', description: 'Pět v řadě proti počítači' },
-  // Card solitaires last.
+  // Kostky (user's wish: at the start of the card games), then the card solitaires.
+  { id: 'kostky', name: 'Kostky', description: 'Házej kostkami proti soupeři' },
   { id: 'soliter', name: 'Solitér', description: 'Skládej karty od esa po krále' },
   { id: 'freecell', name: 'FreeCell', description: 'Solitér se čtyřmi volnými políčky' },
   { id: 'pyramida', name: 'Pyramida', description: 'Odebírej dvojice karet se součtem 13' },

@@ -11,6 +11,7 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 - Výběr her: v Nastavení jde zapnout „Koxa a ostatní hry“ – za každou jinou hru dostane Koxa pamlsek a nahoře je vidět, jak se má.
 - Nová hra Spojování obrázků: spojuj dvojice stejných kamenů čárou, která se zalomí nejvýš dvakrát; stejné kameny a obrázky jako Mahjong, každé rozdání jde dohrát.
 - Nová hra Piškvorky: pět v řadě proti počítači na malé, střední nebo velké ploše; soupeř Běžný hráč nebo Mistr, který hraje, jak nejlépe umí. Poradit, Zpět, přiblížení plochy a potvrzování tahu proti překlepu.
+- Výběr her: Kostky jsou nově hned před karetními hrami (hry, které často hraješ, se dál řadí podle počtu hraní).
 
 ## 1.0.13 – 2026-11-12
 
