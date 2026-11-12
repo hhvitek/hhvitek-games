@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.12 – 2026-11-12
+
 - Nová hra Dáma: klasická česká dáma proti počítači. Soupeř je běžný hráč, nebo mistr, který propočítá mnoho tahů dopředu; tlačítka Poradit a Zpět.
 
 ## 1.0.11 – 2026-11-11
