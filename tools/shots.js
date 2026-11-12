@@ -160,6 +160,13 @@ async (page) => {
       await tap('#grid .c:nth-child(65)'); await wait(500); await tap('#btnHint'); await wait(500); await tap('#grid .c.hint'); await wait(500);
       await tap('#btnMode'); await wait(300); await tap('#grid .c.h:not(:has(svg))'); await wait(500);
     },
+    // a stack tapped and placed by a tap on a cell, another one dragged onto a cell, then Poradit, a tap on the advised cell, Poradit again
+    'vezicky': async () => {
+      await tap('#tray .slot'); await wait(300); await tap('#bsvg .cell[data-i="10"]'); await wait(1500);
+      const a = await page.locator('#tray .slot:has(svg)').first().boundingBox(), b = await page.locator('#bsvg .cell[data-i="3"]').boundingBox();
+      if (a && b) { await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2); await page.mouse.down(); await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 10 }); await page.mouse.up(); await wait(1500); }
+      await tap('#btnHint'); await wait(400); await tap('#bsvg .cell.hint'); await wait(1500); await tap('#btnHint'); await wait(400);
+    },
     'kostky': async () => { await tap('#btnRoll'); await wait(1200); await tap('#roll .die:not(.dead)'); await wait(400); },
     // a roll, two dice kept, the second roll, the šance box written; then the opponent's first steps
     'general': async () => {

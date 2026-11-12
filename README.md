@@ -45,6 +45,7 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Reversi         | `games/reversi/`         | Klasické reversi proti počítači: polož kámen tak, aby obklíčil soupeřovy, a ty se otočí; soupeř běžný hráč nebo mistr, Poradit a Zpět |
 | Lodě            | `games/lode/`            | Klasické lodě proti počítači: rozmísti své lodě, střílej do moře soupeře a potop celé jeho loďstvo dřív než on tvoje; pět nebo deset lodí, tři soupeři od začátečníka po mistra, Poradit |
 | Mlýn            | `games/mlyn/`            | Klasický mlýn s devíti kameny proti počítači: pokládej, posouvej a skládej mlýny, za každý vezmeš soupeři kámen; se třemi kameny se skáče; soupeř běžný hráč nebo mistr, Poradit a Zpět |
+| Věžičky         | `games/vezicky/`         | Pokládej věžičky z šestiúhelníkových dílků na plástev: stejné barvy u sousedů se sesypou na jednu věžičku a deset dílků jedné barvy zmizí; tři obtížnosti, rekordy, Poradit a Zpět |
 | Kostky          | `games/kostky/`          | Klasické kostky (jedničky a pětky) se šesti kostkami proti počítači: házej, dokud se nebojíš, a body si zapiš; tři soupeři od začátečníka po mistra, hra do 3 000, 5 000 nebo 10 000 |
 | Dáma            | `games/dama/`            | Klasická česká dáma proti počítači: dlouhá dáma, braní je povinné; soupeř běžný hráč nebo mistr, Poradit a Zpět            |
 | Piškvorky       | `games/piskvorky/`       | Pět v řadě proti počítači na ploše 13 × 13, 15 × 15 nebo 19 × 19; soupeř běžný hráč nebo mistr, Poradit, Zpět a přiblížení |
