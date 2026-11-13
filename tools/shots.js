@@ -154,6 +154,9 @@ async (page) => {
       // out into the garden: a neighbour cat visits and they wash each other (a joint scene of the visit)
       await page.evaluate(() => { const K = window.Kocka; K.state.G.st.asleep = false; K.go('hall'); K.settle(); K.go('garden'); K.settle(); K.state.G.st.visit = null; K.forceVisit('liza', 'groom'); });
       await wait(4500);
+      // Líza's kittens: one bats at Koxa's tail, the others play beside their mother (the naming dialog is put off for today)
+      await page.evaluate(() => { const K = window.Kocka, d = new Date(); if (!K.forceKittens) return; K.state.G.kitAsk = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; K.state.G.st.visit = null; K.settle(); K.forceKittens('liza', 'kitPlay', 4, 3); });
+      await wait(4500);
     },
     // the hint (dotted way, the next arrow framed), a tap on the framed arrow, the hint again
     'kulicka': async () => { await tap('#btnHint'); await wait(400); await tap('.arrow.hint'); await wait(1200); await tap('#btnHint'); await wait(500); },

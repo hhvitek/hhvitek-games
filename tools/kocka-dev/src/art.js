@@ -57,6 +57,15 @@
 //   postcardFrame(caption), postcardHole (viewBox 300×200), photoFrame(), photoHole (200×236)  frames over a photo.
 //   neighbour(id, pose, opts), neighbours = { id: { name, size } }  the visitors (mourek, liza, bivoj, ciperka, pacicka,
 //                            rambo, sedivka, fousek) in any pose; usually sit, walk, loaf, onFence (rooms.garden.spots.fence).
+//                            opts.coat = a neighbour id whose coat to wear (neighbour('k1', 'sit', { coat: 'liza', kit: 1 })).
+//   Kittens: opts.kit 0..1 in cat(), neighbour(), regions(), mouth() (0 or missing = a grown cat, exactly as without it;
+//                            1 ≈ 5–6 weeks, .35 a young cat): the whole cat kitScale(kit) big round her feet (100, 186)
+//                            (inside the same 200 box; the coat's size is not used), a bigger round head, big eyes, a
+//                            shorter body on shorter thinner legs, a short thin tail. regions() and mouth() with the same
+//                            opts already include all of it (do not scale them by kitScale again). kitAnchor(pose, kit) =
+//                            the anchor of a kitten (anchors mapped). Kitten play poses (any cat can): tumble (on her back,
+//                            paws up; hops and somersaults by CSS) and tailCatch (up on the hind legs, both paws up and
+//                            forward batting at something above, e.g. Koxa's raised tail; the near paw bats by CSS).
 function KockaArt() {
   'use strict';
   const C = {
@@ -67,6 +76,8 @@ function KockaArt() {
   };
   const KOXA_C = Object.assign({}, C);
   let COAT = { pattern: 'tortie', blaze: true };   // Koxa; withCoat() swaps it for a neighbour cat
+  // a kitten (opts.kit 0..1, see kitParams); null = a grown cat, nothing changes. Set by build() for one pose.
+  let KIT = null;
   const OLW = 5;                       // outline stroke (half of it shows outside the silhouette)
   const MOODS = ['happy', 'calm', 'grumpy', 'sad'];
   const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
@@ -174,6 +185,7 @@ function KockaArt() {
     if (q.beans) R.raw(`<g fill="${C.bean}"><ellipse cx="${x}" cy="${r1(y + ry * 0.2)}" rx="${r1(rx * 0.42)}" ry="${r1(ry * 0.36)}"/><circle cx="${r1(x - rx * 0.5)}" cy="${r1(y - ry * 0.42)}" r="${r1(rx * 0.17)}"/><circle cx="${x}" cy="${r1(y - ry * 0.6)}" r="${r1(rx * 0.17)}"/><circle cx="${r1(x + rx * 0.5)}" cy="${r1(y - ry * 0.42)}" r="${r1(rx * 0.17)}"/></g>`);
   }
   function tail(R, p, w = 13, cls = '') {
+    if (KIT) { p = p.map((v, i) => r1(p[i & 1] + (v - p[i & 1]) * KIT.tl)); w = r1(w * KIT.tw); }   // a kitten: short and thin
     R.tailRoot = [p[0], p[1]];
     R.open('', 'kx-tail' + (cls ? ' ' + cls : ''), p[0], p[1]);
     R.limb(p, w, { edge: true, bands: COAT.pattern === 'none' ? [] : [[30, 11, 0]] });   // no ginger band on a plain coat
@@ -211,9 +223,14 @@ function KockaArt() {
     const cx = sd * 15, cy = -1;
     if (kind === 'happy') return `<path d="M${cx - 8} ${cy + 2.5}Q${cx} ${cy - 7} ${cx + 8} ${cy + 2.5}" fill="none" stroke="${C.eye}" stroke-width="3.2" stroke-linecap="round"/>`;
     if (kind === 'closed') return `<path d="M${cx - 8} ${cy}Q${cx} ${cy + 5.5} ${cx + 8} ${cy}" fill="none" stroke="${C.lid}" stroke-width="2.4" stroke-linecap="round"/>`;
-    const big = kind === 'sad' || kind === 'wide';
-    const pr = { grumpy: [1.7, 6.6], sad: [5.2, 6.6], wide: [5.8, 7.2], tired: [2.6, 6] }[kind] || [3.3, 7.3];
-    let s = `<g transform="translate(${cx} ${cy}) rotate(${-sd * 10})"><ellipse rx="10" ry="${big ? 9.8 : 9}" fill="${C.eye}"/><ellipse cx="${sd * -0.6}" cy="${kind === 'sad' ? 1.5 : 0}" rx="${pr[0]}" ry="${pr[1]}" fill="${C.pupil}"/><circle cx="2.8" cy="-3.6" r="2.2" fill="#fff"/>`;
+    const big = kind === 'sad' || kind === 'wide' || !!KIT;
+    const pr = ({ grumpy: [1.7, 6.6], sad: [5.2, 6.6], wide: [5.8, 7.2], tired: [2.6, 6] }[kind] || [3.3, 7.3]).slice();
+    let tf = `translate(${cx} ${cy}) rotate(${-sd * 10})`;
+    if (KIT) {   // a kitten: bigger, rounder eyes with round pupils, set a little lower and wider
+      tf = `translate(${r1(cx * (1 + 0.06 * KIT.k))} ${r1(cy + 2.5 * KIT.k)}) rotate(${-sd * 10}) scale(${KIT.ek})`;
+      if (kind !== 'grumpy') pr[0] = r1(pr[0] + (6 - pr[0]) * 0.6 * KIT.k);
+    }
+    let s = `<g transform="${tf}"><ellipse rx="10" ry="${big ? 9.8 : 9}" fill="${C.eye}"/><ellipse cx="${sd * -0.6}" cy="${kind === 'sad' ? 1.5 : 0}" rx="${pr[0]}" ry="${pr[1]}" fill="${C.pupil}"/><circle cx="2.8" cy="-3.6" r="2.2" fill="#fff"/>`;
     if (big) s += '<circle cx="-3" cy="3" r="1.2" fill="#fff"/>';
     const lid = { grumpy: [-5.5, 0.5], sad: [1.5, -8.5], tired: [-1.5, -1.5] }[kind]; // [outer y, inner y]; inner = towards the nose
     if (lid) s += `<path d="M${sd * 12} -12L${-sd * 11} -12L${-sd * 11} ${lid[1]}L${sd * 12} ${lid[0]}Z" fill="${C.fur}"/><path d="M${sd * 10.5} ${lid[0] + 0.3}L${-sd * 10} ${lid[1] + 0.3}" stroke="${C.edge}" stroke-width="1.2"/>`;
@@ -236,10 +253,13 @@ function KockaArt() {
   }
   // head at (x, y), scale s, rotation rot; h from expr() plus { back, tongue, edge }; also adds the head regions
   function head(R, x, y, s, rot, h) {
-    R.open(`translate(${x} ${y}) rotate(${rot}) scale(${s})`, h.sneeze ? 'kx-sneeze' : '', 0, 30);
+    // a kitten: the whole drawing is squashed by (KIT.sx, KIT.sy) around the feet (cat()); the head undoes that, so it
+    // stays round, and is KIT.hk times bigger
+    const K = KIT, hs = K ? r2(s * K.hk) : s, ek = K ? K.ear : 1;
+    R.open(K ? `translate(${x} ${y}) scale(${r2(1 / K.sx)} ${r2(1 / K.sy)}) rotate(${rot}) scale(${hs})` : `translate(${x} ${y}) rotate(${rot}) scale(${s})`, h.sneeze ? 'kx-sneeze' : '', 0, 30);
     const ea = EAR_ROT[h.ears] != null ? EAR_ROT[h.ears] : 12, dy = h.ears === 'droop' ? 5 : h.ears === 'back' ? 3 : 0;
     for (const sd of [-1, 1]) {
-      R.open(`translate(${sd * 21} ${-22 + dy}) rotate(${sd * ea})`, sd > 0 ? 'kx-ear kx-earR' : 'kx-ear', 0, 0);
+      R.open(`translate(${sd * 21} ${-22 + dy}) rotate(${sd * ea})${K ? ` scale(${ek})` : ''}`, sd > 0 ? 'kx-ear kx-earR' : 'kx-ear', 0, 0);
       R.part(sd > 0 && COAT.torn ? EAR_TORN : EAR, { patches: sd > 0 ? spots([[4, -3, 10, 0]]) : '', edge: !!h.back });
       if (!h.back) R.raw(`<path d="${EAR_IN}" fill="${C.earIn}"/>`);
       R.close();
@@ -250,11 +270,13 @@ function KockaArt() {
     R.close();
     // regions: points of the head's own frame mapped into the cat's viewBox
     const a = rot * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
-    const m = (px, py) => [x + s * (px * ca - py * sa), y + s * (px * sa + py * ca)];
+    const ux = K ? r2(1 / K.sx) : 1, uy = K ? r2(1 / K.sy) : 1;
+    const m = (px, py) => [x + ux * hs * (px * ca - py * sa), y + uy * hs * (px * sa + py * ca)];
     const P = pts => poly(pts.map(q => m(q[0], q[1])));
     const v = (dx, dy) => unit(dx * ca - dy * sa, dx * sa + dy * ca);
     const earPts = sd => [[-14, -5], [-6, -31], [0, -36], [6, -31], [14, -5]].map(([ex, ey]) => {
       const b = sd * ea * Math.PI / 180;
+      ex *= ek; ey *= ek;
       return [sd * 21 + ex * Math.cos(b) - ey * Math.sin(b), -22 + dy + ex * Math.sin(b) + ey * Math.cos(b)];
     });
     R.region('ears', P(earPts(-1)) + P(earPts(1)), v(0, -1));
@@ -482,6 +504,9 @@ function KockaArt() {
     swipe(R, o, e) { swipe(R, o, e); },
     run(R, o, e) { run(R, o, e); },
     rub(R, o, e) { rub(R, o, e); },
+    // kitten play (any cat can, meant for kittens: opts.kit)
+    tumble(R, o, e) { tumble(R, o, e); },
+    tailCatch(R, o, e) { tailCatch(R, o, e); },
   };
   /* ---------- gait: walk, trot, jumps (side view, facing left; flip the box with scaleX(-1) to go right) ---------- */
   // One leg: the upper part swings at the shoulder / hip (px, py), the lower part bends at the knee. Animated legs get
@@ -791,6 +816,49 @@ function KockaArt() {
     R.mid = [126, 132];
   }
 
+  /* ---------- kitten play ---------- */
+  // a playful roll: curled into a ball on her back, paws in the air, the head tucked; by CSS (kx-tumble) she hops and
+  // somersaults round the ball's middle (108, 150), then lies still a moment
+  function tumble(R, o, e) {
+    const k = KIT ? KIT.k : 0, hx = 70 - 8 * k;   // a kitten's big head a little further out
+    R.shadow = [112, 186, 42, 4.5];
+    R.wrap = { cls: 'kx-tumble', ox: 116, oy: 152 };
+    R.limb([112, 126, 110, 116, 112, 108, 116, 100], 11, { fill: C.fur2, paw: [7.5, 7] });   // far front paw
+    R.part(ell(118, 152, 38, 34), { patches: spots([[124, 140, 14, 1], [140, 162, 10, 0], [100, 170, 9, 0]]) });
+    R.part('M88 140C96 124 128 118 146 128C138 142 108 152 88 140Z', { fill: C.fur2 });   // the belly turned up
+    R.part(ell(146, 154, 18, 20), { edge: true, patches: spots([[150, 160, 8, 0]]) });
+    tail(R, [154, 172, 174, 178, 190, 166, 186, 148]);
+    R.limb([140, 136, 146, 124, 150, 116, 158, 108], 13, { edge: true, paw: [8.5, 8], beans: true });   // hind paw
+    R.limb([98, 136, 94, 124, 92, 114, 94, 104], 12, { edge: true, paw: [8, 7.5], beans: true });      // near front paw
+    head(R, hx, 156, 0.84, -28, H(e, { eyes: o.asleep ? 'closed' : o.mood === 'grumpy' ? 'grumpy' : o.mood === 'sad' || o.ill ? e.eyes : 'happy', mouth: o.openMouth || o.meow ? e.mouth : 'cat', ears: o.ears || 'turned' }));
+    R.region('belly', 'M86 142C92 120 130 112 150 126C140 146 106 156 86 142Z', [1, 0]);
+    R.region('back', ellPoly(118, 152, 38, 34), [1, 0]);
+    R.mid = [118, 152];
+    R.zz = [110, 84];
+  }
+  // sitting up on the hind legs, both front paws up and forward (left) batting at something above her (a tail tip),
+  // ears forward, big eyes; the near paw bats by CSS (kx-bat), the tail twitches; reach = the paws, about (44, 34)
+  function tailCatch(R, o, e) {
+    R.shadow = [106, 186, 44, 5];
+    const k = KIT ? KIT.k : 0, hx = 104 + 16 * k, hy = 66 + 12 * k;   // a kitten's big head sits lower and further back
+    R.limb([98, 108, 82, 86, 64 - 8 * k, 56 - 4 * k, 50 - 12 * k, 30 - 2 * k], 11, { fill: C.fur2, paw: [8, 7.5], beans: true });   // the far paw, higher
+    R.part(ell(92, 183, 14, 5), { edge: true }); R.part(ell(122, 184, 13, 5), { edge: true });
+    tail(R, [138, 180, 158, 190, 180, 186, 192, 172], 13, 'kx-tw');
+    const BODY = 'M84 90C70 112 70 150 76 172C84 188 126 188 134 172C140 150 134 112 114 88Z';
+    R.open(btfX(o, 104));
+    R.part(BODY, { patches: spots([[112, 116, 13, 0], [86, 146, 11, 1], [118, 166, 7, 0]]) });
+    R.part(ell(124, 166, 17, 19), { edge: true, patches: spots([[128, 160, 8, 0]]) });
+    R.part(ell(84, 168, 14, 17), { edge: true });
+    R.close();
+    R.open('', 'kx-bat', 88, 108);
+    R.limb([88, 108, 70, 96, 52 - 8 * k, 76, 38 - 14 * k, 52 + 2 * k], 12, { edge: true, paw: [8.5, 8], beans: true });   // the near paw, batting
+    R.close();
+    head(R, hx, hy, 0.94, -24, H(e, { eyes: o.asleep || o.ill ? e.eyes : e.eyes === 'grumpy' ? 'grumpy' : 'wide', ears: o.ears || 'up', mouth: o.openMouth || o.meow ? e.mouth : 'cat', blush: false }));
+    R.region('back', BODY, [0, 1]);
+    R.mid = [104, 132];
+    R.zz = [128, 30];
+  }
+
   /* ---------- the cat ---------- */
   function opts(x) {
     const o = typeof x === 'string' ? { mood: x } : Object.assign({}, x);
@@ -799,17 +867,40 @@ function KockaArt() {
   }
   // the lap poses are loaf / sleep / belly drawn bigger: [scale, centre x, y, new centre x, y]
   const LAPZ = { lapLoaf: [1.25, 108, 137, 100, 122], lapCurl: [1.2, 102, 146, 100, 128], lapBelly: [1.05, 104, 150, 100, 132] };
+  // a kitten (opts.kit 0..1; 0 or missing = a grown cat): the whole cat ks times smaller around her feet (100, 186);
+  // inside that the body squashed by sx × sy (shorter, lower, thinner legs) while the head is hk times bigger and stays
+  // round; eyes ek bigger, ears smaller on the head, the tail tl as long and tw as thick. 1 ≈ a kitten of 5–6 weeks.
+  function kitParams(kit) {
+    const k = Math.min(1, +kit);
+    if (!(k > 0)) return null;
+    return { k, ks: r2(1 - 0.5 * k), sx: r2(1 - 0.16 * k), sy: r2(1 - 0.14 * k), hk: r2(1 + 0.35 * k), ek: r2(1 + 0.22 * k),
+      ear: r2(1 - 0.1 * k), tl: r2(1 - 0.42 * k), tw: r2(1 - 0.3 * k) };
+  }
+  const kitScale = kit => { const K = kitParams(kit); return K ? K.ks : 1; };
+  // the anchor (see ANCHORS; [100, 186] for the rest) of a kitten in that pose: the point of its box to put on the spot
+  const kitAnchor = (pose, kit) => { const K = kitParams(kit), a = ANCHORS[pose] || [100, 186]; return K ? kitOut(K, ...kitIn(K, a[0], a[1])) : a.slice(); };
   function build(pose, o) {
     if (!POSES[pose]) pose = 'sit';
     if (pose === 'sleep' || pose === 'lapCurl') o.asleep = true;
     const R = Rig(o);
-    POSES[pose](R, o, expr(o));
+    KIT = kitParams(o.kit);
+    try { POSES[pose](R, o, expr(o)); } finally { R.kit = KIT; KIT = null; }
     if (LAPZ[pose]) { R.zoom = LAPZ[pose]; R.shadow = null; }
     return { R, pose };
   }
   const zoomPt = (z, x, y) => [r1(z[3] + z[0] * (x - z[1])), r1(z[4] + z[0] * (y - z[2]))];
   // region paths use only absolute M/L/C/Z, so every pair of numbers is a point
   const zoomPath = (z, d) => { let i = 0; return d.replace(/-?\d*\.?\d+/g, m => String(i++ % 2 ? r1(z[4] + z[0] * (m - z[2])) : r1(z[3] + z[0] * (m - z[1])))); };
+  // the kitten's two scalings around the feet (100, 186): the squash of the body (inner) and the size (outer)
+  const kitIn = (K, x, y) => [100 + K.sx * (x - 100), 186 + K.sy * (y - 186)];
+  const kitOut = (K, x, y) => [r1(100 + K.ks * (x - 100)), r1(186 + K.ks * (y - 186))];
+  const kitPath = (f, d) => {
+    const n = (d.match(/-?\d*\.?\d+/g) || []).map(Number), q = [];
+    for (let i = 0; i + 1 < n.length; i += 2) q.push(...f(n[i], n[i + 1]));
+    let i = 0;
+    return d.replace(/-?\d*\.?\d+/g, () => String(r1(q[i++])));
+  };
+  const kitTf = (K, sx, sy) => `translate(100 186) scale(${sx} ${sy}) translate(-100 -186)`;
   const outlined = (s, w) => `<g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="${s}" stroke="#2e2118" stroke-width="${w + 2.6}"/><path d="${s}" stroke="${C.ol}" stroke-width="${w}"/></g>`;
   function cat(pose, x) {
     const o = opts(x), { R, pose: p } = build(pose, o);
@@ -839,12 +930,22 @@ function KockaArt() {
       olF = ` filter="url(#${f})"`;
     }
     let inner = `<g${olF}>${R.ol.join('')}</g><g${fiF}>${R.fi.join('')}</g>${R.top.join('')}`;
-    if (R.wrap) inner = `<g class="${R.wrap.cls}" style="transform-origin:${R.wrap.ox}px ${R.wrap.oy}px">${inner}</g>`;
+    const K = R.kit;
+    if (K) inner = `<g transform="${kitTf(K, K.sx, K.sy)}">${inner}</g>`;
+    if (R.wrap) {
+      const [ox, oy] = K ? kitIn(K, R.wrap.ox, R.wrap.oy).map(r1) : [R.wrap.ox, R.wrap.oy];
+      inner = `<g class="${R.wrap.cls}" style="transform-origin:${ox}px ${oy}px">${inner}</g>`;
+    }
     if (R.zoom) inner = `<g transform="translate(${R.zoom[3]} ${R.zoom[4]}) scale(${R.zoom[0]}) translate(${-R.zoom[1]} ${-R.zoom[2]})">${inner}</g>`;
     if (COAT.size) inner = `<g transform="translate(100 186) scale(${COAT.size}) translate(-100 -186)">${inner}</g>`;
+    if (K) inner = `<g transform="${kitTf(K, K.ks, K.ks)}">${inner}</g>`;
     if (o.purring) inner = `<g class="kx-purr">${inner}</g>`;
-    const sh = R.shadow ? `<ellipse cx="${R.shadow[0]}" cy="${R.shadow[1]}" rx="${R.shadow[2]}" ry="${R.shadow[3]}" fill="#000" opacity=".18"/>` : '';
-    const cls = ['koxa', 'kx-m-' + o.mood, 'kx-p-' + p, o.asleep ? 'kx-asleep' : '', o.wet ? 'kx-wet' : '', R.cls || ''].filter(Boolean).join(' ');
+    let sh = '';
+    if (R.shadow) {
+      const s = R.shadow, [sx, sy] = K ? kitOut(K, ...kitIn(K, s[0], s[1])) : s, f = K ? K.ks * K.sx : 1;
+      sh = `<ellipse cx="${sx}" cy="${sy}" rx="${K ? r1(s[2] * f) : s[2]}" ry="${K ? r1(s[3] * K.ks) : s[3]}" fill="#000" opacity=".18"/>`;
+    }
+    const cls = ['koxa', 'kx-m-' + o.mood, 'kx-p-' + p, K ? 'kx-kit' : '', o.asleep ? 'kx-asleep' : '', o.wet ? 'kx-wet' : '', R.cls || ''].filter(Boolean).join(' ');
     return `<svg class="${cls}" viewBox="0 0 200 200" aria-hidden="true"><defs>${R.defs.join('')}</defs>${sh}${inner}</svg>`;
   }
   // poses that do not stand on (100, 186): the point of her box to put on the spot
@@ -857,17 +958,25 @@ function KockaArt() {
       const [tx, ty] = R.tailRoot, [dx, dy] = unit(tx - R.mid[0], ty - R.mid[1]);
       R.region('tailBase', ellPoly(tx - dx * 22, ty - dy * 22, 25, 15, Math.atan2(dy, dx) * 180 / Math.PI), [dx, dy]);
     }
+    const K = R.kit, kf = K && kitMap(R);
     for (const g of R.reg) {
-      const path = R.zoom ? zoomPath(R.zoom, g.path) : g.path;
-      if (by[g.id]) by[g.id].path += path; else by[g.id] = { id: g.id, path, fur: g.fur };
+      const path = K ? kitPath(kf, g.path) : R.zoom ? zoomPath(R.zoom, g.path) : g.path;
+      // a kitten's fur directions: the squash turns them a little
+      const fur = K ? unit(g.fur[0] * K.sx, g.fur[1] * K.sy) : g.fur;
+      if (by[g.id]) by[g.id].path += path; else by[g.id] = { id: g.id, path, fur };
     }
     return ORDER.filter(id => by[id]).map(id => by[id]);
+  }
+  // a point of the pose's drawing → the kitten's box: squash, the lap zoom, size
+  function kitMap(R) {
+    const K = R.kit, z = R.zoom;
+    return (x, y) => { let [u, v] = kitIn(K, x, y); if (z) { u = z[3] + z[0] * (u - z[1]); v = z[4] + z[0] * (v - z[2]); } return kitOut(K, u, v); };
   }
   // where her mouth is (the middle of the open mouth) in the cat's viewBox, or null when she faces away
   function mouth(pose, x) {
     const { R } = build(pose, opts(x));
     if (!R.mouthPt) return null;
-    const [x0, y0] = R.zoom ? zoomPt(R.zoom, R.mouthPt[0], R.mouthPt[1]) : R.mouthPt;
+    const [x0, y0] = R.kit ? kitMap(R)(R.mouthPt[0], R.mouthPt[1]) : R.zoom ? zoomPt(R.zoom, R.mouthPt[0], R.mouthPt[1]) : R.mouthPt;
     return { x: x0, y: y0 };
   }
   function face(mood) {
@@ -1473,10 +1582,16 @@ function KockaArt() {
     Object.assign(C, KOXA_C, coat.c); COAT = coat;
     try { return fn(); } finally { Object.assign(C, KOXA_C); COAT = save; }
   }
-  // neighbour(id, pose, opts): a visitor drawn like cat() (every pose works; sit, walk, loaf and onFence are the usual ones)
+  // neighbour(id, pose, opts): a visitor drawn like cat() (every pose works; sit, walk, loaf and onFence are the usual ones).
+  // opts.coat = a neighbour id whose coat to wear (a kitten 'k1' in Mourek's coat); otherwise the id's own coat, Mourek's
+  // when unknown. With opts.kit > 0 the coat's size is not used (a kitten is kitScale(kit) big), and a kitten (kit ≥ .5)
+  // has neither heavy old lids nor a torn ear.
   function neighbour(id, pose, x) {
-    const nb = NEIGHBOURS[id] || NEIGHBOURS.mourek;
-    return withCoat(nb, () => cat(pose, x)).replace('class="koxa ', `class="koxa kx-nb kx-nb-${NEIGHBOURS[id] ? id : 'mourek'} `);
+    const cid = x && typeof x === 'object' && NEIGHBOURS[x.coat] ? x.coat : NEIGHBOURS[id] ? id : 'mourek';
+    let nb = NEIGHBOURS[cid];
+    const k = x && typeof x === 'object' ? Math.min(1, +x.kit) : 0;
+    if (k > 0) nb = Object.assign({}, nb, { size: 0 }, k >= 0.5 ? { old: false, torn: false } : {});
+    return withCoat(nb, () => cat(pose, x)).replace('class="koxa ', `class="koxa kx-nb kx-nb-${cid} `);
   }
   const neighbours = {};
   for (const k of Object.keys(NEIGHBOURS)) neighbours[k] = { name: NEIGHBOURS[k].name, size: NEIGHBOURS[k].size || 1 };
@@ -1521,6 +1636,8 @@ function KockaArt() {
 .kx-snow{animation:kx-snow 4s linear infinite}
 .kx-flies>g{animation:kx-fly 2.6s ease-in-out infinite}
 .kx-spin{animation:kx-spin 1.6s ease-in-out infinite}
+.kx-tumble{animation:kx-tumble 2.2s ease-in-out infinite}
+.kx-bat{animation:kx-bat .46s ease-in-out infinite alternate}
 .kx-card{display:block;width:100%;height:auto}
 .kx-z{opacity:0;animation:kx-z 3s linear infinite}
 .kx-fleas circle{animation:kx-hop 1.3s ease-in-out infinite}
@@ -1547,6 +1664,8 @@ function KockaArt() {
 @keyframes kx-bend3{0%,42%{transform:rotate(0deg)}60%{transform:rotate(-85deg)}90%,100%{transform:rotate(0deg)}}
 @keyframes kx-rock{0%,100%{transform:rotate(3deg)}50%{transform:rotate(-3deg) translate(0,-3px)}}
 @keyframes kx-spin{0%,100%{transform:scaleX(1)}25%{transform:scaleX(.12)}50%{transform:scaleX(-1)}75%{transform:scaleX(.12)}}
+@keyframes kx-tumble{0%,45%{transform:none}55%{transform:translate(-3px,-16px) rotate(-90deg)}68%{transform:translate(-6px,-20px) rotate(-200deg)}82%{transform:translate(-3px,-6px) rotate(-320deg)}90%{transform:translate(0,1px) rotate(-360deg) scale(1.04,.94)}96%,100%{transform:rotate(-360deg)}}
+@keyframes kx-bat{0%{transform:rotate(10deg)}100%{transform:rotate(-14deg)}}
 @keyframes kx-rub{0%,100%{transform:rotate(0)}50%{transform:rotate(-2deg)}}
 @keyframes kx-nuzzle{0%,100%{transform:rotate(3deg)}50%{transform:rotate(-5deg)}}
 @keyframes kx-tw{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(4deg)}}
@@ -1564,7 +1683,7 @@ function KockaArt() {
 @media (prefers-reduced-motion:reduce){.koxa,.koxa *,.kx-item *,.kx-room *,.kx-fx-float{animation:none!important}.koxa .kx-z{opacity:.9}}
 `;
 
-  return { css, cat, poses: Object.keys(POSES), regions, room, spots: spotsAt, item, items: Object.keys(ITEMS), face,
+  return { css, cat, poses: Object.keys(POSES), regions, kitScale, kitAnchor, room, spots: spotsAt, item, items: Object.keys(ITEMS), face,
     mouth, itemHeld, sunPatch, rooms, lap, lapSpot, crop, crops: CROPS, cropSlot, anchors: ANCHORS, itemSize, itemPoints, mouseHole, mousePeek, fish, fishes: Object.keys(FISH), marker,
     shop, shopSpots, postcardFrame, postcardHole, photoFrame, photoHole, neighbour, neighbours, icon, icons: Object.keys(ICONS), fx, fxs: Object.keys(FX), vet, vetSpots };
 }

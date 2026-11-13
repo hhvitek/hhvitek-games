@@ -68,6 +68,14 @@
 //                                   7:00 (invited from the garden, Koxa comes in too: 'house'); guestSleep: Koxa and the
 //                                   guest sleep together in the house (pal 4+), once a night
 //   (visitorLeave gets reason 'inside' when the visitor was invited in)
+//   Phase C (kittens visiting, SPEC §8b; a visitor id may be a kitten 'k1'…'k12': E.visitor(st, id) for its name):
+//   visitor / visitorLeave get kits: [ids] when the mother comes or goes with her small kittens (st.visit.kits)
+//   kittens { mother, n, ids, alone? }  kittens seen for the first time: a litter with its mother (n 2–4), or alone: true,
+//                                   n 1, ids [the visitor]: a young cat that nobody saw while small (a litter during a
+//                                   long absence) comes on its own the first time; not 'litter', which is the litter box
+//   visitAct { …, kit }             kit: the kitten Koxa is with (kitPlay, kitGroom)
+//   kitNamed { id, name }           nameKitten
+//   kitGrown { id }                 a kitten's first visit on its own (from 21 days)
 //   photo { n } / photoDeleted { n }   the album
 //   gift { n }                      pamlsky from the launcher link
 //   found { id, text }              a new Deníček entry
@@ -76,6 +84,7 @@
 // Phase B actions (act): strokeVisitor { id, region?, along?, speed? } (without region: the menu's Pohladit),
 //   treatVisitor { id }, playVisitor { id, caught: 'koxa' | 'visitor' }, invite { id }; photo also takes
 //   { vpose, vx, vflip, nokoxa } (where the visitor stood; nokoxa: Koxa is not in the picture)
+// Phase C action: nameKitten { id, name }
 function KockaEngine() {
   const MIN = 60000, HOUR = 60 * MIN, DAY = 24 * HOUR, STEP = 10 * MIN;
   const AWAY = 72 * HOUR;          // longer absence: paní Nováková took her (§4); the rest is not simulated
@@ -213,12 +222,13 @@ function KockaEngine() {
   });
   const ACTIONS = deep(['feed', 'water', 'stroke', 'scratch', 'pickUp', 'putDown', 'play', 'brush', 'cleanLitter', 'letOut', 'letIn', 'treat', 'vetCure', 'pill', 'call', 'vacuum', 'lapOn', 'lapOff',
     'goGarden', 'goHouse', 'fetchDown', 'sow', 'waterBeds', 'harvest', 'catnip', 'buy', 'place', 'sell', 'train', 'showTrick',
-    'feedVisitor', 'strokeVisitor', 'photo', 'deletePhoto', 'treatVisitor', 'playVisitor', 'invite']);
+    'feedVisitor', 'strokeVisitor', 'photo', 'deletePhoto', 'treatVisitor', 'playVisitor', 'invite', 'nameKitten']);
   const CMAX = 1e6;  // counters saturate here (inc)
   const COUNTS = ['favFood', 'belly', 'toy', 'quirk'].concat(SPOTS.map(s => 'spot_' + s));
   // pal*: Koxa and a neighbour cat (the cat is st.diaryCat[id])
   const PAL_DIARY = ['palFirst', 'palGroom', 'palSnuggle'];
-  const CAT_DIARY = PAL_DIARY.concat(['sleepover']);   // the entries that name a neighbour cat (st.diaryCat), in this order
+  // the entries that name a neighbour cat (st.diaryCat), in this order; kittens: the mother, kitGrown: the kitten
+  const CAT_DIARY = PAL_DIARY.concat(['sleepover', 'kittens', 'kitGrown']);
   const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], CAT_DIARY);
 
   /* --- small helpers --- */
@@ -235,6 +245,8 @@ function KockaEngine() {
   const rndSeed = (seed, a, salt) => hash32(seed, a, salt) / 4294967296;
   const ymd = ms => { const d = new Date(ms); return [d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]; };
   const dkey = ms => { const [y, m, d] = ymd(ms); return y * 10000 + (m + 1) * 100 + d; };   // local day, 20261112
+  // the next local day's key (t + 24 h is not enough on the day the clocks go back)
+  const tomorrow = ms => { const d = new Date(ms); d.setDate(d.getDate() + 1); return dkey(d.getTime()); };
   const dayNo = (y, m, d) => Math.round(Date.UTC(y, m, d) / DAY);                         // calendar day number
   const keyNo = k => dayNo(Math.floor(k / 10000), Math.floor(k / 100) % 100 - 1, k % 100);
   const isKey = k => Number.isInteger(k) && k >= 19000101 && k <= 22001231 && k % 100 >= 1 && k % 100 <= 31 && Math.floor(k / 100) % 100 >= 1 && Math.floor(k / 100) % 100 <= 12;
@@ -322,6 +334,7 @@ function KockaEngine() {
       yard: null, wet: 0, beds: Array(BEDS).fill(null), pantry: {}, postcards: [], presents: {},
       stock: {}, owned: {}, furniture: {}, records: {}, tricks: {}, earnDay: { key: dkey(now), n: 0 }, train: null,
       visitors: {}, visit: null, album: [], diaryCat: {}, guest: null, invDay: 0, jealous: null, jealousAt: 0,
+      kits: [], litter: null,
     };
     for (const k of COUNTS) st.cnt[k] = 0;
     return st;
@@ -424,7 +437,7 @@ function KockaEngine() {
     st.walkMax = num(st.walkMax, 0, 0, 100 * DAY);
     const year = new Date(t).getFullYear();
     st.bday = Number.isInteger(st.bday) && st.bday >= 2000 && st.bday <= year ? st.bday : year;
-    st.pill = isKey(st.pill) && st.pill <= dkey(t + DAY) ? st.pill : 0;
+    st.pill = isKey(st.pill) && st.pill <= tomorrow(t) ? st.pill : 0;
     const T = st.traits && typeof st.traits === 'object' ? st.traits : {}, D = drawTraits(st.seed);
     st.traits = {
       favFood: ['pouch', 'chicken', 'tuna'].includes(T.favFood) ? T.favFood : D.favFood,
@@ -438,7 +451,7 @@ function KockaEngine() {
     st.diary = {}; for (const k of Object.keys(Dy)) if (DIARY_IDS.includes(k) && okT(Dy[k])) st.diary[k] = Math.min(Dy[k], t);   // keeps the order found
     if (!st.diary.birthday) st.diary.birthday = st.born;
     const DC = obj(st.diaryCat); st.diaryCat = {};   // only for a found pal* entry, in a fixed order
-    for (const k of CAT_DIARY) if (st.diary[k] && has(VISITORS, DC[k])) st.diaryCat[k] = DC[k];
+    for (const k of CAT_DIARY) if (st.diary[k] && (k === 'kittens' ? MOTHERS.includes(DC[k]) || !!kitOf(st, DC[k]) : isVisitor(st, DC[k]))) st.diaryCat[k] = DC[k];
     const d = st.day;
     st.day = d && typeof d === 'object' && isKey(d.key) && d.key <= dkey(t) && typeof d.ms === 'number' && d.ms >= 0 && d.ms <= 26 * HOUR ? {
       key: d.key, ms: num(d.ms, 0, 0, 2 * DAY), food: num(d.food, 0, 0, 200 * DAY), mood: num(d.mood, 0, -200 * DAY, 200 * DAY),
@@ -452,7 +465,7 @@ function KockaEngine() {
     for (const k of Object.keys(st)) if (!STATE_KEYS.includes(k)) delete st[k];
     return st;
   }
-  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat', 'guest', 'invDay', 'jealous', 'jealousAt'];
+  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat', 'guest', 'invDay', 'jealous', 'jealousAt', 'kits', 'litter'];
   // valid(st): repairs st in place and says whether it is usable (false only for null, a non-object or no time at all)
   function valid(st) { return repair(st) !== null; }
 
@@ -531,8 +544,17 @@ function KockaEngine() {
     if (id === 'walk') return `Nejdelší toulka trvala ${fmtDur(st.walkMax)}.`;
     if (id === 'birthday') { const [y, m, d] = ymd(st.born); return `${name} k nám přišla ${d}. ${m + 1}. ${y}.`; }
     if (CAT_DIARY.includes(id)) {
-      const c = st.diaryCat && Object.prototype.hasOwnProperty.call(VISITORS, st.diaryCat[id]) ? VISITORS[st.diaryCat[id]] : null;
+      const c = st.diaryCat ? visitor(st, st.diaryCat[id]) : null;
       const f = c && c.fem;   // Koxa is a she: the plural is feminine only with a female cat
+      if (id === 'kittens') {
+        if (!c) return 'Kočka od sousedů přivedla na zahradu koťátka.';
+        // a young cat nobody saw while small came alone first
+        if (c.mother) return `Na zahradu poprvé ${f ? 'přišla' : 'přišel'} ${c.name}, koťátko ${VISITORS[c.mother].name.replace(/a$/, 'y')}.`;
+        // the mother's first litter seen
+        const first = st.kits.filter(k => k.mother === c.id && kitSeen(st, k)), L = first.length ? first.filter(k => kitLit(k.id) === kitLit(first[0].id)).map(k => k.name) : [];
+        return L.length ? `${c.name} přivedla na zahradu koťátka: ${L.length > 1 ? L.slice(0, -1).join(', ') + ' a ' + L[L.length - 1] : L[0]}.` : `${c.name} přivedla na zahradu koťátka.`;
+      }
+      if (id === 'kitGrown') return c ? `${c.name} už chodí na návštěvu ${f ? 'sama' : 'sám'}.` : 'Koťátko od sousedů už chodí na návštěvu samo.';
       if (id === 'sleepover') return c ? `${name} měla poprvé návštěvu na noc: ${c.name}.` : `${name} měla poprvé návštěvu na noc.`;
       if (id === 'palFirst') return c ? (f ? `${name} má první kamarádku: ${c.name}.` : `${name} má prvního kamaráda: ${c.name}.`) : `${name} má prvního kočičího kamaráda.`;
       if (id === 'palGroom') return c ? `${name} a ${c.name} si poprvé navzájem ${f ? 'umyly' : 'umyli'} kožíšky.` : `${name} a kamarád si poprvé navzájem umyli kožíšky.`;
@@ -547,6 +569,8 @@ function KockaEngine() {
     palFirst: 'Najde si kamaráda mezi kočkami od sousedů? Choď s ní na zahradu, když přijde návštěva.',
     palGroom: 'Budou si s kamarádem navzájem mýt kožíšek?', palSnuggle: 'Zdřímne si někdy schoulená u kamaráda?',
     sleepover: 'Přespí u nás někdy kočka od sousedů? Když se s vámi oběma moc skamarádí, můžeš ji večer pozvat dovnitř.',
+    kittens: 'Budou mít kočky od sousedů koťátka? Kamaráď se s kočkami, které k nám chodí.',
+    kitGrown: 'Kdy začne koťátko chodit na návštěvu samo?',
   };
   // Deníček: her two spots only; text = the fact when found, else a question
   function diary(st, name) {
@@ -713,6 +737,7 @@ function KockaEngine() {
   function newDay(st, t, ev) {
     endDay(st, ev);
     st.day = freshDay(t);
+    litterDay(st, t, ev);
     const age = birthdayAge(st.born, t), y = new Date(t).getFullYear();
     if (age && st.bday < y) { st.bday = y; addBond(st, 10, ev); ev.push({ type: 'birthday', age }); }
   }
@@ -845,7 +870,7 @@ function KockaEngine() {
       D.ms *= k; D.food *= k; D.mood *= k;
     }
     st.bday = Math.min(st.bday, new Date(now).getFullYear());
-    if (st.pill > dkey(now + DAY)) st.pill = dkey(now + DAY);
+    if (st.pill > tomorrow(now)) st.pill = tomorrow(now);
   }
   function advance(st, now) {
     const ev = [];
@@ -906,6 +931,10 @@ function KockaEngine() {
     const no = reason => { ev.push({ type: 'refused', reason }); return { st, events: ev }; };
     if (typeof action !== 'string' || !ACTIONS.includes(action)) return no('Tohle teď nejde.');
     const before = wants(st), a = arg && typeof arg === 'object' ? arg : {};
+    if (action === 'nameKitten') {   // anywhere, whatever Koxa does (she stays on the lap or up the tree)
+      const why = nameKitten(st, a, ev);
+      return why ? no(why) : { st, events: ev };
+    }
     const home = ['cleanLitter', 'letIn', 'call', 'vacuum', 'sow', 'waterBeds', 'harvest', 'feedVisitor', 'strokeVisitor', 'deletePhoto', 'buy', 'sell', 'place',
       'treatVisitor', 'playVisitor', 'invite', 'photo'];   // invite and photo say themselves why not (Koxa out)
     // up the tree: only calling her, fetching her down, the garden, the shop and the camera
@@ -1359,6 +1388,124 @@ function KockaEngine() {
     sedivka: { name: 'Šedivka', trait: 'old', fem: true }, fousek: { name: 'Fousek', trait: 'sleepy', fem: false },
   });
   const VISITOR_IDS = Object.keys(VISITORS);
+  /* --- Phase C: kittens visiting (SPEC §8b Phase C; they only visit, never a second cat at home) --- */
+  const MOTHERS = deep(['liza', 'ciperka', 'pacicka']);   // not Šedivka: she is old
+  const TOMS = deep(['mourek', 'bivoj', 'rambo', 'fousek']);
+  // after: the first litter at the earliest this many days after the game started; gap: days from one litter to the next;
+  // max litters a game; p: the chance a day once a mother can have them (the player's 3 hearts); per: kittens at most;
+  // alone: from this age (days) a kitten visits on its own; grown: adult size (can be invited); the visit pick: a mother
+  // with small kittens weighs motherW (1 for the others), a young cat kitW, all young cats together at most kitsW
+  const KIT = deep({ after: 7, gap: 120, max: 3, p: 0.1, per: 4, friend: 3, alone: 21, grown: 60, motherW: 3, kitW: 0.6, kitsW: 3 });
+  // suggested names (until the player names the kitten), none the same as a neighbour's
+  const KIT_NAMES = deep({
+    f: ['Micinka', 'Packa', 'Kulička', 'Mourinka', 'Bětka', 'Fifinka', 'Ťapka', 'Žofka', 'Kapička', 'Lilinka', 'Mína', 'Čiča'],
+    m: ['Tygřík', 'Čertík', 'Mikeš', 'Šmudla', 'Drobek', 'Bobík', 'Fíla', 'Ťapík', 'Uhlík', 'Pepík', 'Mourínek', 'Kulíšek'],
+  });
+  // a kitten's trait when not the mother's (30 %): playful ones are the most common, never old
+  const KIT_TRAITS = deep({ curious: 2, shy: 1, bold: 1, playful: 3, greedy: 1, grumpy: 0.5, sleepy: 1 });
+  // where a young cat (from 21 days) likes a stroke, by its trait (a small kitten likes it everywhere); text(name, fem)
+  const KIT_LIKES = deep({
+    curious: { likes: ['head', 'ears'], dislikes: ['belly'], max: 900, text: (n, f) => `${n} má ${f ? 'ráda' : 'rád'} hlazení na hlavě a za ušima. Na bříško ${f ? 'jí' : 'mu'} nesahej.` },
+    shy: { likes: ['head', 'chin'], dislikes: ['belly', 'tail', 'paws'], max: 600, text: n => `${n} se nechá hladit jen pomalu a jemně, na hlavě a na bradě.` },
+    bold: { likes: ['back'], dislikes: ['belly', 'paws'], max: 900, text: (n, f) => `${n} má ${f ? 'ráda' : 'rád'} hlazení na zádech. Bříško a tlapky si hlídá.` },
+    playful: { likes: ['head', 'ears', 'chin', 'back', 'tailBase'], dislikes: ['tail'], max: 900, text: n => `${n} se nechá hladit skoro všude, jen ne na ocase.` },
+    greedy: { likes: ['chin'], dislikes: ['tail'], max: 900, text: n => `${n} má nejradši drbání na bradě. Ocas nech být.` },
+    grumpy: { likes: ['tailBase'], dislikes: ['belly', 'tail', 'paws'], max: 900, text: (n, f) => `${n} má ${f ? 'ráda' : 'rád'} hlazení u kořene ocasu. Bříško, ocas a tlapky nech být.` },
+    sleepy: { likes: ['ears', 'chin'], dislikes: ['paws'], max: 900, text: (n, f) => `${n} má ${f ? 'ráda' : 'rád'} drbání za ušima a na bradě. Tlapky nech být.` },
+  });
+  const isKitId = id => typeof id === 'string' && /^k([1-9]|1[0-2])$/.test(id);
+  const kitOf = (st, id) => (isKitId(id) && Array.isArray(st.kits) ? st.kits.find(k => k.id === id) || null : null);
+  // a litter is a block of ids: k1–k4 the first, k5–k8 the second, k9–k12 the third (one mother, one birth)
+  const kitLit = id => Math.ceil(Number(id.slice(1)) / KIT.per);
+  // the kitten `id` is younger than `days` at t (false for the eight)
+  const kitUnder = (st, id, t, days) => { const K = kitOf(st, id); return !!K && t - K.born < days * DAY; };
+  // a neighbour cat: one of the eight or a kitten of this game
+  function isVisitor(st, id) { return typeof id === 'string' && (Object.prototype.hasOwnProperty.call(VISITORS, id) || !!kitOf(st, id)); }
+  // how much of a kitten it still is (the art's size): 1 up to 2 days, 0.35 at 21 days (it visits alone), 0 at 60 (grown)
+  function kitValue(age) {
+    const v = age <= 2 ? 1 : age < KIT.alone ? 1 - 0.65 * (age - 2) / (KIT.alone - 2) : age < KIT.grown ? 0.35 * (KIT.grown - age) / (KIT.grown - KIT.alone) : 0;
+    return r2(v);
+  }
+  // { id, name, trait, fem, coat, kit, mother, ageDays, small } for any visitor id (null when unknown); coat = whose coat the
+  // art draws (a kitten: the mother's or a tom's); small = under 21 days, comes only with its mother
+  function visitor(st, id) {
+    if (typeof id !== 'string') return null;
+    if (Object.prototype.hasOwnProperty.call(VISITORS, id)) { const V = VISITORS[id]; return { id, name: V.name, trait: V.trait, fem: V.fem, coat: id, kit: 0, mother: null, ageDays: null, small: false }; }
+    const K = st && kitOf(st, id);
+    if (!K) return null;
+    const age = Math.max(0, ((Number.isFinite(st.t) ? st.t : K.born) - K.born) / DAY);
+    return { id, name: K.name, trait: K.trait, fem: K.fem, coat: K.coat, kit: kitValue(age), mother: K.mother, ageDays: Math.floor(age), small: age < KIT.alone, named: K.named };
+  }
+  // every visitor id: the eight, then the kittens of this game
+  function visitorIds(st) { return VISITOR_IDS.concat(st && Array.isArray(st.kits) ? st.kits.map(k => k.id) : []); }
+  const pickW = (W, r) => { const ks = Object.keys(W), sum = ks.reduce((a, k) => a + W[k], 0); let x = r * sum; for (const k of ks) { if (x < W[k]) return k; x -= W[k]; } return ks[ks.length - 1]; };
+  // a kitten has come to the garden (with its mother or alone)
+  const kitSeen = (st, K) => !!(st.visitors[K.id] && st.visitors[K.id].visits);
+  // the unnamed kittens that have been seen (the UI's "Koťátka!" dialog), as visitor() records
+  function kitsNew(st) { return (Array.isArray(st.kits) ? st.kits : []).filter(k => !k.named && kitSeen(st, k)).map(k => visitor(st, k.id)); }
+  function kitName(st, fem, r) {
+    const used = new Set([st.name].concat(VISITOR_IDS.map(id => VISITORS[id].name), st.kits.map(k => k.name)).map(s => s.toLowerCase()));
+    const L = KIT_NAMES[fem ? 'f' : 'm'], s = Math.floor(r * L.length);
+    for (let i = 0; i < L.length; i++) { const nm = L[(s + i) % L.length]; if (!used.has(nm.toLowerCase())) return nm; }
+    return fem ? 'Kočička' : 'Kocourek';
+  }
+  // a new local day: a mother the player has 3 hearts with may have kittens (seeded by the day, salts 40–49); she stays
+  // away 2–3 days and then comes with them; the kittens are born at the day's midnight
+  function litterDay(st, t, ev) {
+    const [y, m, d] = ymd(t), no = dayNo(y, m, d), since = new Date(y, m, d).getTime(), L = st.litter;
+    if (since - st.born < KIT.after * DAY || (L && (L.count >= KIT.max || since - L.since < KIT.gap * DAY))) return;
+    const can = MOTHERS.filter(id => st.visitors[id] && st.visitors[id].friend >= KIT.friend && !(st.guest && st.guest.id === id));
+    if (!can.length || rndDay(st, no, 40) >= KIT.p) return;
+    const mother = can[Math.floor(rndDay(st, no, 41) * can.length)];
+    const n = 2 + Math.floor(rndDay(st, no, 42) * 3), away = rndDay(st, no, 43) < 0.5 ? 2 : 3;
+    const father = TOMS[Math.floor(rndDay(st, no, 44) * TOMS.length)], count = (L ? L.count : 0) + 1;
+    for (let i = 0; i < n; i++) {
+      const r = salt => rndSeed(st.seed, no * 8 + i, salt), fem = r(45) < 0.5, id = 'k' + ((count - 1) * KIT.per + i + 1);
+      if (kitOf(st, id)) continue;
+      st.kits.push({ id, mother, name: kitName(st, fem, r(49)), named: false, fem, coat: r(46) < 0.55 ? mother : father, born: since,
+        trait: r(47) < 0.3 ? VISITORS[mother].trait : pickW(KIT_TRAITS, r(48)), solo: 0 });
+    }
+    st.litter = { mother, since, back: since + away * DAY, count };
+    if (st.visit && st.visit.id === mother) endVisit(st, 'time', ev);
+  }
+  // the weight of a neighbour in the visit pick: 0 while she is away with new kittens, more while they are small
+  function pickWeight(st, id, t) {
+    const L = st.litter;
+    if (L && L.mother === id && t < L.back) return 0;
+    return st.kits.some(k => k.mother === id && k.born <= t && t - k.born < KIT.alone * DAY) ? KIT.motherW : 1;
+  }
+  // the small kittens that come with their mother now
+  const smallKits = (st, id, t) => st.kits.filter(k => k.mother === id && k.born <= t && t - k.born < KIT.alone * DAY).map(k => k.id);
+  // nameKitten: a Czech refusal or null
+  function nameKitten(st, a, ev) {
+    const K = kitOf(st, a.id);
+    if (!K || !kitSeen(st, K)) return 'Takové koťátko neznáme.';
+    if (typeof a.name !== 'string' || !a.name.trim()) return 'Napiš koťátku jméno.';
+    K.name = cleanName(a.name); K.named = true;
+    const R = vrec(st, K.id); if (!R.met) R.met = st.t;   // named = met: it stays in the album when grown
+    ev.push({ type: 'kitNamed', id: K.id, name: K.name });
+    return null;
+  }
+  // the visit begins: the mother's small kittens come along (a litter seen for the first time: 'kittens'); a young cat on
+  // its own: never seen before ('kittens' alone, only itself: a litter nobody saw while small), its first lone visit
+  function kitsArrive(st, id, kits, t, ev) {
+    const K = kitOf(st, id);
+    if (K) {
+      if (!kitSeen(st, K)) { ev.push({ type: 'kittens', mother: K.mother, n: 1, ids: [id], alone: true }); palFound(st, 'kittens', id, t, ev); }
+      if (!K.solo) { K.solo = t; ev.push({ type: 'kitGrown', id }); palFound(st, 'kitGrown', id, t, ev); }
+      return;
+    }
+    const first = [];
+    for (const k of kits.map(x => kitOf(st, x))) {
+      const lit = st.kits.filter(o => kitLit(o.id) === kitLit(k.id));
+      if (!first.includes(lit[0]) && lit.every(o => !kitSeen(st, o))) {
+        first.push(lit[0]);
+        ev.push({ type: 'kittens', mother: k.mother, n: lit.length, ids: lit.map(o => o.id) });
+      }
+    }
+    for (const x of kits) { const R = vrec(st, x); R.visits = Math.min(CMAX, R.visits + 1); }
+    if (first.length) palFound(st, 'kittens', first[0].mother, t, ev);
+  }
   // per hour: a visit in the daytime (×2.5 with the miska pro návštěvy in the garden, ×1.5 with a cushion there);
   // only Bivoj comes at night; a visit lasts 20–90 min (greedy and sleepy ones +30 min when fed)
   // perVisitLiked: the cap when the strokes are where it likes them (Phase B)
@@ -1386,6 +1533,10 @@ function KockaEngine() {
     wrestle: { joint: true, min: 3, rate: 0.12, mood: 8, fx: { fun: 15, energy: -6 } },
     groom: { joint: true, min: 5, rate: 0.08, mood: 8, fx: { coat: 8, love: 6 } },
     snuggle: { joint: true, min: 10, rate: 0.04, mood: 8, fx: { energy: 6, love: 6 } },       // also next to her when she sleeps
+    // Phase C, only while the mother has her small kittens with her (kits); partner: one kitten is Koxa's partner (act.kit)
+    kitPlay: { joint: true, kits: true, partner: true, min: 3, rate: 0.15, mood: 6, fx: { fun: 18, energy: -8 } },   // they pounce on her, pull her tail
+    kitFlee: { joint: true, kits: true, min: 3, rate: 0.2, mood: -4, fx: { love: -2 } },                            // she escapes up the tree (the art; st.yard.tree stays)
+    kitGroom: { joint: true, kits: true, partner: true, min: 4, rate: 0.12, mood: 8, fx: { love: 8 } },            // she licks a kitten
   });
   const PAL_STEP = 0.25, PAL_VISIT = 0.5;   // Koxa's hearts: +¼ for each joint act (not a standoff), at most +½ a visit
   const SOLO_W = deep({ wander: 3, drink: 2, bench: 2, tree: 2, nap: 1, bowl: 3 });
@@ -1419,6 +1570,7 @@ function KockaEngine() {
     if (id === 'bivoj' && h < 3) return 'hiss';
     if (id === 'rambo' && h < 2) return 'hiss';
     if (id === 'ciperka') return 'play';
+    if (kitOf(st, id) && visitor(st, id).kit > 0) return 'play';   // a young cat
     return h >= 3 ? 'friends' : 'watch';
   }
   function vrec(st, id) {
@@ -1428,7 +1580,7 @@ function KockaEngine() {
     return st.visitors[id];
   }
   function endVisit(st, reason, ev) {
-    ev.push({ type: 'visitorLeave', id: st.visit.id, reason });
+    ev.push(Object.assign({ type: 'visitorLeave', id: st.visit.id, reason }, st.visit.kits ? { kits: st.visit.kits.slice() } : {}));
     st.visit = null;
   }
   // one step: a visitor may come (seeded), Koxa reacts, the visit ends after its time (never forever)
@@ -1438,7 +1590,7 @@ function KockaEngine() {
       if (night && st.visit.id !== 'bivoj') endVisit(st, 'night', ev);
       else if (weather(t, st) === 'rain' && st.visit.id !== 'bivoj') endVisit(st, 'rain', ev);
       else {
-        st.visit = fixVisit(st.visit, t);
+        st.visit = fixVisit(st.visit, t, st);
         if (!st.visit) return;
         const U = st.visit.until;
         if (U > t) programme(st, t, Math.min(dt, U - t), watching, ev);   // up to the visit's end exactly, whatever the step
@@ -1451,20 +1603,33 @@ function KockaEngine() {
     const F = st.furniture, cushion = (F.sillCushion && F.sillCushion.room === 'garden') || (F.bedDeluxe && F.bedDeluxe.room === 'garden');
     const rate = night ? VISIT.night : VISIT.day * (F.visitorBowl ? VISIT.bowl : 1) * (cushion ? VISIT.cushion : 1);
     if (!(rnd(st) < 1 - Math.exp(-rate * h))) return;
-    const id = night ? 'bivoj' : VISITOR_IDS[Math.floor(rnd(st) * VISITOR_IDS.length)];
+    const id = night ? 'bivoj' : pickVisitor(st, t, rnd(st));
     const stay = VISIT.stay[0] + Math.floor(rnd(st) * (VISIT.stay[1] - VISIT.stay[0]));
     st.visit = { id, since: t, until: t + stay * MIN, gain: 0, palGain: 0, greeted: false, ready: null, act: { kind: 'arrive', since: t, with: null },
       pet: 0, treat: false, play: 0, playGain: 0, hurt: false };
+    const kits = smallKits(st, id, t);   // a mother brings her small kittens
+    if (kits.length) st.visit.kits = kits;
+    ev.push(Object.assign({ type: 'visitor', id, reaction: st.out ? 'away' : reaction(st, id) }, kits.length ? { kits: kits.slice() } : {}));
+    kitsArrive(st, id, kits, t, ev);
     const R = vrec(st, id); R.visits = Math.min(CMAX, R.visits + 1);
-    ev.push({ type: 'visitor', id, reaction: st.out ? 'away' : reaction(st, id) });
     if (watching) ev.push({ type: 'visitAct', id, kind: 'arrive', with: null });
+  }
+  // who comes in the daytime: the eight (weight 1; a mother with small kittens more, one away with new kittens never) and
+  // the young cats from 21 days (together at most KIT.kitsW); with no kittens exactly the old even pick
+  function pickVisitor(st, t, r) {
+    const ids = VISITOR_IDS.slice(), w = ids.map(id => pickWeight(st, id, t));
+    const alone = st.kits.filter(k => t - k.born >= KIT.alone * DAY);
+    for (const k of alone) { ids.push(k.id); w.push(Math.min(KIT.kitW, KIT.kitsW / alone.length)); }
+    let x = r * w.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < ids.length; i++) { if (x < w[i]) return ids[i]; x -= w[i]; }
+    return ids[ids.length - 1];
   }
   // Koxa can do something with the visitor: in the garden, awake, not up the tree, on the lap or in the arms
   const palAwake = st => !!(st.yard && !st.out && !st.yard.tree && !st.asleep && !st.lap && !st.held);
   const palAsleep = st => !!(st.yard && !st.out && !st.yard.tree && st.asleep);
   const pondFrozen = t => season(t) === 'winter';
   function pickSolo(st, cur, t, r) {
-    const tr = SOLO_TRAIT[VISITORS[st.visit.id].trait] || {};
+    const tr = SOLO_TRAIT[visitor(st, st.visit.id).trait] || {};
     let ks = Object.keys(SOLO_W).filter(k => (k !== 'bowl' || st.furniture.visitorBowl) && (k !== 'drink' || !pondFrozen(t)));
     if (ks.length > 1) ks = ks.filter(k => k !== cur);
     const w = ks.map(k => SOLO_W[k] * (tr[k] || 1)), sum = w.reduce((a, b) => a + b, 0);
@@ -1475,21 +1640,33 @@ function KockaEngine() {
   // together (after greeting, not hissing): chase and wrestle with a playful, curious or bold cat from 1 heart (Čiperka at once),
   // groom and snuggle from 3 hearts (old and sleepy cats prefer to snuggle); null = nothing fits
   function pickJoint(st, cur, r) {
-    const id = st.visit.id, trait = VISITORS[id].trait, p = palOf(st.visitors[id]);
+    const id = st.visit.id, V = visitor(st, id), trait = V.trait, p = palOf(st.visitors[id]);
     const ks = [], w = [];
     const add = (k, x) => { if (k !== cur) { ks.push(k); w.push(x); } };
-    if (['playful', 'curious', 'bold'].includes(trait) && (p >= 1 || id === 'ciperka')) { add('chase', trait === 'playful' ? 3 : 2); add('wrestle', trait === 'bold' ? 2.5 : 1.5); }
+    if (['playful', 'curious', 'bold'].includes(trait) && (p >= 1 || id === 'ciperka' || V.kit > 0)) { add('chase', trait === 'playful' ? 3 : 2); add('wrestle', trait === 'bold' ? 2.5 : 1.5); }
     if (p >= 3) { add('groom', 2); add('snuggle', trait === 'old' || trait === 'sleepy' ? 4 : 1); }
     if (!ks.length) return null;
     let x = r * w.reduce((a, b) => a + b, 0);
     for (let i = 0; i < ks.length; i++) { if (x < w[i]) return ks[i]; x -= w[i]; }
     return ks[ks.length - 1];
   }
-  function addPal(st, id, t, ev) {
+  // with the mother's small kittens: they play with Koxa (kitPlay) or she escapes from them (kitFlee: more often when she
+  // and the mother are not friends yet, and when she does not like her belly touched, st.traits.bellyOk); she licks one
+  // (kitGroom) from 3 hearts with the mother
+  function pickKit(st, cur, r) {
+    const p = palOf(st.visitors[st.visit.id]), tol = clamp((st.traits.bellyOk - 0.15) / 0.25, 0, 1);
+    const W = {};
+    if (cur !== 'kitPlay') W.kitPlay = p < 1 ? 1 : 3;
+    if (cur !== 'kitFlee') W.kitFlee = (p < 1 ? 3 : p < 3 ? 1.5 : 0.5) * (1.5 - tol);
+    if (cur !== 'kitGroom' && p >= 3) W.kitGroom = 2.5;
+    return pickW(W, r);
+  }
+  function addPal(st, id, t, ev, kit) {
     const V = st.visit, g = Math.min(PAL_STEP, PAL_VISIT - V.palGain);
     if (g <= 0) return;
     V.palGain += g;
     bumpPal(st, id, g, t, ev);
+    if (kit) bumpPal(st, kit, g, t, ev);   // the kitten she played with or licked: the same quarter
   }
   function bumpPal(st, id, g, t, ev) {
     const R = vrec(st, id), before = Math.floor(R.pal);
@@ -1506,14 +1683,16 @@ function KockaEngine() {
     find(st, dk, t, ev);
   }
   function setAct(st, kind, t, watching, ev) {
-    const V = st.visit, joint = VISIT_ACTS[kind].joint;
+    const V = st.visit, K = VISIT_ACTS[kind], joint = K.joint;
     V.act = { kind, since: t, with: joint ? 'koxa' : null };
+    // the kitten partner: drawn from the act's start (salt 52)
+    if (K.partner) V.act.kit = V.kits[Math.floor(rndSeed(st.seed, Math.floor(t / 1000), 52) * V.kits.length)];
     if (joint) V.greeted = true;
-    if (watching) ev.push({ type: 'visitAct', id: V.id, kind, with: V.act.with });
-    if (!joint || kind === 'standoff') return;
+    if (watching) ev.push(Object.assign({ type: 'visitAct', id: V.id, kind, with: V.act.with }, K.partner ? { kit: V.act.kit } : {}));
+    if (!joint || kind === 'standoff' || kind === 'kitFlee') return;
     // a save from before Phase A may already have 3+ hearts: the first friend comes before grooming or snuggling
     if (palOf(st.visitors[V.id]) >= 3) palFound(st, 'palFirst', V.id, t, ev);
-    addPal(st, V.id, t, ev);
+    addPal(st, V.id, t, ev, V.act.kit);
     const dk = kind === 'groom' ? 'palGroom' : kind === 'snuggle' ? 'palSnuggle' : null;
     if (dk) palFound(st, dk, V.id, t, ev);
   }
@@ -1556,6 +1735,7 @@ function KockaEngine() {
       const r = salt => rndSeed(st.seed, Math.floor(A.since / 1000), salt);   // one act always leads to the same next one
       let next = null;
       if (greeting) next = r(22) < 0.9 ? (hiss ? 'standoff' : 'greet') : null;
+      else if (awake && !hiss && V.kits && r(50) < 0.55) next = pickKit(st, A.kind, r(51));   // the kittens are here
       else if (awake && !hiss && r(22) < 0.5) next = pickJoint(st, A.kind, r(23));
       else if (asleep && !hiss && palOf(st.visitors[V.id]) >= 3 && A.kind !== 'snuggle' && r(22) < 0.4) next = 'snuggle';
       if (!next) next = pickSolo(st, A.kind, at, r(24));
@@ -1565,19 +1745,25 @@ function KockaEngine() {
     if (V.greeted) V.ready = null;
   }
   // a canonical visit or null (repair and states made by hand); an unknown act or one that does not fit = 'wander' alone
-  function fixVisit(S, t) {
+  // st: the kittens (a kitten's visit, the mother's small kittens in S.kits)
+  function fixVisit(S, t, st) {
     const okT = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
     const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
-    if (!(S && typeof S === 'object' && own(VISITORS, S.id) && okT(S.since) && S.since <= t && okT(S.until) && S.until > S.since &&
+    if (!(S && typeof S === 'object' && isVisitor(st, S.id) && okT(S.since) && S.since <= t && okT(S.until) && S.until > S.since &&
       S.until <= S.since + (VISIT.stay[1] + 2 * VISIT.fedStay) * MIN)) return null;
+    if (kitUnder(st, S.id, S.since, KIT.alone)) return null;   // a small kitten never comes alone
     const fin = v => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
-    const A = S.act && typeof S.act === 'object' ? S.act : {};
-    const okA = own(VISIT_ACTS, A.kind) && (VISIT_ACTS[A.kind].joint ? A.with === 'koxa' : A.with === null);
+    // the mother's kittens with her: known ones of hers, born by now, in the order of st.kits
+    const kits = Array.isArray(S.kits) ? st.kits.filter(k => k.mother === S.id && k.born <= t && S.since - k.born < KIT.alone * DAY && S.kits.includes(k.id)).map(k => k.id) : [];
+    const A = S.act && typeof S.act === 'object' ? S.act : {}, K = own(VISIT_ACTS, A.kind) ? VISIT_ACTS[A.kind] : null;
+    const okA = K && (K.joint ? A.with === 'koxa' : A.with === null) && (!K.kits || kits.length > 0) && (!K.partner || kits.includes(A.kit));
     const act = okA ? { kind: A.kind, since: okT(A.since) && A.since >= S.since && A.since <= t ? A.since : S.since, with: A.with }
       : { kind: 'wander', since: S.since, with: null };
+    if (okA && K.partner) act.kit = A.kit;
     const greeted = S.greeted === true || act.with === 'koxa';
     const when = v => (okT(v) && v >= S.since && v <= t ? v : 0);
-    return {
+    const q = v => Math.round(clamp(fin(v), 0, VISIT.perVisitLiked) * 4) / 4;
+    const out = {
       id: S.id, since: S.since, until: S.until, gain: Math.round(clamp(fin(S.gain), 0, VISIT.perVisitLiked) * 4) / 4,
       palGain: Math.round(clamp(fin(S.palGain), 0, PAL_VISIT) * 4) / 4, greeted,
       ready: !greeted && okT(S.ready) && S.ready >= S.since && S.ready <= t ? S.ready : null, act,
@@ -1585,6 +1771,26 @@ function KockaEngine() {
       // Rambo's swipe already cost a quarter heart this visit
       pet: when(S.pet), treat: S.treat === true, play: when(S.play), playGain: Math.round(clamp(fin(S.playGain), 0, PLAY_VISIT) * 4) / 4, hurt: S.hurt === true,
     };
+    if (!kits.length) return out;
+    out.kits = kits;
+    // the player and each kitten (strokes, a treat, the feather): as the visit's own fields, only for kittens touched
+    const P = S.kp && typeof S.kp === 'object' && !Array.isArray(S.kp) ? S.kp : {}, kp = {};
+    for (const k of kits) {
+      const p = own(P, k) && P[k] && typeof P[k] === 'object' ? P[k] : null;
+      if (p) kp[k] = { gain: q(p.gain), pet: when(p.pet), treat: p.treat === true, play: when(p.play), playGain: Math.round(clamp(fin(p.playGain), 0, PLAY_VISIT) * 4) / 4 };
+    }
+    if (Object.keys(kp).length) out.kp = kp;
+    return out;
+  }
+  // the player's state with a kitten of the visit (created in the order of the visit's kits, as fixVisit keeps it)
+  function kitPlayer(st, id) {
+    const V = st.visit, P = V.kp || {};
+    if (!P[id]) {
+      const o = {};
+      for (const k of V.kits) if (k === id) o[k] = { gain: 0, pet: 0, treat: false, play: 0, playGain: 0 }; else if (P[k]) o[k] = P[k];
+      V.kp = o;
+    }
+    return V.kp[id];
   }
   function addFriend(st, id, d, ev) {
     const R = vrec(st, id), before = Math.floor(R.friend);
@@ -1612,6 +1818,7 @@ function KockaEngine() {
       };
       if (vis) photoVisitor(p, { vpose: str(a.vpose, 20), vx: a.vx, vflip: a.vflip });
       if (nokoxa) p.nokoxa = true;
+      if (outside && st.visit && st.visit.kits) photoKits(st, p, st.visit.kits);   // the mother's small kittens are in it too
       st.album.push(p);
       ev.push({ type: 'photo', n: st.album.length });
       return null;
@@ -1623,26 +1830,28 @@ function KockaEngine() {
       ev.push({ type: 'photoDeleted', n: st.album.length });
       return null;
     }
-    if (st.visit) st.visit = fixVisit(st.visit, t);
-    const id = typeof a.id === 'string' && Object.prototype.hasOwnProperty.call(VISITORS, a.id) ? a.id : null;
+    if (st.visit) st.visit = fixVisit(st.visit, t, st);
+    const id = isVisitor(st, a.id) ? a.id : null;
     if (!id) return 'Takovou kočku neznáme.';
-    const V = VISITORS[id];
+    const V = visitor(st, id);
     if (st.guest && st.guest.id === id) {   // the guest in the living room: strokes only, they change no hearts
       if (action !== 'strokeVisitor') return `${V.name} je u nás na noc. To počká do rána.`;
-      const k = strokeKind(id, a);
+      const k = strokeKind(st, id, a);
       if (k.slow) return null;
       ev.push(k.why ? { type: 'visitorDislike', id, region: k.region, why: k.why, away: V.trait === 'shy' } : Object.assign({ type: 'visitorPurr', id }, k.region ? { region: k.region, liked: k.liked } : {}));
       return null;
     }
-    if (!st.visit || st.visit.id !== id) return `${V.name} tu teď není.`;
-    const R = vrec(st, id), S = st.visit;
+    // a small kitten is here with its mother: it has its own strokes, treat and games of this visit (st.visit.kp)
+    const inKits = !!(st.visit && st.visit.kits && st.visit.kits.includes(id));
+    if (!st.visit || (st.visit.id !== id && !inKits)) return `${V.name} tu teď není.`;
+    const R = vrec(st, id), S = inKits ? kitPlayer(st, id) : st.visit, wild = !V.small && !inKits;   // a small kitten never runs off or swipes
     if (!R.met) R.met = t;
     const [strokeGain, foodGain] = BY_TRAIT[V.trait];
     if (action === 'feedVisitor') {
       const today = dkey(t);
       if (R.fed === today) return `${V.name} už dnes ${V.fem ? 'dostala' : 'dostal'}.`;
       R.fed = today;
-      if (V.trait === 'greedy' || V.trait === 'sleepy') S.until += VISIT.fedStay * MIN;   // stays longer
+      if (!inKits && (V.trait === 'greedy' || V.trait === 'sleepy')) S.until += VISIT.fedStay * MIN;   // stays longer
       ev.push({ type: 'visitorFed', id });
       addFriend(st, id, foodGain, ev);
       if (palAwake(st)) addPal(st, id, t, ev);   // Koxa sees you are friends with it
@@ -1675,23 +1884,23 @@ function KockaEngine() {
     }
     // strokeVisitor
     let liked = false;
-    const k = strokeKind(id, a);
+    const k = strokeKind(st, id, a);
     if (!k.region) {   // the menu's Pohladit (or an unknown region): shy ones may run off, grumpy ones may swipe
-      if (V.trait === 'shy' && R.friend < 2 && rnd(st) < 0.6) { endVisit(st, 'shy', ev); return null; }
-      if (V.trait === 'grumpy' && R.friend < 2 && rnd(st) < 0.5) { ev.push({ type: 'visitorHiss', id }); addFriend(st, id, -0.25, ev); return null; }
+      if (wild && V.trait === 'shy' && R.friend < 2 && rnd(st) < 0.6) { endVisit(st, 'shy', ev); return null; }
+      if (wild && V.trait === 'grumpy' && R.friend < 2 && rnd(st) < 0.5) { ev.push({ type: 'visitorHiss', id }); addFriend(st, id, -0.25, ev); return null; }
       ev.push({ type: 'visitorPurr', id });
     } else {
       if (k.slow) return null;   // too slow: it does not notice
       const swipe = () => { ev.push({ type: 'visitorHiss', id, region: k.region }); if (!S.hurt) { S.hurt = true; addFriend(st, id, -0.25, ev); } return null; };
       if (k.why) {
-        if (V.trait === 'shy' && R.friend < 2) { endVisit(st, 'shy', ev); return null; }
-        if (V.trait === 'grumpy' && R.friend < 3) return swipe();
-        ev.push({ type: 'visitorDislike', id, region: k.region, why: k.why, away: V.trait === 'shy' });
+        if (wild && V.trait === 'shy' && R.friend < 2) { endVisit(st, 'shy', ev); return null; }
+        if (wild && V.trait === 'grumpy' && R.friend < 3) return swipe();
+        ev.push({ type: 'visitorDislike', id, region: k.region, why: k.why, away: wild && V.trait === 'shy' });
         return null;
       }
       liked = k.liked;
       // grumpy Rambo under 2 hearts: half the minutes he swipes even at a neutral spot (the same answer all that minute)
-      if (!liked && V.trait === 'grumpy' && R.friend < 2 && rndSeed(st.seed, Math.floor(t / MIN), 30) < 0.5) return swipe();
+      if (!liked && wild && V.trait === 'grumpy' && R.friend < 2 && rndSeed(st.seed, Math.floor(t / MIN), 30) < 0.5) return swipe();
       ev.push({ type: 'visitorPurr', id, region: k.region, liked });
     }
     if (S.pet && t - S.pet < MIN) return null;   // friendship from strokes at most once a minute, however many strokes come
@@ -1703,10 +1912,10 @@ function KockaEngine() {
     return null;
   }
   // a finger stroke on a visitor: { region (null = none or unknown), slow, why (dislike: 'fast' | 'against' | 'region'), liked }
-  function strokeKind(id, a) {
+  function strokeKind(st, id, a) {
     const region = regionOf(a.region, null);
     if (!region) return { region: null, slow: false, why: null, liked: false };
-    const L = VISITOR_LIKES[id];
+    const L = likesOf(st, id);
     const sp = typeof a.speed === 'number' ? (a.speed < 120 ? 'slow' : a.speed > L.max ? 'fast' : 'good') : ['slow', 'fast'].includes(a.speed) ? a.speed : 'good';
     const dir = a.along === false || a.along === 'against' ? 'against' : a.along === 'sideways' ? 'sideways' : 'along';
     const why = sp === 'fast' ? 'fast' : dir === 'against' ? 'against' : L.dislikes.includes(region) ? 'region' : null;
@@ -1735,10 +1944,12 @@ function KockaEngine() {
   }
   // why the visitor cannot be invited in for the night now (Czech), or null
   function inviteWhy(st, id, t) {
-    if (typeof id !== 'string' || !Object.prototype.hasOwnProperty.call(VISITORS, id)) return 'Takovou kočku neznáme.';
-    const V = VISITORS[id], R = st.visitors[id];
-    if (st.guest) return st.guest.id === id ? `${V.name} už u nás na noc je.` : `Na noc už u nás je ${VISITORS[st.guest.id].name}.`;
+    if (!isVisitor(st, id)) return 'Takovou kočku neznáme.';
+    const V = visitor(st, id), R = st.visitors[id];
+    if (st.guest) return st.guest.id === id ? `${V.name} už u nás na noc je.` : `Na noc už u nás je ${visitor(st, st.guest.id).name}.`;
+    if (V.kit > 0) return `${V.name} je ještě moc ${V.fem ? 'malá' : 'malý'}.`;   // a kitten under 60 days
     if (!st.visit || st.visit.id !== id || st.visit.until <= t) return `${V.name} tu teď není.`;
+    if (smallKits(st, id, t).length) return `${V.name} má malá koťátka, musí být s nimi.`;
     if (st.out) return `${st.name} je venku.`;
     if (st.yard && st.yard.tree) return `${st.name} je na stromě.`;
     if (!R || R.friend < 5) return `${V.name} ještě není tak ${V.fem ? 'velká kamarádka' : 'velký kamarád'}.`;
@@ -1771,19 +1982,30 @@ function KockaEngine() {
     bumpPal(st, G.id, PAL_STEP, t, ev);
   }
   // help texts: where the cat likes to be stroked (null for an unknown id)
-  function visitorLikes(id) {
-    if (typeof id !== 'string' || !Object.prototype.hasOwnProperty.call(VISITOR_LIKES, id)) return null;
-    const L = VISITOR_LIKES[id];
+  // st: needed for a kitten ('k1'…)
+  function visitorLikes(id, st) {
+    const L = st ? likesOf(st, id) : typeof id === 'string' && Object.prototype.hasOwnProperty.call(VISITOR_LIKES, id) ? VISITOR_LIKES[id] : null;
+    if (!L) return null;
     return { likes: L.likes.slice(), dislikes: L.dislikes.slice(), gentle: L.max < 900, max: L.max, text: L.text };
+  }
+  // the likes of any visitor: the table for the eight; a small kitten likes it everywhere; a young cat by its trait
+  function likesOf(st, id) {
+    if (typeof id === 'string' && Object.prototype.hasOwnProperty.call(VISITOR_LIKES, id)) return VISITOR_LIKES[id];
+    const V = visitor(st, id);
+    if (!V) return null;
+    if (V.small) return { likes: Object.keys(REGIONS), dislikes: [], max: 900, text: `${V.name} je ještě koťátko a nechá se pohladit všude.` };
+    const L = KIT_LIKES[V.trait] || KIT_LIKES.playful;
+    return { likes: L.likes, dislikes: L.dislikes, max: L.max, text: L.text(V.name, V.fem) };
   }
   function repairSocial(st, t) {
     const okT = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
     const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+    repairKits(st, t);
     const V = st.visitors && typeof st.visitors === 'object' && !Array.isArray(st.visitors) ? st.visitors : {};
     st.visitors = {};
     for (const k of Object.keys(V)) {
       const r = V[k];
-      if (!own(VISITORS, k) || !r || typeof r !== 'object') continue;
+      if (!isVisitor(st, k) || !r || typeof r !== 'object') continue;
       const friend = typeof r.friend === 'number' && Number.isFinite(r.friend) ? Math.round(clamp(r.friend, 0, 5) * 4) / 4 : 0;
       st.visitors[k] = {
         friend, pal: typeof r.pal === 'number' && Number.isFinite(r.pal) ? Math.round(clamp(r.pal, 0, 5) * 4) / 4 : friend,   // an older save: Koxa's = the player's
@@ -1792,14 +2014,14 @@ function KockaEngine() {
         fed: isKey(r.fed) && r.fed <= dkey(t) ? r.fed : 0,
       };
     }
-    st.visit = fixVisit(st.visit, t);
+    st.visit = fixVisit(st.visit, t, st);
     const G = st.guest;
-    st.guest = G && typeof G === 'object' && own(VISITORS, G.id) && okT(G.since) && G.since <= t && okT(G.until) && G.until > t &&
-      G.until - G.since <= GUEST.max * HOUR ? { id: G.id, since: G.since, until: G.until, slept: G.slept === true } : null;
+    st.guest = G && typeof G === 'object' && isVisitor(st, G.id) && okT(G.since) && G.since <= t && okT(G.until) && G.until > t &&
+      G.until - G.since <= GUEST.max * HOUR && !kitUnder(st, G.id, G.since, KIT.grown) ? { id: G.id, since: G.since, until: G.until, slept: G.slept === true } : null;
     if (st.guest && st.visit && st.visit.id === st.guest.id) st.visit = null;
     st.invDay = isKey(st.invDay) && st.invDay <= dkey(t) ? st.invDay : 0;
     const J = st.jealous;
-    st.jealous = J && typeof J === 'object' && own(VISITORS, J.id) && okT(J.since) && J.since <= t && J.since > t - JEALOUS.ok * MIN ? { since: J.since, id: J.id } : null;
+    st.jealous = J && typeof J === 'object' && isVisitor(st, J.id) && okT(J.since) && J.since <= t && J.since > t - JEALOUS.ok * MIN ? { since: J.since, id: J.id } : null;
     st.jealousAt = okT(st.jealousAt) && st.jealousAt <= t ? st.jealousAt : 0;
     const A = Array.isArray(st.album) ? st.album : [];
     st.album = [];
@@ -1812,21 +2034,60 @@ function KockaEngine() {
         mood: ['happy', 'calm', 'grumpy', 'sad'].includes(p.mood) ? p.mood : 'calm',
         phase: ['night', 'morning', 'day', 'evening'].includes(p.phase) ? p.phase : 'day',
         season: ['spring', 'summer', 'autumn', 'winter'].includes(p.season) ? p.season : 'spring',
-        note: str(p.note, 60, ''), visitor: own(VISITORS, p.visitor) ? p.visitor : null,
+        note: str(p.note, 60, ''), visitor: isVisitor(st, p.visitor) ? p.visitor : null,
       };
       // Phase B fields only when present (an older photo stays as it was); the visitor's place only with a visitor
       if (q.visitor) photoVisitor(q, p);
       if (p.nokoxa === true && q.visitor) q.nokoxa = true;
+      if (q.visitor && Array.isArray(p.kits)) photoKits(st, q, p.kits);
       st.album.push(q);
     }
+  }
+  // the kittens and the litter plan (SPEC §8b Phase C): a broken kitten is dropped, ids unique, at most 3 litters of 4
+  // (a litter = a block of ids, kitLit: one mother, one birth, the first kitten kept decides), names cleaned, born by
+  // now; the litter record agrees with the kittens
+  function repairKits(st, t) {
+    const okT = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
+    const A = Array.isArray(st.kits) ? st.kits : [], ids = new Set(), lit = new Set();
+    st.kits = [];
+    for (const k of A) {
+      if (!k || typeof k !== 'object' || !isKitId(k.id) || ids.has(k.id) || !MOTHERS.includes(k.mother) || !okT(k.born) || k.born > t) continue;
+      const head = st.kits.find(o => kitLit(o.id) === kitLit(k.id));
+      if (head && head.mother !== k.mother) continue;
+      lit.add(kitLit(k.id));
+      ids.add(k.id);
+      const born = head ? head.born : k.born, named = typeof k.name === 'string' && !!k.name.trim();
+      st.kits.push({
+        id: k.id, mother: k.mother, name: named ? cleanName(k.name) : 'Koťátko', named: named && k.named === true, fem: k.fem === true,
+        coat: k.coat === k.mother || TOMS.includes(k.coat) ? k.coat : k.mother, born,
+        trait: Object.prototype.hasOwnProperty.call(KIT_TRAITS, k.trait) ? k.trait : 'playful',
+        solo: okT(k.solo) && k.solo >= born + KIT.alone * DAY && k.solo <= t ? k.solo : 0,
+      });
+    }
+    const L = st.litter, n = st.kits.reduce((m, k) => Math.max(m, kitLit(k.id)), lit.size);
+    const last = st.kits.reduce((b, k) => (!b || k.born > b.born ? k : b), null);
+    if (L && typeof L === 'object' && MOTHERS.includes(L.mother) && okT(L.since) && L.since <= t && okT(L.back) && L.back >= L.since + 2 * DAY &&
+      L.back <= L.since + 3 * DAY) {
+      st.litter = { mother: L.mother, since: L.since, back: L.back, count: clamp(Math.max(Number.isInteger(L.count) ? L.count : 1, n, 1), 1, KIT.max) };
+    } else st.litter = last ? { mother: last.mother, since: last.born, back: last.born + 2 * DAY, count: clamp(n, 1, KIT.max) } : null;
+  }
+  // the small kittens in a photo with their mother (only known kittens of hers)
+  function photoKits(st, p, kits) {
+    const ks = st.kits.filter(k => k.mother === p.visitor && kits.includes(k.id)).map(k => k.id);
+    if (ks.length) p.kits = ks;
   }
   function shiftSocial(st, d, now) {
     const today = dkey(now);
     for (const k of Object.keys(st.visitors)) { const r = st.visitors[k]; if (r.met > now) r.met = now; if (r.fed > today) r.fed = today; }
+    // the kittens keep their age and the litter plan its days: they move with the clock (a birth is never in the future,
+    // and two litters of one mother never become one)
+    for (const k of st.kits) { k.born = Math.max(T_MIN, k.born + d); if (k.solo) k.solo = Math.max(k.born + KIT.alone * DAY, k.solo + d); }
+    if (st.litter) st.litter = { mother: st.litter.mother, since: st.litter.since + d, back: st.litter.back + d, count: st.litter.count };
     if (st.visit) {
-      const V = st.visit, A = V.act && typeof V.act === 'object' ? V.act : {};
+      const V = st.visit, A = V.act && typeof V.act === 'object' ? V.act : {}, kp = {};
+      for (const k of Object.keys(V.kp || {})) { const p = V.kp[k]; kp[k] = Object.assign({}, p, { pet: p.pet ? p.pet + d : 0, play: p.play ? p.play + d : 0 }); }
       st.visit = fixVisit(Object.assign({}, V, { since: V.since + d, until: V.until + d, ready: typeof V.ready === 'number' ? V.ready + d : null,
-        act: Object.assign({}, A, { since: A.since + d }), pet: V.pet ? V.pet + d : 0, play: V.play ? V.play + d : 0 }), now);
+        act: Object.assign({}, A, { since: A.since + d }), pet: V.pet ? V.pet + d : 0, play: V.play ? V.play + d : 0, kp }), now, st);
     }
     if (st.guest) st.guest = { id: st.guest.id, since: st.guest.since + d, until: st.guest.until + d, slept: st.guest.slept };
     if (st.invDay > today) st.invDay = today;
@@ -1835,13 +2096,20 @@ function KockaEngine() {
     for (const p of st.album) if (p.t > now) p.t = now;
   }
   // the Album screen: photos (newest first), postcards, the neighbour cats met, presents
+  // (Phase C: grown kittens once seen are visitors too; kittens = every kitten seen, with its mother and age)
   function album(st) {
+    const vis = VISITOR_IDS.concat(st.kits.filter(k => visitor(st, k.id).kit === 0).map(k => k.id));
     return {
       photos: st.album.slice().reverse(), max: ALBUM_MAX,
       postcards: st.postcards.slice(),
-      visitors: VISITOR_IDS.filter(id => st.visitors[id] && st.visitors[id].met).map(id => ({
-        id, name: VISITORS[id].name, trait: VISITORS[id].trait, hearts: Math.floor(st.visitors[id].friend), pal: Math.floor(palOf(st.visitors[id])), met: st.visitors[id].met, visits: st.visitors[id].visits,
+      visitors: vis.filter(id => st.visitors[id] && (st.visitors[id].met || (isKitId(id) && st.visitors[id].visits))).map(id => ({
+        id, name: visitor(st, id).name, trait: visitor(st, id).trait, hearts: Math.floor(st.visitors[id].friend), pal: Math.floor(palOf(st.visitors[id])), met: st.visitors[id].met, visits: st.visitors[id].visits,
       })),
+      kittens: st.kits.filter(k => kitSeen(st, k)).map(k => {
+        const V = visitor(st, k.id), R = st.visitors[k.id];
+        return { id: k.id, name: k.name, named: k.named, mother: k.mother, motherName: VISITORS[k.mother].name, ageDays: V.ageDays, kit: V.kit, coat: k.coat, fem: k.fem,
+          trait: k.trait, hearts: Math.floor(R.friend), pal: Math.floor(palOf(R)) };
+      }),
       presents: Object.assign({}, st.presents),
     };
   }
@@ -1857,6 +2125,7 @@ function KockaEngine() {
   return {
     NEEDS, FOODS, TOYS, REGIONS, FEARS, QUIRKS, ILLS, LEVELS, HOLIDAYS, ACTIONS, CROPS, PRESENTS, WEATHERS, POSTCARDS, BEDS,
     SHOP, GAMES, TRICKS, ROOMS, EARN_CAP, VISITORS, VISIT_ACTS, VISITOR_LIKES, ALBUM_MAX, album, canInvite, visitorLikes,
+    KIT, KIT_NAMES, visitor, visitorIds, kitsNew,
     create, valid, repair, rename, advance, act, consumeTreats, minigameResult, shop, tricks,
     mood, moodValue, wants, needs, health, bondLevel, diary,
     dayPhase, season, holiday, easter, weather, postcardAt, bedCount,

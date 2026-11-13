@@ -355,7 +355,7 @@ function discover(seed) {
     if (fresh) continue;
     const st = discover(seed); tested++;
     const list = E.diary(st);
-    const missing = list.filter(e => !e.found && !e.id.startsWith('pal') && e.id !== 'sleepover').map(e => e.id);   // pal*, sleepover: neighbour cats, see 'Visitors 2' and 'Visitors 3'
+    const missing = list.filter(e => !e.found && !e.id.startsWith('pal') && !['sleepover', 'kittens', 'kitGrown'].includes(e.id)).map(e => e.id);   // pal*, sleepover, kittens: neighbour cats, see 'Visitors 2', 3 and 4
     ok(missing.length === 0, `seed ${seed} (${T.favFood}, ${T.spots}, ${T.fear}, ${T.quirk}, ${T.toy}): all found, missing ${missing.join(', ')}`);
     ok(list.every(e => typeof e.text === 'string' && e.text.length > 3 && !/undefined|NaN/.test(e.text)), `seed ${seed}: entry texts`);
     if (!missing.length) { seen.favFood.add(T.favFood); seen.fear.add(T.fear); seen.quirk.add(T.quirk); seen.toy.add(T.toy); T.spots.forEach(s => seen.spot.add(s)); }
@@ -364,7 +364,7 @@ function discover(seed) {
   ok(full(), `every trait value reached (${tested} cats)`);
   const st = E.create(1, at(2026, 11, 12, 15), 'Koxa');
   const d = E.diary(st, 'Micka');
-  ok(d.length === 14 && d.find(e => e.id === 'birthday').found && d.find(e => e.id === 'birthday').text === 'Micka k nám přišla 12. 11. 2026.', 'the list: 14 entries, the name from the argument, the birthday found at once');
+  ok(d.length === 16 && d.find(e => e.id === 'birthday').found && d.find(e => e.id === 'birthday').text === 'Micka k nám přišla 12. 11. 2026.', 'the list: 16 entries, the name from the argument, the birthday found at once');
   ok(E.diary(st).find(e => e.id === 'birthday').text.startsWith('Koxa'), 'the stored name without an argument');
 }
 
@@ -1410,7 +1410,7 @@ section('Visitors 2');
   ok(badStand === 0 && stand > 10, 'standoff only Bivoj < 3 hearts and Rambo < 2, once a visit, then they keep apart');
   ok(badGroom === 0 && groom > 10 && snug > 10 && chase > 20, 'groom and snuggle only from 3 hearts');
   ok(badGain === 0, 'Koxa gains at most ½ heart a visit and never loses one');
-  ok(ACTS.every(k => seen.has(k) || k === 'bowl' || k === 'arrive'), `every act occurs (missing: ${ACTS.filter(k => !seen.has(k)).join(', ')})`);
+  ok(ACTS.every(k => seen.has(k) || k === 'bowl' || k === 'arrive' || E.VISIT_ACTS[k].kits), `every act occurs (missing: ${ACTS.filter(k => !seen.has(k)).join(', ')})`);   // kittens: 'Visitors 4'
   const bw = E.create(82, at(2026, 6, 10, 9), 'Koxa'); bw.owned.visitorBowl = true; bw.furniture.visitorBowl = { room: 'garden', x: 0.5, y: 0.8 };
   let bowl = 0; for (let d = 0; d < 6; d++) bowl += gardenVisit(bw, 'pacicka', at(2026, 6, 10 + d, 10), 90).acts.filter(a => a.kind === 'bowl').length;
   ok(bowl > 0, `greedy Pacička goes to the miska pro návštěvy (${bowl}×)`);
@@ -1932,6 +1932,429 @@ section('Visitors 3');
     const need = ['visitorPurr', 'visitorDislike', 'visitorHiss', 'visitorTreat', 'visitorPlay', 'jealous', 'jealousOk', 'jealousEnd', 'guestIn', 'guestOut', 'photo'];
     console.log(`  visitor fuzz: ${need.map(k => `${k} ${seen[k] || 0}`).join(', ')}`);
     ok(need.every(k => seen[k] > 0), `the visitor fuzz meets every new event (missing: ${need.filter(k => !seen[k]).join(', ')})`);
+  }
+}
+
+section('Visitors 4 (kittens)');
+{
+  const rec = (friend, pal) => ({ friend, pal, met: 0, visits: 1, fed: 0 });
+  const T0 = at(2026, 5, 1, 8);
+  const bowl = st => { st.owned.visitorBowl = true; st.furniture.visitorBowl = { room: 'garden', x: 0.5, y: 0.8 }; return st; };
+  // a cat with friends among the mothers: Líza (3 hearts, Koxa's 3) and Pacička (4, Koxa's 1), and the visitors' bowl
+  const mothers = (seed, t = T0) => { const st = bowl(E.create(seed, t, 'Koxa')); st.visitors.liza = rec(3, 3); st.visitors.pacicka = rec(4, 1); return st; };
+  const midnight = t => { const d = new Date(t); return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(); };
+  // `days` of life in `step` advances: care at 8 and 20, the garden 9–13 and 15–19; each(st, t, events) after every advance
+  function live(st, days, step, each) {
+    const end = st.t + days * D;
+    for (let t = st.t + step; t <= end; t += step) {
+      const d = new Date(t), hr = d.getHours(), mi = d.getMinutes(), s = d.getSeconds();
+      const on = h => hr === h && mi === 0 && s < step / 1000;
+      if (on(8) || on(20)) basicCare(st, t);
+      if (on(9) || on(15)) E.act(st, 'goGarden', null, t);
+      if ((on(13) || on(19)) && st.yard) { if (st.yard.tree) E.act(st, 'fetchDown', null, t); E.act(st, 'goHouse', null, t); }
+      const ev = E.advance(st, t).events;
+      if (each) each(st, t, ev);
+    }
+    return st;
+  }
+  // eligibility: never before 7 days, never without 3 hearts with a mother, never Šedivka or a tom, at most 3, 120 days apart
+  {
+    let early = 0, n = 0, wait = [], aways = new Set(), sizes = new Set(), moms = new Set(), boys = 0, kits = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      const st = live(mothers(seed), 40, H);
+      if (!st.litter) continue;
+      n++; wait.push((st.litter.since - T0) / D);
+      if (st.litter.since - st.born < 7 * D) early++;
+      aways.add((st.litter.back - st.litter.since) / D); moms.add(st.litter.mother);
+      const L = st.kits.filter(k => k.born === st.litter.since);
+      sizes.add(L.length); kits += L.length; boys += L.filter(k => !k.fem).length;
+      if (st.litter.since !== midnight(st.litter.since) || L.some(k => k.mother !== st.litter.mother) || st.litter.count !== 1) early += 100;
+    }
+    wait.sort((a, b) => a - b);
+    console.log(`  litters in 40 days: ${n}/30, the median day ${wait[n >> 1].toFixed(1)}, away ${[...aways]} days, ${[...sizes].sort()} kittens, ${boys}/${kits} toms`);
+    ok(n >= 27 && early === 0 && wait[n >> 1] <= 7 + 14, 'a litter at the earliest 7 days after the start, at midnight, usually within two weeks after that');
+    ok(aways.size === 2 && aways.has(2) && aways.has(3) && [2, 3, 4].every(k => sizes.has(k)) && sizes.size === 3 && moms.size === 2 && !moms.has('sedivka'), 'away 2 or 3 days, 2–4 kittens, the mothers with 3+ hearts');
+    ok(boys > kits * 0.25 && boys < kits * 0.75, 'kittens of both sexes');
+    // nobody may have them: under 3 hearts, Šedivka, the toms
+    const none = [];
+    for (let seed = 1; seed <= 6; seed++) {
+      const st = bowl(E.create(seed, T0, 'Koxa'));
+      st.visitors = { liza: rec(2.75, 4), ciperka: rec(2.5, 3), pacicka: rec(0, 0), sedivka: rec(5, 5), mourek: rec(5, 5), bivoj: rec(5, 5), rambo: rec(5, 5), fousek: rec(5, 5) };
+      live(st, 60, 2 * H);
+      none.push(st.litter, st.kits.length);
+    }
+    ok(none.every(x => !x), 'no litter under 3 hearts, with Šedivka or with a tom');
+    // three litters at most, 120 days apart
+    const g = mothers(7, T0); g.born = T0 - 200 * D;
+    g.litter = { mother: 'liza', since: midnight(T0 - 100 * D), back: midnight(T0 - 100 * D) + 2 * D, count: 1 };
+    E.repair(g);
+    live(g, 19, 2 * H);
+    ok(g.litter.count === 1 && g.kits.length === 0, 'no second litter within 120 days');
+    live(g, 60, 2 * H);
+    ok(g.litter.count === 2 && g.litter.since - midnight(T0 - 100 * D) >= 120 * D - H && g.kits.length >= 2 && g.kits.every(k => /^k[5-8]$/.test(k.id)), `the second litter after 120 days: ids k5–k8 (${g.kits.map(k => k.id)})`);
+    const m = mothers(8, T0); m.born = T0 - 900 * D; m.litter = { mother: 'pacicka', since: midnight(T0 - 300 * D), back: midnight(T0 - 300 * D) + 3 * D, count: 3 };
+    E.repair(m); live(m, 60, 2 * H);
+    ok(m.litter.count === 3 && m.kits.length === 0, 'at most three litters a game');
+    invariants(g, 'second litter'); invariants(m, 'three litters');
+    // never while the mother sleeps over: the same day with Líza as the guest gives no litter that night
+    const lizaOnly = () => { const s = mothers(2); s.visitors.pacicka = rec(0, 0); return s; };
+    const a = live(lizaOnly(), 30, H), L = a.litter.since;
+    const b = lizaOnly(); live(b, (L - 3 * H - b.t) / D, H);
+    b.guest = { id: 'liza', since: b.t, until: b.t + 10 * H, slept: false }; b.visit = null;
+    E.advance(b, L + H);
+    ok(a.litter.mother === 'liza' && (!b.litter || b.litter.since !== L), 'no litter on the night the mother sleeps over');
+    invariants(b, 'guest night');
+  }
+  // the same litter day and kittens whatever the step: 10-minute advances, 30-second ones, irregular ones
+  {
+    const s10 = live(mothers(2), 11, 10 * MIN), s30 = live(mothers(2), 11, 30 * 1000);
+    const irr = mothers(2); let x = 5;
+    for (let t = T0; t < T0 + 11 * D;) { x = (x * 1103515245 + 12345) % 2147483648; t = Math.min(T0 + 11 * D, t + 1000 + x % (3 * H)); E.advance(irr, t); }
+    const pick = st => JSON.stringify([st.litter, st.kits]);
+    ok(s10.litter && pick(s10) === pick(s30) && pick(s10) === pick(irr), `the same litter in 10 min, 30 s and irregular steps (${s10.litter && new Date(s10.litter.since).toDateString()})`);
+  }
+  // the mother is away, then comes with all her kittens; the kittens come only with her until 21 days, then alone
+  {
+    let bad = [], kittensEv = 0, group = 0, alone = 0, grown = 0, acts = {}, kitOutside = 0, diaryOk = 0, runs = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const st = mothers(seed);
+      let firstSeen = null;
+      live(st, 70, 10 * MIN, (s, t, ev) => {
+        const Lt = s.litter;
+        for (const e of ev) {
+          if (e.type === 'visitor') {
+            const V = E.visitor(s, e.id);
+            if (Lt && e.id === Lt.mother && t >= Lt.since && t < Lt.back + 10 * MIN && s.visit && s.visit.since < Lt.back) bad.push(`${seed}: the mother came while away`);
+            if (V.mother) {
+              alone++;
+              if (V.ageDays < 21) bad.push(`${seed}: ${e.id} alone at ${V.ageDays} days`);
+            }
+            if (e.kits) {
+              group++;
+              const want = s.kits.filter(k => k.mother === e.id && s.visit.since - k.born < 21 * D).map(k => k.id);
+              if (e.kits.join() !== want.join() || s.visit.kits.join() !== want.join()) bad.push(`${seed}: kits ${e.kits} want ${want}`);
+            } else if (Lt && e.id === Lt.mother && s.kits.some(k => k.mother === e.id && s.visit.since - k.born < 21 * D)) bad.push(`${seed}: the mother without her small kittens`);
+          }
+          if (e.type === 'kittens' && e.alone) { if (!(e.n === 1 && e.ids.join() === s.visit.id && E.visitor(s, e.ids[0]).ageDays >= 21)) bad.push(`${seed}: kittens alone ${JSON.stringify(e)}`); }
+          else if (e.type === 'kittens') {
+            kittensEv++;
+            if (firstSeen === null) firstSeen = t;
+            if (!(e.n >= 2 && e.n <= 4 && e.ids.length === e.n && t >= Lt.back)) bad.push(`${seed}: kittens ${JSON.stringify(e)}`);
+          }
+          if (e.type === 'kitGrown') { grown++; if (E.visitor(s, e.id).ageDays < 21) bad.push(`${seed}: kitGrown at ${E.visitor(s, e.id).ageDays}`); }
+          if (e.type === 'visitAct' && E.VISIT_ACTS[e.kind].kits) {
+            acts[e.kind] = (acts[e.kind] || 0) + 1;
+            if (E.VISIT_ACTS[e.kind].partner && !(s.visit && s.visit.kits.includes(e.kit) || !s.visit)) bad.push(`${seed}: partner ${e.kit}`);
+          }
+        }
+        if (s.visit && s.visit.act && E.VISIT_ACTS[s.visit.act.kind].kits && !(s.yard && !s.asleep)) kitOutside++;
+      });
+      if (!st.litter) continue;
+      runs++;
+      const dl = E.diary(st), dk = dl.find(e => e.id === 'kittens'), dg = dl.find(e => e.id === 'kitGrown');
+      const names = st.kits.filter(k => k.mother === st.litter.mother).map(k => k.name);
+      if (dk.found && dk.text.startsWith(E.visitor(st, st.litter.mother).name + ' přivedla na zahradu koťátka: ') && names.every(n => dk.text.includes(n)) && dk.text.endsWith(names[names.length - 1] + '.') &&
+        dg.found && / už chodí na návštěvu sam[a]?\.$|sám\.$/.test(dg.text)) diaryOk++;
+    }
+    console.log(`  12 lives of 70 days: ${kittensEv} litters seen, ${group} visits with kittens, ${alone} visits of young cats, ${grown} kitGrown, acts ${JSON.stringify(acts)}`);
+    ok(bad.length === 0, `kittens visit right: ${bad.slice(0, 4).join('; ')}`);
+    ok(kittensEv === runs && runs >= 10 && group >= runs * 3 && alone > runs && grown >= runs, 'each litter is seen, comes with its mother several times, then alone');
+    ok(acts.kitPlay > 0 && acts.kitFlee > 0 && acts.kitGroom > 0 && kitOutside === 0, 'kitPlay, kitFlee, kitGroom happen, only with Koxa awake in the garden');
+    ok(diaryOk === runs, `the diary: the kittens by name and the first one alone (${diaryOk}/${runs})`);
+    const st = mothers(1); live(st, 70, 10 * MIN);
+    invariants(st, 'kittens 70 days');
+  }
+  // a state with Líza's kittens: k1 Micinka (she, 5 days), k2 Tygřík (he, 5 days), k3 (30 days) and k4 (70 days) of Pacička
+  const T = at(2026, 6, 10, 10);
+  function family(t = T) {
+    let u = t; const probe = E.create(5, u, 'Koxa'); while (E.weather(u, probe) === 'rain') u += D;
+    const st = bowl(E.create(5, u - 100 * D, 'Koxa'));
+    E.advance(st, u - 100 * D + H); st.t = u; st.day = { key: Number(new Date(u).toISOString().slice(0, 10).replace(/-/g, '')), ms: 0, food: 0, mood: 0, minE: 100, treats: 0, ttreats: 0, q: false, acted: false };
+    basicCare(st, u); st.needs.energy = 90; st.lvl = 2; st.bond = 300; st.pamlsky = 20;
+    const b5 = midnight(u - 5 * D), b30 = midnight(u - 30 * D), b70 = midnight(u - 70 * D);
+    st.kits = [
+      { id: 'k1', mother: 'pacicka', name: 'Žofka', named: true, fem: true, coat: 'pacicka', born: b70, trait: 'greedy', solo: b70 + 22 * D },
+      { id: 'k5', mother: 'pacicka', name: 'Drobek', named: false, fem: false, coat: 'mourek', born: b30, trait: 'shy', solo: 0 },
+      { id: 'k9', mother: 'liza', name: 'Micinka', named: false, fem: true, coat: 'liza', born: b5, trait: 'shy', solo: 0 },
+      { id: 'k10', mother: 'liza', name: 'Tygřík', named: false, fem: false, coat: 'rambo', born: b5, trait: 'playful', solo: 0 },
+    ];
+    st.litter = { mother: 'liza', since: b5, back: b5 + 2 * D, count: 3 };
+    st.visitors = { liza: rec(5, 3), pacicka: rec(4, 2), k1: rec(5, 3), k5: { friend: 0, pal: 0, met: 0, visits: 0, fed: 0 }, k9: rec(0, 0), k10: rec(0, 0) };
+    E.repair(st);
+    return st;
+  }
+  const withKits = (st, garden) => { st.visit = { id: 'liza', since: st.t, until: st.t + 2 * H, gain: 0, palGain: 0, greeted: false, act: { kind: 'arrive', since: st.t, with: null }, kits: ['k10', 'k9', 'k1', 'x'] }; if (garden) st.yard = { since: st.t, snow: false, tree: null }; E.repair(st); return st; };
+  // visitor() and visitorIds()
+  {
+    const st = family();
+    ok(E.visitorIds(st).join() === Object.keys(E.VISITORS).concat('k1', 'k5', 'k9', 'k10').join(), 'visitorIds: the eight, then the kittens');
+    const all = E.visitorIds(st).map(id => E.visitor(st, id));
+    ok(all.every(v => v && typeof v.name === 'string' && typeof v.fem === 'boolean' && typeof v.trait === 'string' && typeof v.coat === 'string' && Object.prototype.hasOwnProperty.call(E.VISITORS, v.coat) && v.kit >= 0 && v.kit <= 1), 'visitor(): every id has a name, sex, trait, a neighbour\'s coat and kit 0–1');
+    ok(Object.keys(E.VISITORS).every(id => { const v = E.visitor(st, id); return v.coat === id && v.kit === 0 && v.mother === null && v.name === E.VISITORS[id].name; }), 'the eight: their own coat, kit 0, no mother');
+    const m = E.visitor(st, 'k9'), b = E.visitor(st, 'k5'), g = E.visitor(st, 'k1');
+    ok(m.name === 'Micinka' && m.fem && m.mother === 'liza' && m.ageDays === 5 && m.small && m.kit > 0.8 && b.ageDays === 30 && !b.small && b.kit > 0.2 && b.kit < 0.35 && g.kit === 0 && g.ageDays === 70, `kittens: age and kit (${m.kit}, ${b.kit}, ${g.kit})`);
+    ok(E.visitor(st, 'k2') === null && E.visitor(st, 'tom') === null && E.visitor(st, null) === null && E.visitor(st, '__proto__') === null, 'visitor(): null for unknown ids');
+    // the growth curve: 1 up to 2 days, 0.35 at 21, 0 from 60, never growing back
+    const c = clone(st), ks = [];
+    for (let a = 0; a <= 70; a++) { c.t = c.kits[2].born + a * D + H; ks.push(E.visitor(c, 'k9').kit); }
+    ok(ks[0] === 1 && ks[2] === 1 && ks[21] === 0.35 && ks[60] === 0 && ks[70] === 0 && ks.every((k, i) => !i || k <= ks[i - 1]), `kit by age: ${[0, 2, 10, 21, 40, 60].map(a => ks[a])}`);
+  }
+  // strokes, treats and the feather on small kittens: each has its own; they like it everywhere, never run off
+  {
+    const st = withKits(family(), true);
+    ok(st.visit.kits.join() === 'k9,k10', `a visit keeps only the mother's small kittens, in order (${st.visit.kits})`);
+    let ev = E.act(st, 'strokeVisitor', { id: 'k9', region: 'belly', along: true, speed: 300 }, st.t).events;
+    ok(ev.some(e => e.type === 'visitorPurr' && e.id === 'k9' && e.liked) && st.visitors.k9.friend === 0.5 && st.visitors.liza.friend === 5, `a kitten likes the belly: +¼ +¼ (${st.visitors.k9.friend})`);
+    ev = E.act(st, 'strokeVisitor', { id: 'k10', region: 'tail', along: true, speed: 300 }, st.t + 1000).events;
+    ok(ev.some(e => e.type === 'visitorPurr' && e.id === 'k10') && st.visitors.k10.friend === 0.75, 'its brother in the same minute: his own minute (+½ playful, +¼ liked)');
+    for (let k = 0; k < 20; k++) E.act(st, 'strokeVisitor', { id: 'k9', speed: 300 }, st.t + 2000 + k * 1000);
+    ok(st.visit && st.visit.kits.length === 2 && st.visitors.k9.friend >= 0.5, 'shy Micinka with no hearts never runs off (the menu\'s Pohladit)');
+    ev = E.act(st, 'treatVisitor', { id: 'k9' }, st.t + 30000).events;
+    ok(ev.some(e => e.type === 'visitorTreat' && e.id === 'k9') && st.pamlsky === 19, 'a treat for Micinka');
+    ok(E.act(st, 'treatVisitor', { id: 'k9' }, st.t + 31000).events.some(e => e.type === 'refused' && e.reason === 'Micinka už pamlsek dostala.'), 'once a visit: "Micinka už pamlsek dostala."');
+    ok(E.act(st, 'treatVisitor', { id: 'k10' }, st.t + 32000).events.some(e => e.type === 'visitorTreat') && E.act(st, 'treatVisitor', { id: 'liza' }, st.t + 33000).events.some(e => e.type === 'visitorTreat') && st.pamlsky === 17, 'Tygřík and Líza get their own');
+    ev = E.act(st, 'playVisitor', { id: 'k10', caught: 'visitor' }, st.t + 40000).events;
+    ok(ev.some(e => e.type === 'visitorPlay' && e.id === 'k10' && e.koxa === true), 'the feather with Tygřík (Koxa plays too)');
+    ok(E.act(st, 'playVisitor', { id: 'k10' }, st.t + 50000).events.some(e => e.type === 'refused' && e.reason === 'Tygřík si chvilku oddechne.'), 'one game a minute each');
+    ok(E.act(st, 'playVisitor', { id: 'k9' }, st.t + 51000).events.some(e => e.type === 'visitorPlay'), 'Micinka has her own minute');
+    ok(E.act(st, 'feedVisitor', { id: 'k9' }, st.t + 52000).events.some(e => e.type === 'refused' && /dostala/.test(e.reason)), 'fed today by the treat');
+    ok(Object.keys(st.visit.kp).join() === 'k9,k10', 'per-kitten state in the visit\'s order');
+    {   // a greedy kitten fed: the mother's visit is not longer (a greedy visitor alone would stay 30 min more)
+      const g = withKits(family(), true); g.kits.find(k => k.id === 'k10').trait = 'greedy'; E.repair(g);
+      const until = g.visit.until, fe = E.act(g, 'feedVisitor', { id: 'k10' }, g.t + 1000).events;
+      ok(E.visitor(g, 'k10').trait === 'greedy' && fe.some(e => e.type === 'visitorFed' && e.id === 'k10') && g.visit.until === until, 'feeding a greedy kitten does not make its mother\'s visit longer');
+      invariants(g, 'greedy kitten fed');
+    }
+    ok(E.act(st, 'strokeVisitor', { id: 'k5', speed: 300 }, st.t + 53000).events.some(e => e.type === 'refused' && e.reason === 'Drobek tu teď není.'), 'a kitten not here: "Drobek tu teď není."');
+    invariants(st, 'kittens touched');
+    // a young cat on its own follows its trait: shy Drobek under 2 hearts runs off from the belly
+    const y = family(); y.visit = { id: 'k5', since: y.t, until: y.t + H, gain: 0 }; E.repair(y);
+    ev = E.act(y, 'strokeVisitor', { id: 'k5', region: 'belly', along: true, speed: 300 }, y.t).events;
+    ok(ev.some(e => e.type === 'visitorLeave' && e.reason === 'shy') && !y.visit, 'a shy young cat (30 days) runs off like Líza');
+    ok(E.visitorLikes('k5', y).text === 'Drobek se nechá hladit jen pomalu a jemně, na hlavě a na bradě.' && E.visitorLikes('k9', y).dislikes.length === 0 && E.visitorLikes('k9', y).text.startsWith('Micinka je ještě koťátko') && E.visitorLikes('k9') === null && E.visitorLikes('liza', y).text === E.visitorLikes('liza').text, 'visitorLikes(id, st): a kitten everywhere, a young cat by its trait');
+    invariants(y, 'young cat');
+  }
+  // kitten acts only with Koxa awake in the garden; the partner is one of the kittens; her hearts with the kitten grow too
+  {
+    let seen = {}, partner = 0, palK = 0, outside = 0;
+    for (let s = 1; s <= 40; s++) {
+      const st = family(); st.seed = s; st.visitors.liza = rec(5, s % 2 ? 3 : 0.5); withKits(st, s % 4 !== 0);
+      for (let k = 1; k <= 12 && st.visit; k++) {
+        const ev = E.advance(st, st.t + 10 * MIN).events;
+        for (const e of ev) if (e.type === 'visitAct') { seen[e.kind] = (seen[e.kind] || 0) + 1; if (E.VISIT_ACTS[e.kind].partner && ['k9', 'k10'].includes(e.kit)) partner++; }
+        if (st.visit && E.VISIT_ACTS[st.visit.act.kind].kits && !st.yard) outside++;
+      }
+      if (st.visitors.k9.pal + st.visitors.k10.pal > 0) palK++;
+      invariants(st, `kitten acts ${s}`);
+    }
+    console.log(`  kitten acts: ${JSON.stringify(seen)}`);
+    ok(seen.kitPlay > 0 && seen.kitFlee > 0 && seen.kitGroom > 0 && partner === seen.kitPlay + seen.kitGroom && outside === 0 && palK > 0, 'kitPlay / kitFlee / kitGroom with Koxa in the garden, with a kitten partner; Koxa makes friends with the kittens');
+    // kitGroom needs 3 of Koxa's hearts with the mother; fleeing more often when they are not friends
+    let groomLow = 0, fleeLow = 0, fleeHigh = 0, low = 0, high = 0;
+    for (let s = 1; s <= 60; s++) for (const p of [0.5, 4]) {
+      const st = family(); st.seed = s; st.visitors.liza = rec(5, p); withKits(st, true);
+      for (let k = 1; k <= 12 && st.visit; k++) for (const e of E.advance(st, st.t + 10 * MIN).events) if (e.type === 'visitAct') {
+        if (p < 3) { low++; if (e.kind === 'kitGroom') groomLow++; if (e.kind === 'kitFlee') fleeLow++; } else { high++; if (e.kind === 'kitFlee') fleeHigh++; }
+      }
+    }
+    ok(groomLow === 0 && fleeLow / low > fleeHigh / high, `kitGroom only from 3 hearts; she flees more before they are friends (${fleeLow}/${low} vs ${fleeHigh}/${high})`);
+    // a kitten act ends when she leaves the garden
+    const st = family(); withKits(st, true);
+    for (let k = 1; k <= 30 && !(st.visit && E.VISIT_ACTS[st.visit.act.kind].kits); k++) E.advance(st, st.t + MIN);
+    if (st.visit && E.VISIT_ACTS[st.visit.act.kind].kits) {
+      E.act(st, 'goHouse', null, st.t + 1000);
+      ok(st.visit && !st.visit.act.with && st.visit.kits.length === 2, 'going in ends the kitten act; the kittens stay with their mother');
+    }
+  }
+  // the invitation: kittens are too small, the mother has small kittens, a grown one can sleep over
+  {
+    const ev = at(2026, 6, 10, 19);
+    const st = withKits(family(ev), false);
+    ok(E.canInvite(st, 'k9', ev).reason === 'Micinka je ještě moc malá.' && E.canInvite(st, 'k10', ev).reason === 'Tygřík je ještě moc malý.', 'a kitten: "je ještě moc malá / malý"');
+    ok(E.canInvite(st, 'liza', ev).reason === 'Líza má malá koťátka, musí být s nimi.' && E.act(st, 'invite', { id: 'liza' }, ev).events.some(e => e.type === 'refused' && e.reason === 'Líza má malá koťátka, musí být s nimi.'), 'the mother with small kittens stays with them');
+    const y = family(ev); y.visit = { id: 'k5', since: y.t, until: y.t + H, gain: 0 }; y.visitors.k5 = rec(5, 3); E.repair(y);
+    ok(E.canInvite(y, 'k5', ev).reason === 'Drobek je ještě moc malý.', 'a young cat (30 days) is still too small');
+    const g = family(ev); g.visit = { id: 'k1', since: g.t, until: g.t + H, gain: 0 }; E.repair(g);
+    const r = E.act(g, 'invite', { id: 'k1' }, g.t + 1000).events;
+    ok(E.canInvite(family(ev), 'k1', ev).reason === 'Žofka tu teď není.' && r.some(e => e.type === 'guestIn' && e.id === 'k1') && g.guest.id === 'k1', 'a grown kitten (70 days) can sleep over');
+    ok(E.act(g, 'treatVisitor', { id: 'k1' }, g.t + 2000).events.some(e => e.reason === 'Žofka je u nás na noc. To počká do rána.'), 'the grown kitten as the guest');
+    E.advance(g, g.t + 14 * H);
+    ok(!g.guest, 'the night ends');
+    invariants(g, 'kitten guest'); invariants(st, 'invite mother');
+  }
+  // naming
+  {
+    const st = withKits(family(), false);
+    ok(E.kitsNew(st).map(v => v.id).join() === 'k9,k10', 'kitsNew: the unnamed kittens that have come (not Drobek, never seen)');
+    let ev = E.act(st, 'nameKitten', { id: 'k9', name: '  Mourinka Malinká z Náchoda u Hradce  ' }, st.t).events;
+    const K = st.kits.find(k => k.id === 'k9');
+    ok(ev.some(e => e.type === 'kitNamed' && e.id === 'k9' && e.name === K.name) && K.named && K.name === 'Mourinka Malinká z N' && E.visitor(st, 'k9').name === K.name, `nameKitten: trimmed, at most 20 characters (${K.name})`);
+    for (const bad of ['', '   ', 5, null])
+      ok(E.act(st, 'nameKitten', { id: 'k10', name: bad }, st.t).events.some(e => e.type === 'refused' && e.reason === 'Napiš koťátku jméno.') && !st.kits.find(k => k.id === 'k10').named, `a bad name refused (${JSON.stringify(bad)})`);
+    for (const id of ['k2', 'k5', 'mourek', null, '__proto__'])
+      ok(E.act(st, 'nameKitten', { id, name: 'Bob' }, st.t).events.some(e => e.type === 'refused' && e.reason === 'Takové koťátko neznáme.'), `an unknown kitten refused (${id})`);
+    st.yard = { since: st.t, snow: false, tree: { since: st.t, calls: 0 } }; E.repair(st);
+    ok(E.act(st, 'nameKitten', { id: 'k10', name: 'Rarášek' }, st.t + 1000).events.some(e => e.type === 'kitNamed') && st.yard.tree && E.kitsNew(st).length === 0, 'naming works whatever Koxa does (up the tree); kitsNew empty');
+    ok(E.diary(st).find(e => e.id === 'kittens').found === null, 'no diary entry for kittens made by hand');
+    invariants(st, 'naming');
+  }
+  // a litter nobody saw while small: each young cat is announced alone, as itself, the first time it comes
+  {
+    const st = family(); st.visit = null;
+    st.kits.push({ id: 'k6', mother: 'pacicka', name: 'Sněženka', named: false, fem: true, coat: 'pacicka', born: st.kits[1].born, trait: 'curious', solo: 0 });
+    E.repair(st);
+    const first = {}, evs = [];
+    for (let t = st.t + 10 * MIN; t < st.t + 40 * D && !(first.k5 && first.k6); t += 10 * MIN) {
+      const ev = E.advance(st, t).events;
+      for (const e of ev) if (e.type === 'visitor' && (e.id === 'k5' || e.id === 'k6') && !first[e.id]) { first[e.id] = ev; evs.push(e.id); }
+    }
+    const k = id => first[id] && first[id].filter(e => e.type === 'kittens');
+    ok(first.k5 && first.k6 && ['k5', 'k6'].every(id => k(id).length === 1 && k(id)[0].alone === true && k(id)[0].n === 1 && k(id)[0].ids.join() === id && k(id)[0].mother === 'pacicka'),
+      `a young cat first seen alone: 'kittens' alone, only itself (${evs.map(id => JSON.stringify(k(id)))})`);
+    const dk = E.diary(st).find(e => e.id === 'kittens'), fe = st.kits.find(o => o.id === evs[0]);
+    ok(dk.found && dk.text === `Na zahradu poprvé ${fe.fem ? 'přišla' : 'přišel'} ${fe.name}, koťátko Pacičky.`, `the diary: "${dk.text}"`);
+    ok(['k5', 'k6'].every(id => E.kitsNew(st).some(v => v.id === id)), 'both can be named once seen');
+    invariants(st, 'kittens seen alone');
+    const r = clone(st); E.repair(r);
+    ok(JSON.stringify(r.diaryCat) === JSON.stringify(st.diaryCat) && r.diaryCat.kittens === evs[0], 'repair keeps a kitten in the diary\'s kittens entry');
+  }
+  // a kitten named while small stays in the album when grown (60 days), an unnamed one seen too
+  {
+    const st = withKits(family(), false);
+    E.act(st, 'nameKitten', { id: 'k9', name: 'Mína' }, st.t + 1000);
+    ok(st.visitors.k9.met > 0, 'naming a kitten counts as meeting it');
+    st.visit = null; E.repair(st);
+    E.advance(st, st.t + 60 * D);
+    const al = E.album(st);
+    ok(E.visitor(st, 'k9').kit === 0 && al.visitors.some(v => v.id === 'k9' && v.name === 'Mína') && al.visitors.some(v => v.id === 'k10'),
+      `grown kittens once seen are among the neighbours' cats (${al.visitors.map(v => v.id)})`);
+  }
+  // album
+  {
+    const st = withKits(family(), false); st.visitors.k1.met = st.t; st.visitors.k9.met = st.t;
+    const al = E.album(st);
+    ok(al.kittens.map(k => k.id).join() === 'k1,k9,k10' && al.kittens.every(k => ['id', 'name', 'named', 'mother', 'motherName', 'ageDays', 'kit', 'coat', 'fem', 'hearts', 'pal'].every(f => f in k)), `album.kittens: the seen ones with every field (${al.kittens.map(k => k.id)})`);
+    const z = al.kittens[0];
+    ok(z.name === 'Žofka' && z.named && z.motherName === 'Pacička' && z.ageDays === 70 && z.kit === 0 && z.hearts === 5 && z.pal === 3 && al.kittens[1].motherName === 'Líza', 'album.kittens: names, mother, age, hearts');
+    ok(al.visitors.some(v => v.id === 'k1' && v.name === 'Žofka') && !al.visitors.some(v => v.id === 'k9'), 'album.visitors: a grown kitten once met, not a small one');
+    const ph = E.act(st, 'photo', { room: 'garden', vpose: 'sit' }, st.t + 1000).events;
+    st.yard = { since: st.t, snow: false, tree: null }; E.repair(st);
+    E.act(st, 'photo', { room: 'garden' }, st.t + 2000);
+    ok(st.album[st.album.length - 1].visitor === 'liza' && st.album[st.album.length - 1].kits.join() === 'k9,k10', 'a garden photo with the mother has her kittens');
+    invariants(st, 'album kittens');
+  }
+  // repair: garbage kittens, litters, visits
+  {
+    const st = withKits(family(), true);
+    const g = clone(st);
+    g.kits = g.kits.concat([
+      { id: 'k9', mother: 'liza', name: 'Dup', named: true, fem: true, coat: 'liza', born: g.t - D, trait: 'shy' },             // a duplicate id
+      { id: 'k11', mother: 'sedivka', name: 'X', fem: true, coat: 'sedivka', born: g.t - D, trait: 'shy' },                    // not a mother
+      { id: 'k12', mother: 'liza', name: 'Y', fem: true, coat: 'liza', born: g.t + D, trait: 'shy' },                          // born tomorrow
+      { id: 'k13', mother: 'liza', name: 'Z', fem: true, coat: 'liza', born: g.t - D, trait: 'shy' },                          // a bad id
+      { id: 'k11', mother: 'liza', name: 7, named: true, fem: 'yes', coat: 'tygr', born: g.kits[2].born, trait: 'old', solo: 'x' },   // repaired
+      { id: 'k12', mother: 'liza', name: 'Five', fem: false, coat: 'liza', born: g.kits[2].born, trait: 'shy' },                    // the 5th of a litter? (3rd here)
+      { id: 'k4', mother: 'ciperka', name: 'W', fem: true, coat: 'ciperka', born: g.t - 2 * D, trait: 'bold' },                     // a 4th litter
+      null, 'k8', [],
+    ]);
+    g.litter = { mother: 'sedivka', since: 'x', back: 5, count: 9 };
+    g.visitors.k6 = rec(1, 1); g.visitors.k11 = rec(2, 2);
+    g.visit.kp = { k9: { gain: 9, pet: 'x', treat: 1, play: g.t + H, playGain: 3 }, liza: { gain: 1 }, k5: {} };
+    g.visit.act = { kind: 'kitGroom', since: g.t, with: 'koxa', kit: 'k5' };
+    E.repair(g);
+    const k11 = g.kits.find(k => k.id === 'k11');
+    ok(g.kits.map(k => k.id).join() === 'k1,k5,k9,k10,k11,k12' && k11.name === 'Koťátko' && !k11.named && !k11.fem && k11.coat === 'liza' && k11.trait === 'playful' && k11.solo === 0, `repair: duplicates, strangers, the future and a 4th litter dropped, fields fixed (${g.kits.map(k => k.id)})`);
+    ok(g.litter && g.litter.mother === 'liza' && g.litter.count === 3 && g.litter.since === g.kits[2].born, `repair: a broken litter record rebuilt from the kittens (${JSON.stringify(g.litter)})`);
+    ok(!g.visitors.k6 && g.visitors.k11, 'repair: records of unknown kittens dropped');
+    ok(JSON.stringify(g.visit.kp) === JSON.stringify({ k9: { gain: 1.5, pet: 0, treat: false, play: 0, playGain: 0.5 } }) && g.visit.act.kind === 'wander' && g.visit.kits.join() === 'k9,k10', `repair: the per-kitten state and a kitGroom with a stranger (${JSON.stringify(g.visit.kp)}, ${g.visit.act.kind})`);
+    invariants(g, 'kitten garbage');
+    // five of one litter: the fifth dropped
+    const f = clone(st); f.kits = f.kits.concat([0, 1, 2].map(i => ({ id: 'k' + (11 + i), mother: 'liza', name: 'N' + i, named: false, fem: true, coat: 'liza', born: f.kits[2].born, trait: 'shy', solo: 0 })));
+    E.repair(f);
+    ok(f.kits.filter(k => k.mother === 'liza').length === 4, 'at most 4 kittens a litter');
+    for (const bad of [null, 'x', 5, { mother: 'liza' }, { mother: 'liza', since: T, back: T + D, count: 1 }]) {
+      const b = clone(st); b.litter = bad; E.repair(b);
+      ok(b.litter && b.litter.count >= 2 && b.litter.since <= b.t, `repair: litter ${JSON.stringify(bad)} → ${JSON.stringify(b.litter)}`);
+      invariants(b, 'litter garbage');
+    }
+    const e = clone(st); e.kits = 'x'; e.litter = null; E.repair(e);
+    ok(e.kits.length === 0 && e.litter === null && !e.visit.kits && !e.visitors.k9 && e.diaryCat.kitGrown === undefined, 'repair: no kittens at all');
+    invariants(e, 'no kittens');
+    const old = clone(st); delete old.kits; delete old.litter; E.repair(old);
+    ok(Array.isArray(old.kits) && old.litter === null, 'an older save: no kittens, no litter');
+  }
+  // the clock moves back in a visit with kittens; a long absence: they keep growing by real time
+  {
+    const st = withKits(family(), true);
+    E.act(st, 'strokeVisitor', { id: 'k9', region: 'head', speed: 300 }, st.t + 1000);
+    const born = st.kits[2].born, since = st.litter.since;
+    E.advance(st, st.t - 2 * H);
+    ok(st.visit && st.visit.kits.join() === 'k9,k10' && st.kits[2].born === born - 2 * H && E.visitor(st, 'k9').ageDays === 5 && st.litter.since === since - 2 * H && st.visit.kp.k9.pet === st.visit.since + 1000, 'the clock moved back: the kittens stay as old as they were, the litter plan and the strokes move with it');
+    invariants(st, 'kittens clock back');
+    const fut = withKits(family(), false); fut.kits[2].born = fut.t; fut.kits[3].born = fut.t; E.repair(fut);
+    E.advance(fut, fut.t - 3 * D);
+    ok(fut.kits[2].born === fut.t && fut.visit.kits.join() === 'k9,k10', 'kittens born just now, the clock 3 days back: born now, still with their mother');
+    invariants(fut, 'kittens clock far back');
+    // two litters of one mother (200 and 50 days), the clock 300 days back: still two litters, nobody lost, ages kept
+    const two = family(); two.kits = two.kits.filter(k => k.mother === 'pacicka');
+    const b200 = midnight(two.t - 200 * D), b50 = midnight(two.t - 50 * D);
+    two.kits = [
+      { id: 'k1', mother: 'liza', name: 'Žofka', named: true, fem: true, coat: 'liza', born: b200, trait: 'greedy', solo: b200 + 22 * D },
+      { id: 'k2', mother: 'liza', name: 'Bobík', named: true, fem: false, coat: 'liza', born: b200, trait: 'shy', solo: b200 + 23 * D },
+      { id: 'k3', mother: 'liza', name: 'Ťapka', named: true, fem: true, coat: 'mourek', born: b200, trait: 'bold', solo: 0 },
+      { id: 'k5', mother: 'liza', name: 'Mňouk', named: true, fem: false, coat: 'liza', born: b50, trait: 'playful', solo: b50 + 30 * D },
+      { id: 'k6', mother: 'liza', name: 'Kulička', named: false, fem: true, coat: 'rambo', born: b50, trait: 'sleepy', solo: 0 },
+    ];
+    two.litter = { mother: 'liza', since: b50, back: b50 + 2 * D, count: 2 }; two.visit = null; two.visitors = { liza: rec(5, 3) }; E.repair(two);
+    const ids2 = two.kits.map(k => k.id).join(), ages = two.kits.map(k => E.visitor(two, k.id).ageDays).join();
+    E.advance(two, two.t - 300 * D); E.repair(two);
+    ok(two.kits.map(k => k.id).join() === ids2 && two.kits.map(k => E.visitor(two, k.id).ageDays).join() === ages && two.kits[0].born !== two.kits[3].born && two.litter.count === 2,
+      `the clock 300 days back: two litters of Líza stay two, every kitten kept with its age (${ids2} / ${two.kits.map(k => k.id)}, ${ages})`);
+    invariants(two, 'two litters clock back');
+    // repair groups by the id block: kittens of one block with another birth join their litter, a stranger mother is dropped
+    const blk = clone(two); blk.kits[1].born += D; blk.kits.push({ id: 'k4', mother: 'pacicka', name: 'X', named: false, fem: true, coat: 'pacicka', born: blk.kits[0].born, trait: 'shy', solo: 0 }); E.repair(blk);
+    ok(blk.kits.map(k => k.id).join() === ids2 && blk.kits[1].born === blk.kits[0].born, 'repair: a litter is a block of ids (k1–k4): one birth, one mother');
+    // a small kitten never visits alone, a kitten under 60 days is never the guest (states made by hand, an old clock)
+    const sm = family(); sm.visit = { id: 'k9', since: sm.t, until: sm.t + H, gain: 0 }; E.repair(sm);
+    ok(sm.visit === null, 'repair: a kitten of 5 days visiting alone is no visit');
+    const gs = family(); gs.visit = null; gs.guest = { id: 'k5', since: gs.t - H, until: gs.t + 5 * H, slept: false }; E.repair(gs);
+    const gg = family(); gg.visit = null; gg.guest = { id: 'k1', since: gg.t - H, until: gg.t + 5 * H, slept: false }; E.repair(gg);
+    ok(gs.guest === null && gg.guest && gg.guest.id === 'k1', 'repair: a young cat (30 days) is never the guest, a grown one (70 days) may be');
+    invariants(sm, 'small alone'); invariants(gs, 'young guest');
+    const ab = family(); E.advance(ab, ab.t + 30 * D);
+    ok(E.visitor(ab, 'k9').ageDays === 35 && E.visitor(ab, 'k9').kit < 0.35 && E.visitor(ab, 'k9').kit > 0, 'a 30-day absence: the kittens are 30 days older');
+    invariants(ab, 'kittens absence');
+  }
+  // fuzz: the kitten actions with good and garbage ids, minutes apart, sometimes hours or back in time
+  {
+    const seen = {};
+    for (const seed of [150, 151, 152, 153]) {
+      let x = seed;
+      const r = () => { x = (Math.imul(x ^ (x >>> 15), 0x2C1B3C6D) + 0x6D2B79F5) >>> 0; x ^= x >>> 12; return (x >>> 0) / 4294967296; };
+      const pick = a => a[Math.floor(r() * a.length)];
+      const st = family(); st.seed = seed;
+      let t = st.t;
+      const ids = () => E.visitorIds(st).concat('k2', 'k12', 'tom', null, 7);
+      for (let i = 0; i < 1500; i++) {
+        const k = r();
+        t += k < 0.8 ? Math.floor(r() * 3 * MIN) : k < 0.97 ? Math.floor(r() * 8 * H) : -Math.floor(r() * 2 * H);
+        if (!st.visit && !st.guest && r() < 0.2) { r() < 0.5 ? withKits(st, false) : (st.visit = { id: pick(E.visitorIds(st)), since: st.t, until: st.t + 90 * MIN, gain: 0 }, E.repair(st)); }
+        const V = st.visit, id = V && r() < 0.8 ? (V.kits && r() < 0.6 ? pick(V.kits) : V.id) : pick(ids());
+        const a = pick(['strokeVisitor', 'strokeVisitor', 'treatVisitor', 'playVisitor', 'feedVisitor', 'invite', 'photo', 'nameKitten', 'nameKitten', 'goGarden', 'goHouse', 'advance', 'basic']);
+        let res;
+        if (a === 'advance') res = E.advance(st, t);
+        else if (a === 'basic') { basicCare(st, t); res = { st, events: [] }; }
+        else if (a === 'nameKitten') res = E.act(st, a, { id: pick(ids()), name: pick(['Bob', '', '  Líza  ', 'x'.repeat(40), 3]) }, t);
+        else res = E.act(st, a, a === 'strokeVisitor' ? { id, region: pick(Object.keys(E.REGIONS).concat(null)), along: pick([true, false]), speed: pick([60, 300, 1500]) } : { id, caught: 'koxa', room: 'garden' }, t);
+        for (const e of res.events) seen[e.type] = (seen[e.type] || 0) + 1;
+        if (st.visit && st.visit.kits && st.visit.kits.some(k => !st.kits.some(o => o.id === k && o.mother === st.visit.id))) ok(false, `kitten fuzz ${seed}: a stranger in the visit`);
+        invariants(st, `kitten fuzz ${seed} step ${i}`);
+        if (failed > 20) break;
+      }
+    }
+    const need = ['kitNamed', 'visitorPurr', 'visitorTreat', 'visitorPlay', 'kitGrown', 'visitAct', 'refused'];
+    console.log(`  kitten fuzz: ${need.map(k => `${k} ${seen[k] || 0}`).join(', ')}`);
+    ok(need.every(k => seen[k] > 0), `the kitten fuzz meets the kitten events (missing: ${need.filter(k => !seen[k]).join(', ')})`);
   }
 }
 

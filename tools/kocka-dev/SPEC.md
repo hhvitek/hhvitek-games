@@ -178,7 +178,7 @@ Pointer Events on the scene; mouse and pen behave like one finger.
 
 ## 8b. Návštěvy 2 (Phase A, user's decision 2026-11-13)
 Visitors live in the garden and do things together with Koxa; Koxa has her own friendship with every cat. Phase B
-(below) adds the player's interactions with a visitor; planned next: kittens visiting (no adoption).
+(below) adds the player's interactions with a visitor; Phase C kittens visiting (no adoption).
 - **Programme (engine):** `st.visit.act = { kind, since, with }` (`E.VISIT_ACTS`). Alone (`with: null`): `arrive` (on
   the fence, first minutes), `wander`, `drink` (the pond; never in winter), `bench`, `tree`, `nap`, `bowl` (only with
   the miska pro návštěvy). Together (`with: 'koxa'`, only while she is in the garden, awake, not up the tree, on the lap
@@ -264,6 +264,72 @@ New randomness only from `rndSeed` keyed on the moment (salts 30, 31), never `st
   on the rug in the evening, sleeps on the křeslo (the rug when the player sits there), lies down beside Koxa (sideLie,
   `PAIR.sideLie`) when she sleeps in the obývák; at 7:00 it walks out toward the předsíň. Photos: `vx` = 200 + half
   the distance to Koxa (Koxa drawn at 400 − vx), or the visitor's own x when Koxa is not there (`nokoxa`).
+
+### Phase C: kittens visiting (engine 2026-11-13; user's decision: kittens only visit, never a second cat at home)
+New randomness from `rndDay` / `rndSeed` keyed on the day or the act's start (salts 40–52), never `st.n`; the litter does
+not depend on the step of `advance()`.
+- **Litters:** at each new local day (`newDay`) a mother — Líza, Čiperka or Pacička (never Šedivka: she is old) — whose
+  player's hearts (`friend`) are 3+ may have kittens: from 7 days after `st.born`, 120 days after the previous litter,
+  at most 3 a game, 10 % a day (salt 40; usually within two weeks), never on a night she sleeps over. The kittens are born
+  at that day's midnight; the mother stays away 2–3 days (`st.litter = { mother, since, back, count }`, kept after the
+  litter for the gap and the count) and then comes with 2–4 kittens. One father (a tom) per litter.
+- **Kittens** `st.kits = [{ id: 'k1'…'k12' (litter j: k4j-3…k4j), mother, name, named, fem, coat, born, trait, solo }]`:
+  `coat` = the mother's id (55 %) or the father's (a neighbour coat the art draws); `trait` = the mother's (30 %) or drawn
+  (playful most likely, never old); `name` = a suggestion (Micinka, Packa, Kulička, Mourinka, Bětka, Fifinka, Ťapka, Žofka,
+  Kapička, Lilinka, Mína, Čiča / Tygřík, Čertík, Mikeš, Šmudla, Drobek, Bobík, Fíla, Ťapík, Uhlík, Pepík, Mourínek,
+  Kulíšek; never a neighbour's, Koxa's or a sibling's) until the player names it (`nameKitten { id, name }`, cleaned like
+  her name; "Napiš koťátku jméno.", "Takové koťátko neznáme." for one never seen; a named kitten counts as met, so it
+  stays among the neighbours' cats when grown); `solo` = its first visit alone. A litter is its block of ids (one mother,
+  one birth; repair never merges two litters); when the clock moves back the kittens' `born` and `solo` move with it
+  like the litter plan, so they keep their age. A kitten under 21 days never visits alone, under 60 days is never the
+  guest (repair drops such a visit or guest).
+- **Growing:** `kit` (the art's size) is 1 up to 2 days, falls to 0.35 at 21 days and to 0 at 60 days. Under 21 days the
+  kittens come only with their mother (`st.visit.kits`; she is picked 3× as often then, never while away); from 21 days a
+  young cat visits on its own (weight 0.6 each, all of them at most 3, against 1 for each of the eight: the total rate
+  does not change); `kitGrown` at its first visit alone. A kitten (under 60 days) cannot be invited ("Micinka je ještě moc
+  malá."), neither a mother with small kittens ("Líza má malá koťátka, musí být s nimi.").
+- **Programme:** with the small kittens and Koxa awake in the garden, after the greeting: `kitPlay` (they pounce, pull her
+  tail; fun up, energy down), `kitFlee` (she escapes up the tree in the picture, `st.yard.tree` stays; mood −4, no hearts;
+  more often under 1 / 3 of her hearts with the mother and when she minds belly rubs, `st.traits.bellyOk`), `kitGroom`
+  (she licks one, from 3 hearts; love up). `act.kit` / `visitAct.kit` = the kitten partner (kitPlay, kitGroom), which gets
+  the same quarter of Koxa's hearts as the mother.
+- **The player and a kitten:** strokes, a treat and the feather as for any visitor, each kitten with its own minute,
+  treat and caps (`st.visit.kp`); a small kitten likes strokes everywhere and never runs off or swipes; a young cat
+  follows its trait (`visitorLikes(id, st)`).
+- **API:** `E.visitor(st, id)` = `{ id, name, trait, fem, coat, kit, mother, ageDays, small }` for the eight and the
+  kittens (use it instead of `E.VISITORS[id]`), `E.visitorIds(st)`, `E.kitsNew(st)` (unnamed kittens seen: the
+  "Koťátka!" dialog), `album().kittens`, grown kittens in `album().visitors`; events `kittens { mother, n, ids }` (a
+  litter's first visit with its mother; not `litter`, the litter box; `alone: true`, n 1, ids [itself]: a young cat that
+  nobody saw while small comes on its own the first time), `kitNamed { id, name }`, `kitGrown { id }`, `visitor` /
+  `visitorLeave` with `kits`. A garden photo with the mother stores her small kittens (`kits`). Deníček: `kittens`
+  ("Líza přivedla na zahradu koťátka: Micinka, Tygřík a Packa.", or "Na zahradu poprvé přišla Žofka, koťátko
+  Lízy." when the first kitten seen came alone) and `kitGrown` ("Micinka už chodí na návštěvu sama.").
+- **UI (Phase C):** every text takes the name and gender from `E.visitor(st, id)` (`VIS`). A mover knows its `coat` and
+  `kit`; the box stays the grown cat's size (the art draws a kitten `kitScale(kit)` big round its feet), anchors from
+  `kitAnchor`, REACH scaled by its size, the leg cycle quicker by its size, hit regions from `A.regions` with its kit (no
+  extra scaling), `v:k1:head` region ids. All cats are ranked by their feet for the z-order (19, 18 … 12 behind Koxa,
+  21, 22 … 25 in front, floor toys 10 and drop rings 11 under every cat, the fly 26, the laser dot 27; a kitten beside its mother in front of her; `zf: 'top'` for the kitten she washes). The small kittens
+  (`VZ.kids`) each have a little brain (`kidTick`): follow the mother (walk after her one by one, sit at ±64 art units),
+  sleep curled against her when she naps on the ground, tumble, pounce at a sibling (it rolls on its back), chase one,
+  climb onto the bench to her and sometimes topple off, drink in front of her, wait under the fence or tree when she is up
+  there. With them she comes in and goes out through the gate (they cannot jump the fence). Scenes: `kitPlay` (Koxa sits,
+  the partner kitten in `tailCatch` 96 art units behind her on her tail side; then she loafs and it pounces at 100; then it
+  tumbles beside her; the distances grow with a bigger kitten by how far its paws reach, from its regions), `kitFlee` (she
+  runs to the tree, jumps up and lies on the branch; the kittens wait under the tree, one standing up at the trunk; the
+  mother sits on the lawn), `kitGroom` (the kitten sits in front of her chest, a little behind, drawn in front; her
+  lickOther tongue (`A.mouth`) on the top of its head (`A.regions` head) at its own size; then it lies beside her). The
+  "Koťátka!" dialog (whenFree, 8 s after they come into view, a young cat alone too, or after the `kittens` event, only
+  in the garden; never while a finger is down, a drag, carrying her, the laser, the lap or a game: then 3 s later again,
+  and any dialog that opens ends a gesture under way, so a dragged treat goes back): a drawing,
+  a name field (prefilled with the suggestion, 20 characters, an empty one dims Pojmenovat: "Napiš koťátku jméno.") and
+  kočička / kocourek for each; "Později" puts it off for the day (`kitAsk` in the save). A kitten's menu: "koťátko Lízy,
+  4 dny" (later "dcera / syn Lízy"), both hearts, Pohladit, Dát pamlsek (small ones; Nakrmit for the young), Přejmenovat,
+  Pozvat na noc dimmed with the engine's reason. Treats and the feather go to the cat they are dropped / waved at (the
+  nearest one on the ground that is not resting); a dragged treat rings every cat, each ring as big as the cat, the one
+  under the finger lit. Photos draw the stored `kits` beside the mother (the side away from Koxa
+  first) at the size they had then. Deníček: "Koťátka" (kittens still growing), grown ones among "Kočky od sousedů" with
+  "dcera Lízy". Test hook: `forceKittens(mother, kind, days, n)`, `visitor.kids`, `movers`, `moverPoint(id)`,
+  `visitorStrokePath(region, against, id)`, `holdVisitor(ms, id)`, `kittenDialog()`, `visitorMenu(id)`.
 
 ## 9. Holidays (date → props, texts)
 Advent 1.–23.12 (věnec), Mikuláš 5.12 (punčocha), Vánoce 24.12–6.1 (stromeček; she knocks ornaments down),

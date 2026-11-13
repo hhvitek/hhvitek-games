@@ -3,7 +3,7 @@
 //
 // const I = KockaInput();
 //
-// Gestures:  const g = I.attach(el, opts)   g() or g.detach() removes it; g.setMode(m), g.mode(), g.cancel()
+// Gestures:  const g = I.attach(el, opts)   g() or g.detach() removes it; g.setMode(m), g.mode(), g.cancel(), g.active()
 //   The caller sets `touch-action:none` (and user-select:none) on el. Pointer Events; mouse and pen = one finger.
 //   Pointers that start on `opts.ignore` elements inside el (default buttons, links, inputs, [data-no-gesture])
 //   are left alone, so ordinary buttons in the scene keep working.
@@ -580,6 +580,7 @@ function KockaInput() {
     detach.setMode = m => { if (m !== mode) { cancelAll(); mode = m; } };
     detach.mode = () => mode;
     detach.cancel = cancelAll;
+    detach.active = () => ptrs.size > 0;                    // a finger is down (a gesture may be under way)
     detach.strokeStep = stepLen;
     return detach;
   }

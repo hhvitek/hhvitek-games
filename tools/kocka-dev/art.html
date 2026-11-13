@@ -132,6 +132,37 @@ h += '</div><h2>rub × moods: Koxa, Mourek, Líza, Bivoj (phone size, 150 px)</h
 for (const who of ['koxa', 'mourek', 'liza', 'bivoj']) for (const m of MOODS) h += `<div class="cell ${who === 'liza' ? 'cottage' : 'paper'}" style="width:150px"><div class="box">${who === 'koxa' ? A.cat('rub', m) : A.neighbour(who, 'rub', m)}</div>${who} ${m}</div>`;
 h += '</div><h2>Neighbours on the garden fence</h2><div style="width:320px"><div class="room">' + A.room({ id: 'garden', phase: 'day', season: 'summer' }) +
   [['mourek', 60], ['liza', 160], ['bivoj', 360]].map(([id, x]) => { const f = A.rooms.garden.spots.fence, w = 110; return `<div style="position:absolute;left:${(x - w / 2) / 4}%;top:${(f.y - 186 / 200 * w) / 6}%;width:${w / 4}%;aspect-ratio:1">${A.neighbour(id, 'onFence', 'calm')}</div>`; }).join('') + '</div></div>';
+// Koťata: neighbour('k1', pose, { coat, kit }); kit 1 ≈ 5–6 weeks, drawn A.kitScale(kit) big round the feet (100, 186)
+const KITP = ['sit', 'walk', 'loaf', 'sleep', 'pounce', 'tumble', 'tailCatch'];
+h += `<h2>Koťata: every coat as a kitten (kit 1; kitScale ${A.kitScale(1)})</h2><div class="grid" style="grid-template-columns:repeat(${KITP.length},1fr)">`;
+for (const id of Object.keys(A.neighbours)) for (const p of KITP) h += cell(A.neighbour('k1', p, { coat: id, kit: 1, mood: p === 'tumble' || p === 'tailCatch' ? 'happy' : 'calm' }), `${A.neighbours[id].name} ${p}`, id === 'liza' || id === 'fousek' || id === 'ciperka' ? 'cottage' : 'paper');
+h += '</div>';
+const KITALL = ['sit', 'walk', 'trot', 'run', 'loaf', 'sleep', 'sideLie', 'belly', 'pounce', 'stalk', 'crouch', 'eat', 'climb', 'onBranch', 'drink', 'swipe', 'sniff', 'groom', 'arch', 'rub', 'tumble', 'tailCatch'];
+h += `<h2>Kitten in every pose (Čiperka's coat, kit 1, noProp) with its regions</h2><div class="grid" style="grid-template-columns:repeat(11,1fr)">`;
+for (const p of KITALL) {
+  const o = { kit: 1, mood: 'happy', noProp: true }, rg = A.regions(p, o), m = A.mouth(p, o);
+  h += cell(A.neighbour('k1', p, Object.assign({ coat: 'ciperka' }, o)), p) + cell(A.neighbour('k1', p, Object.assign({ coat: 'ciperka' }, o)) + `<svg viewBox="0 0 200 200" class="reg" style="position:absolute;inset:0;overflow:visible">${rg.slice().reverse().map(r => `<path d="${r.path}" fill="${COL[r.id]}"/>`).join('')}${m ? `<circle cx="${m.x}" cy="${m.y}" r="3" fill="red"/>` : ''}</svg>`, p + ' regions');
+}
+h += '</div><h2>Growing up: kit 1 → 0.66 → 0.35 → 0 (Mourek and Líza)</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">';
+for (const [id, p] of [['mourek', 'sit'], ['liza', 'sit'], ['mourek', 'walk'], ['liza', 'loaf']]) for (const k of [1, 0.66, 0.35, 0]) h += cell(A.neighbour('k1', p, { coat: id, kit: k, mood: 'calm' }), `${A.neighbours[id].name} ${p} kit ${k}`, id === 'liza' ? 'cottage' : 'paper');
+h += '</div>';
+// recommended offsets (art units = room units at the game's 200-unit cat box; + = to the right):
+// KIDS.catchSit: a kit-1 kitten in tailCatch (not flipped) right of a sitting happy Koxa, its paws in her raised tail;
+// KIDS.pounceLoaf: a kit-1 kitten in pounce (not flipped) right of a loafing Koxa, its front paws on her tail root;
+// KIDS.beside: a kit-1 kitten sitting beside its sitting mother (either side, drawn in front of her)
+const KIDS = { catchSit: 96, beside: 64, pounceLoaf: 100 };
+h += '<h2>Koťata on the lawn: Líza with three kittens, Koxa with a kitten catching her tail</h2><div class="grid" style="grid-template-columns:repeat(2,1fr)">' +
+  scene(`Líza + kittens (beside ±${KIDS.beside}), a tumble and a pounce`, [['liza', 'sit', 'happy', 120, true], ['k2', 'tumble', { coat: 'liza', kit: 1, mood: 'happy' }, 236, false], ['k3', 'pounce', { coat: 'mourek', kit: 1, mood: 'happy' }, 330, true],
+    ['k1', 'sit', { coat: 'ciperka', kit: 1, mood: 'happy' }, 120 + KIDS.beside, true], ['k4', 'sit', { coat: 'liza', kit: 1, mood: 'calm' }, 120 - KIDS.beside, false]]) +
+  scene(`Koxa sit happy + kitten tailCatch (dx ${KIDS.catchSit})`, [['koxa', 'sit', 'happy', 140, false], ['k1', 'tailCatch', { coat: 'mourek', kit: 1, mood: 'happy' }, 140 + KIDS.catchSit, false], ['k2', 'loaf', { coat: 'liza', kit: 1, mood: 'calm' }, 50, true]]) +
+  scene(`Koxa loaf + kitten pounce at her tail root (dx ${KIDS.pounceLoaf})`, [['koxa', 'loaf', 'calm', 150, false], ['k1', 'pounce', { coat: 'pacicka', kit: 1, mood: 'happy' }, 150 + KIDS.pounceLoaf, false]]) +
+  scene(`Koxa sit grumpy + kitten tailCatch (dx ${KIDS.catchSit})`, [['koxa', 'sit', 'grumpy', 150, false], ['k1', 'tailCatch', { coat: 'bivoj', kit: 1, mood: 'happy' }, 150 + KIDS.catchSit, false]]) +
+  scene('kit 0.35 young cats with Koxa', [['koxa', 'sit', 'calm', 120, false], ['k1', 'sit', { coat: 'bivoj', kit: 0.35, mood: 'happy' }, 220, true], ['k2', 'walk', { coat: 'pacicka', kit: 0.66, mood: 'calm' }, 320, false]]) +
+  scene('kittens sleeping and playing', [['k1', 'sleep', { coat: 'rambo', kit: 1 }, 90, false], ['k2', 'sideLie', { coat: 'sedivka', kit: 1, asleep: true }, 170, false], ['k3', 'swipe', { coat: 'fousek', kit: 1, mood: 'happy' }, 250, true], ['k4', 'belly', { coat: 'mourek', kit: 1, mood: 'happy' }, 330, false]]) + '</div>';
+h += '<h2>Kittens big (phone size, 250 px)</h2><div style="display:flex;gap:8px;flex-wrap:wrap">';
+for (const [id, p, bg] of [['mourek', 'sit', 'paper'], ['liza', 'tailCatch', 'cottage'], ['ciperka', 'tumble', 'paper'], ['pacicka', 'walk', 'paper'], ['rambo', 'loaf', 'paper'], ['fousek', 'pounce', 'cottage']])
+  h += `<div class="cell ${bg}" style="width:250px">${A.neighbour('k1', p, { coat: id, kit: 1, mood: 'happy' })}</div>`;
+h += '</div>';
 h += '<h2>Room: phase × season</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';
 const SEAS = ['spring', 'summer', 'autumn', 'winter'], PH = ['morning', 'day', 'evening', 'night'];
 for (const se of SEAS) for (const ph of PH) h += `<div><div class="room">${A.room({ phase: ph, season: se, sunX: (PH.indexOf(ph) + SEAS.indexOf(se)) / 6 })}<div class="cat">${A.cat(ph === 'night' ? 'sleep' : ['sit', 'loaf', 'window', 'sit'][PH.indexOf(ph)], 'happy')}</div></div>${ph} ${se}</div>`;

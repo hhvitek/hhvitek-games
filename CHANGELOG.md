@@ -9,6 +9,7 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 - Kočka: kočky od sousedů na zahradě ožily – chodí, pijí z jezírka, spí na lavičce a lezou na strom. Když je Koxa venku, očichají se s ní, honí se, hravě se pošťuchují, myjí si kožíšky nebo spolu podřimují; Koxa si s nimi buduje vlastní kamarádství (v Deníčku má každá kočka srdíčka tvoje i její).
 - Kočka: kamarády od sousedů můžeš hladit prstem (každý má rád něco jiného – plachá Líza uteče, Rambo se ožene), dát jim pamlsek z ruky a mávat peříčkem pro dva. Koxa umí žárlit, nejlepší kamarádku můžeš večer pozvat na noc do obýváku a vyfotit se dá i s kamarádem.
+- Kočka: kamarádka od sousedů může mít koťátka – přivede je na zahradu, ty jim dáš jména a Koxa si s nimi hraje, myje je, nebo před nimi uteče na strom. Asi po třech týdnech chodí koťátka na návštěvu sama a postupně vyrostou.
 
 ## 1.0.17 – 2026-11-13
 
