@@ -1,7 +1,15 @@
 // The app version, shown in the launcher's Nastavení and used by sw.js to name its cache.
 // Written by tools/release.js from CHANGELOG.md: never edit by hand.
-globalThis.APP_VERSION = { version: '1.0.16', date: '2026-11-13' };
+globalThis.APP_VERSION = { version: '1.0.17', date: '2026-11-13' };
 globalThis.APP_CHANGES = [
+  {
+    "version": "1.0.17",
+    "date": "2026-11-13",
+    "items": [
+      "Výběr her: u Paprsku, Šipek ven, Cesty ven a Malovaných křížovek je vidět, kde jsi (např. „Úroveň 12“ nebo „Vyřešeno 8 z 36“).",
+      "Kočka: když položíš dvě hračky hned po sobě, Koxa si po první sama doběhne i pro druhou (dřív ji nechala ležet)."
+    ]
+  },
   {
     "version": "1.0.16",
     "date": "2026-11-13",

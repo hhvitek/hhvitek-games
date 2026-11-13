@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.17 – 2026-11-13
+
 - Výběr her: u Paprsku, Šipek ven, Cesty ven a Malovaných křížovek je vidět, kde jsi (např. „Úroveň 12“ nebo „Vyřešeno 8 z 36“).
 - Kočka: když položíš dvě hračky hned po sobě, Koxa si po první sama doběhne i pro druhou (dřív ji nechala ležet).
 
