@@ -74,6 +74,8 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
 .badge{font-size:18px;font-weight:800;line-height:1.3;padding:1px 10px;border-radius:12px;background:#e8a317;color:#2b1a0e}
 .desc{display:block;font-size:18px;line-height:1.3;color:#6f5a48;margin-top:2px}
 .plays{font-size:18px;font-weight:700;color:#6f5a48;font-variant-numeric:tabular-nums}
+/* a game's progress ("Úroveň 12", "Vyřešeno 8 z 36"): a quiet outlined tag, unlike the orange Rozehráno */
+.prog{font-size:18px;font-weight:700;line-height:1.3;padding:0 9px;border-radius:12px;border:2px solid #e6d8c6;color:#6f5a48;font-variant-numeric:tabular-nums}
 .chev{flex:none;width:24px;height:24px;fill:none;stroke:#b39b84;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
 .empty{text-align:center;font-size:20px;color:#6f5a48;padding:40px 0}
 /* "Nainstalovat do zařízení" below the games, above Nastavení: only where the browser can install it (beforeinstallprompt) and only until it is installed */
@@ -270,6 +272,8 @@ try {
 
 // Launcher contract: a game sets 'games.<id>.inProgress' = '1' while it has an unfinished game.
 const inProgress = id => store.get(`games.${id}.inProgress`) === '1';
+// A game with levels may set 'games.<id>.progress' to a short Czech text ("Úroveň 12"); shown on its row
+const progress = id => { const v = store.get(`games.${id}.progress`); return typeof v === 'string' && v.length <= 30 ? v : ''; };
 // The launcher counts how many times each game was started; tiles are sorted by it.
 const plays = id => parseInt(store.get(`games.${id}.plays`), 10) || 0;
 // A game moves ahead of the registry.js order only after it was opened at least this many times
@@ -537,7 +541,7 @@ function render() {
     <a class="game" href="games/${encodeURIComponent(g.id)}/index.html?menu" data-id="${esc(g.id)}">
       <span class="icon"><img src="games/${encodeURIComponent(g.id)}/icon.svg" alt="" onerror="this.replaceWith(document.createTextNode('${esc(g.name).charAt(0)}'))"></span>
       <span class="text">
-        <span class="top"><span class="name">${esc(g.name)}</span>${badge(g.id) ? '<span class="badge">Rozehráno</span>' : ''}${L.showPlays && g.plays ? `<span class="plays">hráno ${g.plays}×</span>` : ''}</span>
+        <span class="top"><span class="name">${esc(g.name)}</span>${badge(g.id) ? '<span class="badge">Rozehráno</span>' : ''}${progress(g.id) ? `<span class="prog">${esc(progress(g.id))}</span>` : ''}${L.showPlays && g.plays ? `<span class="plays">hráno ${g.plays}×</span>` : ''}</span>
         ${g.description ? `<span class="desc">${esc(g.description)}</span>` : ''}
       </span>
       <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
@@ -553,14 +557,14 @@ grid.addEventListener('click', e => {
 // records, play counts) after a confirmation. Cached files for offline mode stay.
 // Only our own keys: GitHub Pages serves all projects of one user from the same origin
 // (and file:// is shared too), so localStorage.clear() would wipe other projects' data.
-// Exactly our keys, for each game of the registry: games.<id>.state / .inProgress / .plays (and Kočka's .mood / .treats), the old Czech
+// Exactly our keys, for each game of the registry: games.<id>.state / .inProgress / .progress / .plays (and Kočka's .mood / .treats), the old Czech
 // badge hry.<id>.rozehrano and the older per-game key '<id>.v1' (still read once by the games, see OLD_KEY).
 // Older keys whose name differs from the game id:
 const OTHER_KEY_NAMES = ['solitaire', 'pyramid', 'spider', 'skladaniKostek'];
 const ownKey = k => {
   if (k === LAUNCHER_KEY) return true;
   const ids = (globalThis.GAMES || []).map(g => g.id);
-  return ids.some(id => [`games.${id}.state`, `games.${id}.inProgress`, `games.${id}.plays`, `games.${id}.mood`, `games.${id}.treats`, `hry.${id}.rozehrano`, `${id}.v1`].includes(k))
+  return ids.some(id => [`games.${id}.state`, `games.${id}.inProgress`, `games.${id}.progress`, `games.${id}.plays`, `games.${id}.mood`, `games.${id}.treats`, `hry.${id}.rozehrano`, `${id}.v1`].includes(k))
     || OTHER_KEY_NAMES.some(n => k === `${n}.v1` || k === `hry.${n}.rozehrano`);
 };
 // Settings screen: opened by the button below the tiles, closed by Zpět (or the phone's Back)

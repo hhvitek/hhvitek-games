@@ -495,6 +495,7 @@ const DX = E.DX, DY = E.DY;
 /* ---------- Settings and storage ---------- */
 const ID = 'sipky-ven';                                   // = the folder name
 const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const PROGRESS = `games.${ID}.progress`; // contract: a short Czech progress text the launcher shows on the game's row
 const THEMES = [
   { id: 'paper', name: 'Papír', meta: '#f4ebdf' },
   { id: 'night', name: 'Noc',   meta: '#131c2e' },
@@ -521,6 +522,9 @@ function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify({ settings: S, level, top, bests, game: G }));
     if (inProgress()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+    // the level the player is at (after a win the next one), from level 2 on: "Úroveň 12" in the launcher
+    const at = G ? (G.status === 'won' ? level : G.level) : 1;
+    if (at > 1) localStorage.setItem(PROGRESS, `Úroveň ${at}`); else localStorage.removeItem(PROGRESS);
   } catch (e) {} // rule: storage may be full or blocked; the game goes on
 }
 const clampLevel = v => Math.max(1, Math.min(MAX_LEVEL, v));

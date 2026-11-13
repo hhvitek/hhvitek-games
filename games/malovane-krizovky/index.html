@@ -912,6 +912,7 @@ const E = KrizovkyEngine();
 /* ---------- Settings and storage ---------- */
 const ID = 'malovane-krizovky';                           // = the folder name
 const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
+const PROGRESS = `games.${ID}.progress`; // contract: a short Czech progress text the launcher shows on the game's row
 const THEMES = [
   { id: 'paper', name: 'Papír', meta: '#f4ebdf' },
   { id: 'night', name: 'Noc', meta: '#16233f' },
@@ -951,6 +952,9 @@ function save() {
   try {
     localStorage.setItem(KEY, JSON.stringify({ settings: S, prog: D.prog, done: D.done, game: G }));
     if (G.status === 'playing' && !isFresh()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
+    // how many pictures are solved: "Vyřešeno 8 z 36" in the launcher
+    const solved = PZ.filter(p => D.done[p.id]).length;
+    if (solved) localStorage.setItem(PROGRESS, `Vyřešeno ${solved} z ${PZ.length}`); else localStorage.removeItem(PROGRESS);
   } catch (e) {} // rule: storage may be full or blocked; the game goes on
 }
 const isCode = v => v === 0 || v === 1 || v === 2;
