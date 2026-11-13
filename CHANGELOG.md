@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.22 – 2026-11-14
+
 - Nová hra Přistání: přistaň s raketou na plošině v poušti nebo na lodi na moři. Brzdi motorem, nakláněj se a dosedni na obě nohy; 24 misí v 6 kapitolách (poušť, moře, vítr, noc a mlha, omezené zážehy, Měsíc a Mars), výzva dne se sérií, hvězdy, rekordy a průhledná raketa tvého nejlepšího letu.
 
 ## 1.0.21 – 2026-11-13

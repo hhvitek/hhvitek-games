@@ -1,7 +1,14 @@
 // The app version, shown in the launcher's Nastavení and used by sw.js to name its cache.
 // Written by tools/release.js from CHANGELOG.md: never edit by hand.
-globalThis.APP_VERSION = { version: '1.0.21', date: '2026-11-13' };
+globalThis.APP_VERSION = { version: '1.0.22', date: '2026-11-14' };
 globalThis.APP_CHANGES = [
+  {
+    "version": "1.0.22",
+    "date": "2026-11-14",
+    "items": [
+      "Nová hra Přistání: přistaň s raketou na plošině v poušti nebo na lodi na moři. Brzdi motorem, nakláněj se a dosedni na obě nohy; 24 misí v 6 kapitolách (poušť, moře, vítr, noc a mlha, omezené zážehy, Měsíc a Mars), výzva dne se sérií, hvězdy, rekordy a průhledná raketa tvého nejlepšího letu."
+    ]
+  },
   {
     "version": "1.0.21",
     "date": "2026-11-13",
