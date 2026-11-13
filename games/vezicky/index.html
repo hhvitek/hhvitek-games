@@ -922,7 +922,7 @@ function renderSettings() {
     <section class="card"><h3>Hra</h3>
       <div class="field"><div class="flabel">Obtížnost</div>
         ${DIFFS.map(d => opt('diff:' + d.id, S.diff === d.id, d.name, `${d.desc} Každých ${E.STEP} bodů přibude další, nejvýš ${E.MAXC}.`)).join('')}
-        ${pending ? `<div class="notice">Po návratu do hry začne <b>nová hra</b> s novou obtížností${G.status === 'playing' && !isFresh() ? ' a rozehraná hra se ztratí' : ''}.</div>` : ''}
+        ${pending && !isFresh() ? `<div class="notice">Nová obtížnost platí od <b>příští hry</b>.${G.status === 'playing' ? ' Rozehraná hra zůstává.' : ''}</div>` : ''}
         <div class="fnote">Každá obtížnost má svůj rekord.</div>
       </div>
     </section>
@@ -947,12 +947,14 @@ $('#settingsIn').addEventListener('click', e => {
   normalize(S); buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
 });
-function openSettings() { finishAnim(); hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+let diffAtOpen = null; // the difficulty when Settings opened: a toast only for a change made now
+function openSettings() { finishAnim(); hideToast(); diffAtOpen = S.diff; renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
 // a change that needs a new game starts it after returning and says so (rule)
 function closeSettings() {
   $('#screenSettings').hidden = true;
-  if (S.diff !== G.diff) newGame(isFresh() ? '' : 'Začala nová hra s novou obtížností');
-  else render();
+  // a new difficulty applies from the next game; an untouched game is replaced at once
+  if (S.diff !== G.diff && isFresh()) newGame('');
+  else { render(); if (S.diff !== G.diff && S.diff !== diffAtOpen) toast(`Nová obtížnost platí od příští hry${G.status === 'playing' ? '. Rozehraná hra zůstává.' : ''}`); }
 }
 $('#btnSettings').addEventListener('click', openSettings);
 
@@ -1013,7 +1015,7 @@ if (saved && saved.bests && typeof saved.bests === 'object') for (const d of DIF
 // rule: a difficulty chosen just before the app was closed (Settings still open) is applied now, as closing Settings would
 if (saved && validGame(saved.game)) {
   G = saved.game; best = Math.max(bests[G.diff] || 0, G.score);
-  if (S.diff !== G.diff) closeSettings(); else render();
+  if (S.diff !== G.diff && isFresh()) newGame(''); else render(); // as closing Settings would
 } else newGame();
 
 addEventListener('resize', () => { finishAnim(); render(); });

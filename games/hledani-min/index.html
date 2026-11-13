@@ -464,6 +464,8 @@ function num() { if (numFor !== G.mine) { numFor = G.mine; numCache = G.mine ? E
 let S, G, stats = {}, hint = null;
 const isFresh = () => G.history.length === 0;
 const inProgress = () => G && G.status === 'playing' && !isFresh();
+// the size and Bez hádání apply from the next game; an untouched (or finished) game is replaced at once
+const rulesChanged = () => S.size !== G.rules.size || S.noGuess !== G.rules.noGuess;
 let lastWritten = null; // what this page last read or wrote under KEY
 function load() { try { lastWritten = localStorage.getItem(KEY); return JSON.parse(lastWritten); } catch (e) { return null; } }
 function save() {
@@ -925,11 +927,10 @@ function renderSettings() {
     <section class="card"><h3>Hra</h3>
       <div class="field"><div class="flabel">Velikost plochy</div>
         ${Object.entries(SIZES).map(([id, z]) => opt('size:' + id, S.size === id, z.name, z.desc)).join('')}
-        ${S.size !== G.rules.size && !isFresh() ? `<div class="notice">Po návratu do hry začne <b>nová hra</b> s novou velikostí${inProgress() ? ' a rozehraná hra se ztratí' : ''}.</div>` : ''}
       </div>
       ${toggleRow('noGuess', 'Bez hádání')}
       <div class="fnote" style="margin-top:-6px">Každé rozdání jde celé vyřešit úvahou, nikdy nemusíš hádat. Bez toho se občas hádat musí, jako v klasické hře.</div>
-      ${S.noGuess !== G.rules.noGuess && S.size === G.rules.size && !isFresh() ? (inProgress()
+      ${rulesChanged() && !isFresh() ? (inProgress()
         ? '<div class="notice">Rozehraná hra se dohraje podle původního nastavení. Změna platí od příští hry.</div>'
         : '<div class="notice">Po návratu do hry začne <b>nová hra</b> s tímto nastavením.</div>') : ''}
     </section>
@@ -974,14 +975,15 @@ $('#settingsIn').addEventListener('click', e => {
   normalize(S); buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
 });
-function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; clockSync(); }
+let rulesAtOpen = '';
+const sameAtOpen = () => rulesAtOpen === S.size + '|' + S.noGuess; // a toast only for a change made now
+function openSettings() { hideToast(); rulesAtOpen = S.size + '|' + S.noGuess; renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; clockSync(); }
 // a change that needs a new game starts it after returning and says so (rule); "Bez hádání" waits for the next
 // game while one is in progress
 function closeSettings() {
   $('#screenSettings').hidden = true;
-  if (S.size !== G.rules.size) newGame(!isFresh() ? 'Začala nová hra s novou velikostí' : '');
-  else if (S.noGuess !== G.rules.noGuess && !inProgress()) newGame(!isFresh() ? 'Začala nová hra s novým nastavením' : '');
-  else { clockSync(); render(); }
+  if (rulesChanged() && !inProgress()) newGame(!isFresh() ? 'Začala nová hra s novým nastavením' : '');
+  else { clockSync(); render(); if (rulesChanged() && !sameAtOpen()) toast('Změna platí od příští hry. Rozehraná hra zůstává.'); }
 }
 $('#btnSettings').addEventListener('click', openSettings);
 
@@ -1049,7 +1051,7 @@ if (saved && saved.stats && typeof saved.stats === 'object') {
 if (saved && validGame(saved.game)) {
   G = saved.game;
   // rule: a setting chosen just before the app was closed (Settings still open) is applied now, as closing Settings would
-  if (S.size !== G.rules.size || (S.noGuess !== G.rules.noGuess && !inProgress())) closeSettings(); else { render(); clockSync(); }
+  if (rulesChanged() && !inProgress()) closeSettings(); else { render(); clockSync(); } // as closing Settings would
 }
 else newGame();
 
