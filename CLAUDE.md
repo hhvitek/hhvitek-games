@@ -7,7 +7,7 @@ Main target devices: Xiaomi 13T / 14T / 15T in portrait (CSS viewport about 393�
 
 1. `node tools/check.js <id>` passes (a hook runs it after every edit and again before you stop).
 2. Run `tools/shots.js` for the changed games and **look at** `.playwright-mcp/sheet-<id>.png` (see Testing); the stop hook reminds you once when a changed game has no newer screenshots.
-3. A new game or a bigger rebuild: follow the `new-game` skill, which ends with the `game-review` subagent.
+3. A new game or a bigger rebuild: follow the `new-game` skill as the orchestrator (subagents do the analysis and the implementation, see "Adding a game"); it ends with an independent `game-review` subagent.
 4. What the user decided goes to "Decisions…" below; open questions to TODO.md.
 5. A change the players will see gets a short Czech line under `## Nevydáno` in `CHANGELOG.md` (the stop hook reminds you). Never release by yourself: only when the user says so (see Deployment).
 
@@ -101,6 +101,23 @@ Follow the `new-game` skill (`.claude/skills/new-game/SKILL.md`): it copies `gam
 says which game to copy each pattern from, adds the game to `tools/shots.js`, and ends with screenshots and the
 `game-review` subagent. `sw.js` picks the game up from `registry.js` by itself; players get it with the next release
 (a new game is a `minor` release only when the user asks for it, see Versioning). Add its line to `CHANGELOG.md`.
+
+**The session is the orchestrator** (user's decision 2026-11-13; for a new game and for a bigger rebuild): the session
+the user talks to plans, delegates and checks, and does not write the game itself. It keeps the task list, decides,
+talks to the user and keeps its own context free for that.
+- **Analysis goes to subagents** (Agent tool, e.g. `Explore` or `general-purpose`): studying the rules and their Czech
+  variants, reading which existing game to copy a pattern from, designing an engine or a generator. Give each a narrow
+  brief (goal, files to read, what is already decided) and ask for a conclusion, not file dumps.
+- **Implementation goes to subagents** too: the game itself, its engine and its `tools/<id>-test.js`, the fixes of the
+  review findings. Pieces that touch different files may run in parallel; two writers never touch the same file.
+  Only one agent at a time uses the Playwright MCP (implementers work without the browser, one tester at a time).
+- **The orchestrator verifies** what comes back instead of trusting the report: it runs `node tools/check.js <id>`,
+  looks at `.playwright-mcp/sheet-<id>.png` itself with the Read tool and spot-checks the code.
+- **At the very end a separate, independent agent reviews the game**: the `game-review` subagent, started fresh (never
+  a fork of this conversation), given only the game folder, not the orchestrator's or the implementers' conclusions.
+  It runs after everything else is done. The orchestrator verifies each finding in the code, has the real ones fixed by
+  a subagent, and repeats the checks (and the review, when the fixes were large).
+- These are subagents inside this session, not new sessions (sessions only when the user asks for them).
 
 ## Shared images (`images/`)
 

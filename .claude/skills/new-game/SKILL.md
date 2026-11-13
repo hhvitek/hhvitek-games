@@ -8,6 +8,12 @@ description: Procedure for making a new game in this project (mobile games) or f
 Work through these steps in order and keep them on your task list. Do not report "done" before step 9.
 CLAUDE.md is the source of the rules; this file only says what to do when.
 
+**You are the orchestrator** (user's decision, CLAUDE.md "Adding a game"): you plan, decide, talk to the user and check
+results; subagents (Agent tool) do the analysis (rules, which game to copy from, engine design) and the implementation
+(steps 2–4, the engine test, the fixes of step 7). Brief each one narrowly and tell it to read CLAUDE.md, the template
+and this skill. Only one agent at a time uses the Playwright MCP. Steps 5–6 you verify yourself (check.js, reading the
+sheet), and step 7 is always last and done by a fresh, independent agent.
+
 ## 1. Read first
 - `CLAUDE.md` completely: the rules, both "Decisions…" sections (the user's choices), "Patterns every game follows", Testing.
 - `games/_template/index.html` completely: it is the skeleton every game copies (contract, storage, Back button,
@@ -59,8 +65,9 @@ Open `.playwright-mcp/sheet-<id>.png` with the Read tool and check:
 Then switch through every theme in Settings (one shot each, or a quick script) and look again.
 
 ## 7. Independent review
-Start the `game-review` subagent on `games/<id>/`. Verify each finding in the code yourself, fix the real ones,
-then repeat steps 5–6 for what changed.
+When everything else is done, start the `game-review` subagent fresh (not a fork) on `games/<id>/`, with only the
+folder: none of your or the implementers' conclusions. Verify each finding in the code yourself, have a subagent fix the
+real ones, then repeat steps 5–6 for what changed (and the review again when the fixes were large).
 
 ## 8. Record the user's decisions
 What the user decided about this game goes to CLAUDE.md "Decisions for single games"; open questions to TODO.md.
