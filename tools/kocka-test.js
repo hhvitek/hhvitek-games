@@ -81,6 +81,11 @@ function randomRun(seed, days) {
     playVisitor: () => ({ id: st.visit && r() < 0.7 ? st.visit.id : pick(['mourek', 'sedivka', 'tom', null]), caught: pick(['koxa', 'visitor', 'x', null]) }),
     invite: () => ({ id: st.visit && r() < 0.7 ? st.visit.id : pick(['sedivka', 'bivoj', 'tom', null]) }),
     photo: () => pick([null, {}, { room: pick(['garden', 'living', 'lap', 'moon']), pose: 'sit', vpose: pick(['sit', '', 'x'.repeat(30), 5]), vx: pick([0, 123.4, 999, -5, NaN, 'x']), vflip: pick([true, false, 'yes']), nokoxa: pick([true, false, 1]) }]),
+    // teasing (SPEC §13): good and garbage pats; boop and splash take no argument
+    pat: () => pick([null, 'x', { region: pick(Object.keys(E.REGIONS).concat('nose', 'v:liza:head', null, 7)), n: pick([1, 2, 3, 8, 14, 20, -5, 1.5, NaN, 1e6, '3']),
+      ms: pick([0, 150, 500, 650, 6000, NaN, -1]), cv: pick([0, 0.1, 0.5, 5, NaN, 'x']), eating: pick([true, false, 1]) }]),
+    boop: () => pick([null, {}, 'x']),
+    splash: () => pick([null, {}, 7]),
   };
   const acts = E.ACTIONS.concat(['bogus', '', null]);
   let lvl = 0;
@@ -92,6 +97,19 @@ function randomRun(seed, days) {
     // now and then a neighbour cat comes over (made by hand, then repaired), so the visitor actions meet a visitor
     if (r() < 0.08 && !st.visit && !st.guest) { st.visit = { id: pick(['sedivka', 'sedivka', 'mourek', 'liza', 'rambo', 'ciperka']), since: st.t, until: st.t + 60 * MIN, gain: 0 }; E.repair(st); }
     if (st.visit && r() < 0.3) { const a = pick(['strokeVisitor', 'strokeVisitor', 'treatVisitor', 'playVisitor', 'invite', 'photo', 'feedVisitor']); res = E.act(st, a, ARGS[a](), t); }
+    else if (r() < 0.05) {   // a run of pats (or nose taps, or the can) seconds apart: warnings, blowUps, sulks, crosses, paybacks
+      const kind = pick(['pat', 'pat', 'pat', 'boop', 'splash']), region = pick(['back', 'tailBase', 'tail', 'head', 'belly', 'nose']);
+      const ms = pick([150, 450, 600]), k = 2 + Math.floor(r() * 25), eating = r() < 0.1, all = [];
+      if (kind === 'splash' && r() < 0.8) all.push(...E.act(st, 'goGarden', null, t).events);
+      for (let i = 1; i <= k; i++) {
+        t += kind === 'pat' ? ms : 5000;
+        res = E.act(st, kind, kind === 'pat' ? { region, n: i, ms: i > 1 ? ms : 0, cv: pick([0, 0.1, 0.5]), eating } : null, t);
+        all.push(...res.events);
+      }
+      if (r() < 0.6) { t += 3000; all.push(...E.act(st, pick(['stroke', 'stroke', 'scratch', 'treat', 'call', 'play', 'pickUp', 'lapOn']), pick([null, { region: 'back', along: true, speed: 300 }]), t).events); }
+      if (r() < 0.5) for (let i = 0; i < 9; i++) { t += 10 * MIN; all.push(...E.advance(st, t).events); }   // the player watches her
+      res = { st, events: all };
+    }
     else if (r() < 0.15) res = E.advance(st, t);
     else if (r() < 0.02) res = E.consumeTreats(st, pick([1, 5, -3, NaN, 1e9]), t);
     else { const a = pick(acts); res = E.act(st, a, ARGS[a] ? ARGS[a]() : null, t); }
@@ -109,6 +127,13 @@ function randomRun(seed, days) {
 section('Random 60-day sequences: needs, weight, bond in range, canonical state');
 const runs = [1, 2, 3, 77, 4242, 0xdeadbeef];
 const results = runs.map(s => randomRun(s, 60));
+{
+  const seen = {};
+  for (const j of results) for (const evs of JSON.parse(j).events) for (const e of evs) seen[e.type] = (seen[e.type] || 0) + 1;
+  const need = ['pat', 'blowUp', 'trap', 'boop', 'swat', 'splash', 'sulk', 'cross', 'sulkEnd', 'crossEnd', 'reconcile', 'payback'];
+  console.log(`  teasing in the fuzz: ${need.map(k => `${k} ${seen[k] || 0}`).join(', ')}`);
+  ok(need.every(k => seen[k] > 0), `the random runs meet the teasing events (missing: ${need.filter(k => !seen[k]).join(', ')})`);
+}
 
 /* ---------- 2. determinism ---------- */
 section('Determinism');
@@ -328,6 +353,17 @@ function discover(seed) {
   for (let i = 0; i < 400 && !st.diary.belly; i++) { E.act(st, 'stroke', { region: 'belly' }, t); if (i % 5 === 0) careAt(st, t); }
   // her toy 5×
   for (let i = 0; i < 5; i++) { tick(30 * MIN); E.act(st, 'play', T.toy, t); }
+  // teasing (SPEC §13): the flop (8 regular pats at the tail base in her tempo), a nose tap, the can in the garden (a sulk,
+  // made up by a stroke), two more splashes (a cross) and her payback back in the house
+  for (let i = 0; i < 5 && !['happy', 'calm'].includes(E.mood(st)); i++) { tick(30 * MIN); careAt(st, t); E.act(st, 'play', T.toy, t); }
+  const tempo = E.patTempo(st);
+  for (let i = 1; i <= 8; i++) { t += tempo; E.act(st, 'pat', { region: 'tailBase', n: i, ms: i > 1 ? tempo : 0, cv: 0 }, t); }
+  t += 5000; E.act(st, 'boop', null, t);
+  E.act(st, 'goGarden', null, t); E.act(st, 'splash', null, t);
+  t += 5000; E.act(st, 'stroke', { region: 'back', along: true, speed: 300 }, t);
+  t += 5000; E.act(st, 'splash', null, t); t += 5000; E.act(st, 'splash', null, t);
+  E.act(st, 'goHouse', null, t);
+  for (let i = 0; i < 18 && !st.diary.payback; i++) tick(10 * MIN);
   // a walk
   friend(st); E.act(st, 'letOut', null, t); tick(H); E.act(st, 'letIn', null, t);
   // her quirk, seen on two days
@@ -364,7 +400,10 @@ function discover(seed) {
   ok(full(), `every trait value reached (${tested} cats)`);
   const st = E.create(1, at(2026, 11, 12, 15), 'Koxa');
   const d = E.diary(st, 'Micka');
-  ok(d.length === 16 && d.find(e => e.id === 'birthday').found && d.find(e => e.id === 'birthday').text === 'Micka k nám přišla 12. 11. 2026.', 'the list: 16 entries, the name from the argument, the birthday found at once');
+  ok(d.length === 21 && d.find(e => e.id === 'birthday').found && d.find(e => e.id === 'birthday').text === 'Micka k nám přišla 12. 11. 2026.', 'the list: 21 entries, the name from the argument, the birthday found at once');
+  ok(d.map(e => e.id).slice(9, 15).join() === 'birthday,bliss,boop,reconcile,splash,payback' &&
+    d.filter(e => ['bliss', 'boop', 'reconcile', 'splash', 'payback'].includes(e.id)).every(e => !e.found && (e.text.endsWith('?') || e.text.endsWith('…'))),
+    'the five teasing entries follow the birthday; not found yet: a question or a neutral hint');
   ok(E.diary(st).find(e => e.id === 'birthday').text.startsWith('Koxa'), 'the stored name without an argument');
 }
 
@@ -1561,7 +1600,12 @@ section('Visitors 3');
     for (let k = 0; k < 10; k++) E.act(n, 'strokeVisitor', { id: 'mourek', region: 'back', speed: 300 }, n.t + k * MIN);
     ok(n.visitors.mourek.friend === 1, 'neutral strokes only: at most +1 a visit (as before)');
     const u = visiting(100, 'mourek', 0, 0, T0).st;
-    ok(E.act(u, 'strokeVisitor', { id: 'mourek', region: 'nose', speed: 300 }, u.t).events.some(e => e.type === 'visitorPurr' && !('region' in e)) && u.visitors.mourek.friend === 0.5, 'an unknown region: like the menu\'s Pohladit');
+    ok(E.act(u, 'strokeVisitor', { id: 'mourek', region: 'whiskers', speed: 300 }, u.t).events.some(e => e.type === 'visitorPurr' && !('region' in e)) && u.visitors.mourek.friend === 0.5, 'an unknown region: like the menu\'s Pohladit');
+    // the nose (Art's region, SPEC §13.2) counts as the head: Mourek likes the head
+    const nz = visiting(100, 'mourek', 0, 0, T0).st;
+    ok(E.act(nz, 'strokeVisitor', { id: 'mourek', region: 'nose', along: true, speed: 300 }, nz.t).events.some(e => e.type === 'visitorPurr' && e.region === 'head' && e.liked) && nz.visitors.mourek.friend === 0.75,
+      'a visitor\'s nose counts as its head (liked by Mourek)');
+    invariants(nz, 'visitor nose');
   }
   // the likes table
   {
@@ -2424,6 +2468,797 @@ section('Cat flap installed, shop toys, šanta from the pantry');
   ok(E.act(co, 'catnip', null, co.t).events[0].type === 'refused' && co.pantry.catnip === 2, 'šanta from the pantry: not while she is out (kept)');
   co.beds[1] = { crop: 'catnip', sown: co.t - 3 * D, days: 3, watered: 0 };
   ok(!E.act(co, 'harvest', { bed: 1 }, co.t).events.some(e => e.type === 'catnip') && co.pantry.catnip === 3, 'šanta harvested while she is out: into the pantry');
+}
+
+/* ---------- Škádlení: teasing out of love (SPEC §13.3) ---------- */
+section('Teasing');
+{
+  const TZ = E.TEASE, T0 = at(2026, 6, 10, 10);
+  const NEED_SETS = { happy: [90, 90, 90, 80, 60, 100, 90], calm: [60, 60, 60, 50, 50, 90, 80], grumpy: [40, 40, 50, 30, 30, 60, 60], sad: [15, 15, 40, 10, 10, 30, 30] };
+  const setMood = (st, mood) => { ['food', 'water', 'energy', 'fun', 'love', 'litter', 'coat'].forEach((k, i) => { st.needs[k] = NEED_SETS[mood][i]; }); st.want = E.wants(st); };
+  // an awake Koxa at 10:00 on a dry day (moved to the next dry one), her mood set by her needs
+  function tc(seed, mood = 'happy', t = T0) {
+    const probe = E.create(seed, t, 'Koxa');
+    while (E.weather(t, probe) === 'rain') t += D;
+    const st = E.create(seed, t - H, 'Koxa'); E.advance(st, t);
+    setMood(st, mood);
+    st.pamlsky = 30;
+    if (E.mood(st) !== mood || st.asleep) ok(false, `teasing setup ${seed}: ${mood} awake (${E.moodValue(st)}, asleep ${st.asleep})`);
+    return st;
+  }
+  // a run of k pats on `region`, ms apart (n goes on from n0); all the events and the time of the last tap
+  function pats(st, t, region, k, ms, o = {}) {
+    const ev = [], n0 = o.n0 || 0;
+    for (let i = 1; i <= k; i++) {
+      t += ms;
+      const n = n0 + i;
+      ev.push(...E.act(st, 'pat', { region, n, ms: n > 1 ? ms : 0, cv: o.cv === undefined ? 0 : o.cv, eating: !!o.eating }, t).events);
+    }
+    return { ev, t };
+  }
+  const has = (ev, type, f) => ev.some(e => e.type === type && (!f || f(e)));
+  const cnt = (ev, type, f) => ev.filter(e => e.type === type && (!f || f(e))).length;
+  const idx = (ev, type, f) => ev.findIndex(e => e.type === type && (!f || f(e)));
+  const near = (a, b, d = 0.05) => Math.abs(a - b) <= d;
+  const dk = ms => { const d = new Date(ms); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };   // local day key
+  const heatAt = (st, t) => Math.max(0, st.tease.heat - (t - st.tease.at) / (10 * MIN));
+  // three blowUps seconds apart (fast pats on her back): a sulk, a longer sulk, then a cross
+  function makeCross(st) {
+    let t = st.t; const ev = [];
+    for (let k = 0; k < 3; k++) { const r = pats(st, t + 2000, 'back', 15, 150); ev.push(...r.ev); t = r.t; }
+    return { ev, t };
+  }
+  const FRESH = JSON.stringify({ kind: null, until: 0, heat: 0, at: 0, warnAt: 0, boops: [], gain: 0, gainAt: 0, pay: null, payDay: 0, bondDay: 0, splash: 0 });
+
+  // constants and the tempo
+  {
+    ok(E.TEASE.fast === 260 && E.TEASE.warnMs === 1800 && E.TEASE.gainMax === 8 && E.TEASE.crossAt === 5 && Object.isFrozen(E.TEASE) && Object.isFrozen(E.TEASE.heat), 'TEASE exported, frozen');
+    ok(E.ACTIONS.includes('pat') && E.ACTIONS.includes('boop') && E.ACTIONS.includes('splash'), 'pat, boop and splash are actions');
+    const tempos = []; for (let s = 1; s <= 300; s++) tempos.push(E.patTempo(E.create(s, T0, 'K')));
+    ok(tempos.every(x => Number.isInteger(x) && x >= 400 && x <= 650) && Math.min(...tempos) < 420 && Math.max(...tempos) > 630, `her tempo 400–650 ms from the seed (${Math.min(...tempos)}–${Math.max(...tempos)})`);
+    const c = E.create(1, T0, 'Koxa');
+    ok(JSON.stringify(c.tease) === FRESH && Object.keys(c).pop() === 'tease', 'create: the default tease, the last key');
+    ok(JSON.stringify(E.create(1, T0, 'Koxa').traits) === JSON.stringify(E.create(1, T0, 'Koxa').traits) && c.n === 0, 'no draws from st.n at creation');
+  }
+
+  // bliss: her tempo at the tail base; the love cap per 10 minutes; the flop once a run, its bond once a day; over-patting
+  {
+    const st = tc(1), fav = E.patTempo(st), l0 = st.needs.love, b0 = st.bond;
+    let r = pats(st, st.t, 'tailBase', 8, fav);
+    const bl = r.ev.filter(e => e.type === 'pat');
+    ok(bl.length === 8 && bl.every(e => e.stage === 'bliss' && e.region === 'tailBase') && bl.map(e => e.rear).join() === 'false,false,true,true,true,true,true,true' && bl[7].close === 1 && bl[0].close === 0,
+      'tail base, regular, in her tempo: bliss; the rear up from tap 3; close 1 in her tempo');
+    ok(cnt(r.ev, 'flop') === 1 && idx(r.ev, 'flop') > r.ev.indexOf(bl[7]) && r.ev.find(e => e.type === 'flop').lap === false, 'the flop exactly once, after the 8th pat');
+    const fd = r.ev.find(e => e.type === 'found' && e.id === 'bliss');
+    ok(fd && fd.text.includes(fav <= 520 ? 'svižně' : 'pomalu a pravidelně') && fd.text.startsWith('Koxa má ráda'), `Deníček: bliss (${fd && fd.text})`);
+    ok(near(st.needs.love, l0 + 8 + 4) && st.tease.gain === 12, `8 steady pats in her tempo: pats capped at +8, the flop +4 on top, the window full (${l0} → ${st.needs.love})`);
+    ok(st.bond === b0 + 1 && st.tease.bondDay === dk(st.t), 'the flop: bond +1 (bondDay today)');
+    r = pats(st, r.t, 'tailBase', 5, fav, { n0: 8 });
+    ok(r.ev.filter(e => e.type === 'pat').every(e => e.stage === 'bliss') && !has(r.ev, 'flop') && near(st.needs.love, l0 + 12), 'taps 9–13: bliss, no flop, no more love');
+    const l1 = st.needs.love;
+    r = pats(st, r.t, 'tailBase', 3, fav, { n0: 13 });
+    ok(r.ev.filter(e => e.type === 'pat').map(e => e.stage).join() === 'warn,warn,warn' && !has(r.ev, 'loveBite'), 'tap 14: over-patting warns');
+    let k = 17, bite = null;
+    for (; k < 40 && !bite; k++) { r = pats(st, r.t, 'tailBase', 1, fav, { n0: k - 1 }); bite = r.ev.find(e => e.type === 'loveBite'); }
+    ok(bite && bite.lap === false && (k - 1 - 14) * fav >= 1800 && (k - 2 - 14) * fav < 1800, `a loveBite 1.8 s after the warning (tap ${k - 1})`);
+    ok(st.tease.kind === null && near(st.needs.love, l1 - 1) && near(st.tease.heat, 1, 0.01), 'loveBite: love −1, heat +1, no sulk');
+    invariants(st, 'bliss');
+    // a second run in the same window: she flops again, but no more love (the window is full) and no bond
+    {
+      const b = st.bond, l = st.needs.love;
+      r = pats(st, r.t + 3000, 'tailBase', 8, fav);
+      ok(cnt(r.ev, 'flop') === 1 && near(st.needs.love, l) && st.tease.gain === 12 && st.bond === b, `a second run in the same window: the flop, no love (${l} → ${st.needs.love}), no bond`);
+    }
+    // the next run 11 min later: the flop again, love +8 +4 again (a new window), the bond not again today
+    E.advance(st, r.t + 11 * MIN);
+    st.needs.love = 70;
+    const b1 = st.bond, l2 = st.needs.love;
+    r = pats(st, r.t + 11 * MIN, 'tailBase', 8, fav);
+    ok(cnt(r.ev, 'flop') === 1 && st.bond === b1 && near(st.needs.love, l2 + 12, 0.2) && !has(r.ev, 'found'), `a second flop the same day: love in a new window, no bond, no diary (${l2} → ${st.needs.love})`);
+    // a window that ends inside a run: no love in the full old window, then +1.5 a pat and the flop's +4 in the new one
+    const G = st.tease.gainAt;
+    E.advance(st, G + 10 * MIN - 3.5 * fav);
+    const l3 = st.needs.love;
+    r = pats(st, G + 10 * MIN - 3.5 * fav, 'tailBase', 8, fav);
+    ok(cnt(r.ev, 'flop') === 1 && st.tease.gain === 12 && near(st.needs.love, l3 + 5 * (1 + 0.5) + 4, 0.2), `the flop in a window that began inside the run: love +4 (${l3} → ${st.needs.love})`);
+    // the next day: bond again
+    const nx = clone(st); E.advance(nx, nx.t + D); setMood(nx, 'happy');
+    ok(!nx.asleep, 'the next day at 10: awake');
+    const b2 = nx.bond; pats(nx, nx.t, 'tailBase', 8, fav);
+    ok(nx.bond >= b2 + 1, 'the flop on the next day: bond +1 again');
+    invariants(st, 'bliss windows'); invariants(nx, 'bliss next day');
+    // irregular at the tail base, or on the back: like (+1 a pat, the same cap); a close tempo only
+    const lk = tc(2), l4 = lk.needs.love;
+    r = pats(lk, lk.t, 'tailBase', 4, 500, { cv: 0.5 });
+    const r2 = pats(lk, r.t, 'back', 4, 500, { n0: 4 });
+    ok(r.ev.concat(r2.ev).filter(e => e.type === 'pat').every(e => e.stage === 'like') && near(lk.needs.love, l4 + 8, 0.05), 'irregular tail base and the back: like, +1 each (8 pats = +8)');
+    const far = tc(3), fv = E.patTempo(far), slow = Math.min(5000, fv + 400);
+    r = pats(far, far.t, 'tailBase', 8, slow);
+    ok(!has(r.ev, 'flop') && r.ev.filter(e => e.type === 'pat').every(e => e.stage === 'bliss' && e.close === 0), 'far from her tempo: bliss without the flop');
+    invariants(lk, 'like'); invariants(far, 'far tempo');
+  }
+
+  // drumming on her back: a warning; stopping within 1.8 s is fine, going on = blowUp
+  {
+    const st = tc(4);
+    let r = pats(st, st.t, 'back', 7, 150);
+    // (tap 1 has no tempo yet: liked; the UI sends pats only from tap 2)
+    ok(r.ev.filter(e => e.type === 'pat').map(e => e.stage).join() === 'like,tolerate,warn,warn,warn,warn,warn' && !has(r.ev, 'blowUp') && st.tease.warnAt > 0, 'fast on the back: tolerated, a warning from tap 3');
+    r = pats(st, r.t + 3000, 'back', 2, 150);
+    ok(!has(r.ev, 'blowUp') && !has(r.ev, 'sulk') && st.tease.kind === null && st.tease.warnAt === 0, 'stopped within 1.8 s: nothing, the next run starts fresh');
+    // a pause longer than 1.5 s resets the warning even when the UI's n goes on
+    r = pats(st, r.t + 3000, 'back', 3, 150);
+    const t3 = r.t; r = pats(st, r.t + 1600, 'back', 12, 150, { n0: 3 });
+    ok(!has(r.ev, 'blowUp') && st.tease.warnAt === t3 + 1750, 'a pause over 1.5 s: a new warning, no blowUp');
+    const l0 = st.needs.love;
+    r = pats(st, r.t + 3000, 'back', 20, 150);
+    const bi = idx(r.ev, 'blowUp');
+    ok(cnt(r.ev, 'blowUp') === 1 && r.ev.slice(0, bi).filter(e => e.type === 'pat').length === 14 && r.ev[bi].why === 'fast' && r.ev[bi].lap === false, 'going on 1.8 s after the warning: blowUp fast at tap 15');
+    ok(r.ev[bi + 1] && r.ev[bi + 1].type === 'sulk' && r.ev[bi + 1].until === r.t - 5 * 150 + 3 * MIN && st.tease.kind === 'sulk', 'then a sulk of 3 minutes');
+    ok(near(st.needs.love, l0 + 1 - 2, 0.02) && near(heatAt(st, st.t), 2, 0.01), 'blowUp: love −2 (after the liked tap 1), heat +2');
+    ok(E.health(st).sulk && !E.health(st).cross && E.health(st).teaseUntil === st.tease.until, 'health: sulk, teaseUntil');
+    invariants(st, 'blowUp fast');
+    // the tail: irritation even slow and happy
+    const tl = tc(5); r = pats(tl, tl.t, 'tail', 10, 500);
+    ok(r.ev.find(e => e.type === 'blowUp').why === 'tail' && r.ev.slice(0, idx(r.ev, 'blowUp')).filter(e => e.type === 'pat').map(e => e.stage).join() === 'tolerate,tolerate,warn,warn,warn,warn', 'the tail: warned from tap 3, blowUp tail 1.8 s later');
+    invariants(tl, 'tail');
+  }
+
+  // asleep (or dozing on the lap): never a blowUp, nothing changes; the nose tap is refused
+  {
+    const st = tc(6); st.asleep = true; st.sleepAt = st.t; st.needs.energy = 50;
+    const T = JSON.stringify(st.tease);
+    const ev = [];
+    for (const reg of ['back', 'tail', 'belly', 'tailBase', 'nose']) ev.push(...pats(st, st.t, reg, 30, 120).ev);
+    ok(st.asleep && ev.every(e => e.type === 'pat' && e.stage === 'tolerate' && e.sleeping === true) && JSON.stringify(st.tease) === T, 'asleep: 150 fast pats are only tolerated in her sleep, the tease state unchanged');
+    ok(E.act(st, 'boop', null, st.t).events.pop().reason === 'Koxa spí, nebuď ji.', 'boop asleep: refused');
+    invariants(st, 'pats asleep');
+    const lp = tc(7); E.act(lp, 'lapOn', null, lp.t); lp.lap.doze = true; lp.lap.dozeAt = lp.t;
+    const e2 = pats(lp, lp.t, 'back', 30, 120).ev;
+    ok(lp.lap && lp.lap.doze && e2.every(e => e.type === 'pat' && e.sleeping), 'dozing on the lap: tolerated, she stays dozing');
+    ok(E.act(lp, 'boop', null, lp.t).events.pop().reason === 'Koxa spí, nebuď ji.' && lp.lap, 'boop while she dozes on the lap: refused, the lap stays');
+    invariants(lp, 'pats dozing');
+  }
+
+  // at the bowl: the mild blowUp ('eat'), no payback ever
+  {
+    const st = tc(8), l0 = st.needs.love;
+    const r = pats(st, st.t, 'back', 8, 500, { eating: true });
+    const ps = r.ev.filter(e => e.type === 'pat'), before = r.ev.slice(0, idx(r.ev, 'blowUp')).filter(e => e.type === 'pat');
+    ok(ps.every(e => e.eating === true) && before.map(e => e.stage).join() === 'tolerate,warn,warn,warn,warn' && r.ev.find(e => e.type === 'blowUp').why === 'eat', 'eating: warned from tap 2, blowUp eat 1.8 s later');
+    ok(st.tease.kind === 'sulk' && near(st.needs.love, l0 - 1, 0.02) && near(heatAt(st, st.t), 1, 0.01), 'the meal blowUp: love −1, heat +1, a sulk');
+    let planned = 0;
+    for (let s = 1; s <= 40; s++) { const x = tc(100 + s); pats(x, x.t, 'tail', 8, 500, { eating: true }); if (x.tease.pay) planned++; if (x.tease.kind !== 'sulk') ok(false, `eat ${s}: a sulk`); }
+    ok(planned === 0, 'the meal blowUp never plans a payback (40 cats)');
+    invariants(st, 'eat');
+  }
+
+  // the belly is a trap; the head, chin, ears, paws and nose never blow up
+  {
+    const st = tc(9), l0 = st.needs.love;
+    const r = { ev: E.act(st, 'pat', { region: 'belly', n: 2, ms: 500 }, st.t + 500).events };
+    ok(r.ev.map(e => e.type).join() === 'trap' && st.tease.kind === null && near(st.needs.love, l0, 0.01) && near(heatAt(st, st.t), 1, 0.01), 'the belly: a trap (from the run), heat +1, no love, no sulk');
+    const lp = tc(10); E.act(lp, 'lapOn', null, lp.t);
+    const e2 = E.act(lp, 'pat', { region: 'belly', n: 3, ms: 400 }, lp.t + 500).events;
+    ok(has(e2, 'trap') && lp.lap && lp.lap.annoy === 2, 'a trap on the lap: she stays, annoyed +2');
+    invariants(st, 'trap'); invariants(lp, 'trap lap');
+    for (const mood of ['happy', 'grumpy', 'sad']) for (const reg of ['head', 'chin', 'ears', 'paws', 'nose']) {
+      const x = tc(11, mood), ev = pats(x, x.t, reg, 40, 100).ev;
+      const ps = ev.filter(e => e.type === 'pat');
+      if (has(ev, 'blowUp') || has(ev, 'sulk') || !ps.slice(0, 13).every(e => e.stage === 'tolerate' && e.region === (reg === 'nose' ? 'head' : reg)) || !has(ev, 'loveBite')) ok(false, `${mood} ${reg}: tolerated, never a blowUp, over-patting = a loveBite`);
+      else ok(true);
+    }
+  }
+
+  // her mood: grumpy blows up even when slow, sad tolerates, a sulk irritates
+  {
+    const g = tc(12, 'grumpy'), r = pats(g, g.t, 'back', 10, 500);
+    ok(r.ev.find(e => e.type === 'blowUp').why === 'grumpy', 'grumpy: slow regular pats on the back blow up (grumpy)');
+    const s = tc(13, 'sad'), r2 = pats(s, s.t, 'back', 13, 500);
+    ok(r2.ev.filter(e => e.type !== 'meow').every(e => e.type === 'pat' && e.stage === 'tolerate') && s.tease.kind === null, 'sad: tolerated');
+    const c = tc(14, 'calm'), r3 = pats(c, c.t, 'tailBase', 8, E.patTempo(c));
+    ok(has(r3.ev, 'flop'), 'calm: bliss and the flop too');
+    const so = tc(15); pats(so, so.t, 'back', 8, 500, { eating: true });   // a sulk from the bowl
+    const r4 = pats(so, so.t + 3000, 'back', 10, 500);
+    ok(r4.ev.find(e => e.type === 'blowUp').why === 'grumpy' && has(r4.ev, 'sulk', e => e.until === so.tease.until), 'a sulk running: slow pats on the back blow up again (grumpy), the sulk is prolonged');
+    invariants(g, 'grumpy'); invariants(s, 'sad'); invariants(so, 'sulk again');
+  }
+
+  // making up after a sulk: a stroke along the fur, a scratch, a treat; against the fur keeps the sulk; or it ends by itself
+  {
+    const sulky = seed => { const x = tc(seed); pats(x, x.t, 'back', 8, 500, { eating: true }); return x; };   // a sulk, no payback
+    const st = sulky(16);
+    for (const [arg, why] of [[{ region: 'back', along: false, speed: 300 }, 'against'], [{ region: 'back', along: true, speed: 1500 }, 'too fast'], [{ region: 'back', along: 'sideways', speed: 300 }, 'sideways'],
+      [{ region: 'back', along: true, speed: 50 }, 'too slow'], [{ region: 'belly', along: true, speed: 300 }, 'the belly']]) {
+      const ev = E.act(st, 'stroke', arg, st.t).events;
+      ok(!has(ev, 'reconcile') && st.tease.kind === 'sulk', `a stroke ${why}: still sulking`);
+    }
+    const z = clone(st); z.asleep = true; z.sleepAt = z.t; z.needs.energy = 50;
+    ok(!has(E.act(z, 'stroke', { region: 'back', along: true, speed: 300 }, z.t).events, 'reconcile') && z.tease.kind === 'sulk', 'asleep: a stroke does not make it up');
+    const b0 = st.bond, ref = clone(st); ref.tease.kind = null; ref.tease.until = 0;
+    const ev = E.act(st, 'stroke', { region: 'back', along: true, speed: 300 }, st.t).events;
+    E.act(ref, 'stroke', { region: 'back', along: true, speed: 300 }, ref.t);
+    const rc = ev.find(e => e.type === 'reconcile');
+    ok(rc && rc.by === 'stroke' && rc.bond === true && st.tease.kind === null && st.tease.until === 0 && st.bond === b0 + 1, 'a stroke along the fur: made up, bond +1');
+    ok(near(st.needs.love - ref.needs.love, 3, 1e-9) && has(ev, 'found', e => e.id === 'reconcile' && e.text === 'Koxa se po škádlení usmířila: otřela se ti o ruku.'), 'reconcile: love +3, Deníček');
+    ok(idx(ev, 'reconcile') < idx(ev, 'found', e => e.id === 'reconcile'), 'reconcile before its found');
+    ok(!has(E.advance(st, st.t + 5 * MIN).events, 'sulkEnd'), 'no sulkEnd after making up');
+    pats(st, st.t, 'back', 8, 500, { eating: true });
+    const e2 = E.act(st, 'scratch', { region: 'head', seconds: 1 }, st.t).events.find(e => e.type === 'reconcile');
+    ok(e2 && e2.by === 'scratch' && e2.bond === false && st.bond === b0 + 1, 'a scratch makes up too; the bond only once a day');
+    pats(st, st.t, 'back', 8, 500, { eating: true });
+    const e3 = E.act(st, 'treat', null, st.t).events;
+    ok(has(e3, 'treat') && has(e3, 'reconcile', e => e.by === 'treat' && !e.bond) && st.tease.kind === null, 'a treat makes up');
+    pats(st, st.t, 'back', 8, 500, { eating: true });
+    ok(has(E.act(st, 'treat', 'stick', st.t).events, 'refused') && st.tease.kind === 'sulk', 'no stick in stock: refused, still sulking');
+    invariants(st, 'reconcile');
+    // it ends by itself, exactly at until
+    const se = sulky(17), u = se.tease.until;
+    ok(!has(E.advance(se, u - 1).events, 'sulkEnd') && E.health(se).sulk, 'still sulking 1 ms before the end');
+    ok(has(E.advance(se, u).events, 'sulkEnd') && !E.health(se).sulk && se.tease.kind === null && se.tease.until === 0, 'sulkEnd exactly at until');
+    invariants(se, 'sulk end');
+  }
+
+  // a cross: swats (no claws, no heat), ignores, wriggles; she eats a treat and stays cross; it ends after 20 min
+  {
+    const st = tc(18), r = makeCross(st), t = st.t;
+    ok(cnt(r.ev, 'blowUp') === 3 && r.ev.filter(e => e.type === 'sulk' || e.type === 'cross').map(e => e.type).join() === 'sulk,sulk,cross', 'three blowUps: sulk, sulk, cross');
+    ok(st.tease.kind === 'cross' && st.tease.until === t + 20 * MIN && st.tease.pay && E.health(st).cross, 'a cross of 20 minutes always plans a payback');
+    const h0 = heatAt(st, t), l0 = st.needs.love;
+    const one = (a, arg) => E.act(st, a, arg, t).events;
+    ok(one('pat', { region: 'back', n: 2, ms: 500 }).map(e => e.type).join() === 'swat' && one('pat', { region: 'tailBase', n: 5, ms: 500 })[0].why === 'pat', 'pats: a swat');
+    ok(one('stroke', { region: 'back', along: true, speed: 300 }).map(e => e.type + e.why).join() === 'swatstroke' && one('scratch', { region: 'chin' })[0].why === 'scratch', 'stroke and scratch: a swat');
+    const b4 = st.tease.boops.length;
+    ok(one('boop', null)[0].why === 'boop' && st.tease.boops.length === b4, 'boop: a swat, not counted');
+    ok(near(heatAt(st, t), h0, 1e-6) && near(st.needs.love, l0, 1e-9), 'swats: no heat, no love');
+    ok(one('call', null)[0].reason === 'Koxa tě teď schválně neposlouchá.' && one('play', 'mouse')[0].reason === 'Koxa si s tebou teď hrát nechce. Zlobí se.', 'call and play: ignored');
+    ok(one('pickUp', null)[0].type === 'wriggle' && !st.held && one('lapOn', null)[0].type === 'wriggle' && !st.lap, 'pickUp and lapOn: wriggle');
+    const tr = one('treat', null);
+    ok(has(tr, 'treat') && !has(tr, 'reconcile') && st.tease.kind === 'cross', 'a treat: eaten, still cross');
+    const z = clone(st); z.asleep = true; z.sleepAt = z.t; z.needs.energy = 50;
+    ok(E.act(z, 'stroke', { region: 'back', along: true, speed: 300 }, z.t).events.map(e => e.type).join() === 'purr' && E.act(z, 'pat', { region: 'back', n: 9, ms: 150 }, z.t).events[0].sleeping, 'asleep while cross: purrs in her sleep, never swats');
+    const ref = clone(st); ref.tease.kind = null; ref.tease.until = 0;
+    ok(E.moodValue(ref) - E.moodValue(st) === 20, `mood while cross: −20 (${E.moodValue(st)})`);
+    invariants(st, 'cross');
+    ok(!has(E.advance(st, st.tease.until - 1).events, 'crossEnd') && has(E.advance(st, t + 20 * MIN).events, 'crossEnd') && st.tease.kind === null, 'crossEnd after 20 minutes');
+    ok(has(E.act(st, 'call', null, st.t).events, 'come'), 'after the cross she comes when called');
+    invariants(st, 'cross end');
+  }
+
+  // heat cools by 1 per 10 minutes, analytically
+  {
+    const st = tc(19);
+    let r = pats(st, st.t, 'back', 15, 150);
+    ok(near(st.tease.heat, 2, 1e-6), 'one blowUp: heat 2');
+    const a0 = st.tease.at;
+    E.act(st, 'pat', { region: 'head', n: 1 }, a0 + 10 * MIN);
+    ok(near(st.tease.heat, 1, 1e-6) && st.tease.at === a0 + 10 * MIN, 'after 10 min a pat brings it up to date: 1');
+    r = pats(st, a0 + 25 * MIN, 'back', 15, 150);
+    ok(has(r.ev, 'sulk') && !has(r.ev, 'cross') && near(st.tease.heat, 2, 1e-6), 'a blowUp 25 min later: heat 0 + 2, a sulk');
+    const c = tc(20); let t = c.t, kinds = [];
+    for (let k = 0; k < 3; k++) { const x = pats(c, t, 'back', 15, 150); kinds.push(x.ev.find(e => e.type === 'sulk' || e.type === 'cross').type); t = x.t + 4 * MIN; }
+    ok(kinds.join() === 'sulk,sulk,cross', `three blowUps 4 minutes apart: ${kinds.join()} (heat ${c.tease.heat})`);
+    const d = tc(21); t = d.t; kinds = [];
+    for (let k = 0; k < 3; k++) { const x = pats(d, t, 'back', 15, 150); kinds.push(x.ev.find(e => e.type === 'sulk' || e.type === 'cross').type); t = x.t + 8 * MIN; }
+    ok(kinds.join() === 'sulk,sulk,sulk', `three blowUps 8 minutes apart: never cross (${kinds.join()})`);
+    invariants(st, 'heat'); invariants(c, 'heat cross');
+  }
+
+  // the nose tap
+  {
+    const st = tc(22), t = st.t;
+    let ev = E.act(st, 'boop', null, t).events;
+    ok(ev[0].type === 'boop' && !ev[0].swat && has(ev, 'found', e => e.id === 'boop' && e.text === 'Když jí ťukneš do nosu, Koxa zašilhá a kýchne.') && st.tease.boops.join() === String(t), 'the first boop: she sneezes, Deníček');
+    ev = E.act(st, 'boop', null, t + 10000).events;
+    ok(ev.map(e => e.type).join() === 'boop' && st.tease.boops.length === 2 && !st.tease.kind, 'the second: a boop');
+    invariants(st, 'two boops');
+    ev = E.act(st, 'boop', null, t + 20000).events;
+    ok(ev.map(e => e.type).join().startsWith('boop,sulk') && ev[0].swat === true && st.tease.boops.length === 0 && st.tease.kind === 'sulk' && near(heatAt(st, st.t), 1, 0.01), 'the third within 60 s: a swat and a sulk, heat +1');
+    ok(E.act(st, 'boop', null, t + 30000).events[0].swat === undefined && st.tease.boops.length === 1, 'the next one counts from zero');
+    invariants(st, 'boop swat');
+    const sl = tc(23), t2 = sl.t;
+    E.act(sl, 'boop', null, t2); E.act(sl, 'boop', null, t2 + 30000);
+    ok(!E.act(sl, 'boop', null, t2 + 61000).events[0].swat && sl.tease.boops.length === 2, 'three nose taps over 61 s: no swat');
+    E.advance(sl, t2 + 125000);
+    ok(sl.tease.boops.length === 0, 'old nose taps are dropped');
+    invariants(sl, 'boops dropped');
+    const lp = tc(24); E.act(lp, 'lapOn', null, lp.t);
+    const t3 = lp.t;
+    ok(E.act(lp, 'boop', null, t3).events[0].type === 'boop' && lp.lap, 'a boop on the lap: she stays');
+    E.act(lp, 'boop', null, t3 + 1000);
+    ev = E.act(lp, 'boop', null, t3 + 2000).events;
+    ok(ev.map(e => e.type).slice(0, 3).join() === 'lapLeave,boop,sulk' && ev[0].reason === 'annoyed' && !lp.lap, 'the swat on the lap: lapLeave (annoyed), boop, sulk');
+    invariants(lp, 'boop lap');
+    // a run of taps on the nose is patting the head
+    const pn = tc(25), rn = pats(pn, pn.t, 'nose', 3, 400);
+    ok(rn.ev.every(e => e.type === 'pat' && e.region === 'head') && pn.tease.boops.length === 0, 'pats on the nose: the head, not boops');
+  }
+
+  // the watering can
+  {
+    const st = tc(26);
+    ok(E.act(st, 'splash', null, st.t).events.pop().reason === 'Konví se zalévá na zahradě.', 'splash in the house: refused');
+    const w = tc(27, 'happy', at(2027, 1, 14, 10)); E.act(w, 'goGarden', null, w.t);
+    ok(w.yard && E.act(w, 'splash', null, w.t).events.pop().reason === 'V zimě ne – byla by jí zima.', 'splash in winter: refused');
+    const g = tc(28); E.act(g, 'goGarden', null, g.t);
+    const a = clone(g); a.asleep = true; a.sleepAt = a.t; a.needs.energy = 50;
+    ok(E.act(a, 'splash', null, a.t).events.pop().reason === 'Koxa spí. Nech ji spát.', 'splash asleep: refused');
+    const tr = clone(g); tr.yard.tree = { since: tr.t, calls: 0 };
+    ok(E.act(tr, 'splash', null, tr.t).events.pop().reason === 'Koxa je na stromě.', 'splash up the tree: refused');
+    const o = friend(clone(g)); E.act(o, 'letOut', null, o.t);
+    ok(o.out && E.act(o, 'splash', null, o.t).events.pop().reason === 'Koxa je venku.', 'splash while she is out: refused');
+    for (const x of [st, w, a, tr, o]) invariants(x, 'splash refused');
+    const l0 = g.needs.love, t = g.t, ref = clone(g);
+    const ev = E.act(g, 'splash', null, t).events;
+    ok(ev.map(e => e.type).slice(0, 2).join() === 'splash,sulk' && has(ev, 'found', e => e.id === 'splash'), 'splash: splash, sulk, Deníček');
+    ok(g.wet === t + 30 * MIN && g.tease.splash === g.wet && E.health(g).splashed && E.health(g).wet && near(g.needs.love, l0 - 3, 1e-9) && near(heatAt(g, t), 2, 1e-6), 'wet for 30 min from the can, love −3, heat +2');
+    const dry = clone(g); dry.wet = 0; dry.tease.splash = 0; dry.tease.kind = null; dry.tease.until = 0;
+    ok(E.moodValue(dry) - E.moodValue(g) === 25, `mood: wet −15 and sulk −10 (${E.moodValue(dry)} → ${E.moodValue(g)})`);
+    invariants(g, 'splash');
+    E.act(g, 'splash', null, t + 10 * MIN);
+    ok(g.wet === t + 40 * MIN && g.tease.splash === g.wet, 'a second splash: wet until max(wet, t + 30 min)');
+    E.advance(g, t + 41 * MIN);
+    ok(!E.health(g).splashed && !E.health(g).wet && g.tease.splash === 0, 'dry again: no longer from the can');
+    invariants(g, 'splash dry');
+    // already wetter from the rain: the can does not shorten it
+    let rd = null; for (let s = 30; s < 200 && !rd; s++) { const p = E.create(s, T0, 'K'); for (let d = 0; d < 60 && !rd; d++) if (E.weather(T0 + d * D, p) === 'rain') rd = { s, t: T0 + d * D }; }
+    const rn = E.create(rd.s, rd.t - H, 'Koxa'); E.advance(rn, rd.t); rn.needs.energy = 90;
+    E.act(rn, 'goGarden', null, rd.t);
+    const wr = rn.wet;
+    ok(wr === rd.t + 120 * MIN && E.act(rn, 'splash', null, rd.t).events.some(e => e.type === 'splash') && rn.wet === wr && rn.tease.splash === 0 && !E.health(rn).splashed, 'wet from the rain: the can keeps the longer wet, not "from the can"');
+    invariants(rn, 'splash rain');
+    // rain after a splash still soaks her (coat −10, the wet event)
+    let pair = null;
+    for (let s = 1; s < 300 && !pair; s++) { const p = E.create(s, T0, 'K'); for (let d = 0; d < 80 && !pair; d++) { const x = at(2026, 6, 1 + d, 12); if (E.weather(x, p) !== 'rain' && E.weather(x + D, p) === 'rain') pair = { s, t: at(2026, 6, 1 + d, 23, 40) }; } }
+    const pr = E.create(pair.s, pair.t - H, 'Koxa'); E.advance(pr, pair.t); pr.wokeAt = pr.t; pr.needs.energy = 90;
+    E.act(pr, 'goGarden', null, pair.t); E.act(pr, 'splash', null, pair.t);
+    ok(pr.tease.splash === pair.t + 30 * MIN, 'a splash before midnight');
+    const c0 = pr.needs.coat, all = [];
+    for (let k = 1; k <= 4; k++) all.push(...E.advance(pr, pair.t + k * 10 * MIN).events);
+    ok(has(all, 'wet') && pr.needs.coat <= c0 - 10 && pr.wet > pr.t + 100 * MIN && pr.tease.splash === 0 && !E.health(pr).splashed, `rain after the splash: soaked, coat −10 (${c0} → ${pr.needs.coat})`);
+    invariants(pr, 'rain after splash');
+  }
+
+  // the long offence (st.off, after an absence over 72 h) is untouched and blocks new sulks and paybacks
+  {
+    const st = tc(29); st.off = { until: st.t + 20 * H, turned: false };
+    const off = JSON.stringify(st.off), l0 = st.needs.love;
+    let r = pats(st, st.t, 'back', 15, 150);
+    ok(has(r.ev, 'blowUp', e => e.why === 'fast') && !has(r.ev, 'sulk') && !has(r.ev, 'cross') && st.tease.kind === null && st.tease.pay === null && near(st.needs.love, l0 - 2, 0.02) && near(heatAt(st, st.t), 2, 0.01),
+      'the long offence: the blowUp and its love and heat, but no sulk and no payback');
+    r = pats(st, st.t + 3000, 'back', 12, 500);
+    ok(has(r.ev, 'blowUp', e => e.why === 'grumpy'), 'slow pats on the back: grumpy (the long offence)');
+    for (let k = 0; k < 3; k++) r = { ev: E.act(st, 'boop', null, st.t + 1000).events };
+    ok(r.ev[0].swat === true && !has(r.ev, 'sulk'), 'the third boop: a swat, no sulk');
+    E.act(st, 'goGarden', null, st.t);
+    const se = E.act(st, 'splash', null, st.t).events;
+    ok(has(se, 'splash') && !has(se, 'sulk') && !has(se, 'cross') && st.tease.kind === null && st.wet > st.t, 'the can: wet, no sulk');
+    ok(JSON.stringify(st.off) === off, 'st.off never changes');
+    invariants(st, 'long offence');
+    // an absence over 72 h ends a sulk or cross and drops the payback
+    const ab = tc(30); makeCross(ab);
+    ok(ab.tease.kind === 'cross' && ab.tease.pay, 'a cross with a payback');
+    const ra = E.advance(ab, ab.t + 4 * D).events;
+    ok(has(ra, 'offended') && ab.tease.kind === null && ab.tease.until === 0 && ab.tease.pay === null && ab.off, 'away 4 days: no cross, no payback, the long offence instead');
+    invariants(ab, 'absence');
+  }
+
+  // her payback: only shelf or ambush, once a day, it waits for a watching advance and a free cat, and lapses
+  {
+    const kinds = { shelf: 0, ambush: 0 };
+    let ok1 = 0;
+    for (let s = 1; s <= 30; s++) {
+      const st = tc(200 + s); makeCross(st);
+      const P = clone(st.tease.pay), U = st.tease.until, all = [];
+      if (!P || !['shelf', 'ambush'].includes(P.kind) || P.at < U + 5 * MIN || P.at > U + 25 * MIN) { ok(false, `payback ${s}: planned 5–25 min after the cross (${JSON.stringify(P)})`); continue; }
+      let when = 0;
+      for (let k = 1; k <= 18; k++) { const e = E.advance(st, st.t + 10 * MIN).events; if (has(e, 'payback') && !when) when = st.t; all.push(...e); }
+      const pb = all.filter(e => e.type === 'payback');
+      if (pb.length === 1 && pb[0].kind === P.kind && when >= P.at && when < P.at + 10 * MIN && st.tease.pay === null && st.tease.payDay === dk(when) && st.diary.payback) { ok1++; kinds[P.kind]++; }
+      else ok(false, `payback ${s}: ${JSON.stringify(pb)} at ${when} planned ${JSON.stringify(P)}`);
+      invariants(st, `payback ${s}`);
+    }
+    ok(ok1 === 30 && kinds.shelf > 3 && kinds.ambush > 3, `a cross: one payback when due (${JSON.stringify(kinds)})`);
+    // the Deníček text
+    const dt = tc(231); makeCross(dt); for (let k = 0; k < 18; k++) E.advance(dt, dt.t + 10 * MIN);
+    ok(E.diary(dt).find(e => e.id === 'payback').text === 'Koxa ti to vrátila. Co se škádlívá, to se rádo mívá!', 'Deníček: payback');
+    // a sulk plans one with chance 0.5
+    let planned = 0;
+    for (let s = 1; s <= 200; s++) { const x = tc(300 + s); pats(x, x.t + s * 1000, 'back', 15, 150); if (x.tease.pay) planned++; }
+    ok(planned > 70 && planned < 130, `a sulk plans a payback about half the time (${planned}/200)`);
+    // once a day: after a payback no new one is planned that day; the next day again
+    const st = tc(232); makeCross(st);
+    for (let k = 0; k < 18; k++) E.advance(st, st.t + 10 * MIN);
+    ok(st.diary.payback && st.tease.payDay > 0, 'a payback today');
+    makeCross(st);
+    ok(st.tease.kind === 'cross' && st.tease.pay === null, 'another cross the same day: no payback planned');
+    let more = 0; for (let k = 0; k < 18; k++) more += cnt(E.advance(st, st.t + 10 * MIN).events, 'payback');
+    ok(more === 0, 'no second payback that day');
+    const nd = clone(st); E.advance(nd, at(2026, 6, 11, 10)); nd.needs.energy = 90;
+    if (nd.asleep) { nd.asleep = false; nd.wokeAt = nd.t; }
+    makeCross(nd);
+    ok(nd.tease.pay !== null, 'the next day: planned again');
+    invariants(st, 'payback once a day'); invariants(nd, 'payback next day');
+    // the garden: always the ambush (no kitchen counter there)
+    let amb = 0, gs = 0;
+    for (let s = 1; s <= 10; s++) {
+      const g = tc(400 + s); E.act(g, 'goGarden', null, g.t);
+      for (let k = 0; k < 3; k++) E.act(g, 'splash', null, g.t + 2000);
+      if (g.tease.kind !== 'cross' || !g.tease.pay) { ok(false, `garden ${s}: three splashes make a cross`); continue; }
+      const all = []; for (let k = 0; k < 18; k++) all.push(...E.advance(g, g.t + 10 * MIN).events);
+      const pb = all.filter(e => e.type === 'payback');
+      if (pb.length) { gs++; if (pb.every(e => e.kind === 'ambush')) amb++; }
+      invariants(g, `garden payback ${s}`);
+    }
+    ok(gs >= 7 && amb === gs, `in the garden it is always the ambush (${amb}/${gs})`);
+    // it waits: not while the advance is not watching (a jump over an hour), then at the next watching one
+    const wa = tc(233); makeCross(wa);
+    const P = wa.tease.pay, t0 = wa.t;
+    ok(!has(E.advance(wa, t0 + 61 * MIN).events, 'payback') && wa.tease.pay && wa.tease.pay.at === P.at, 'a jump over an hour: it waits');
+    ok(has(E.advance(wa, t0 + 71 * MIN).events, 'payback'), 'the next watching advance: the payback');
+    // it waits while she sleeps, comes when she is awake again
+    const sl = tc(234); makeCross(sl);
+    const P2 = clone(sl.tease.pay), ev2 = [];
+    E.advance(sl, sl.tease.until); sl.asleep = true; sl.sleepAt = sl.t; sl.needs.energy = 30;
+    while (sl.t < P2.at + 20 * MIN) ev2.push(...E.advance(sl, sl.t + 10 * MIN).events);
+    ok(!has(ev2, 'payback') && sl.asleep && sl.tease.pay, 'asleep when it is due: it waits');
+    sl.asleep = false; sl.wokeAt = sl.t; sl.needs.energy = 90;
+    ok(has(E.advance(sl, sl.t + 10 * MIN).events, 'payback'), 'awake again: the payback');
+    invariants(sl, 'payback waits');
+    // and it lapses after 120 min
+    const lp = tc(235); makeCross(lp);
+    const P3 = clone(lp.tease.pay);
+    ok(!has(E.advance(lp, P3.at + 121 * MIN).events, 'payback') && lp.tease.pay === null && !lp.diary.payback, 'not seen within 120 min: it lapses silently');
+    let late = 0; for (let k = 0; k < 6; k++) late += cnt(E.advance(lp, lp.t + 10 * MIN).events, 'payback');
+    ok(late === 0, 'and never comes later');
+    invariants(lp, 'payback lapses');
+  }
+
+  // the step length never matters: 10-minute and 10-second advances give the same tease, off and paybacks
+  {
+    for (const s of [500, 501, 502, 503]) {
+      const st = tc(s);
+      pats(st, st.t, 'tailBase', 4, 500, { cv: 0.5 });   // the love window
+      E.act(st, 'boop', null, st.t + 1000); E.act(st, 'boop', null, st.t + 1000);   // two nose taps
+      if (s % 2) makeCross(st); else pats(st, st.t + 2000, 'back', 15, 150);       // a cross, or a sulk
+      const A = clone(st), B = clone(st), t0 = st.t, pa = [], pb = [];
+      for (let t = t0 + 10 * MIN; t <= t0 + 3 * H; t += 10 * MIN) pa.push(...E.advance(A, t).events.filter(e => /^(payback|sulkEnd|crossEnd)$/.test(e.type)).map(e => e.type + (e.kind || '')));
+      for (let t = t0 + 10000; t <= t0 + 3 * H; t += 10000) pb.push(...E.advance(B, t).events.filter(e => /^(payback|sulkEnd|crossEnd)$/.test(e.type)).map(e => e.type + (e.kind || '')));
+      ok(JSON.stringify([A.tease, A.off]) === JSON.stringify([B.tease, B.off]) && pa.join() === pb.join() && pa.length > 0,
+        `seed ${s}: the same tease after 18 × 10 min and 1080 × 10 s (${pa.join()})`);
+      invariants(A, 'steps A'); invariants(B, 'steps B');
+    }
+  }
+
+  // the clock moved back: every moment moves with it, the days are clamped
+  {
+    const st = tc(36); E.act(st, 'goGarden', null, st.t);
+    pats(st, st.t, 'tailBase', 8, E.patTempo(st));                        // bondDay, the love window
+    E.act(st, 'boop', null, st.t + 1000); E.act(st, 'boop', null, st.t + 1000);   // two nose taps
+    pats(st, st.t + 3000, 'tail', 3, 300);                                       // a warning
+    for (let k = 0; k < 3; k++) E.act(st, 'splash', null, st.t + 2000);           // a cross, wet from the can, a payback planned
+    st.tease.warnAt = st.tease.at - 500;                                         // (the splash ended the run: a warning by hand)
+    st.tease.payDay = Math.floor(st.tease.bondDay / 100) * 100 + 1;              // a payback on the 1st of the month
+    E.repair(st); invariants(st, 'before the clock moves back');
+    const b = clone(st), d = -11 * H;
+    ok(b.tease.kind === 'cross' && b.tease.pay && b.tease.splash && b.tease.gainAt && b.tease.warnAt && b.tease.boops.length === 2 && b.tease.bondDay > b.tease.payDay, 'every field set');
+    ok(E.advance(st, st.t + d).events.length === 0, 'no events');
+    const T = st.tease, B = b.tease;
+    ok(T.until === B.until + d && T.at === B.at + d && T.warnAt === B.warnAt + d && T.gainAt === B.gainAt + d && T.splash === B.splash + d && st.wet === T.splash &&
+      T.boops.join() === B.boops.map(x => x + d).join() && T.pay.at === B.pay.at + d && T.pay.kind === B.pay.kind && T.heat === B.heat && T.gain === B.gain, 'until, at, warnAt, gainAt, splash, boops, pay.at move; heat and gain stay');
+    const today = dk(st.t);
+    ok(T.bondDay === today && today < B.bondDay && T.payDay === B.payDay, `bondDay clamped to the new today (${B.bondDay} → ${T.bondDay}), an older payDay kept`);
+    invariants(st, 'clock moved back');
+    ok(E.health(st).cross && E.health(st).splashed && E.health(st).teaseUntil === T.until, 'still cross and wet from the can');
+  }
+
+  // repair: garbage in tease gives the canonical default or the valid parts; older saves get the default
+  {
+    const base = tc(37), t = base.t;
+    base.wet = t + 20 * MIN;
+    const G = [
+      [null, FRESH], ['x', FRESH], [[1, 2], FRESH], [{}, FRESH], [{ kind: 'plague', until: t + MIN }, FRESH],
+      [{ kind: 'sulk', until: t + 10 * MIN }, FRESH], [{ kind: 'sulk', until: t }, FRESH], [{ kind: 'cross', until: t + 21 * MIN }, FRESH],
+      [{ heat: 7, at: 0 }, FRESH], [{ heat: 99, at: t - MIN, warnAt: t }, null], [{ boops: [t + 1, t - 70000, 'x', t - 5000, t - 3000, t - 1000] }, null],
+      [{ gain: 50, gainAt: t - MIN }, null], [{ gain: 5, gainAt: t - 11 * MIN }, FRESH], [{ pay: { kind: 'tray', at: t } }, FRESH],
+      [{ pay: { kind: 'shelf', at: t + 50 * MIN } }, FRESH], [{ pay: { kind: 'shelf', at: t - 121 * MIN } }, FRESH], [{ payDay: 20991231, bondDay: 'x' }, FRESH],
+      [{ splash: t + 10 * MIN }, FRESH], [{ extra: 1, kind: null }, FRESH],
+    ];
+    for (const [g, want] of G) {
+      const s = clone(base); s.tease = g; E.repair(s);
+      invariants(s, `repair tease ${JSON.stringify(g)}`);
+      if (want) ok(JSON.stringify(s.tease) === want, `repair tease ${JSON.stringify(g)}: the default`);
+    }
+    const s1 = clone(base); s1.tease = { heat: 99, at: t - MIN, warnAt: t, boops: [t + 1, t - 70000, 'x', t - 5000, t - 3000, t - 1000], gain: 50, gainAt: t - MIN, kind: 'cross', until: t + 20 * MIN,
+      pay: { kind: 'ambush', at: t + 45 * MIN, x: 1 }, payDay: 20260101, bondDay: 20260610, splash: t + 20 * MIN };
+    E.repair(s1);
+    ok(JSON.stringify(s1.tease) === JSON.stringify({ kind: 'cross', until: t + 20 * MIN, heat: 10, at: t - MIN, warnAt: 0, boops: [t - 3000, t - 1000], gain: 12, gainAt: t - MIN, pay: { kind: 'ambush', at: t + 45 * MIN }, payDay: 20260101, bondDay: 20260610, splash: t + 20 * MIN }),
+      `repair keeps the valid parts in the canonical order (${JSON.stringify(s1.tease)})`);
+    const lo = clone(s1); lo.off = { until: t + 5 * H, turned: false }; E.repair(lo);
+    ok(lo.tease.kind === null && lo.tease.until === 0 && lo.tease.pay === null && lo.off.until === t + 5 * H, 'during the long offence repair drops the sulk/cross and the payback, st.off stays');
+    const old = clone(base); delete old.tease; E.repair(old);
+    ok(JSON.stringify(old.tease) === FRESH && Object.keys(old).pop() === 'tease', 'an older save without tease: the default');
+    invariants(old, 'old save'); E.act(old, 'pat', { region: 'tailBase', n: 3, ms: 500 }, old.t + 1000); invariants(old, 'old save patted');
+  }
+
+  // mood and the launcher's forecast during a sulk
+  {
+    const st = tc(38); pats(st, st.t, 'back', 8, 500, { eating: true });
+    const ref = clone(st); ref.tease.kind = null; ref.tease.until = 0;
+    ok(E.moodValue(ref) - E.moodValue(st) === 10, 'a sulk: mood −10');
+    const fa = clone(st), fb = clone(ref);   // the launcher moves a copy on (the 'ahead' forecast)
+    E.advance(fa, st.tease.until + MIN); E.advance(fb, st.tease.until + MIN);
+    ok(E.moodValue(fa) === E.moodValue(fb) && !E.health(fa).sulk, 'moved on past the end: the mood as without the sulk');
+    const hm = E.health(st);
+    ok(hm.sulk === true && hm.cross === false && hm.splashed === false && hm.teaseUntil === st.tease.until && E.health(ref).teaseUntil === 0, 'health: sulk, cross, splashed, teaseUntil');
+  }
+
+  // the lap: patting and a nose tap keep her there; a blowUp or loveBite ends it first
+  {
+    const st = tc(39); E.act(st, 'lapOn', null, st.t);
+    const t = st.t;
+    let ev = E.act(st, 'pat', { region: 'back', n: 2, ms: 500, cv: 0.5 }, t + 1000).events;
+    ok(ev.map(e => e.type).join() === 'pat' && ev[0].stage === 'like' && st.lap && st.lap.pet === t + 1000, 'a pat on the lap: like, she stays, it counts as stroking');
+    ev = E.act(st, 'boop', null, t + 2000).events;
+    ok(st.lap && ev[0].type === 'boop', 'a boop on the lap: she stays');
+    const r = pats(st, t + 5000, 'back', 15, 150);
+    const li = idx(r.ev, 'lapLeave');
+    ok(li >= 0 && r.ev[li].reason === 'annoyed' && r.ev[li + 1].type === 'blowUp' && r.ev[li + 1].lap === true && r.ev[li + 2].type === 'sulk' && !st.lap, 'a blowUp on the lap: lapLeave (annoyed), blowUp { lap }, sulk');
+    invariants(st, 'lap blowUp');
+    const lb = tc(40); E.act(lb, 'lapOn', null, lb.t);
+    const r2 = pats(lb, lb.t, 'head', 25, 300);
+    const bi = idx(r2.ev, 'loveBite');
+    ok(bi > 0 && r2.ev[bi - 1].type === 'lapLeave' && r2.ev[bi].lap === true && !lb.lap && !has(r2.ev, 'sulk'), 'a loveBite on the lap: lapLeave, loveBite { lap }, no sulk');
+    const sp = tc(41); E.act(sp, 'goGarden', null, sp.t); E.act(sp, 'lapOn', null, sp.t);
+    const e3 = E.act(sp, 'splash', null, sp.t + 1000).events;
+    ok(e3[0].type === 'lapOff' && has(e3, 'splash') && !sp.lap, 'the can is not a lap action: the player stands up first');
+    invariants(lb, 'lap loveBite'); invariants(sp, 'lap splash');
+  }
+
+  // with a visitor: while she sulks no joint act goes on and no jealousy starts
+  {
+    const st = tc(42); E.act(st, 'goGarden', null, st.t); st.lvl = 1; st.bond = 100;
+    st.visitors.sedivka = { friend: 5, pal: 3.5, met: st.t, visits: 3, fed: 0 };
+    st.visit = { id: 'sedivka', since: st.t, until: st.t + 2 * H, gain: 0, palGain: 0, greeted: true, act: { kind: 'snuggle', since: st.t, with: 'koxa' } };
+    E.repair(st);
+    ok(st.visit && st.visit.act.with === 'koxa', 'snuggling with Šedivka');
+    E.act(st, 'splash', null, st.t + 1000);
+    E.advance(st, st.t + 10000);
+    ok(st.visit && st.visit.act.with === null, 'a sulk: the joint act ends at the next step');
+    let jl = 0;
+    for (let k = 0; k < 40; k++) jl += cnt(E.act(st, 'strokeVisitor', { id: 'sedivka', region: 'back', along: true, speed: 300 }, st.t + 1000).events, 'jealous');
+    ok(st.tease.kind === 'sulk' && jl === 0, 'no jealousy while she sulks');
+    invariants(st, 'visitor sulk');
+  }
+}
+
+section('Input: pat runs, rhythm, sounds (the Input block)');
+{
+  // the Input block from the same file as the engine (an .html: the "Input" block; a .js: input.js next to it)
+  const vm = require('vm');
+  let isrc;
+  if (/\.html?$/i.test(file)) {
+    const m = fs.readFileSync(file, 'utf8').match(/\/\* -{10} Input -{10} \*\/([\s\S]*?)\/\* -{10} Input end -{10} \*\//);
+    isrc = m ? m[1] : null;
+  } else {
+    const near = path.join(path.dirname(file), 'input.js');
+    isrc = fs.readFileSync(fs.existsSync(near) ? near : path.join(__dirname, 'kocka-dev', 'src', 'input.js'), 'utf8');
+  }
+  ok(!!isrc, 'the Input block is there');
+  // a fake Web Audio: every node, param and method exists and does nothing
+  const any = () => { const f = function () { return any(); }; return new Proxy(f, { get: (t, k) => (k in t ? t[k] : k === Symbol.toPrimitive ? () => 0 : (t[k] = any())), set: (t, k, v) => { t[k] = v; return true; } }); };
+  class FakeAC {
+    constructor() {
+      this.currentTime = 0; this.sampleRate = 8000; this.state = 'running'; this.destination = any();
+      return new Proxy(this, { get: (t, k) => (k in t ? t[k] : () => any()) });
+    }
+    createBuffer(ch, len) { const d = new Float32Array(len); return { getChannelData: () => d, length: len, duration: len / 8000 }; }
+    resume() { return Promise.resolve(); }
+  }
+  const timers = [];
+  const doc = { hidden: false, addEventListener() {}, removeEventListener() {} };
+  const nav = { userActivation: { hasBeenActive: false } };
+  const sandbox = { window: {}, document: doc, navigator: nav, performance: { now: () => 0 }, console, Math,
+    setTimeout: f => { timers.push(f); return timers.length; }, clearTimeout: () => {}, setInterval: () => 0, clearInterval: () => {} };
+  sandbox.window.AudioContext = FakeAC;
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  let I = null;
+  try { vm.runInContext(isrc + '\n;globalThis.KockaInput = KockaInput;', sandbox); I = sandbox.KockaInput(); } catch (e) { ok(false, 'Input block loads: ' + e.message); }
+  if (I) {
+    const eq = (a, b, m) => ok(JSON.stringify(a) === JSON.stringify(b), m + ': got ' + JSON.stringify(a) + ', want ' + JSON.stringify(b));
+    // rhythm(): n, the mean interval, its coefficient of variation (population, 2 decimals)
+    eq(I.rhythm([]), { n: 0, ms: 0, cv: 0 }, 'rhythm of nothing');
+    eq(I.rhythm(null), { n: 0, ms: 0, cv: 0 }, 'rhythm of null');
+    eq(I.rhythm([100]), { n: 1, ms: 0, cv: 0 }, 'rhythm of one tap');
+    eq(I.rhythm([0, 500]), { n: 2, ms: 500, cv: 0 }, 'one interval: cv 0');
+    eq(I.rhythm([0, 400, 800, 1200]), { n: 4, ms: 400, cv: 0 }, 'steady taps');
+    eq(I.rhythm([0, 300, 900]), { n: 3, ms: 450, cv: 0.33 }, 'intervals 300 and 600');
+    eq(I.rhythm([5, 5, 5]), { n: 3, ms: 0, cv: 0 }, 'mean 0: cv 0');
+    eq(I.rhythm([0, 333, 667, 1000]), { n: 4, ms: 333, cv: 0 }, 'rounded mean');
+    ok(I.T.PAT_GAP === 900 && I.T.PAT_NEAR === 24 && I.T.PAT_WINDOW === 6, 'PAT_GAP 900, PAT_NEAR 24, PAT_WINDOW 6');
+
+    // a fake element and pointer events; Koxa x 0..200 (back y < 100, nose x < 50 y 100..120, head), visitors beside her
+    const makeEl = () => { const L = {}; return { L, addEventListener(t, f) { L[t] = f; }, removeEventListener(t) { delete L[t]; },
+      getBoundingClientRect: () => ({ left: 0, top: 0 }), setPointerCapture() {}, releasePointerCapture() {}, contains: () => true }; };
+    const hitRegion = (x, y) => {
+      if (y < 0 || y >= 200) return null;
+      if (x >= 0 && x < 200) return { id: y < 100 ? 'back' : x < 50 && y < 120 ? 'nose' : 'head', fur: [1, 0] };
+      if (x >= 300 && x < 400) return { id: y < 100 ? 'v:liza:back' : 'v:liza:head', fur: [1, 0] };
+      if (x >= 400 && x < 500) return { id: 'v:mia:back', fur: [1, 0] };
+      return null;
+    };
+    const setup = (mode = 'care', extra = {}) => {
+      const el = makeEl(), evs = [];
+      const g = I.attach(el, Object.assign({ mode, hitRegion, hitItem: x => (x >= 700 ? 'toy' : null), time: e => e.t, on: ev => evs.push(ev) }, extra));
+      let id = 1;
+      const P = (type, pid, x, y, t) => el.L[type] && el.L[type]({ pointerId: pid, clientX: x, clientY: y, t, pointerType: 'touch', button: 0, target: null });
+      const tap = (x, y, t, dur = 60) => { const p = id++; P('pointerdown', p, x, y, t); P('pointerup', p, x, y, t + dur); return evs[evs.length - 1]; };
+      return { el, g, evs, P, tap, nid: () => id++ };
+    };
+    let S = setup(), e = S.tap(50, 50, 1000);
+    ok(e.type === 'tap' && e.t === 1060, 'a tap has t (the release)');
+    eq(e.pat, { n: 1, ms: 0, cv: 0, region: 'back' }, 'the first pat');
+    e = S.tap(52, 52, 1500); eq(e.pat, { n: 2, ms: 500, cv: 0, region: 'back' }, 'the second pat');
+    e = S.tap(150, 20, 2000); eq(e.pat && e.pat.n, 3, 'the same region far away continues');
+    e = S.tap(150, 20, 2960); eq(e.pat && e.pat.n, 1, '960 ms later: a new run');
+    e = S.tap(150, 20, 3860); eq(e.pat && e.pat.n, 2, 'exactly 900 ms: the run goes on');
+    e = S.tap(150, 20, 4761); eq(e.pat && e.pat.n, 1, '901 ms: a new run');
+    // another region of Koxa: only within PAT_NEAR
+    S = setup(); S.tap(60, 90, 0); e = S.tap(60, 114, 400); eq([e.pat.n, e.pat.region], [2, 'head'], 'another region 24 px away continues');
+    S = setup(); S.tap(60, 90, 0); e = S.tap(60, 115, 400); eq([e.pat.n, e.pat.region], [1, 'head'], 'another region 25 px away: a new run');
+    S = setup(); S.tap(60, 90, 0); e = S.tap(60, 130, 400); eq([e.pat.n, e.pat.region], [1, 'head'], 'another region 40 px away: a new run');
+    S = setup(); S.tap(40, 101, 0); e = S.tap(40, 99, 300); eq([e.pat.n, e.pat.region], [2, 'back'], 'nose → back next to it continues');
+    // visitors: a run only on the same visitor
+    S = setup(); S.tap(320, 90, 0); e = S.tap(320, 105, 300); eq([e.pat.n, e.pat.region], [2, 'v:liza:head'], 'the same visitor nearby continues');
+    e = S.tap(198, 105, 600); eq(e.pat.n, 1, 'Koxa after a visitor: a new run');
+    S = setup(); S.tap(398, 50, 0); e = S.tap(401, 50, 200); eq([e.pat.n, e.pat.region], [1, 'v:mia:back'], 'another visitor 3 px away: a new run');
+    S = setup(); S.tap(199, 50, 0); e = S.tap(301, 50, 200); eq(e.pat.n, 1, 'Koxa → a visitor: a new run');
+    // a tap off the cat or on an item: pat null and the run is over
+    S = setup(); S.tap(50, 50, 0); e = S.tap(250, 50, 100); ok('pat' in e && e.pat === null, 'off the cat: pat null');
+    e = S.tap(50, 50, 200); eq(e.pat.n, 1, 'after an off-cat tap: n = 1');
+    S = setup(); S.tap(50, 50, 0); e = S.tap(750, 50, 100); ok(e.item === 'toy' && e.pat === null, 'an item: pat null');
+    e = S.tap(50, 50, 200); eq(e.pat.n, 1, 'after an item tap: n = 1');
+    // cancel(), setMode() (also the same mode), cancel() inside the tap handler
+    S = setup(); S.tap(50, 50, 0); S.g.cancel(); e = S.tap(50, 50, 100); eq(e.pat.n, 1, 'cancel() ends the run');
+    S = setup(); S.tap(50, 50, 0); S.g.setMode('care'); e = S.tap(50, 50, 100); eq(e.pat.n, 1, 'setMode (the same mode) ends the run');
+    S = setup(); S.tap(50, 50, 0); S.g.setMode('drag'); S.g.setMode('care'); e = S.tap(50, 50, 100); eq(e.pat.n, 1, 'setMode away and back ends the run');
+    {
+      const el = makeEl(), evs = [];
+      const g = I.attach(el, { mode: 'care', hitRegion, time: ev => ev.t, on: ev => { evs.push(ev); if (ev.type === 'tap' && ev.pat && ev.pat.n === 3) g.cancel(); } });
+      for (let i = 0; i < 5; i++) { el.L.pointerdown({ pointerId: i + 1, clientX: 50, clientY: 50, t: i * 300, pointerType: 'touch', button: 0 }); el.L.pointerup({ pointerId: i + 1, clientX: 50, clientY: 50, t: i * 300 + 50, pointerType: 'touch', button: 0 }); }
+      eq(evs.map(v => v.pat.n), [1, 2, 3, 1, 2], 'cancel() inside the tap handler: the next tap starts a new run');
+    }
+    // a stroke, a moved finger, a slow press, a long press, pointercancel: each ends the run
+    S = setup(); S.tap(50, 50, 0);
+    { const p = S.nid(); S.P('pointerdown', p, 20, 50, 200); S.P('pointermove', p, 60, 50, 260); S.P('pointermove', p, 100, 50, 320); S.P('pointerup', p, 100, 50, 340); }
+    ok(S.evs.some(v => v.type === 'stroke'), 'a stroke happened');
+    e = S.tap(50, 50, 500); eq(e.pat.n, 1, 'a stroke ends the run');
+    S = setup(); S.tap(50, 50, 0);
+    { const p = S.nid(); S.P('pointerdown', p, 50, 50, 200); S.P('pointermove', p, 62, 50, 230); S.P('pointerup', p, 62, 50, 260); }
+    e = S.tap(50, 50, 400); eq(e.pat.n, 1, 'a finger that moved (no tap) ends the run');
+    S = setup(); S.tap(50, 50, 0);
+    { const p = S.nid(); S.P('pointerdown', p, 50, 50, 200); S.P('pointerup', p, 50, 50, 700); }
+    e = S.tap(50, 50, 800); eq(e.pat.n, 1, 'a press longer than a tap ends the run');
+    S = setup(); S.tap(50, 50, 0);
+    { const p = S.nid(); S.P('pointerdown', p, 50, 50, 200); timers[timers.length - 1](); ok(S.evs[S.evs.length - 1].type === 'pickup', 'a long press picks her up'); S.P('pointerup', p, 50, 50, 700); }
+    e = S.tap(50, 50, 800); eq(e.pat.n, 1, 'a long press ends the run');
+    S = setup(); S.tap(50, 50, 0);
+    { const p = S.nid(); S.P('pointerdown', p, 50, 50, 100); S.el.L.pointercancel({ pointerId: p }); }
+    e = S.tap(50, 50, 300); eq(e.pat.n, 1, 'pointercancel ends the run');
+    // an idle resting finger (a thumb off the cat) does not end it
+    S = setup(); S.P('pointerdown', 500, 250, 180, 0);
+    S.tap(50, 50, 100); S.tap(50, 50, 400);
+    S.P('pointerup', 500, 250, 180, 500);
+    e = S.tap(50, 50, 700); eq(e.pat && e.pat.n, 3, 'a resting thumb lifted: the run goes on');
+    // two fingers overlapping on Koxa: a scratch, no taps, the run is over; alternate drumming without overlap: a run
+    S = setup(); S.tap(50, 50, 0);
+    S.P('pointerdown', 91, 40, 50, 200); S.P('pointerdown', 92, 80, 50, 230); S.P('pointerup', 91, 40, 50, 260); S.P('pointerup', 92, 80, 50, 290);
+    ok(!S.evs.slice(1).some(v => v.type === 'tap'), 'two overlapping fingers: no taps');
+    e = S.tap(50, 50, 400); eq(e.pat.n, 1, 'two overlapping fingers end the run');
+    S = setup();
+    let threw = null;
+    try { for (let i = 0; i < 40; i++) { const x = i % 2 ? 70 : 40; S.P('pointerdown', 300 + i, x, 50, i * 70); if (i) S.P('pointerup', 299 + i, i % 2 ? 40 : 70, 50, i * 70 + 10); } } catch (err) { threw = err; }
+    ok(!threw, 'overlapping two-finger drumming never throws' + (threw ? ': ' + threw.message : ''));
+    S = setup();
+    for (let i = 0; i < 8; i++) { const x = i % 2 ? 70 : 40; S.P('pointerdown', 200 + i, x, 50, i * 150); S.P('pointerup', 200 + i, x, 50, i * 150 + 60); }
+    eq(S.evs.filter(v => v.type === 'tap').map(v => v.pat.n), [1, 2, 3, 4, 5, 6, 7, 8], 'drumming without overlap: one run');
+    e = S.evs[S.evs.length - 1]; eq([e.pat.ms, e.pat.cv], [150, 0], 'its tempo');
+    // the tempo of a run that slows down: only the last PAT_WINDOW taps
+    S = setup();
+    for (const t of [0, 200, 400, 600, 800, 1000, 1500, 2000, 2500, 3000, 3500]) e = S.tap(50, 50, t, 0);
+    eq([e.pat.n, e.pat.ms, e.pat.cv], [11, 500, 0], 'n counts the whole run, ms/cv the last 6 taps');
+    // other modes: t, no pat key
+    for (const m of ['drag', 'train']) { S = setup(m); e = S.tap(50, 50, 0); ok(e.type === 'tap' && e.t === 60 && !('pat' in e), m + ' mode: t and no pat'); }
+    // detach: the listeners go (and the run with them)
+    S = setup(); S.tap(50, 50, 0); S.g.detach(); ok(!S.el.L.pointerdown && !S.el.L.pointerup, 'detach removes the listeners');
+    // the Škádlení sounds: not meow kinds; null when unknown, before the first gesture, while off or hidden
+    eq(I.sound.FX, ['sneeze', 'splash', 'shake', 'clink'], 'I.sound.FX');
+    ok(!I.sound.FX.some(k => I.sound.KINDS.includes(k)), 'the fx are not meow kinds');
+    ok(I.sound.fx('sneeze') === null, 'before the first gesture: null');
+    nav.userActivation.hasBeenActive = true;
+    ok(I.sound.fx('nope') === null && I.sound.fx('meow') === null, 'an unknown name: null');
+    for (const k of I.sound.FX) { let r = null; try { r = I.sound.fx(k); } catch (err) { r = 'threw ' + err.message; } ok(r === k, `fx('${k}') plays: ${r}`); }
+    doc.hidden = true; ok(I.sound.fx('clink') === null, 'a hidden page: null'); doc.hidden = false;
+    I.sound.setEnabled(false); ok(I.sound.fx('splash') === null, 'sound off: null');
+    I.sound.setEnabled(true); ok(I.sound.fx('splash') === 'splash', 'sound on again: plays');
+  }
+}
+
+section('Art: rearUp lifts her rear right under the finger (the Cat art block)');
+{
+  // the Cat art block from the same file as the engine (an .html: the "Cat art" block; a .js: art.js next to it)
+  let asrc;
+  if (/\.html?$/i.test(file)) {
+    const m = fs.readFileSync(file, 'utf8').match(/\/\* -{10} Cat art -{10} \*\/([\s\S]*?)\/\* -{10} Cat art end -{10} \*\//);
+    asrc = m ? m[1] : null;
+  } else {
+    const near = path.join(path.dirname(file), 'art.js');
+    asrc = fs.readFileSync(fs.existsSync(near) ? near : path.join(__dirname, 'kocka-dev', 'src', 'art.js'), 'utf8');
+  }
+  ok(!!asrc, 'the Cat art block is there');
+  let A = null;
+  try { A = new Function(asrc + '\nreturn KockaArt;')()(); } catch (e) { ok(false, 'Cat art block loads: ' + e.message); }
+  if (A) {
+    // a region path → polygons (M L H V C S Q T Z, absolute and relative; curves in 12 steps), hit by the nonzero rule
+    const flatten = d => {
+      const tok = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e-?\d+)?/g) || [], subs = [];
+      let i = 0, cmd = '', x = 0, y = 0, sx = 0, sy = 0, cur = null;
+      const num = () => +tok[i++];
+      const bez = P0 => { for (let k = 1; k <= 12; k++) { let P = P0.map(q => q.slice()); while (P.length > 1) P = P.slice(1).map((q, j) => [P[j][0] + (q[0] - P[j][0]) * k / 12, P[j][1] + (q[1] - P[j][1]) * k / 12]); cur.push(P[0]); } };
+      while (i < tok.length) {
+        if (/[a-zA-Z]/.test(tok[i])) cmd = tok[i++];
+        const C = cmd.toUpperCase(), ox = cmd === C ? 0 : x, oy = cmd === C ? 0 : y;
+        if (C === 'Z') { x = sx; y = sy; cur = null; continue; }
+        if (C === 'M') { x = ox + num(); y = oy + num(); sx = x; sy = y; cur = [[x, y]]; subs.push(cur); cmd = cmd === C ? 'L' : 'l'; continue; }
+        if (!cur) { cur = [[x, y]]; subs.push(cur); }
+        let e;
+        if (C === 'L' || C === 'T') e = [ox + num(), oy + num()];
+        else if (C === 'H') e = [ox + num(), y];
+        else if (C === 'V') e = [x, oy + num()];
+        else if (C === 'C') { const a = [ox + num(), oy + num()], b = [ox + num(), oy + num()]; e = [ox + num(), oy + num()]; bez([[x, y], a, b, e]); }
+        else if (C === 'Q' || C === 'S') { const a = [ox + num(), oy + num()]; e = [ox + num(), oy + num()]; bez([[x, y], a, e]); }
+        else throw new Error('path command ' + cmd);
+        if (C === 'L' || C === 'T' || C === 'H' || C === 'V') cur.push(e);
+        x = e[0]; y = e[1];
+      }
+      return subs;
+    };
+    const inside = (subs, px, py) => {
+      let w = 0;
+      for (const sp of subs) for (let k = 0; k < sp.length; k++) {
+        const [x1, y1] = sp[k], [x2, y2] = sp[(k + 1) % sp.length], c = (x2 - x1) * (py - y1) - (px - x1) * (y2 - y1);
+        if (y1 <= py) { if (y2 > py && c > 0) w++; } else if (y2 <= py && c < 0) w--;
+      }
+      return w !== 0;
+    };
+    const regs = (p, o) => A.regions(p, o).map(r => ({ id: r.id, s: flatten(r.path) }));
+    const hit = (R, u, v) => { for (const r of R) if (inside(r.s, u, v)) return r.id; return null; };
+    // the UI's regionMid(): the region sampled on a 3-unit grid
+    const grid = (R, id) => { const r = R.find(g => g.id === id), pts = []; if (r) for (let v = 0; v < 200; v += 3) for (let u = 0; u < 200; u += 3) if (inside(r.s, u, v)) pts.push([u, v]); return pts; };
+    const midOf = pts => ({ x: pts.reduce((a, q) => a + q[0], 0) / pts.length, y: pts.reduce((a, q) => a + q[1], 0) / pts.length });
+    const RU = regs('rearUp', { mood: 'happy' }), ids = RU.map(r => r.id);
+    ok(ids.indexOf('tailBase') >= 0 && ids.indexOf('tailBase') < ids.indexOf('paws'), 'rearUp: tailBase is hit before paws: ' + ids.join());
+    const ORDER = ['nose', 'chin', 'tail', 'paws', 'head', 'ears', 'tailBase', 'belly', 'back'];
+    for (const p of ['sit', 'loaf', 'belly', 'sideLie', 'shake']) { const L = A.regions(p, 'calm').map(r => r.id); ok(L.join() === ORDER.filter(id => L.includes(id)).join(), `${p} keeps the usual hit order: ${L.join()}`); }
+    const b = midOf(grid(RU, 'tailBase'));
+    for (const [p, mood] of [['sit', 'calm'], ['loaf', 'calm'], ['belly', 'happy'], ['sideLie', 'happy']]) {
+      const pts = grid(regs(p, { mood }), 'tailBase');
+      if (!pts.length) { ok(false, p + ': has a tailBase'); continue; }
+      // the UI puts rearUp so the two tailBase middles line up horizontally (both poses stand on (100, 186))
+      const a = midOf(pts), dx = a.x - b.x, on = q => hit(RU, q[0] - dx, q[1]);
+      ok(on([a.x, a.y]) === 'tailBase', `${p} → rearUp: the middle of its tailBase stays on tailBase (${on([a.x, a.y])})`);
+      const low = pts.filter(q => q[1] >= a.y), lowOn = low.filter(q => on(q) === 'tailBase').length;
+      ok(lowOn === low.length, `${p} → rearUp: the lower part of its tailBase lands on tailBase (${lowOn}/${low.length})`);
+      const allOn = pts.filter(q => on(q) === 'tailBase').length;
+      ok(allOn / pts.length >= 0.95, `${p} → rearUp: at least 95 % of its tailBase lands on tailBase (${allOn}/${pts.length})`);
+    }
+    // the contract of SPEC §13.2: rearUp's tailBase (vertex centroid as art.html prints it) within 15 units of loaf's
+    const cen = d => { const n = (d.match(/-?\d*\.?\d+/g) || []).map(Number); let x = 0, y = 0, k = 0; for (let i = 0; i + 1 < n.length; i += 2) { x += n[i]; y += n[i + 1]; k++; } return [x / k, y / k]; };
+    const tb = (p, o) => cen(A.regions(p, o).find(g => g.id === 'tailBase').path);
+    const r = tb('rearUp', 'happy'), l = tb('loaf', 'calm');
+    ok(Math.hypot(r[0] - l[0], r[1] - l[1]) <= 15, 'rearUp tailBase within 15 units of loaf\'s: ' + Math.hypot(r[0] - l[0], r[1] - l[1]).toFixed(1));
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

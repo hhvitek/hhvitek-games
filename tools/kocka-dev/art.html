@@ -16,6 +16,8 @@ h2{margin:24px 0 8px;font-size:18px}
 .room .cat{position:absolute;left:15%;bottom:6%;width:70%;aspect-ratio:1}
 .reg path{fill-opacity:.35;stroke:#000;stroke-width:.6}
 .still *{animation-play-state:paused!important}
+.frame .kx-drops path{animation-delay:-.6s!important;animation-play-state:paused!important}
+.frame2 .kx-achoo{animation-delay:-.22s!important;animation-play-state:paused!important}
 </style>
 </head>
 <body>
@@ -30,6 +32,53 @@ const MOODS = ['happy', 'calm', 'grumpy', 'sad'];
 const out = document.getElementById('out');
 const cell = (svg, label, cls = 'paper') => `<div class="cell ${cls}"><div class="box">${svg}</div>${label}</div>`;
 let h = '';
+const COL = { nose: '#f0f', ears: '#e33', chin: '#f90', paws: '#3a3', head: '#36f', tail: '#a3f', tailBase: '#fd0', belly: '#f3c', back: '#0cc' };
+const regOv = (rg, only, pts = []) => `<svg viewBox="0 0 200 200" class="reg" style="position:absolute;inset:0;overflow:visible">${rg.slice().reverse().filter(r => !only || only.includes(r.id)).map(r => `<path d="${r.path}" fill="${COL[r.id]}"/>`).join('')}${pts.filter(Boolean).map(([x, y, c]) => `<circle cx="${x}" cy="${y}" r="3.5" fill="${c}" stroke="#fff" stroke-width="1"/>`).join('')}</svg>`;
+// Škádlení (SPEC §13.2): the new poses and options; "Přehrát" draws the sheet again, so the one-time animations replay
+const centroid = d => { const n = (d.match(/-?\d*\.?\d+/g) || []).map(Number); let x = 0, y = 0, k = 0; for (let i = 0; i + 1 < n.length; i += 2) { x += n[i]; y += n[i + 1]; k++; } return [x / k, y / k]; };
+const tbC = (p, o) => { const r = A.regions(p, o).find(g => g.id === 'tailBase'); return r ? centroid(r.path) : null; };
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]).toFixed(1);
+function teasing() {
+  const big = (svg, label, cls = 'paper') => `<div class="cell ${cls}" style="width:200px"><div class="box">${svg}</div>${label}</div>`;
+  const hp = (p, o) => { const q = A.headPoint(p, o); return q ? [[q.x, q.y, '#36f'], q.nose && [q.nose.x, q.nose.y, '#f0f']] : []; };
+  const tR = tbC('rearUp', 'happy'), tL = tbC('loaf', 'calm'), tS = tbC('sit', 'calm');
+  let s = '<h2 id="teasing">Škádlení <button id="replay">Přehrát</button> <button id="flick">kx-flick on the sleepers</button></h2>';
+  s += `<p>tailBase centroid: rearUp (${tR.map(v => v.toFixed(1))}) – loaf (${tL.map(v => v.toFixed(1))}) = <b>${dist(tR, tL)}</b> (must be ≤ 15), – sit (${tS.map(v => v.toFixed(1))}) = ${dist(tR, tS)}. Blue dot = headPoint, magenta = its nose.</p>`;
+  s += '<div style="display:flex;gap:6px;flex-wrap:wrap">';
+  s += big(A.cat('rearUp', { mood: 'happy', purring: true }), 'rearUp happy purring') + big(A.cat('rearUp', 'happy') + regOv(A.regions('rearUp', 'happy'), null, [[...tR, '#000'], [...tL, '#f00']]), 'rearUp regions (black: its tailBase, red: loaf’s)');
+  s += big(A.cat('shake', 'grumpy'), 'shake dry') + big(A.cat('shake', { mood: 'grumpy', wet: true }), 'shake wet') + big(`<div class="frame">${A.cat('shake', { mood: 'grumpy', wet: true })}</div>`, 'shake wet, a frame of the drops', 'cottage');
+  s += big(A.cat('belly', { mood: 'happy', grab: true }), 'belly grab') + big(A.cat('lapBelly', { mood: 'happy', grab: true }), 'lapBelly grab') + big(A.cat('belly', { mood: 'happy', grab: true }) + regOv(A.regions('belly', { grab: true })), 'belly grab regions');
+  s += big(A.cat('sit', { mood: 'calm', eyes: 'cross' }), 'sit cross') + big(A.cat('sit', { mood: 'calm', achoo: true }), 'sit achoo') + big(`<div class="frame2">${A.cat('sit', { mood: 'calm', achoo: true })}</div>`, 'sit achoo, mid frame') + big(A.cat('sit', { mood: 'calm', shakeHead: true }), 'sit shakeHead');
+  s += big(A.cat('sit', { mood: 'grumpy', warn: true }), 'sit grumpy warn') + big(A.cat('loaf', { mood: 'calm', warn: true }), 'loaf warn') + '</div>';
+  s += '<h2>Eyes cross / squint (sit, loaf, lapLoaf), achoo, shakeHead, warn</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">';
+  for (const p of ['sit', 'loaf', 'lapLoaf']) for (const e of ['cross', 'squint']) s += cell(A.cat(p, { mood: 'calm', eyes: e }), `${p} ${e}`);
+  s += cell(A.cat('sit', { mood: 'happy', eyes: 'squint', ears: 'back' }), 'sit squint ears back (tolerate)') + cell(A.cat('walk', { mood: 'calm', eyes: 'cross' }), 'walk cross');
+  for (const p of ['sit', 'loaf', 'lapLoaf', 'sideLie']) s += cell(A.cat(p, { mood: 'calm', achoo: true }), `${p} achoo`);
+  for (const p of ['sit', 'loaf', 'lapLoaf', 'rub']) s += cell(A.cat(p, { mood: 'calm', shakeHead: true }), `${p} shakeHead`);
+  for (const p of ['sit', 'loaf', 'lapLoaf', 'walk', 'stalk', 'sideLie', 'sulk', 'inBox']) s += cell(A.cat(p, { mood: p === 'sit' ? 'grumpy' : 'calm', warn: true }), `${p} warn`);
+  s += cell(A.cat('sit', { mood: 'calm', ill: 'cold' }), 'sit cold (h.sneeze loop)') + cell(A.cat('sit', { mood: 'calm', ill: 'cold', achoo: true }), 'cold + achoo') + cell(A.cat('sulk', { mood: 'grumpy', eyes: 'cross' }), 'sulk cross (ignored)') + cell(`<div class="flk">${A.cat('sleep', 'calm')}</div>`, 'sleep (kx-flick)') + cell(`<div class="flk">${A.cat('lapCurl', 'calm')}</div>`, 'lapCurl (kx-flick)');
+  s += '</div><h2>Neighbours and kittens: rearUp, shake wet, belly grab, cross, warn</h2><div class="grid" style="grid-template-columns:repeat(10,1fr)">';
+  for (const [id, o, bg] of [['liza', {}, 'cottage'], ['bivoj', {}, 'paper'], ['k1', { coat: 'mourek', kit: 1 }, 'paper'], ['k1', { coat: 'ciperka', kit: 1 }, 'cottage']]) {
+    const nm = o.kit ? `kitten (${o.coat})` : A.neighbours[id].name, O = x => Object.assign({}, o, x);
+    s += cell(A.neighbour(id, 'rearUp', O({ mood: 'happy' })), nm + ' rearUp', bg) + cell(A.neighbour(id, 'shake', O({ mood: 'grumpy', wet: true })), nm + ' shake wet', bg) + cell(A.neighbour(id, 'belly', O({ mood: 'happy', grab: true })), nm + ' grab', bg) +
+      cell(A.neighbour(id, 'sit', O({ mood: 'calm', eyes: 'cross' })), nm + ' cross', bg) + cell(A.neighbour(id, 'sit', O({ mood: 'grumpy', warn: true })), nm + ' warn', bg);
+  }
+  s += '</div><h2>The nose region (magenta, only the nose; dots = headPoint)</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">';
+  for (const [l, p, o, who] of [['sit', 'sit', 'calm'], ['loaf', 'loaf', 'calm'], ['lapLoaf', 'lapLoaf', 'calm'], ['rearUp', 'rearUp', 'happy'], ['shake', 'shake', 'calm'], ['Líza sit', 'sit', 'calm', 'liza'], ['kitten sit', 'sit', { kit: 1, mood: 'calm' }, 'k1'], ['kitten loaf', 'loaf', { kit: 1, mood: 'calm' }, 'k1']]) {
+    const svg = who ? A.neighbour(who, p, Object.assign(typeof o === 'object' ? o : { mood: o }, who === 'k1' ? { coat: 'mourek' } : {})) : A.cat(p, o);
+    s += cell(svg + regOv(A.regions(p, o), ['nose'], hp(p, o)), l, who === 'liza' ? 'cottage' : 'paper');
+  }
+  s += '</div><h2>FX splash, puff; item mug (itemSize ' + A.itemSize.mug.w + ')</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">';
+  for (const f of ['splash', 'puff']) s += cell(`<div style="width:60%;margin:20% auto">${A.fx(f)}</div>`, f) + cell(`<div style="width:60%;margin:20% auto">${A.fx(f)}</div>`, f, 'cottage');
+  s += cell(A.item('mug'), 'mug') + cell(A.item('mug'), 'mug', 'cottage') + cell(`<div style="transform:rotate(-70deg)">${A.item('mug')}</div>`, 'mug falling (turned by the UI)') + cell(A.itemHeld('mug'), 'mug held');
+  // the mug next to her on the kitchen counter, at its natural size (cat 212 room units)
+  const ct = A.rooms.kitchen.spots.counter, KCm = 212 / 200, mw = A.itemSize.mug.w;
+  s += `</div><h2>Payback scene: Koxa sitting on the counter with the mug, the sneeze puff on her nose</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><div style="width:300px"><div class="room">${A.room({ id: 'kitchen', phase: 'day', season: 'summer' })}` +
+    `<div style="position:absolute;left:${(ct.x - 100 * KCm) / 4}%;top:${(ct.y - 186 * KCm) / 6}%;width:${212 / 4}%;aspect-ratio:1">${A.cat('sit', 'calm')}</div><div style="position:absolute;left:${(ct.x - 70 - mw / 2) / 4}%;top:${(ct.y - 0.9 * mw) / 6}%;width:${mw / 4}%;aspect-ratio:1">${A.item('mug')}</div></div>kitchen counter</div>`;
+  const q = A.headPoint('sit', { achoo: true });
+  s += `<div class="cell paper" style="width:250px;position:relative"><div class="box">${A.cat('sit', { mood: 'calm', achoo: true })}<div style="position:absolute;left:${(q.nose.x - 46) / 2}%;top:${(q.nose.y - 2) / 2}%;width:16%;aspect-ratio:1">${A.fx('puff')}</div><div style="position:absolute;left:${(q.x + 20) / 2}%;top:${(q.y - 70) / 2}%;width:22%;aspect-ratio:1">${A.fx('splash')}</div></div>puff at headPoint.nose, splash near the head</div></div>`;
+  return s;
+}
 // every pose × mood, on paper and on the dark cottage page
 for (const bg of ['paper', 'cottage']) {
   h += `<h2>Poses × moods on ${bg}</h2><div class="grid" style="grid-template-columns:repeat(10,1fr)">`;
@@ -44,7 +93,6 @@ for (const [p, o, l] of V) h += cell(A.cat(p, o), l);
 h += '</div>';
 // regions
 h += '<h2>Regions (hit-test order; arrow = fur direction)</h2><div class="grid" style="grid-template-columns:repeat(10,1fr)">';
-const COL = { ears: '#e33', chin: '#f90', paws: '#3a3', head: '#36f', tail: '#a3f', tailBase: '#fd0', belly: '#f3c', back: '#0cc' };
 for (const p of A.poses) {
   const rg = A.regions(p);
   const ov = `<svg viewBox="0 0 200 200" class="reg" style="position:absolute;inset:0;overflow:visible">${rg.slice().reverse().map(r => `<path d="${r.path}" fill="${COL[r.id]}"/>`).join('')}${rg.map((r, i) => { const x = 14 + i * 26, y = 12; return `<g><text x="${x}" y="${y - 2}" font-size="7" text-anchor="middle">${r.id}</text><path d="M${x - r.fur[0] * 9} ${y + 10 - r.fur[1] * 9}L${x + r.fur[0] * 9} ${y + 10 + r.fur[1] * 9}" stroke="${COL[r.id]}" stroke-width="2.5" marker-end="url(#ah)"/></g>`; }).join('')}<defs><marker id="ah" viewBox="0 0 6 6" refX="3" refY="3" markerWidth="4" markerHeight="4" orient="auto"><path d="M0 0L6 3L0 6Z"/></marker></defs></svg>`;
@@ -201,7 +249,14 @@ for (const p of A.poses) { const m = A.mouth(p, { openMouth: true }); h += cell(
 h += '</div><h2>Big (phone size, 250 px)</h2><div style="display:flex;gap:8px;flex-wrap:wrap">';
 for (const [p, m, bg] of [['sit', 'happy', 'cottage'], ['sit', 'calm', 'paper'], ['loaf', 'calm', 'cottage'], ['sleep', 'calm', 'paper']]) h += `<div class="cell ${bg}" style="width:250px">${A.cat(p, m)}</div>`;
 h += '</div>';
-out.innerHTML = h;
+out.innerHTML = '<div id="tease"></div>' + h;
+const tease = document.getElementById('tease');
+const drawTease = () => {
+  tease.innerHTML = teasing();
+  document.getElementById('replay').onclick = drawTease;
+  document.getElementById('flick').onclick = () => { for (const el of tease.querySelectorAll('.flk')) { el.classList.remove('kx-flick'); void el.offsetWidth; el.classList.add('kx-flick'); setTimeout(() => el.classList.remove('kx-flick'), 450); } };
+};
+drawTease();
 const st = document.getElementById('step'); st.oninput = () => { document.getElementById('gait').style.setProperty('--kx-step', st.value + 's'); document.getElementById('stepv').textContent = st.value + ' s'; };
 </script>
 </body>

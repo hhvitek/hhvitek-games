@@ -50,6 +50,15 @@
   .meter { position: relative; height: 26px; border-radius: 8px; background: #efe2cf; overflow: hidden; margin-top: 8px; }
   .meter i { position: absolute; left: 0; top: 0; bottom: 0; background: #6a9a3a; width: 0; }
   .meter b { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); }
+  .patCat { position: absolute; top: 8px; width: 47%; height: 250px; }
+  .patCat > .art, .patCat > svg, .patCat > .art > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .patCat > b { position: absolute; left: 0; right: 0; bottom: -2px; text-align: center; font-size: 13px; color: var(--soft); }
+  .regs path { fill: transparent; stroke: rgba(0,0,0,.25); stroke-dasharray: 3 3; transition: fill .3s; }
+  .regs path.go { fill: rgba(40,160,60,.45); } .regs path.new { fill: rgba(220,140,0,.5); }
+  #patVis > .art { filter: sepia(.7) saturate(1.6) brightness(1.15); }
+  #patBig { position: absolute; right: 10px; top: 8px; font-size: 26px; font-weight: 800; pointer-events: none; }
+  #patBig.go { color: #2d7a2d; } #patBig.new { color: #b26200; }
+  #patList { margin: 6px 0 0; min-height: 4em; white-space: pre-wrap; }
   #log { position: fixed; left: 0; right: 0; bottom: 0; height: 170px; overflow: auto; margin: 0; padding: 6px 12px;
     background: #2b1a0e; color: #f4ebdf; font: 12px/1.35 ui-monospace, monospace; white-space: pre-wrap; }
 </style>
@@ -138,6 +147,25 @@
     <div id="cue" style="position:absolute;left:0;right:0;top:12px;text-align:center;font-size:22px;font-weight:800"></div>
   </div>
   <div class="row"><button id="trainMode" aria-pressed="false">Režim minihry</button><span class="stat" id="trainStat">train</span></div>
+</section>
+
+<section>
+  <h2>9. Škádlení</h2>
+  <p class="note">Ťukej na kočku: vlevo Koxa, vpravo návštěva (oblasti <code>v:liza:…</code>). Ťuky nejvýš 0,9 s po sobě
+    na stejnou oblast, nebo do 24 px na stejné kočce, jsou jedna řada: n, tempo ms a pravidelnost cv z posledních 6 ťuků.
+    Zelená = řada pokračuje, oranžová = nová řada. Tah, podržení, ťuk mimo kočku nebo „Ukončit řadu“ ji ukončí.
+    Ťuk na nos kýchne.</p>
+  <div class="area" id="patArea" style="height:270px">
+    <div class="patCat" id="patKoxa" style="left:2%"><div class="art"></div><svg class="regs"></svg><b>Koxa</b></div>
+    <div class="patCat" id="patVis" style="left:51%"><div class="art"></div><svg class="regs"></svg><b>Líza (návštěva)</b></div>
+    <div id="patBig"></div>
+  </div>
+  <div class="row"><select id="patPose" aria-label="Póza Koxy"></select><button id="patCancel">Ukončit řadu</button>
+    <span class="stat" id="patStat">ťukni na kočku</span></div>
+  <pre class="stat" id="patList"></pre>
+  <h2 style="margin-top:10px">Zvuky škádlení</h2>
+  <div class="row" id="fxBtns"></div>
+  <div class="row"><span class="stat" id="fxStat"></span></div>
 </section>
 
 <pre id="log"></pre>
@@ -416,6 +444,74 @@ $('#trainMode').onclick = e => {
   $('#trainStat').textContent = trainCtl.mode();
 };
 
+/* ---------- 9. Škádlení: pat runs and the teasing sounds ---------- */
+const patArea = $('#patArea'), patBig = $('#patBig');
+const PAT_CATS = [{ box: $('#patKoxa'), prefix: '', pose: null, regs: [], paths: [] }, { box: $('#patVis'), prefix: 'v:liza:', pose: 'sit', regs: [], paths: [] }];
+function buildPatCat(pc, pose) {
+  let svg = PH.svg, vb = PH.viewBox, regs = PH.regions;
+  if (ART && pose !== 'placeholder') {
+    try {
+      const o = { mood: 'calm' }, r = ART.regions(pose, o);
+      if (Array.isArray(r) && r.length) { svg = ART.cat(pose, o); vb = (svg.match(/viewBox="([^"]+)"/) || [])[1] || '0 0 200 200'; regs = r; }
+    } catch (e) { console.warn('art.js pose failed, placeholder cat', e); }
+  }
+  pc.box.querySelector('.art').innerHTML = svg;
+  const rs = pc.box.querySelector('.regs');
+  rs.innerHTML = ''; rs.setAttribute('viewBox', vb);
+  pc.regs = regs;
+  pc.paths = regs.map(r => { const p = document.createElementNS(NS, 'path'); p.setAttribute('d', r.path || r.shape || ''); rs.appendChild(p); return p; });
+}
+const patPose = $('#patPose'), artPoses = ART && Array.isArray(ART.poses) ? ART.poses : [];
+patPose.innerHTML = artPoses.map(p => `<option>${p}</option>`).join('') + '<option value="placeholder">zástupná</option>';
+patPose.value = artPoses.includes('loaf') ? 'loaf' : artPoses.includes('sit') ? 'sit' : 'placeholder';
+patPose.onchange = () => buildPatCat(PAT_CATS[0], patPose.value);
+buildPatCat(PAT_CATS[0], patPose.value);
+buildPatCat(PAT_CATS[1], artPoses.includes('sit') ? 'sit' : 'placeholder');
+// el px → each cat's viewBox; the first region holding the point, its id with the cat's prefix (a visitor: v:liza:…)
+function patHit(x, y) {
+  const a = patArea.getBoundingClientRect();
+  for (const pc of PAT_CATS) {
+    const m = pc.box.querySelector('.regs').getScreenCTM(); if (!m) continue;
+    const pt = new DOMPoint(a.left + x, a.top + y).matrixTransform(m.inverse());
+    for (let i = 0; i < pc.paths.length; i++) if (pc.paths[i].isPointInFill(pt)) return { id: pc.prefix + pc.regs[i].id, fur: pc.regs[i].fur, pc, i };
+  }
+  return null;
+}
+const patLines = [];
+let patOn = false;
+function patLine(s) { patLines.unshift(s); patLines.length = Math.min(patLines.length, 10); $('#patList').textContent = patLines.join('\n'); }
+const patCtl = I.attach(patArea, {
+  mode: 'care',
+  hitRegion: patHit,
+  catWidth: () => PAT_CATS[0].box.getBoundingClientRect().width,
+  on(ev) {
+    log(ev, 'pat');
+    if (ev.type !== 'tap') {
+      if (patOn && !QUIET.has(ev.type)) patLine(`— řada skončila (${ev.type})`);
+      patOn = false; return;
+    }
+    const p = ev.pat;
+    if (!p) { if (patOn) patLine('— řada skončila (ťuk mimo kočku)'); patOn = false; patBig.textContent = ''; $('#patStat').textContent = 'mimo kočku: pat = null'; return; }
+    const go = p.n > 1, cls = go ? 'go' : 'new';
+    patOn = true;
+    patBig.textContent = `n ${p.n}`; patBig.className = cls;
+    const s = `n ${p.n} · ${p.ms} ms · cv ${p.cv.toFixed(2)} · ${p.region}  ${go ? '← pokračuje' : '● nová řada'}`;
+    $('#patStat').textContent = s; patLine(s);
+    const r = ev.region && ev.region.pc && ev.region.pc.paths[ev.region.i];
+    if (r) { r.setAttribute('class', cls); clearTimeout(r._t); r._t = setTimeout(() => r.setAttribute('class', ''), 400); }
+    if (/(^|:)nose$/.test(p.region)) I.sound.fx('sneeze');
+  },
+});
+$('#patCancel').onclick = () => { patCtl.cancel(); if (patOn) patLine('— řada skončila (cancel)'); patOn = false; patBig.textContent = ''; };
+const FX_NAME = { sneeze: 'Kýchnutí', splash: 'Šplouchnutí vody', shake: 'Otřepání', clink: 'Cinknutí plecháčku' };
+$('#fxBtns').innerHTML = (I.sound.FX || []).map(k => `<button data-fx="${k}">${FX_NAME[k] || k}</button>`).join('');
+document.querySelectorAll('[data-fx]').forEach(b => b.onclick = () => {
+  I.sound.unlock();
+  const r = I.sound.fx(b.dataset.fx);
+  $('#fxStat').textContent = `${b.dataset.fx}: ${r ? 'hraje' : 'ticho'}`;
+  log({ type: 'fx', name: b.dataset.fx, ok: !!r }, 'sound');
+});
+
 /* ---------- Animation ---------- */
 let lastT = performance.now();
 function frame(t) {
@@ -435,7 +531,7 @@ requestAnimationFrame(frame);
 placeCat(catPos.x, catPos.y, false);
 
 // for tests
-window.Feel = { I, LOG, counts, hitRegion, trainCtl, get CAT() { return CAT; }, catWidth, buildCat, ball, chaser, dot };
+window.Feel = { I, LOG, counts, hitRegion, trainCtl, patCtl, patHit, get CAT() { return CAT; }, catWidth, buildCat, ball, chaser, dot };
 </script>
 </body>
 </html>

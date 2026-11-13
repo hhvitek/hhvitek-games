@@ -142,7 +142,8 @@ async (page) => {
     'cesta-ven': async () => { await tap('#btnGo'); await wait(500); await tap(HINTED); await wait(800); await tap('#btnGo'); await wait(500); },
     // a mirror turned, then the hint, a tap on the hinted mirror, and the next hint shown
     'paprsek': async () => { await tap('#taps .cell[aria-label^="Zrcadlo"]'); await wait(400); await tapButton(/Poradit/); await wait(600); await tap(HINTED); await wait(600); await tapButton(/Poradit/); await wait(600); },
-    // granule dragged into the bowl (she walks there and eats), then a stroke along her back; the hint stays visible
+    // granule dragged into the bowl (she walks there and eats), then a stroke along her back and a tap on her nose (she
+    // squints and sneezes); the hint stays visible. In the garden at the end: the watering can on her (a splash, a shake-off)
     'kocka': async () => {
       await page.evaluate(() => { const st = window.Kocka.state.G.st; st.asleep = false; st.needs.food = 25; if (window.Kocka.go) window.Kocka.go('kitchen', -1); window.Kocka.settle(); });
       const drag = async (a, b) => { await page.mouse.move(a.x, a.y); await page.mouse.down(); await page.mouse.move(a.x + 10, a.y - 14, { steps: 3 }); await page.mouse.move(b.x, b.y, { steps: 12 }); await page.mouse.up(); };
@@ -151,12 +152,18 @@ async (page) => {
       const pts = await page.evaluate(() => window.Kocka.strokePath('back'));
       if (pts) { await page.mouse.move(pts[0].x, pts[0].y); await page.mouse.down(); for (const p of pts.slice(1)) { await page.mouse.move(p.x, p.y); await wait(8); } await page.mouse.up(); }
       await wait(600);
+      const nose = await page.evaluate(() => window.Kocka.catPoint('nose'));
+      if (nose) { await page.mouse.click(nose.x, nose.y); await wait(1800); } else errors.push('kocka: no nose to tap');
       // out into the garden: a neighbour cat visits and they wash each other (a joint scene of the visit)
       await page.evaluate(() => { const K = window.Kocka; K.state.G.st.asleep = false; K.go('hall'); K.settle(); K.go('garden'); K.settle(); K.state.G.st.visit = null; K.forceVisit('liza', 'groom'); });
       await wait(4500);
       // Líza's kittens: one bats at Koxa's tail, the others play beside their mother (the naming dialog is put off for today)
       await page.evaluate(() => { const K = window.Kocka, d = new Date(); if (!K.forceKittens) return; K.state.G.kitAsk = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; K.state.G.st.visit = null; K.settle(); K.forceKittens('liza', 'kitPlay', 4, 3); });
       await wait(4500);
+      // the can dragged onto Koxa (where she is in front of the kittens)
+      const can = await page.evaluate(() => window.Kocka.itemPoint('can'));
+      const her = await page.evaluate(() => { const K = window.Kocka; for (const r of ['head', 'back', 'chin', 'ears', 'tailBase', 'paws']) { const p = K.catPoint(r); if (p && K.regionAtFull(p.x, p.y) === r) return p; } return null; });
+      if (can && her) { await drag(can, her); await wait(1500); } else errors.push('kocka: no can or no Koxa in the garden');
     },
     // the hint (dotted way, the next arrow framed), a tap on the framed arrow, the hint again
     'kulicka': async () => { await tap('#btnHint'); await wait(400); await tap('.arrow.hint'); await wait(1200); await tap('#btnHint'); await wait(500); },

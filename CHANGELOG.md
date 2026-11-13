@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Kočka: co se škádlívá, to se rádo mívá. Koxu můžeš poplácat (u kořene ocasu pomalu a pravidelně je to blaho, rychlé bubnování ji naštve), ťuknout jí do nosu nebo ji na zahradě pokropit konví. Když se urazí, usmíříte se pohlazením nebo pamlskem – a někdy ti to později vrátí.
+
 ## 1.0.20 – 2026-11-13
 
 - Kočka: přehlednější nápověda s kratšími větami. Nově v ní najdeš, jak získat pamlsky a za co je utratit, co přináší přátelství, co dělá nábytek, jak fungují záhony, nemoci a co se děje, když tu nejsi.
