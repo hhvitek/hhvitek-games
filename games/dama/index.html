@@ -609,9 +609,10 @@ function rng(seed) {
 
 /* ---------- The computer's move ----------
    o = { pos: text, stm, hist: [texts of the positions before, oldest first, since the last man move or capture],
-         quiet, level: 'normal' | 'master' | 'hint', seed, nodes?, maxMs?, myMove (how many moves this side made) }
+         quiet, level: 'beginner' | 'normal' | 'master' | 'hint', seed, nodes?, maxMs?, myMove (how many moves this side made) }
    Returns { i: index into moves(pos), score, depth, nodes }. */
 const LEVEL = {
+  beginner: { nodes: 0 },
   normal: { nodes: 0, depth: 2 },
   master: { nodes: 1200000 },
   hint:   { nodes: 400000 },
@@ -635,7 +636,30 @@ function think(o) {
   REP1[rp] = p.h1; REP2[rp] = p.h2;
   // a move that wins at once is never missed
   for (let i = 0; i < list.length; i++) if (!moves(play(p, list[i])).length) return { i, score: MATE, depth: 1, nodes: 0 };
+  if (o.level === 'beginner') return thinkBeginner(p, list, rand);
   return o.level === 'normal' ? thinkNormal(o, p, list, rp, quiet, rand) : thinkMaster(o, p, list, rp, quiet, rand);
+}
+// The beginner: no search at all. It likes to go forward, to take as much as it can and to make a king, but it
+// hardly ever asks what the reply will be: only now and then (a third of its moves) it notices that the piece it moves
+// can be taken at once, and a quarter of its moves are just any legal move. It never guards its back row on purpose.
+function thinkBeginner(p, list, rand) {
+  const side = p.stm;
+  if (rand() < 0.25) return { i: Math.floor(rand() * list.length), score: 0, depth: 0, nodes: 0 };
+  const careful = rand() < 0.35;
+  let bestI = 0, bestV = -INF;
+  for (let i = 0; i < list.length; i++) {
+    const mv = list[i];
+    let v = mv.caps.length * 60 + popcnt(mv.cm & p.k) * 80 + (mv.promo ? 120 : 0);
+    // a man going forward, the further up the better (a king just wanders)
+    if (!mv.king) v += 6 + (side ? 7 - ROW[mv.to] : ROW[mv.to]) * 3;
+    if (careful) {
+      const reply = moves(play(p, mv));
+      if (reply.some(r => r.cm & bit(mv.to))) v -= mv.king ? 150 : 60;
+    }
+    v += Math.round((rand() * 2 - 1) * 40);
+    if (v > bestV) { bestV = v; bestI = i; }
+  }
+  return { i: bestI, score: 0, depth: careful ? 1 : 0, nodes: 0 };
 }
 // The ordinary player: two half-moves ahead plus the captures that follow, a simple view of the board, some noise,
 // and now and then the second best move when it is not much worse. It sees "if I go there, he takes me", not more.
@@ -721,6 +745,7 @@ const THEMES = [
 // The computer opponent: its own AI here (the engine), the name, face and stars from games/_opponents/opponents.js
 const O = OPPONENTS;
 const LEVELS = [
+  { id: 'beginner', title: 'Začátečník', desc: 'Hraje jako někdo, kdo se dámu teprve učí: táhne hlavně dopředu, nedívá se, co uděláš ty, a často ti kámen daruje. Na první hry a na trénink.' },
   { id: 'normal', title: 'Běžný hráč', desc: 'Hraje jako běžný člověk: vidí tah nebo dva dopředu a občas se splete. Dobrý soupeř na každý den.' },
   { id: 'master', title: 'Mistr', desc: 'Hraje nejlépe, jak umí: propočítá mnoho tahů dopředu a nic nedaruje. Porazit ho je opravdu těžké.' },
 ];

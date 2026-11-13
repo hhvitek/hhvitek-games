@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Dáma: nový nejslabší soupeř Začátečník ★☆☆ pro ty, kdo se dámu teprve učí: táhne hlavně vpřed, nepromýšlí, co uděláš ty, a často ti daruje kámen.
+
 ## 1.0.17 – 2026-11-13
 
 - Výběr her: u Paprsku, Šipek ven, Cesty ven a Malovaných křížovek je vidět, kde jsi (např. „Úroveň 12“ nebo „Vyřešeno 8 z 36“).
