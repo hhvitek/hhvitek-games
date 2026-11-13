@@ -20,7 +20,17 @@
 //   opts.strokeStep       number or getter: overrides that step (px)
 //   opts.time(e)          → ms of a pointer event (default e.timeStamp; tests may pass their own clock)
 //   opts.on(ev)           receives { type, ... }:
-//     tap        { x, y, item, region, cat }       released before LONG_MS, moved < SLOP px and did not rub
+//     tap        { x, y, item, region, cat, t, pat }   released before LONG_MS, moved < SLOP px and did not rub;
+//                t = ms of the release (opts.time); pat only in 'care' (the key is absent in other modes): the run of
+//                taps on a cat this tap belongs to (Škádlení, SPEC §13.1), { n, ms, cv, region } when the tap is on a cat
+//                (cat, a region hit, no item), else null. n = taps in the run including this one; ms, cv = rhythm() of
+//                the run's last PAT_WINDOW tap times; region = the hit region's id. A pat continues the run when it
+//                comes ≤ PAT_GAP ms after the previous one and hits the same region id, or the same cat (Koxa: no
+//                'v:' prefix; a visitor: the same 'v:<id>:' prefix) ≤ PAT_NEAR px from the previous tap; otherwise a
+//                new run starts (n = 1). The run is cleared by a tap with pat null, every other emitted event, every
+//                pointer released (or taken by the browser) without a tap (fingers that were only ignored, a resting
+//                thumb or a third finger, do not count), setMode(), cancel() and detach(). Two fingers that overlap in
+//                time on Koxa are a scratch (no taps) as before; taps that do not overlap form a run like any taps.
 //     longpress  { x, y }                          LONG_MS still, not on Koxa and not on an item
 //     pickup     { x, y }                          LONG_MS still on Koxa (rubbing over HOLD_PATH px or turning back
 //                                                  HOLD_REVERSALS times is not still); then:
@@ -65,17 +75,21 @@
 //   every MIC_POLL_MS; onCall() when the level stays ≥ threshold for MIC_CALL_MS (then MIC_COOLDOWN_MS pause).
 //   States 'off'|'ask'|'ok'|'denied'|'none'. The tracks are released on stop(), on maxMs and when the page hides.
 // Sound:  I.sound.meow(mood) → variant, say(kind) → kind|null, purr(on, intensity 0…1), nom(), hiss(), chirp(),
-//   setEnabled(bool), unlock(), KINDS, last(). meow() picks a variant fitting the mood ('happy'|'calm'|'grumpy'|'sad'|
+//   fx(name) → name|null, FX, setEnabled(bool), unlock(), KINDS, last(). meow() picks a variant fitting the mood ('happy'|'calm'|'grumpy'|'sad'|
 //   'want'|'offended'), never the same twice in a row; kinds: mew, meow, demand, plaintive, chirp, trill, question,
 //   yowl, hiss, purr, nom, lap; every call is randomized (pitch ±15 %, length, contour, loudness). purr(true, x) while
-//   purring only changes the intensity. WebAudio, no files: formant synthesis (SPEC §12a). The AudioContext is created on the first user gesture (attach() calls unlock() on taps;
+//   purring only changes the intensity. WebAudio, no files: formant synthesis (SPEC §12a). fx(name): one Škádlení
+//   effect (SPEC §13.1), FX = ['sneeze', 'splash', 'shake', 'clink'], randomized a little every time; they are not meow
+//   kinds (never in KINDS); null when the name is unknown or the sound is silent (the same gates as say). The AudioContext is created on the first user gesture (attach() calls unlock() on taps;
 //   call it from your own buttons too). Silent when disabled, before any gesture and while the page is hidden.
 // Vibration:  I.vibrate(pattern) (ms, an array or a name from I.BUZZ), I.setVibrate(bool)
 // Pure helpers (tests): classifyStroke(fur, dx, dy, dt, path?), reversals(samples), isScratch(samples),
 //   flickVelocity(samples) → { vx, vy, speed }, follow(p, target, dtMs, lagMs?), stepToy(b, dtS, w, h),
 //   strokeStepFor(catWidth), holdMoved(samples), majorityRegion([region|null]), isRub(samples), isCircle(samples),
 //   isDoubleSwipe([{ dir, t }]), classifyCue(samples, t0?) → { type: 'circle'|'swipe'|'miss', dir?, reason?, dx, dy },
-//   voiceParams(kind, rnd?) (one randomized call), pickKind(mood, last, rnd?)
+//   voiceParams(kind, rnd?) (one randomized call), pickKind(mood, last, rnd?),
+//   rhythm(times) → { n, ms, cv } (ascending tap times in ms: n = count, ms = the mean interval rounded, cv = its
+//   population standard deviation / mean rounded to 0.01; fewer than 2 times → ms 0, cv 0)
 //   samples = [{ x, y, t }] with t in ms. I.T = all thresholds.
 function KockaInput() {
   'use strict';
@@ -94,6 +108,7 @@ function KockaInput() {
     TOY_FRICTION: 1.2, TOY_BOUNCE: 0.6,
     TILT_DEAD: 0.025, TILT_WAIT_MS: 1000, TILT_LEVEL_MS: 300, TILT_SMOOTH: 0.4,
     MIC_CALL_LEVEL: 0.6, MIC_CALL_MS: 250, MIC_COOLDOWN_MS: 1500, MIC_POLL_MS: 50, MIC_FLOOR_DB: -60,
+    PAT_GAP: 900, PAT_NEAR: 24, PAT_WINDOW: 6,
   };
   const BUZZ = { tap: 10, purr: [6, 60, 6, 60, 6, 60, 6], bite: 70, call: [20, 80, 20] };
   const IGNORE = 'button,a,input,select,textarea,label,[data-no-gesture]';
@@ -273,6 +288,19 @@ function KockaInput() {
     if (Math.hypot(b.vx, b.vy) < 5) b.vx = b.vy = 0;
     return hit;
   }
+  // the tempo of a run of taps: times = ascending ms → { n, ms (mean interval), cv (its population standard
+  // deviation / mean, to 0.01) }; fewer than 2 times → ms 0, cv 0
+  function rhythm(times) {
+    const list = Array.isArray(times) ? times : [], n = list.length;
+    if (n < 2) return { n, ms: 0, cv: 0 };
+    let sum = 0;
+    for (let i = 1; i < n; i++) sum += list[i] - list[i - 1];
+    const mean = sum / (n - 1);
+    let sq = 0;
+    for (let i = 1; i < n; i++) { const d = list[i] - list[i - 1] - mean; sq += d * d; }
+    const cv = mean ? Math.sqrt(sq / (n - 1)) / mean : 0;
+    return { n, ms: Math.round(mean), cv: Math.round(cv * 100) / 100 };
+  }
 
   /* ---------- Gestures ---------- */
   // stroke step for a cat drawn w px wide: short enough for the chin and the ears, at most SPEC's 40 px
@@ -304,7 +332,8 @@ function KockaInput() {
     const on = typeof opts.on === 'function' ? opts.on : () => {};
     const time = typeof opts.time === 'function' ? opts.time : (e => e.timeStamp || performance.now());
     const ignore = opts.ignore === undefined ? IGNORE : opts.ignore;
-    const emit = (type, d) => on(Object.assign({ type }, d));
+    let run = null;           // the pat run ('care'): { n, times, id, who, x, y, t } of its last tap (SPEC §13.1)
+    const emit = (type, d) => { if (type !== 'tap') run = null; on(Object.assign({ type }, d)); };
     const region = (x, y) => (opts.hitRegion && opts.hitRegion(x, y)) || null;
     const onCat = (x, y) => (opts.hitCat ? !!opts.hitCat(x, y) : !!region(x, y));
     const itemAt = (x, y) => (opts.hitItem && opts.hitItem(x, y)) || null;
@@ -516,10 +545,13 @@ function KockaInput() {
       try { el.releasePointerCapture(e.pointerId); } catch (err) {}
       sound.unlock();
       endRub(P);
+      // any press that did not move, did not rub and was not a long press is a tap; every other release ends a pat run
+      // (a finger that was only ignored does not)
+      const isTap = P.kind === 'pending' && !P.moved && !P.rubbed && !P.noTap && t - P.t0 < T.LONG_MS;
+      if (!isTap && P.kind !== 'idle') run = null;
       if (P.kind === 'laser') emit('laser', { x, y, on: false });
       else if (P.kind === 'pending') {
-        // any press that did not move, did not rub and was not a long press is a tap
-        if (!P.moved && !P.rubbed && !P.noTap && t - P.t0 < T.LONG_MS) emit('tap', { x, y, item: P.item, region: mode === 'care' || mode === 'train' ? region(x, y) : null, cat: P.cat });
+        if (isTap) tapped(P, x, y, t);
       } else if (P.kind === 'stroke') {
         if (P.seg.path >= T.STROKE_TAIL) strokeEnd(P, x, y, t);  // the rest of the stroke counts too
         // tricks: a quick straight move that did not start on Koxa and did not stroke her
@@ -541,6 +573,28 @@ function KockaInput() {
       } else if (P.kind === 'carry') emit('drop', { x, y, target: target(x, y, 'cat') });
       else if (P.kind === 'scratch') endScratch(t);
     }
+    function tapped(P, x, y, t) {
+      const reg = mode === 'care' || mode === 'train' ? region(x, y) : null;
+      const ev = { x, y, item: P.item, region: reg, cat: P.cat, t };
+      if (mode === 'care') ev.pat = patOf(P, reg, x, y, t);   // set before the event: a cancel() in the handler wins
+      emit('tap', ev);
+    }
+    // which cat a region id belongs to: '' = Koxa, 'v:<id>:' = a visitor
+    const whoOf = id => { const m = /^v:[^:]*:/.exec(id); return m ? m[0] : ''; };
+    // the pat of a tap: continues the run or starts a new one; null (and no run) off the cat or on an item
+    function patOf(P, reg, x, y, t) {
+      if (!P.cat || P.item || !reg || reg.id == null) { run = null; return null; }
+      const id = String(reg.id), who = whoOf(id), dt = run ? t - run.t : -1;
+      const goOn = run && dt >= 0 && dt <= T.PAT_GAP &&
+        (id === run.id || (who === run.who && Math.hypot(x - run.x, y - run.y) <= T.PAT_NEAR));
+      if (!goOn) run = { n: 0, times: [] };
+      run.n++;
+      run.times.push(t);
+      if (run.times.length > T.PAT_WINDOW) run.times.shift();
+      Object.assign(run, { id, who, x, y, t });
+      const r = rhythm(run.times);
+      return { n: run.n, ms: r.ms, cv: r.cv, region: reg.id };
+    }
     function swiped(dir, dx, dy, x, y, t, t0) {
       emit('swipe', { dir, dx, dy, x, y });
       swipes = swipes.concat([{ dir, t, t0 }]).slice(-2);
@@ -550,6 +604,7 @@ function KockaInput() {
     // the browser took the pointer (a system gesture, a scroll) or the mode changed: nothing is applied
     function drop(P) {
       ptrs.delete(P.id);
+      if (P.kind !== 'idle') run = null;                      // taken without a tap: the pat run ends
       if (P.kind === 'raw') { emit('pup', { id: P.id, x: P.x, y: P.y, t: P.t, cancel: true }); return; }
       clearTimeout(P.timer);
       endRub(P);
@@ -559,7 +614,7 @@ function KockaInput() {
       else if (P.kind === 'scratch') endScratch(P.t);
     }
     function cancelEv(e) { const P = ptrs.get(e.pointerId); if (P) drop(P); }
-    function cancelAll() { for (const P of [...ptrs.values()]) drop(P); ptrs.clear(); scr = null; }
+    function cancelAll() { for (const P of [...ptrs.values()]) drop(P); ptrs.clear(); scr = null; run = null; }
     const noMenu = e => e.preventDefault();                  // Android shows a menu after a long press
     el.addEventListener('pointerdown', down);
     el.addEventListener('pointermove', move);
@@ -577,9 +632,9 @@ function KockaInput() {
       el.removeEventListener('contextmenu', noMenu);
     }
     detach.detach = detach;
-    detach.setMode = m => { if (m !== mode) { cancelAll(); mode = m; } };
+    detach.setMode = m => { if (m !== mode) { cancelAll(); mode = m; } run = null; };
     detach.mode = () => mode;
-    detach.cancel = cancelAll;
+    detach.cancel = cancelAll;                              // also ends the pat run (the next pat is n = 1)
     detach.active = () => ptrs.size > 0;                    // a finger is down (a gesture may be under way)
     detach.strokeStep = stepLen;
     return detach;
@@ -872,6 +927,100 @@ function KockaInput() {
         t += r(0.14, 0.24);
       }
     }
+    /* Škádlení effects (SPEC §13.1): short, not loud, a little different every time */
+    // a falling exponential envelope on a gain: silent → peak after `attack` s → silent after `decay` more s
+    function ping(g, t, peak, attack, decay) {
+      g.setValueAtTime(0.0001, t);
+      g.exponentialRampToValueAtTime(peak, t + attack);
+      g.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+    }
+    // "hapčí" (~0.35 s): a soft breath in, a tiny voiced "a", then a sharp noise burst with a high formant
+    function sneezeAt(c, t, dest = master) {
+      const inhale = r(0.09, 0.13), tb = t + inhale + r(0.02, 0.04);
+      const n1 = noise(c), b1 = c.createBiquadFilter(), g1 = c.createGain();
+      b1.type = 'bandpass'; b1.Q.value = 1.2;
+      b1.frequency.setValueAtTime(r(900, 1300), t); b1.frequency.linearRampToValueAtTime(r(1600, 2200), t + inhale);
+      g1.gain.setValueAtTime(0, t); g1.gain.linearRampToValueAtTime(r(0.05, 0.08), t + inhale); g1.gain.linearRampToValueAtTime(0, t + inhale + 0.03);
+      n1.connect(b1); b1.connect(g1); g1.connect(dest); n1.start(t); n1.stop(t + inhale + 0.05);
+      const f = r(560, 720), o = c.createOscillator(), vb = c.createBiquadFilter(), og = c.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f * 1.1, tb - 0.05); o.frequency.exponentialRampToValueAtTime(f * 0.85, tb + 0.01);
+      vb.type = 'bandpass'; vb.frequency.value = r(1000, 1250); vb.Q.value = 4;
+      og.gain.setValueAtTime(0, tb - 0.05); og.gain.linearRampToValueAtTime(r(0.12, 0.18), tb - 0.035); og.gain.linearRampToValueAtTime(0, tb + 0.005);
+      o.connect(vb); vb.connect(og); og.connect(dest); o.start(tb - 0.05); o.stop(tb + 0.02);
+      const n2 = noise(c), hp = c.createBiquadFilter(), pk = c.createBiquadFilter(), g2 = c.createGain(), d = r(0.16, 0.22);
+      hp.type = 'highpass'; hp.frequency.value = r(1800, 2400);
+      pk.type = 'peaking'; pk.frequency.value = r(3800, 5200); pk.Q.value = 2; pk.gain.value = 10;
+      ping(g2.gain, tb, r(0.2, 0.28), 0.006, d);
+      n2.connect(hp); hp.connect(pk); pk.connect(g2); g2.connect(dest); n2.start(tb); n2.stop(tb + d + 0.03);
+    }
+    // water poured on fur (~0.5 s): a noise burst getting duller as it decays, a bubbly flutter, droplet ticks
+    function splashAt(c, t, dest = master) {
+      const d = r(0.4, 0.55), nz = noise(c), lp = c.createBiquadFilter(), am = c.createGain(), g = c.createGain();
+      lp.type = 'lowpass'; lp.Q.value = 0.8;
+      lp.frequency.setValueAtTime(r(3500, 4500), t); lp.frequency.exponentialRampToValueAtTime(r(700, 1000), t + d);
+      const l = c.createOscillator(), lg = c.createGain();
+      am.gain.value = 0.75; l.type = 'triangle'; l.frequency.value = r(18, 26); lg.gain.value = 0.25;
+      l.connect(lg); lg.connect(am.gain);
+      ping(g.gain, t, r(0.22, 0.3), 0.012, d);
+      nz.connect(lp); lp.connect(am); am.connect(g); g.connect(dest);
+      nz.start(t); nz.stop(t + d + 0.05); l.start(t); l.stop(t + d + 0.05);
+      const drops = 5 + Math.floor(Math.random() * 5);
+      for (let i = 0; i < drops; i++) {
+        const tt = t + r(0.04, d), f = r(700, 1600), o = c.createOscillator(), og = c.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(f, tt); o.frequency.exponentialRampToValueAtTime(f * r(1.6, 2.3), tt + r(0.02, 0.04));
+        ping(og.gain, tt, r(0.04, 0.09), 0.003, 0.05);
+        o.connect(og); og.connect(dest); o.start(tt); o.stop(tt + 0.07);
+      }
+    }
+    // a quick whole-body shake (~0.6 s): fluttering fur noise, amplitude modulated ~12 Hz and slowing a little, a low flap
+    function shakeAt(c, t, dest = master) {
+      const d = r(0.5, 0.65), rate = r(11, 13), peak = r(0.18, 0.25);
+      const nz = noise(c), bp = c.createBiquadFilter(), low = c.createBiquadFilter(), lowG = c.createGain();
+      bp.type = 'bandpass'; bp.frequency.value = r(900, 1500); bp.Q.value = 0.7;
+      low.type = 'lowpass'; low.frequency.value = r(250, 350); lowG.gain.value = 1.2;
+      const am = c.createGain(), l = c.createOscillator(), lg = c.createGain();
+      am.gain.value = 0.5; l.type = 'triangle'; lg.gain.value = 0.5;
+      l.frequency.setValueAtTime(rate, t); l.frequency.linearRampToValueAtTime(rate * 0.8, t + d);
+      l.connect(lg); lg.connect(am.gain);
+      const g = c.createGain();
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + 0.06);
+      g.gain.setValueAtTime(peak, t + d * 0.6); g.gain.linearRampToValueAtTime(0, t + d);
+      nz.connect(bp); bp.connect(am); nz.connect(low); low.connect(lowG); lowG.connect(am); am.connect(g); g.connect(dest);
+      nz.start(t); nz.stop(t + d + 0.05); l.start(t); l.stop(t + d + 0.05);
+    }
+    // an enamel mug hitting tiles: a few inharmonic partials (1.2–3.5 kHz) with a fast decay and a click, then a
+    // smaller clink ~120 ms later (it bounces)
+    function clinkAt(c, t, dest = master) {
+      const base = r(1200, 1260);
+      const ding = (tt, a, f0) => {
+        const out = c.createGain(); out.gain.value = 1; out.connect(dest);
+        const parts = [[1, 1, 0.18], [1.47, 0.6, 0.12], [2.09, 0.45, 0.09], [2.76, 0.3, 0.06]];
+        for (const [ratio, w, dk] of parts) {
+          const o = c.createOscillator(), og = c.createGain(), dec = dk * r(0.8, 1.2);
+          o.type = 'sine'; o.frequency.value = Math.min(3500, f0 * ratio * r(0.98, 1.02));
+          ping(og.gain, tt, a * w / 2.35, 0.002, dec);
+          o.connect(og); og.connect(out); o.start(tt); o.stop(tt + dec + 0.03);
+        }
+        const nz = noise(c), hp = c.createBiquadFilter(), ng = c.createGain();
+        hp.type = 'highpass'; hp.frequency.value = 3000;
+        ping(ng.gain, tt, a * 0.4, 0.001, 0.008);
+        nz.connect(hp); hp.connect(ng); ng.connect(out); nz.start(tt); nz.stop(tt + 0.02);
+      };
+      const a = r(0.18, 0.24);
+      ding(t, a, base);
+      ding(t + r(0.1, 0.14), a * r(0.4, 0.55), base * r(0.97, 1.03));
+    }
+    const FX_AT = { sneeze: sneezeAt, splash: splashAt, shake: shakeAt, clink: clinkAt };
+    const FX = Object.keys(FX_AT);
+    // fx(name): one Škádlení effect; returns the name, or null when unknown or silent (off, before a gesture, hidden)
+    function fx(name) {
+      if (!FX.includes(name)) return null;
+      const c = ready(); if (!c) return null;
+      FX_AT[name](c, c.currentTime + 0.02);
+      return name;
+    }
     // say(kind): one sound of that variant, randomized every time; returns the kind (or null when silent)
     function say(kind, o = {}) {
       if (!KINDS.includes(kind)) kind = 'meow';
@@ -954,12 +1103,13 @@ function KockaInput() {
         nodes.timer = setTimeout(() => cycle(next), Math.max(0, (next - c.currentTime - 0.3) * 1000));
       })(t0 + 0.05);
     }
-    // tests and tuning: renders one call of a kind offline → Promise({ data: Float32Array, rate, params })
+    // tests and tuning: renders one call of a kind (or an fx name) offline → Promise({ data: Float32Array, rate, params })
     function render(kind, rate = 22050) {
       const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
       if (!OAC) return Promise.reject(new Error('no OfflineAudioContext'));
       const p = voiceParams(kind), oc = new OAC(1, Math.ceil(rate * ((p.d || 1) + 1.3)), rate);
-      if (kind === 'hiss') hissAt(oc, 0.01, oc.destination);
+      if (FX.includes(kind)) FX_AT[kind](oc, 0.01, oc.destination);
+      else if (kind === 'hiss') hissAt(oc, 0.01, oc.destination);
       else if (kind === 'nom') nomAt(oc, 0.01, oc.destination);
       else voice(oc, p, 0.01, oc.destination);
       return oc.startRendering().then(b => ({ data: b.getChannelData(0), rate, params: p }));
@@ -967,7 +1117,7 @@ function KockaInput() {
     const nom = () => say('nom'), hiss = () => say('hiss'), chirp = () => say('chirp');
     function setEnabled(b) { enabled = !!b; if (!enabled) purr(false); }
     function unlock() { if (enabled) getCtx(); }
-    return { meow, say, purr, nom, hiss, chirp, setEnabled, unlock, render, KINDS,
+    return { meow, say, purr, nom, hiss, chirp, fx, FX, setEnabled, unlock, render, KINDS,
       enabled: () => enabled, purring: () => !!purrNodes, last: () => lastSaid };
   })();
 
@@ -1057,5 +1207,5 @@ function KockaInput() {
 
   return { attach, tilt, mic, sound, vibrate, setVibrate, BUZZ, T,
     classifyStroke, reversals, isScratch, flickVelocity, follow, stepToy, strokeStepFor, holdMoved, majorityRegion, isRub, isCircle, isDoubleSwipe, classifyCue,
-    voiceParams, pickKind, VOWEL, VARIANT };
+    rhythm, voiceParams, pickKind, VOWEL, VARIANT };
 }

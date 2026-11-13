@@ -3,11 +3,27 @@
 //
 // API of KockaArt():
 //   css                      keyframes and classes (blink, ear twitch, tail sway by mood, sleep breathing, purr shiver,
-//                            sneeze, wriggle, Zzz, fleas, gait, weather); prefers-reduced-motion turns it off. Inject once.
+//                            sneeze, wriggle, Zzz, fleas, gait, weather, Škádlení); prefers-reduced-motion turns it off.
+//                            Inject once. The class kx-flick on any ancestor of a cat (or on the svg): her right ear twitches
+//                            once (~.4 s; for a tap on a sleeping cat: add it, remove it after ~450 ms).
 //   cat(pose, opts)          <svg class="koxa"> viewBox 0 0 200 200, the cat stands on y≈186 (centre x 100; see anchors).
 //                            opts = { mood: 'happy'|'calm'|'grumpy'|'sad', thin, chubby, ill: null|'fleas'|'tummy'|'cold',
 //                            ears: 'up'|'back'|'turned', purring, asleep, meow, openMouth, wet, noProp } (a mood string
-//                            works as opts too). Poses (side views face left: flip the box with scaleX(-1)):
+//                            works as opts too). Škádlení options (applied after the pose chose its face, so no pose
+//                            overrides them; the face ones are ignored when she faces away):
+//                              eyes: 'cross' (cross-eyed, both pupils turned to the nose) | 'squint' (pinched tight "><",
+//                                contented-annoyed);
+//                              achoo: a one-time sneeze: the head jerks forward and down once (kx-achoo .5 s), eyes squint
+//                                unless opts.eyes, mouth open (not the cold's looping kx-sneeze; put fx('puff') on
+//                                headPoint().nose);
+//                              shakeHead: the head shakes left–right twice (kx-shakeHead .6 s, once);
+//                              warn: the tail tip lashes fast (kx-warn .35 s), ears 'turned' unless opts.ears, the skin on
+//                                the back twitches (kx-twitch .9 s: a ginger ripple with ticks above it); a pose without a
+//                                tail only turns the ears;
+//                              grab (belly, lapBelly): the front paws hug the hand just above the belly (round about
+//                                (118, 114); lapBelly zoomed), the hind legs bunny-kick (kx-kick .4 s), wide eyes, the mouth
+//                                open; soft paws with beans, never claws.
+//                            Poses (side views face left: flip the box with scaleX(-1)):
 //                            sit, loaf, sleep, stretch, pounce (toys only), eat, drink, groom, sulk (back turned), belly,
 //                            carried, wriggle, window (from behind), walk and trot (legs swing by CSS; the step time is
 //                            the CSS variable --kx-step on any ancestor: walk .8s, trot .42s by default), walk1..walk4
@@ -21,18 +37,27 @@
 //                            swipe (play-fight: on the haunches, one paw raised high; pairs with belly or swipe), run (a
 //                            gallop by CSS, step --kx-step .34 s by default), rub (standing, leaning forward, the cheek
 //                            pushed against whatever is in front: a leg, a hand, another cat; eyes shut, tail straight up
-//                            with a hooked tip; sways by CSS). All of them stand on (100, 186).
+//                            with a hooked tip; sways by CSS). Škádlení: rearUp ("zadeček jako výtah": the chest and the
+//                            front paws low on the floor treading in turn by CSS (kx-tread .6 s), the rear up on straight
+//                            hind legs, the tail straight up, a happy face; its tailBase lies on the haunch within 15 units
+//                            of loaf's, so a pat run there goes on when she lifts it) and shake (standing, shaking herself
+//                            off: kx-shake .4 s × 3 then still, fur on end, ears flat, eyes squeezed, motion lines; with
+//                            opts.wet the drops fly off once, kx-drops). All of them stand on (100, 186).
 //   poses                    the list of pose names.
 //   anchors                  { pose: [x, y] } for poses that do not stand on (100, 186): put that point on the spot.
 //   regions(pose, opts)      [{ id, path, fur: [dx, dy] }] in the cat's 0..200 viewBox, ids from
-//                            'chin'|'tail'|'paws'|'head'|'ears'|'tailBase'|'belly'|'back' (tailBase = kořen ocasu,
+//                            'nose'|'chin'|'tail'|'paws'|'head'|'ears'|'tailBase'|'belly'|'back' (nose = about 26 × 18
+//                            head units round the nose, only when the face is visible, neighbours and kittens too; tailBase = kořen ocasu,
 //                            the back just in front of the tail root, in every pose that has 'back'). The list is in
-//                            hit-test order: the first region whose path contains the point wins (chin before head, head
+//                            hit-test order: the first region whose path contains the point wins (nose before chin, chin before head, head
 //                            before ears, so 'ears' is only the visible ear above the head plus a small margin). Paths
 //                            may hold several subpaths (both ears, every paw): use the nonzero rule. `fur` is the unit
 //                            vector of stroking along the fur (head → tail; on the head from the forehead over the top,
 //                            on the chin and throat downwards). Pass the same opts as cat() (the tail follows the mood).
 //   mouth(pose, opts)        {x, y} of her mouth in the cat's viewBox, or null when she faces away.
+//   headPoint(pose, opts)    { x, y, nose, back } in the cat's viewBox (kitten and lap zoom applied as in mouth()): x, y =
+//                            the middle of the head, nose = {x, y} of the nose tip or null when she faces away (back: true);
+//                            null for an unknown pose. For fx('puff') on the nose and fx('splash') on her.
 //   room(o) / room(phase, season)  <svg> viewBox 0 0 400 600, preserveAspectRatio xMidYMid slice.
 //                            o = { id: 'living'|'kitchen'|'hall'|'garden', phase: 'morning'|'day'|'evening'|'night',
 //                            season: 'spring'|'summer'|'autumn'|'winter', sunX: 0..1, holiday: null | id | [ids],
@@ -52,7 +77,10 @@
 //   crop(name, stage 0..3)   a plant in a bed (viewBox 0 0 100 100, standing on y≈90); crops = names (plant, radish,
 //                            carrot, strawberry, tomato, catnip); cropSlot = where a produce drawing can sit on 'plant'.
 //   item(name), itemHeld(name)  <svg class="kx-item"> viewBox 0 0 100 100, standing on y≈90; items = the names.
-//   icon(name), fx(name), face(mood), vet(), vetSpots  UI icons (24×24, currentColor), effects, the small head, the vet.
+//   icon(name), fx(name), face(mood), vet(), vetSpots  UI icons (24×24, currentColor), effects (40 × 40: heart, zzz,
+//                            bang, note, splash = water from the can with drops, puff = a sneeze cloud with two droplets,
+//                            sparkle), the small head, the vet. item('mug') = the enamel mug (cream, blue rim and handle, a
+//                            chip; itemSize 26), one picture: the UI turns it while it falls.
 //   Tricks and more poses: trickSit, trickPaw (dej pac), trickSpin (turns round by CSS), trickBeg (panáček), inBox, onFence.
 //   itemSize[name] = { w, h }  the item's 100 × 100 box in room units; itemPoints: rod / wand tip, cat-tree platforms.
 //   mouseHole(), mousePeek(phase 0..1), fish(kind) (fishes: goldfish, carp, perch), marker(done)  minigame pieces.
@@ -191,7 +219,18 @@ function KockaArt() {
     if (KIT) { p = p.map((v, i) => r1(p[i & 1] + (v - p[i & 1]) * KIT.tl)); w = r1(w * KIT.tw); }   // a kitten: short and thin
     R.tailRoot = [p[0], p[1]];
     R.open('', 'kx-tail' + (cls ? ' ' + cls : ''), p[0], p[1]);
-    R.limb(p, w, { edge: true, bands: COAT.pattern === 'none' ? [] : [[30, 11, 0]] });   // no ginger band on a plain coat
+    const bands = COAT.pattern === 'none' ? [] : [[30, 11, 0]];   // no ginger band on a plain coat
+    if (R.o && R.o.warn) {
+      // a warning: the tip (the second half of the last curve) is its own group and lashes fast (kx-warn)
+      const n = p.length, a = p.slice(n - 8), m = (u, v) => [(u[0] + v[0]) / 2, (u[1] + v[1]) / 2];
+      const P0 = [a[0], a[1]], P1 = [a[2], a[3]], P2 = [a[4], a[5]], P3 = [a[6], a[7]];
+      const q1 = m(P0, P1), q2 = m(P1, P2), q3 = m(P2, P3), s1 = m(q1, q2), s2 = m(q2, q3), mid = m(s1, s2).map(r1);
+      R.limb(p.slice(0, n - 6).concat(q1.map(r1), s1.map(r1), mid), w, { edge: true, bands });
+      R.open('', 'kx-warn', mid[0], mid[1]);
+      R.limb(mid.concat(s2.map(r1), q3.map(r1), P3), w, { edge: true });
+      R.close();
+      R.warnTip = P3;
+    } else R.limb(p, w, { edge: true, bands });
     R.close();
     R.region('tail', ribbon(p, w + 6), unit(p[p.length - 2] - p[0], p[p.length - 1] - p[1]));
   }
@@ -226,6 +265,12 @@ function KockaArt() {
     const cx = sd * 15, cy = -1;
     if (kind === 'happy') return `<path d="M${cx - 8} ${cy + 2.5}Q${cx} ${cy - 7} ${cx + 8} ${cy + 2.5}" fill="none" stroke="${C.eye}" stroke-width="3.2" stroke-linecap="round"/>`;
     if (kind === 'closed') return `<path d="M${cx - 8} ${cy}Q${cx} ${cy + 5.5} ${cx + 8} ${cy}" fill="none" stroke="${C.lid}" stroke-width="2.4" stroke-linecap="round"/>`;
+    // squint: pinched tight, a ">" / "<" pointing at the nose, with a small crease above it
+    if (kind === 'squint') {
+      const o = cx + sd * 8.5, n = cx - sd * 6.5, ky = KIT ? cy + 2 * KIT.k : cy;
+      return `<path d="M${o} ${ky - 4.8}L${n} ${ky + 0.6}L${o} ${ky + 5}" fill="none" stroke="${C.lid}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>` +
+        `<path d="M${cx + sd * 2} ${ky - 9.5}Q${cx - sd * 3} ${ky - 8} ${cx - sd * 6} ${ky - 5}" fill="none" stroke="${C.lid}" stroke-width="1.4" stroke-linecap="round" opacity=".6"/>`;
+    }
     const big = kind === 'sad' || kind === 'wide' || !!KIT;
     const pr = ({ grumpy: [1.7, 6.6], sad: [5.2, 6.6], wide: [5.8, 7.2], tired: [2.6, 6] }[kind] || [3.3, 7.3]).slice();
     let tf = `translate(${cx} ${cy}) rotate(${-sd * 10})`;
@@ -233,14 +278,18 @@ function KockaArt() {
       tf = `translate(${r1(cx * (1 + 0.06 * KIT.k))} ${r1(cy + 2.5 * KIT.k)}) rotate(${-sd * 10}) scale(${KIT.ek})`;
       if (kind !== 'grumpy') pr[0] = r1(pr[0] + (6 - pr[0]) * 0.6 * KIT.k);
     }
-    let s = `<g transform="${tf}"><ellipse rx="10" ry="${big ? 9.8 : 9}" fill="${C.eye}"/><ellipse cx="${sd * -0.6}" cy="${kind === 'sad' ? 1.5 : 0}" rx="${pr[0]}" ry="${pr[1]}" fill="${C.pupil}"/><circle cx="2.8" cy="-3.6" r="2.2" fill="#fff"/>`;
-    if (big) s += '<circle cx="-3" cy="3" r="1.2" fill="#fff"/>';
+    // cross: both pupils, round and big, pushed into the inner corners towards the nose (and a little down)
+    const cross = kind === 'cross';
+    let s = cross
+      ? `<g transform="${tf}"><ellipse rx="10" ry="9.8" fill="${C.eye}"/><ellipse cx="${-sd * 5.4}" cy="2.6" rx="4.4" ry="5.2" fill="${C.pupil}"/><circle cx="${r1(-sd * 5.4 + 1.6)}" cy="0.4" r="1.5" fill="#fff"/>`
+      : `<g transform="${tf}"><ellipse rx="10" ry="${big ? 9.8 : 9}" fill="${C.eye}"/><ellipse cx="${sd * -0.6}" cy="${kind === 'sad' ? 1.5 : 0}" rx="${pr[0]}" ry="${pr[1]}" fill="${C.pupil}"/><circle cx="2.8" cy="-3.6" r="2.2" fill="#fff"/>`;
+    if (big && !cross) s += '<circle cx="-3" cy="3" r="1.2" fill="#fff"/>';
     const lid = { grumpy: [-5.5, 0.5], sad: [1.5, -8.5], tired: [-1.5, -1.5] }[kind]; // [outer y, inner y]; inner = towards the nose
     if (lid) s += `<path d="M${sd * 12} -12L${-sd * 11} -12L${-sd * 11} ${lid[1]}L${sd * 12} ${lid[0]}Z" fill="${C.fur}"/><path d="M${sd * 10.5} ${lid[0] + 0.3}L${-sd * 10} ${lid[1] + 0.3}" stroke="${C.edge}" stroke-width="1.2"/>`;
     return s + '</g>';
   }
   function faceDetails(h) {
-    const open = !['happy', 'closed'].includes(h.eyes);
+    const open = !['happy', 'closed', 'squint'].includes(h.eyes);
     let s = open ? `<g class="kx-eyes" style="transform-origin:0px -1px">${eye(-1, h.eyes)}${eye(1, h.eyes)}</g>` : eye(-1, h.eyes) + eye(1, h.eyes);
     if (h.eyes === 'sad') s += `<path d="M-19 8q2.6 4.4 0 6.4q-2.6-2 0-6.4z" fill="#a9d8f2"/>`;
     if (h.blush) s += `<g fill="${C.blush}" opacity=".38"><ellipse cx="-26" cy="12" rx="5.5" ry="3"/><ellipse cx="26" cy="12" rx="5.5" ry="3"/></g>`;
@@ -254,12 +303,25 @@ function KockaArt() {
     if (h.ill === 'tummy') s += `<path d="M35 -27q4.5 6.5 0 9.4q-4.5-2.9 0-9.4z" fill="#a9d8f2" stroke="${C.ol}" stroke-width=".8"/>`;
     return s;
   }
+  // the options that change the face after the pose chose it (Škádlení): o.eyes 'cross'|'squint', o.achoo (squint,
+  // mouth open), o.warn (ears turned); none of them when she faces away
+  function faceOpts(o, h) {
+    if (h.back) return o.warn && !o.ears ? H(h, { ears: 'turned' }) : h;
+    const q = {};
+    if (o.achoo) { q.eyes = 'squint'; q.mouth = 'open'; q.blush = false; }
+    if (o.eyes === 'cross' || o.eyes === 'squint') q.eyes = o.eyes;
+    if (o.warn && !o.ears) q.ears = 'turned';
+    return H(h, q);
+  }
   // head at (x, y), scale s, rotation rot; h from expr() plus { back, tongue, edge }; also adds the head regions
   function head(R, x, y, s, rot, h) {
+    h = faceOpts(R.o || {}, h);
     // a kitten: the whole drawing is squashed by (KIT.sx, KIT.sy) around the feet (cat()); the head undoes that, so it
     // stays round, and is KIT.hk times bigger
-    const K = KIT, hs = K ? r2(s * K.hk) : s, ek = K ? K.ear : 1;
-    R.open(K ? `translate(${x} ${y}) scale(${r2(1 / K.sx)} ${r2(1 / K.sy)}) rotate(${rot}) scale(${hs})` : `translate(${x} ${y}) rotate(${rot}) scale(${s})`, h.sneeze ? 'kx-sneeze' : '', 0, 30);
+    const K = KIT, hs = K ? r2(s * K.hk) : s, ek = K ? K.ear : 1, o = R.o || {};
+    // one class on the head group: a one-time sneeze (boop), a head shake, else the cold's sneeze loop
+    const hcls = o.achoo && !h.back ? 'kx-achoo' : o.shakeHead ? 'kx-shakeHead' : h.sneeze ? 'kx-sneeze' : '';
+    R.open(K ? `translate(${x} ${y}) scale(${r2(1 / K.sx)} ${r2(1 / K.sy)}) rotate(${rot}) scale(${hs})` : `translate(${x} ${y}) rotate(${rot}) scale(${s})`, hcls, 0, 30);
     const ea = EAR_ROT[h.ears] != null ? EAR_ROT[h.ears] : 12, dy = h.ears === 'droop' ? 5 : h.ears === 'back' ? 3 : 0;
     for (const sd of [-1, 1]) {
       R.open(`translate(${sd * 21} ${-22 + dy}) rotate(${sd * ea})${K ? ` scale(${ek})` : ''}`, sd > 0 ? 'kx-ear kx-earR' : 'kx-ear', 0, 0);
@@ -283,7 +345,11 @@ function KockaArt() {
       return [sd * 21 + ex * Math.cos(b) - ey * Math.sin(b), -22 + dy + ex * Math.sin(b) + ey * Math.cos(b)];
     });
     R.region('ears', P(earPts(-1)) + P(earPts(1)), v(0, -1));
+    R.headPt = m(0, 0).map(r1);
     if (!h.back) R.mouthPt = m(0, h.mouth === 'open' ? 21 : h.mouth === 'meow' ? 20 : 17).map(r1);
+    if (!h.back) R.nosePt = m(0, 11).map(r1);
+    // the nose (a tap on it is a boop): about 26 × 18 head units round the nose, before the chin and the head
+    if (!h.back) R.region('nose', P(Array.from({ length: 14 }, (_, i) => { const t = i / 14 * 2 * Math.PI; return [13 * Math.cos(t), 11 + 9 * Math.sin(t)]; })), v(0, -1));
     if (!h.back) R.region('chin', P([[-20, 22], [20, 22], [24, 27], [23, 40], [15, 50], [0, 53], [-15, 50], [-23, 40], [-24, 27]]), v(0, 1));
     R.region('head', P(HEAD_PTS), h.back ? v(0, 1) : v(0, -1));
   }
@@ -307,6 +373,7 @@ function KockaArt() {
     R.close();
     R.region('back', BODY, [0, 1]);
     R.mid = [100, 140];
+    R.skin = back ? [112, 118] : [126, 118];   // where the skin twitches (o.warn)
   }
   const LEG = { paw: [10, 6.5], toes: true };
   function frontLegs(R, both) {
@@ -354,6 +421,7 @@ function KockaArt() {
       head(R, 72, 130, 0.95, -4, e);
       R.region('back', BODY, [1, 0]);
       R.mid = [125, 150];
+      R.skin = [140, 128];
     },
     sleep(R, o, e) {
       R.wrap = { cls: 'kx-breathe', ox: 100, oy: 186 };
@@ -428,12 +496,26 @@ function KockaArt() {
       R.open(btfY(o, 186));
       R.part(BODY, { patches: spots([[110, 154, 20, 1], [138, 162, 12, 0], [86, 162, 10, 1], [150, 148, 7, 1]]) });
       R.close();
-      R.limb([84, 148, 80, 140, 79, 132, 82, 124], 12, { edge: true, paw: [8, 7] });
-      R.limb([102, 144, 101, 136, 102, 128, 107, 121], 12, { edge: true, paw: [8, 7] });
-      R.limb([138, 148, 140, 128, 148, 118, 157, 118], 13, { edge: true, paw: [9, 8], beans: true });
-      R.limb([158, 152, 166, 136, 176, 128, 185, 132], 13, { edge: true, paw: [9, 8], beans: true });
+      if (o.grab) {
+        // the trap: the front legs hug the hand just above the belly (round GRAB), the hind legs bunny-kick it (kx-kick);
+        // soft round paws, never claws
+        R.open('', 'kx-kick kx-kickB', 150, 150);   // the far hind leg
+        R.limb([150, 150, 152, 132, 146, 112, 136, 104], 13, { fill: C.fur2, paw: [8.5, 7.5], beans: true });
+        R.close();
+        R.limb([84, 150, 78, 122, 88, 98, 106, 96], 12, { edge: true, paw: [8.5, 7.5], beans: true });   // over the hand
+        R.open('', 'kx-kick', 162, 152);
+        R.limb([162, 152, 166, 134, 154, 120, 140, 124], 13, { edge: true, paw: [9, 8], beans: true });  // the near hind leg
+        R.close();
+        R.limb([102, 148, 98, 140, 98, 132, 102, 128], 12, { edge: true, paw: [8.5, 7.5], beans: true });   // under it
+        R.raw(outlined('M100 84l-4 -7M116 81v-8M132 84l4 -7', 1.6));
+      } else {
+        R.limb([84, 148, 80, 140, 79, 132, 82, 124], 12, { edge: true, paw: [8, 7] });
+        R.limb([102, 144, 101, 136, 102, 128, 107, 121], 12, { edge: true, paw: [8, 7] });
+        R.limb([138, 148, 140, 128, 148, 118, 157, 118], 13, { edge: true, paw: [9, 8], beans: true });
+        R.limb([158, 152, 166, 136, 176, 128, 185, 132], 13, { edge: true, paw: [9, 8], beans: true });
+      }
       tail(R, [176, 176, 186, 180, 192, 186, 199, 181]);
-      head(R, 54, 152, 0.82, -62, e);
+      head(R, 54, 152, 0.82, -62, o.grab ? H(e, { eyes: o.asleep || o.ill ? e.eyes : 'wide', ears: o.ears || 'turned', mouth: o.meow || o.openMouth ? e.mouth : 'open', blush: false }) : e);
       R.region('belly', ellPoly(118, 160, 50, 20), [1, 0]);
       R.region('back', BODY, [1, 0]);
       R.mid = [118, 160];
@@ -507,6 +589,9 @@ function KockaArt() {
     swipe(R, o, e) { swipe(R, o, e); },
     run(R, o, e) { run(R, o, e); },
     rub(R, o, e) { rub(R, o, e); },
+    // Škádlení
+    rearUp(R, o, e) { rearUp(R, o, e); },
+    shake(R, o, e) { shake(R, o, e); },
     // kitten play (any cat can, meant for kittens: opts.kit)
     tumble(R, o, e) { tumble(R, o, e); },
     tailCatch(R, o, e) { tailCatch(R, o, e); },
@@ -554,6 +639,7 @@ function KockaArt() {
     head(R, trot ? 62 : 66, trot ? 112 : 110, 0.88, trot ? -2 : -6, trot ? H(e, { eyes: o.asleep || o.ill ? e.eyes : 'wide', ears: o.ears || 'up' }) : e);
     R.region('back', trot ? ellPoly(120, 124, 52, 19) : ellPoly(120, 128, 48, 21), [1, 0]);
     R.mid = [120, 126];
+    R.skin = [128, trot ? 109 : 111];
   }
   // a crouch before a jump, looking up
   function crouch(R, o, e) {
@@ -641,6 +727,7 @@ function KockaArt() {
     head(R, 54, 158, 0.84, -4, H(e, { eyes: o.asleep || o.ill ? e.eyes : 'wide', ears: o.ears || 'up', mouth: 'flat', blush: false }));
     R.region('back', BODY, [1, 0]);
     R.mid = [126, 166];
+    R.skin = [126, 152];
   }
   // sitting, one front paw lifted and shaken (snow or rain on it)
   function shakePaw(R, o, e) {
@@ -652,7 +739,7 @@ function KockaArt() {
     R.close();
     head(R, 100, 70, 1, 6, H(e, { ears: o.ears || 'back', eyes: e.eyes === 'happy' ? 'open' : e.eyes }));
     const drop = (x, y) => o.wet ? `<path d="M${x} ${y}q2.4 4 0 5.8q-2.4-1.8 0-5.8z" fill="#a9d8f2" stroke="#2e2118" stroke-width=".8"/>` : `<circle cx="${x}" cy="${y}" r="2.6" fill="#fff" stroke="#2e2118" stroke-width=".8"/>`;
-    R.top.push(`<g class="kx-flick">${drop(146, 130) + drop(152, 144) + drop(142, 152) + drop(156, 126)}</g>`);
+    R.top.push(`<g class="kx-flash">${drop(146, 130) + drop(152, 144) + drop(142, 152) + drop(156, 126)}</g>`);
     R.mid = [100, 140];
   }
   // held under the front legs (carried) or twisting to get down (wriggle)
@@ -694,6 +781,7 @@ function KockaArt() {
     leg(R, 100, 136, 24, 27, 12, {});
     R.region('back', ellPoly(126, 130, 46, 20), [1, 0]);
     R.mid = [126, 130];
+    R.skin = [134, 114];
   }
   // nose-to-nose greeting: standing, the neck stretched forward and a little down, the tail up
   function sniff(R, o, e) {
@@ -721,6 +809,7 @@ function KockaArt() {
     if (hiss) R.top.push(outlined('M22 120l-9 -3M20 129h-10M22 138l-9 3', 2));
     R.region('back', BODY, [1, 0]);
     R.mid = [118, 96];
+    R.skin = [120, 70];
   }
   // sitting seen from the side (lickOther, swipe): an upright chest, the haunch behind, the tail round the front paws
   function sitSide(R, o) {
@@ -731,6 +820,7 @@ function KockaArt() {
     R.close();
     R.region('back', BODY, unit(1, 1.2));
     R.mid = [116, 140];
+    R.skin = [136, 117];
   }
   // licking the other cat's head: sitting, the head stretched forward and a little down, eyes half closed, tongue out
   function lickOther(R, o, e) {
@@ -771,6 +861,7 @@ function KockaArt() {
     R.region('belly', ellPoly(118, 174, 46, 10), [1, 0]);
     R.region('back', BODY, [1, 0]);
     R.mid = [120, 160];
+    R.skin = [124, 139];
     R.zz = [58, 102];
   }
   // a gallop (animated by CSS like walk and trot, step time --kx-step, .34 s by default): the front and the hind legs
@@ -817,6 +908,49 @@ function KockaArt() {
     R.close();
     R.region('back', ellPoly(126, 132, 46, 20, -9), unit(1, -0.16));
     R.mid = [126, 132];
+  }
+
+  /* ---------- Škádlení: the rear up, the shake-off ---------- */
+  // "zadeček jako výtah": patted just right at the tail root she lifts her rear on straight hind legs, the chest and the
+  // front paws low on the floor treading in turn (kx-tread), the tail straight up with a hooked tip, a happy face. The
+  // kořen ocasu (tailBase) lies on the haunch, within 15 units of where it is in loaf, so a tap run there goes on.
+  function rearUp(R, o, e) {
+    R.shadow = [112, 186, 64, 5];
+    const BODY = 'M58 172C56 152 72 142 94 138C116 132 134 102 156 94C176 88 190 102 186 122C182 140 168 148 154 150C132 154 106 176 88 184C70 189 59 184 58 172Z';
+    R.limb(line(154, 136, 149, 183), 12, { fill: C.fur2, paw: [8.5, 4.5] });          // the far hind leg, straight
+    R.open('', 'kx-tread kx-treadB', 90, 180);                                          // the far front paw
+    R.limb([90, 180, 80, 182, 70, 183, 60, 183], 11, { fill: C.fur2, paw: [9.5, 4.5] });
+    R.close();
+    R.open(btfY(o, 160));
+    R.part(BODY, { patches: spots([[150, 110, 13, 1], [120, 140, 11, 0], [86, 160, 9, 0], [174, 114, 6, 0]]) });
+    R.part(ell(163, 126, 18, 26), { edge: true, patches: spots([[168, 120, 8, 0]]) });
+    R.close();
+    tail(R, [178, 104, 184, 82, 176, 58, 180, 38, 182, 26, 176, 18, 168, 21]);
+    R.limb(line(166, 140, 168, 183), 13, { edge: true, paw: [9, 4.5], toes: true });   // the near hind leg, straight
+    R.open('', 'kx-tread', 100, 182);                                                   // the near front paw
+    R.limb([100, 182, 92, 184, 84, 185, 76, 185], 12, { edge: true, paw: [10, 4.8], toes: true });
+    R.close();
+    head(R, 60, 140, 0.9, -8, H(e, { eyes: o.asleep || o.ill ? e.eyes : e.eyes === 'grumpy' ? 'grumpy' : 'happy', blush: !o.ill, ears: o.ears || 'turned' }));
+    R.region('back', BODY, unit(1, -0.7));
+    R.tailBaseAt = [157, 156, 23, 22, -20, unit(1, -0.8)];
+    R.mid = [120, 146];
+    R.skin = [124, 120];
+  }
+  // shaking herself off (after the can or the rain): standing, the whole body wobbles from side to side three times
+  // (kx-shake on the body group, then still), fur on end, ears flat, eyes squeezed shut, motion lines at the sides;
+  // with o.wet drops fly off once (kx-drops)
+  function shake(R, o, e) {
+    R.wrap = { cls: 'kx-shake', ox: 120, oy: 176 };
+    R.fluff = 5;
+    stand(R, o, [170, 122, 186, 112, 188, 90, 196, 80]);
+    R.limb([98, 124, 88, 120, 80, 116, 74, 112], 26, {});
+    head(R, 64, 104, 0.88, -4, H(e, { eyes: o.asleep ? 'closed' : 'squint', ears: o.ears || 'back', blush: false }));
+    R.top.push(outlined('M22 96q-8 13 0 26M12 90q-11 19 0 38M186 132q8 12 0 24M196 126q10 18 0 36', 2.4));
+    if (o.wet) {
+      const drop = (x, y, dx, dy) => `<path d="M${x} ${y}q4 6.6 0 9.6q-4-3.1 0-9.6z" fill="#a9d8f2" stroke="#2e2118" stroke-width=".8" style="--dx:${dx}px;--dy:${dy}px"/>`;
+      R.top.push(`<g class="kx-drops">${[[34, 70, -14, -12], [16, 140, -16, 4], [42, 160, -10, 8], [100, 80, -2, -16], [136, 88, 4, -16], [170, 60, 10, -12], [198, 108, 14, -4], [192, 168, 14, 8], [120, 104, 0, -10]].map(d => drop(...d)).join('')}</g>`);
+    }
+    R.skin = [132, 112];
   }
 
   /* ---------- kitten play ---------- */
@@ -918,6 +1052,11 @@ function KockaArt() {
         `<circle cx="${mx + dx}" cy="${my + dy}" r="2.3" fill="#7a2e12" stroke="${C.ol}" stroke-width="1" style="animation-delay:${d}s"/>`).join('')}</g>` +
         `<g class="kx-scr">${outlined(`M${mx + 30} ${my - 30}l5 -5l2 6l5 -5`, 1.8)}</g>`);
     }
+    if (o.warn && R.tailRoot) {   // a warning: the skin on the back twitches (a ginger ripple and two ticks above it)
+      const M = R.mid || [100, 140], [sx, sy] = R.skin || [r1(M[0] + (R.tailRoot[0] - M[0]) * 0.45), r1(M[1] + (R.tailRoot[1] - M[1]) * 0.45 - 16)];
+      R.top.push(`<g class="kx-twitch" style="transform-origin:${sx}px ${sy}px"><path d="M${sx - 16} ${sy}q4 -5 8 0t8 0t8 0t8 0" fill="none" stroke="${C.patch2}" stroke-width="3" stroke-linecap="round"/>` +
+        outlined(`M${sx - 9} ${sy - 8}l-3 -7.5M${sx} ${sy - 9.5}v-8M${sx + 9} ${sy - 8}l3 -7.5`, 2) + '</g>');
+    }
     let olF = '', fiF = '';
     if (o.wet) {   // wet: the outline turns spiky, the coat darker, drops fall off her
       const f = nid(), g = nid(), [mx, my] = R.mid || [100, 140];
@@ -953,11 +1092,12 @@ function KockaArt() {
   }
   // poses that do not stand on (100, 186): the point of her box to put on the spot
   const ANCHORS = { onBranch: [100, 150], climb: [100, 112], carried: [100, 60], wriggle: [100, 60] };
-  const ORDER = ['chin', 'tail', 'paws', 'head', 'ears', 'tailBase', 'belly', 'back'];
+  const ORDER = ['nose', 'chin', 'tail', 'paws', 'head', 'ears', 'tailBase', 'belly', 'back'];
   function regions(pose, x) {
     const { R } = build(pose, opts(x)), by = {};
     // tailBase (kořen ocasu): an oval on the body just in front of the tail root, fur from the body's middle to the root
-    if (R.tailRoot && R.mid && R.reg.some(g => g.id === 'back')) {
+    if (R.tailBaseAt) { const [cx, cy, rx, ry, rot, fur] = R.tailBaseAt; R.region('tailBase', ellPoly(cx, cy, rx, ry, rot), fur); }
+    else if (R.tailRoot && R.mid && R.reg.some(g => g.id === 'back')) {
       const [tx, ty] = R.tailRoot, [dx, dy] = unit(tx - R.mid[0], ty - R.mid[1]);
       R.region('tailBase', ellPoly(tx - dx * 22, ty - dy * 22, 25, 15, Math.atan2(dy, dx) * 180 / Math.PI), [dx, dy]);
     }
@@ -981,6 +1121,16 @@ function KockaArt() {
     if (!R.mouthPt) return null;
     const [x0, y0] = R.kit ? kitMap(R)(R.mouthPt[0], R.mouthPt[1]) : R.zoom ? zoomPt(R.zoom, R.mouthPt[0], R.mouthPt[1]) : R.mouthPt;
     return { x: x0, y: y0 };
+  }
+  // the middle of her head and the tip of her nose (null when she faces away) in the cat's viewBox; null for an unknown
+  // pose. For the sneeze puff (fx('puff')) on the nose and the splash (fx('splash')) on her head.
+  function headPoint(pose, x) {
+    if (!POSES[pose]) return null;
+    const { R } = build(pose, opts(x));
+    if (!R.headPt) return null;
+    const f = R.kit ? kitMap(R) : R.zoom ? (u, v) => zoomPt(R.zoom, u, v) : (u, v) => [u, v];
+    const [hx, hy] = f(R.headPt[0], R.headPt[1]), n = R.nosePt ? f(R.nosePt[0], R.nosePt[1]) : null;
+    return { x: hx, y: hy, nose: n ? { x: n[0], y: n[1] } : null, back: !n };
   }
   function face(mood) {
     const o = opts(mood), R = Rig(o);
@@ -1084,6 +1234,12 @@ function KockaArt() {
       `<path d="M70 10Q92 24 86 58" fill="none" stroke="#555" stroke-width="1.4"/>${FEATHERS(86, 58, 0.7)}`,
     featherWand: () => `<path d="M10 94L60 14" stroke="${IO}" stroke-width="6" stroke-linecap="round"/><path d="M10 94L60 14" stroke="#c8574a" stroke-width="3" stroke-linecap="round"/><path d="M60 14Q96 10 88 60" fill="none" stroke="#555" stroke-width="1.4"/>${FEATHERS(88, 60, 0.8)}`,
     featherBunch: () => FEATHERS(50, 20, 1.3),
+    // the enamel mug (smaltovaný plecháček): cream white, blue rim, handle and base line, a small chip by the rim
+    mug: () => groundShadow(30) + `<path d="M64 38Q88 36 88 56Q88 76 64 76" fill="none"${st(11)}/><path d="M64 38Q88 36 88 56Q88 76 64 76" fill="none" stroke="#2f5fa8" stroke-width="6"/>` +
+      `<path d="M14 26H68L66 86Q41 93 16 86Z" fill="#f4efe2"${st()}/><path d="M16.5 80Q41 87 65.5 80" stroke="#2f5fa8" stroke-width="4" fill="none"/>` +
+      `<path d="M24 36V74" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".85"/><path d="M58 34V78" stroke="#ddd3bd" stroke-width="5" stroke-linecap="round" opacity=".7"/>` +
+      `<ellipse cx="41" cy="26" rx="27" ry="7" fill="#2f5fa8"${st()}/><ellipse cx="41" cy="27" rx="21.5" ry="4.2" fill="#e9e1cf"/>` +
+      `<path d="M50 33.5l3 1.5 2.5 -1 1 3.5 -2.5 3 -3.5 -.5 -1.5 -3z" fill="#2b2b33" stroke="#7a8a9a" stroke-width="1"/>`,
     pill: () => `<g transform="rotate(-30 50 55)"><path d="M50 45H30A10 10 0 0 0 30 65H50Z" fill="#fff"/><path d="M50 45H70A10 10 0 0 1 70 65H50Z" fill="#e0727a"/><rect x="20" y="45" width="60" height="20" rx="10" fill="none"${st()}/><path d="M50 45V65" stroke="${IO}" stroke-width="2"/><path d="M28 50H44" stroke="#fff" stroke-opacity=".8" stroke-width="2.4" stroke-linecap="round"/></g>`,
   };
   function item(name) {
@@ -1135,6 +1291,13 @@ function KockaArt() {
     zzz: () => outlined('M6 26h8l-8 9h8M17 14h10l-10 11h10M27 3h8l-8 8h8', 2.4),
     bang: () => `<path d="${poly(Array.from({ length: 16 }, (_, i) => { const a = i / 16 * 2 * Math.PI - Math.PI / 2, r = i % 2 ? 11 : 18; return [20 + Math.cos(a) * r, 20 + Math.sin(a) * r]; }))}" fill="#ffd04a"${st(2.5)}/><path d="M20 11.5v10" stroke="${IO}" stroke-width="4.5" stroke-linecap="round"/><circle cx="20" cy="28" r="2.6" fill="${IO}"/>`,
     note: () => outlined('M15 29V10l15-4v17', 2.6) + `<g fill="${C.ol}"${st(2.2)}><ellipse cx="11.5" cy="29.5" rx="4.6" ry="3.6" transform="rotate(-20 11.5 29.5)"/><ellipse cx="26.5" cy="23.5" rx="4.6" ry="3.6" transform="rotate(-20 26.5 23.5)"/></g>`,
+    // the watering can on her: a splash with drops flying up
+    splash: () => `<path d="M3 34Q8 25 13 29Q12 17 17 11Q22 17 21 27Q25 19 29 15Q33 22 28 30Q33 27 37 34Q30 39 20 38Q10 39 3 34Z" fill="#8fcdf0"${st(2.2)}/>` +
+      `<path d="M10 33Q20 29 31 33" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".8"/><path d="M17 15Q18 21 18 25" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".8"/>` +
+      [[6, 14, 1], [33, 6, 1.1], [24, 2, 0.8], [38, 20, 0.8], [2, 24, 0.7]].map(([x, y, k]) => `<path d="M${x} ${y}q${r1(2.6 * k)} ${r1(4.4 * k)} 0 ${r1(6.4 * k)}q${r1(-2.6 * k)} ${r1(-2 * k)} 0 ${r1(-6.4 * k)}z" fill="#8fcdf0"${st(1.4)}/>`).join(''),
+    // a sneeze: a small white cloud with two droplets
+    puff: () => `<path d="M9 30A6 6 0 0 1 8 18.5A7.5 7.5 0 0 1 20 11A7 7 0 0 1 32.5 16A6.5 6.5 0 0 1 31 30Z" fill="#fff"${st(2.2)}/><path d="M13 22q3-3 6-1" stroke="#c9d7e0" stroke-width="1.8" fill="none" stroke-linecap="round"/>` +
+      [[8, 33, 1], [17, 35, 0.8]].map(([x, y, k]) => `<path d="M${x} ${y}q${r1(2.2 * k)} ${r1(3.6 * k)} 0 ${r1(5.2 * k)}q${r1(-2.2 * k)} ${r1(-1.6 * k)} 0 ${r1(-5.2 * k)}z" fill="#a9d8f2"${st(1.2)}/>`).join(''),
     sparkle: () => `<path d="M17 3Q19 15 31 17Q19 19 17 31Q15 19 3 17Q15 15 17 3Z" fill="#ffe27a"${st(2)}/><path d="M31 26Q32 31 37 32Q32 33 31 38Q30 33 25 32Q30 31 31 26Z" fill="#ffe27a"${st(1.6)}/>`,
   };
   function fx(name) {
@@ -1496,7 +1659,7 @@ function KockaArt() {
   for (const [k, v] of Object.entries({ bowl: 58, bowlEmpty: 58, bowlFull: 58, waterBowl: 52, waterBowlEmpty: 52, litter: 104, litterDirty: 104, bed: 150, mouse: 34, catnipMouse: 34,
     feather: 70, yarn: 40, laserDot: 30, treat: 30, foodBag: 60, jug: 56, brush: 50, scoop: 50, pouch: 40, chicken: 56, tuna: 44, vacuum: 140, seedPacket: 40, wateringCan: 70, trowel: 44,
     pill: 24, pouchPack: 70, chickenPack: 70, tunaPack: 64, treatBag: 50, ballBell: 34, box: 120, tunnel: 190, scratcher: 130, catTree: 240, sillCushion: 140, bedDeluxe: 160,
-    rugRound: 280, lamp: 170, birdFeeder: 150, catFlap: 60, fishingRod: 120, featherWand: 120, featherBunch: 40 })) itemSize[k] = { w: v, h: v };
+    rugRound: 280, lamp: 170, birdFeeder: 150, catFlap: 60, fishingRod: 120, featherWand: 120, featherBunch: 40, mug: 26 })) itemSize[k] = { w: v, h: v };
   // in the item's own 100 × 100 box: the rod / wand tip (where the UI hangs its own string), the cat tree's platforms
   const itemPoints = { fishingRod: { tip: { x: 70, y: 10 } }, featherWand: { tip: { x: 60, y: 14 } }, catTree: { platforms: [{ x: 32, y: 58 }, { x: 71, y: 36 }, { x: 47, y: 8 }] } };
 
@@ -1639,7 +1802,7 @@ function KockaArt() {
 .kx-rub{animation:kx-rub 2.4s ease-in-out infinite}
 .kx-nuzzle{animation:kx-nuzzle 2.4s ease-in-out infinite}
 .kx-shakep{animation:kx-shakep .28s ease-in-out infinite}
-.kx-flick{animation:kx-flick .5s steps(2) infinite}
+.kx-flash{animation:kx-blinkon .5s steps(2) infinite}
 .kx-drip path{animation:kx-drip 1.6s ease-in infinite}
 .kx-rain{animation:kx-rain .5s linear infinite}
 .kx-snow{animation:kx-snow 4s linear infinite}
@@ -1650,11 +1813,22 @@ function KockaArt() {
 .kx-card{display:block;width:100%;height:auto}
 .kx-z{opacity:0;animation:kx-z 3s linear infinite}
 .kx-fleas circle{animation:kx-hop 1.3s ease-in-out infinite}
-.kx-scr{animation:kx-flick 1.1s steps(2) infinite}
+.kx-scr{animation:kx-blinkon 1.1s steps(2) infinite}
 .kx-laser{animation:kx-glow 1s ease-in-out infinite}
 .kx-icon{display:inline-block;width:24px;height:24px;vertical-align:middle;flex:none}
 .kx-fx{display:block;width:100%;height:100%;overflow:visible}
 .kx-fx-float{animation:kx-float 1.6s ease-out forwards}
+.koxa .kx-warn{animation:kx-warn .35s ease-in-out infinite}
+.koxa .kx-twitch{animation:kx-ripple .9s ease-in-out infinite}
+.koxa .kx-tread{animation:kx-tread .6s ease-in-out infinite}
+.koxa .kx-treadB{animation-delay:-.3s}
+.koxa .kx-kick{animation:kx-kick .4s ease-in-out infinite}
+.koxa .kx-kickB{animation-delay:-.2s}
+.kx-shake{animation:kx-shake .4s ease-in-out 3}
+.kx-drops path{transform-box:fill-box;transform-origin:50% 50%;animation:kx-drops .9s ease-out 1 both}
+.koxa .kx-achoo{animation:kx-achoo .5s ease-out 1}
+.koxa .kx-shakeHead{animation:kx-shakeHead .6s ease-in-out 1}
+.kx-flick .koxa .kx-earR,.koxa.kx-flick .kx-earR{animation:kx-earflick .4s ease-out 1}
 @keyframes kx-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
 @keyframes kx-twitch{0%,86%,100%{transform:rotate(0)}89%{transform:rotate(16deg)}92%{transform:rotate(-4deg)}95%{transform:rotate(8deg)}}
 @keyframes kx-sway{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
@@ -1687,12 +1861,21 @@ function KockaArt() {
 @keyframes kx-swing{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
 @keyframes kx-z{0%{opacity:0;transform:translate(0,0)}15%{opacity:1}100%{opacity:0;transform:translate(10px,-26px)}}
 @keyframes kx-hop{0%,100%{transform:translate(0,0)}30%{transform:translate(3px,-9px)}60%{transform:translate(-2px,-3px)}}
-@keyframes kx-flick{0%{opacity:1}100%{opacity:0}}
+@keyframes kx-blinkon{0%{opacity:1}100%{opacity:0}}
+@keyframes kx-warn{0%,100%{transform:rotate(-28deg)}50%{transform:rotate(28deg)}}
+@keyframes kx-ripple{0%,100%{transform:none}20%{transform:translate(2px,-1px) scaleY(1.5)}40%{transform:translate(-2px,0) scaleY(.6)}60%{transform:translate(1px,-1px) scaleY(1.2)}}
+@keyframes kx-tread{0%,100%{transform:none}50%{transform:rotate(11deg)}}
+@keyframes kx-kick{0%,100%{transform:rotate(0)}50%{transform:rotate(-20deg)}}
+@keyframes kx-shake{0%,100%{transform:none}20%{transform:rotate(-5deg) skewX(7deg)}45%{transform:rotate(5deg) skewX(-7deg)}70%{transform:rotate(-3deg) skewX(4deg)}}
+@keyframes kx-drops{0%{opacity:0;transform:translate(calc(var(--dx,0px) * -2),calc(var(--dy,0px) * -2)) scale(.5)}20%{opacity:1}70%{opacity:1;transform:none}100%{opacity:0;transform:translate(var(--dx,0px),var(--dy,0px))}}
+@keyframes kx-achoo{0%{transform:none}25%{transform:translate(1px,-3px) rotate(6deg) scale(1.04)}45%{transform:translate(-4px,7px) rotate(-8deg) scale(.96,1.04)}70%{transform:translate(-1px,2px) rotate(-2deg)}100%{transform:none}}
+@keyframes kx-shakeHead{0%,100%{transform:none}15%{transform:rotate(-14deg)}35%{transform:rotate(13deg)}55%{transform:rotate(-11deg)}75%{transform:rotate(8deg)}90%{transform:rotate(-3deg)}}
+@keyframes kx-earflick{0%,100%{transform:none}25%{transform:rotate(24deg)}50%{transform:rotate(-6deg)}75%{transform:rotate(10deg)}}
 @keyframes kx-glow{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
 @media (prefers-reduced-motion:reduce){.koxa,.koxa *,.kx-item *,.kx-room *,.kx-fx-float{animation:none!important}.koxa .kx-z{opacity:.9}}
 `;
 
   return { css, cat, poses: Object.keys(POSES), regions, kitScale, kitAnchor, room, bedSpots, spots: spotsAt, item, items: Object.keys(ITEMS), face,
-    mouth, itemHeld, sunPatch, rooms, lap, lapSpot, crop, crops: CROPS, cropSlot, anchors: ANCHORS, itemSize, itemPoints, mouseHole, mousePeek, fish, fishes: Object.keys(FISH), marker,
+    mouth, headPoint, itemHeld, sunPatch, rooms, lap, lapSpot, crop, crops: CROPS, cropSlot, anchors: ANCHORS, itemSize, itemPoints, mouseHole, mousePeek, fish, fishes: Object.keys(FISH), marker,
     shop, shopSpots, postcardFrame, postcardHole, photoFrame, photoHole, neighbour, neighbours, icon, icons: Object.keys(ICONS), fx, fxs: Object.keys(FX), vet, vetSpots };
 }

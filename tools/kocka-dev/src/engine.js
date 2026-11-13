@@ -85,6 +85,23 @@
 //   treatVisitor { id }, playVisitor { id, caught: 'koxa' | 'visitor' }, invite { id }; photo also takes
 //   { vpose, vx, vflip, nokoxa } (where the visitor stood; nokoxa: Koxa is not in the picture)
 // Phase C action: nameKitten { id, name }
+//   Škádlení (teasing out of love, SPEC §13; st.tease):
+//   pat { region, stage: 'like'|'bliss'|'tolerate'|'warn', close?, rear?, sleeping?, eating? }   a pat that did nothing
+//                                   bigger (region after the alias; close and rear with bliss; sleeping: true asleep or
+//                                   dozing on the lap, nothing changes; eating: true while she eats)
+//   flop { lap }                    after the bliss pat at tap 8: she flops on her side
+//   blowUp { why: 'fast'|'grumpy'|'tail'|'eat', lap }   the warned run went on 1.8 s ('eat' is the mild one: she leaves the bowl)
+//   loveBite { lap }                over-patting went on 1.8 s after its warning (no sulk)
+//   trap                            a pat on the belly: she grabs the hand (no claws)
+//   boop { swat? }                  a nose tap (swat: true on the 3rd within 60 s)
+//   swat { why: 'pat'|'boop'|'stroke'|'scratch' }   touched while cross (no claws)
+//   splash                          the watering can on her
+//   sulk { until } / cross { until } a sulk starts or is prolonged / a cross starts or is renewed
+//   sulkEnd / crossEnd              the time ran out
+//   reconcile { by: 'stroke'|'scratch'|'treat', bond }   made up after a sulk (bond: whether bond +1 was given today)
+//   payback { kind: 'shelf'|'ambush' }   her revenge, at most once a day (watching only, when she is free)
+//   Order inside one action: lapLeave → the cause (blowUp/loveBite/boop/splash) → sulk/cross → found
+// Teasing actions: pat { region, n, ms, cv, eating }, boop, splash
 function KockaEngine() {
   const MIN = 60000, HOUR = 60 * MIN, DAY = 24 * HOUR, STEP = 10 * MIN;
   const AWAY = 72 * HOUR;          // longer absence: paní Nováková took her (§4); the rest is not simulated
@@ -202,7 +219,7 @@ function KockaEngine() {
     belly: { name: 'bříško', loc: 'na bříšku' },
     tail: { name: 'ocas', loc: 'na ocase' }, paws: { name: 'tlapky', loc: 'na tlapkách' },
   });
-  const REGION_ALIAS = deep({ paw: 'paws', side: 'back' });   // older or other spellings of the same region
+  const REGION_ALIAS = deep({ paw: 'paws', side: 'back', nose: 'head' });   // older or other spellings of the same region (the nose is the head)
   const regionOf = (r, def) => typeof r !== 'string' ? def : Object.prototype.hasOwnProperty.call(REGIONS, r) ? r : Object.prototype.hasOwnProperty.call(REGION_ALIAS, r) ? REGION_ALIAS[r] : def;
   const SPOTS = deep(Object.keys(REGIONS).filter(k => REGIONS[k].spot));
   const FEARS = deep({ vacuum: { name: 'vysavač', gen: 'vysavače' }, storm: { name: 'bouřka', gen: 'bouřky' }, fireworks: { name: 'ohňostroj', gen: 'ohňostroje' } });
@@ -223,14 +240,39 @@ function KockaEngine() {
   });
   const ACTIONS = deep(['feed', 'water', 'stroke', 'scratch', 'pickUp', 'putDown', 'play', 'brush', 'cleanLitter', 'letOut', 'letIn', 'treat', 'vetCure', 'pill', 'call', 'vacuum', 'lapOn', 'lapOff',
     'goGarden', 'goHouse', 'fetchDown', 'sow', 'waterBeds', 'harvest', 'catnip', 'buy', 'place', 'sell', 'train', 'showTrick',
-    'feedVisitor', 'strokeVisitor', 'photo', 'deletePhoto', 'treatVisitor', 'playVisitor', 'invite', 'nameKitten']);
+    'feedVisitor', 'strokeVisitor', 'photo', 'deletePhoto', 'treatVisitor', 'playVisitor', 'invite', 'nameKitten', 'pat', 'boop', 'splash']);
+  // Škádlení (SPEC §13.3): patting, the nose tap, the watering can, the sulk / cross, making up and her payback
+  const TEASE = deep({
+    fast: 260,           // ms: a mean interval under this is drumming ("fast")
+    regular: 0.3,        // cv under this is regular
+    warnN: 3,            // irritation paths warn from this tap of the run
+    overN: 14,           // every other path warns (over-patting) from this tap
+    warnMs: 1800,        // blowUp / loveBite only when the run goes on at least this long after the warning
+    runGap: 1500,        // ms: a pat later than this after tease.at belongs to a new run (the engine's own check)
+    rearN: 3, flopN: 8, flopClose: 0.4,   // bliss: the rear up from tap 3; the flop exactly at tap 8 when close >= 0.4
+    closeSpan: 300,      // close = clamp(1 - |ms - fav| / 300, 0, 1)
+    fav: [400, 650],     // her favourite tempo (ms): patTempo(st)
+    like: 1, bliss: 1, blissClose: 0.5,   // love per pat: like +1, bliss +1 + 0.5 × close
+    gainMax: 8, gainWin: 10,              // love from pats: at most +8 per 10-minute window
+    flopLove: 4, bond: 1,                 // the flop: love +4 (once a window), bond +1 (once a day, shared with reconcile)
+    heatMax: 10, cool: 10,                // heat 0..10, −1 per 10 minutes
+    heat: { blowUp: 2, eat: 1, loveBite: 1, trap: 1, boop: 1, splash: 2 },
+    crossAt: 5,                           // heat >= 5 after adding = cross, else sulk
+    sulkMin: 3, crossMin: 20,
+    love: { blowUp: -2, eat: -1, loveBite: -1, splash: -3, reconcile: 3 },
+    boopN: 3, boopWin: 60000,             // the 3rd nose tap within 60 s = a swat
+    wetMin: 30,                           // splash: wet until max(st.wet, t + 30 min)
+    pay: { p: 0.5, min: 5, max: 25, lapse: 120, ext: 5 },   // payback: chance for a sulk, delay after the end, lapse, see below
+    mood: { sulk: -10, cross: -20 },
+  });
+  const TEASE_DIARY = ['bliss', 'boop', 'reconcile', 'splash', 'payback'];
   const CMAX = 1e6;  // counters saturate here (inc)
   const COUNTS = ['favFood', 'belly', 'toy', 'quirk'].concat(SPOTS.map(s => 'spot_' + s));
   // pal*: Koxa and a neighbour cat (the cat is st.diaryCat[id])
   const PAL_DIARY = ['palFirst', 'palGroom', 'palSnuggle'];
   // the entries that name a neighbour cat (st.diaryCat), in this order; kittens: the mother, kitGrown: the kitten
   const CAT_DIARY = PAL_DIARY.concat(['sleepover', 'kittens', 'kitGrown']);
-  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], CAT_DIARY);
+  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY);
 
   /* --- small helpers --- */
   const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
@@ -244,6 +286,15 @@ function KockaEngine() {
   const rnd = st => { st.n = (st.n + 1) >>> 0; return hash32(st.seed, st.n, 1) / 4294967296; };
   const rndDay = (st, dayNo, salt) => hash32(st.seed, dayNo, salt) / 4294967296;
   const rndSeed = (seed, a, salt) => hash32(seed, a, salt) / 4294967296;
+  // teasing (SPEC §13.3): her favourite pat tempo 400–650 ms from the seed (not stored; k = 8 is free in drawTraits)
+  const patTempo = st => TEASE.fav[0] + Math.floor(hash32(st.seed, 0x7A17, 8) / 4294967296 * (TEASE.fav[1] - TEASE.fav[0] + 1));
+  const freshTease = () => ({ kind: null, until: 0, heat: 0, at: 0, warnAt: 0, boops: [], gain: 0, gainAt: 0, pay: null, payDay: 0, bondDay: 0, splash: 0 });
+  // a sulk or a cross runs at t (default: st.t)
+  const teasing = (st, t) => { const T = st.tease, x = t === undefined ? st.t : t; return !!(T && T.kind && x < T.until); };
+  const teaseKind = (st, t) => (teasing(st, t) ? st.tease.kind : null);
+  const longOff = (st, t) => !!(st.off && t < st.off.until);
+  // heat cools analytically (−1 per 10 min from the value at tease.at), so the step length never matters
+  const heatNow = (T, t) => Math.max(0, T.heat - (t - T.at) / (TEASE.cool * MIN));
   const ymd = ms => { const d = new Date(ms); return [d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]; };
   const dkey = ms => { const [y, m, d] = ymd(ms); return y * 10000 + (m + 1) * 100 + d; };   // local day, 20261112
   // the next local day's key (t + 24 h is not enough on the day the clocks go back)
@@ -335,7 +386,7 @@ function KockaEngine() {
       yard: null, wet: 0, beds: Array(BEDS).fill(null), pantry: {}, postcards: [], presents: {},
       stock: {}, owned: {}, furniture: {}, records: {}, tricks: {}, earnDay: { key: dkey(now), n: 0 }, train: null,
       visitors: {}, visit: null, album: [], diaryCat: {}, guest: null, invDay: 0, jealous: null, jealousAt: 0,
-      kits: [], litter: null,
+      kits: [], litter: null, tease: freshTease(),
     };
     for (const k of COUNTS) st.cnt[k] = 0;
     return st;
@@ -437,6 +488,7 @@ function KockaEngine() {
     st.acc = { fleas: num(A.fleas, 0, 0, 10 * DAY), tummy: num(A.tummy, 0, 0, 10 * DAY), cold: num(A.cold, 0, 0, 10 * DAY) };
     st.off = st.off && typeof st.off === 'object' && soon(st.off.until, DAY) ? { until: st.off.until, turned: st.off.turned === true } : null;
     st.scared = soon(st.scared, 2 * HOUR);
+    st.tease = repairTease(st.tease, st, t);
     st.litterAt = okT(st.litterAt) && st.litterAt >= t - 2 * DAY && st.litterAt <= t + 9 * HOUR ? st.litterAt : t + 8 * HOUR;
     st.walkMax = num(st.walkMax, 0, 0, 100 * DAY);
     const year = new Date(t).getFullYear();
@@ -469,7 +521,35 @@ function KockaEngine() {
     for (const k of Object.keys(st)) if (!STATE_KEYS.includes(k)) delete st[k];
     return st;
   }
-  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat', 'guest', 'invDay', 'jealous', 'jealousAt', 'kits', 'litter'];
+  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat', 'guest', 'invDay', 'jealous', 'jealousAt', 'kits', 'litter', 'tease'];
+  // the canonical st.tease (SPEC §13.3), after st.wet and st.off were repaired; st.off is never changed here
+  function repairTease(Z, st, t) {
+    const okT = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
+    const num = (v, lo, hi) => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, lo, hi) : 0);
+    const past = v => (okT(v) && v <= t ? v : 0);
+    const day = v => (isKey(v) && v <= dkey(t) ? v : 0);
+    const T = Z && typeof Z === 'object' && !Array.isArray(Z) ? Z : {}, off = longOff(st, t);
+    const kind = (T.kind === 'sulk' || T.kind === 'cross') && okT(T.until) && T.until > t &&
+      T.until <= t + (T.kind === 'sulk' ? TEASE.sulkMin : TEASE.crossMin) * MIN && !off ? T.kind : null;
+    const at = past(T.at), heat = at ? num(T.heat, 0, TEASE.heatMax) : 0;
+    const warnAt = okT(T.warnAt) && T.warnAt <= at ? T.warnAt : 0;
+    const boops = (Array.isArray(T.boops) ? T.boops : []).filter(b => okT(b) && b > t - TEASE.boopWin && b <= t).sort((a, b) => a - b).slice(-(TEASE.boopN - 1));
+    let gainAt = past(T.gainAt), gain = num(T.gain, 0, TEASE.gainMax);
+    if (!gainAt || t - gainAt >= TEASE.gainWin * MIN) { gainAt = 0; gain = 0; }
+    const P = T.pay && typeof T.pay === 'object' ? T.pay : {};
+    const pay = (P.kind === 'shelf' || P.kind === 'ambush') && okT(P.at) && P.at > t - TEASE.pay.lapse * MIN && P.at <= t + 45 * MIN && !off ? { kind: P.kind, at: P.at } : null;
+    return {
+      kind, until: kind ? T.until : 0, heat, at, warnAt, boops, gain, gainAt, pay, payDay: day(T.payDay), bondDay: day(T.bondDay),
+      splash: okT(T.splash) && T.splash > t && T.splash === st.wet ? T.splash : 0,
+    };
+  }
+  // after an advance or an act: the nose taps of the last 60 s, the love window, "wet from the can" (canonical as repair)
+  function teaseTidy(st) {
+    const T = st.tease, t = st.t;
+    if (T.boops.length && T.boops[0] <= t - TEASE.boopWin) T.boops = T.boops.filter(b => b > t - TEASE.boopWin);
+    if (T.gainAt && t - T.gainAt >= TEASE.gainWin * MIN) { T.gain = 0; T.gainAt = 0; }
+    if (T.splash && !(T.splash > t && T.splash === st.wet)) T.splash = 0;
+  }
   // valid(st): repairs st in place and says whether it is usable (false only for null, a non-object or no time at all)
   function valid(st) { return repair(st) !== null; }
 
@@ -487,7 +567,9 @@ function KockaEngine() {
     if (st.ill) m -= 30;
     if (st.off && st.t < st.off.until) m -= 25;
     if (st.scared > st.t) m -= 20;
-    if (st.wet > st.t) m -= 15;                       // wet from the rain: grumpy for a while
+    if (st.wet > st.t) m -= 15;                       // wet from the rain (or the can): grumpy for a while
+    const tk = teaseKind(st);                         // teasing: a sulk −10, a cross −20
+    if (tk) m += TEASE.mood[tk];
     if (st.visit && !st.out) {   // a neighbour cat in the garden: what they do together, else how she takes it
       const A = st.visit.act;
       m += A && A.with === 'koxa' && Object.prototype.hasOwnProperty.call(VISIT_ACTS, A.kind) ? VISIT_ACTS[A.kind].mood : VISIT_MOOD[reaction(st, st.visit.id)];
@@ -521,6 +603,8 @@ function KockaEngine() {
       garden: !!st.yard, wet: st.wet > t, tree: !!(st.yard && st.yard.tree), walk: !!(st.out && st.out.walk),
       pill: st.pill ? (dkey(t) >= st.pill ? 'today' : 'tomorrow') : null,
       guest: st.guest ? st.guest.id : null, jealous: !!st.jealous,
+      sulk: teaseKind(st) === 'sulk', cross: teaseKind(st) === 'cross', splashed: !!(st.tease && st.wet > t && st.wet === st.tease.splash),
+      teaseUntil: teasing(st) ? st.tease.until : 0,
     };
   }
 
@@ -547,6 +631,11 @@ function KockaEngine() {
     if (id === 'weight') return `${name} váží ${st.weight.toFixed(1).replace('.', ',')} kg.`;
     if (id === 'walk') return `Nejdelší toulka trvala ${fmtDur(st.walkMax)}.`;
     if (id === 'birthday') { const [y, m, d] = ymd(st.born); return `${name} k nám přišla ${d}. ${m + 1}. ${y}.`; }
+    if (id === 'bliss') return `${name} má ráda, když ji poplácáváš u kořene ocasu – ${patTempo(st) <= 520 ? 'svižně' : 'pomalu a pravidelně'}. Zvedne zadeček jako výtah a přešlapuje.`;
+    if (id === 'boop') return `Když jí ťukneš do nosu, ${name} zašilhá a kýchne.`;
+    if (id === 'reconcile') return `${name} se po škádlení usmířila: otřela se ti o ruku.`;
+    if (id === 'splash') return `${name} dostala sprchu z konve. Otřepala se a hodnou chvíli se zlobila.`;
+    if (id === 'payback') return `${name} ti to vrátila. Co se škádlívá, to se rádo mívá!`;
     if (CAT_DIARY.includes(id)) {
       const c = st.diaryCat ? visitor(st, st.diaryCat[id]) : null;
       const f = c && c.fem;   // Koxa is a she: the plural is feminine only with a female cat
@@ -570,6 +659,8 @@ function KockaEngine() {
     favFood: 'Co nejraději papá? Zkoušej různé dobroty.', belly: 'Nechá si podrbat bříško?',
     toy: 'S čím si nejraději hraje?', fear: 'Čeho se bojí?', quirk: 'Jaký má zvláštní zvyk?',
     weight: 'Kolik váží? Uvidíš zítra.', walk: 'Ještě nebyla venku.', birthday: '',
+    bliss: 'Co jí udělá radost u kořene ocasu?', boop: 'Co udělá, když jí ťukneš do nosu?', reconcile: 'Jak se usmíříte, když ji naštveš?',
+    splash: 'Možná se jednou dozvíš…', payback: 'Kdo ví, co ji jednou napadne…',
     palFirst: 'Najde si kamaráda mezi kočkami od sousedů? Choď s ní na zahradu, když přijde návštěva.',
     palGroom: 'Budou si s kamarádem navzájem mýt kožíšek?', palSnuggle: 'Zdřímne si někdy schoulená u kamaráda?',
     sleepover: 'Přespí u nás někdy kočka od sousedů? Když se s vámi oběma moc skamarádí, můžeš ji večer pozvat dovnitř.',
@@ -578,7 +669,7 @@ function KockaEngine() {
   };
   // Deníček: her two spots only; text = the fact when found, else a question
   function diary(st, name) {
-    const nm = cleanName(name || st.name), ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], CAT_DIARY);
+    const nm = cleanName(name || st.name), ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY);
     return ids.map(id => {
       const found = st.diary[id] || null;
       return { id, found, text: found ? entryText(st, id, nm) : (id.startsWith('spot_') ? 'Kde se ráda nechá hladit? Hlaď ji po srsti.' : HINTS[id]) };
@@ -702,7 +793,8 @@ function KockaEngine() {
       return;
     }
     if (w === 'rain') {
-      if (!(st.wet > t)) { N.coat = Math.max(0, N.coat - 10); ev.push({ type: 'wet' }); }
+      // the rain soaks her also when she is wet from the can (that was only a little water)
+      if (!(st.wet > t) || st.wet === st.tease.splash) { N.coat = Math.max(0, N.coat - 10); ev.push({ type: 'wet' }); }
       st.wet = t + GARDEN.wetFor * MIN;
       N.coat = Math.max(0, N.coat - GARDEN.rainCoat * h);
       if (st.lap) leaveLap(st, t, 'rain', ev);
@@ -836,11 +928,27 @@ function KockaEngine() {
     const s = scareAt(st, t, dt);
     if (s && !st.out) { meet(st, s, t, ev); if (st.yard && s === 'storm' && !st.yard.tree) leaveYard(st, ev, 'house'); }
     if (st.out && (t + dt >= st.out.until || N.energy < 25 || (!st.out.byPlayer && night && season(t) === 'winter'))) comeBack(st, t + dt, ev);
+    teaseStep(st, t + dt, watching, ev);
     if (st.off && t >= st.off.until) st.off = null;
     // the day's averages (weight, bond)
     const D = st.day;
     D.ms += dt; D.food += N.food * dt; D.mood += moodValue(st) * dt; D.minE = Math.min(D.minE, N.energy);
     for (const n of Object.keys(N)) N[n] = Math.round(N[n] * 1e6) / 1e6;    // tidy JSON; fine enough for frequent acts
+  }
+  // teasing at the end of a step (te): the sulk or cross ends at its exact moment; then her payback when it is due, the
+  // advance is watching and she is free (else it waits until it lapses)
+  function teaseStep(st, te, watching, ev) {
+    const T = st.tease;
+    if (T.kind && te >= T.until) { ev.push({ type: T.kind === 'sulk' ? 'sulkEnd' : 'crossEnd' }); T.kind = null; T.until = 0; }
+    const P = T.pay;
+    if (!P) return;
+    if (te >= P.at + TEASE.pay.lapse * MIN || T.payDay === dkey(te)) { T.pay = null; return; }
+    const free = !st.asleep && !st.out && !st.lap && !st.held && !(st.yard && st.yard.tree) && !(st.scared > te) &&
+      !(st.visit && st.visit.act && st.visit.act.with) && !st.jealous && !teasing(st, te) && !longOff(st, te);
+    if (te < P.at || !watching || !free) return;
+    T.payDay = dkey(te); T.pay = null;
+    ev.push({ type: 'payback', kind: st.yard ? 'ambush' : P.kind });   // no kitchen counter in the garden
+    find(st, 'payback', te, ev);
   }
   // the clock moved back by now - st.t: every stored moment moves with it, so waiting times stay as long as they were
   function shiftTimes(st, now) {
@@ -875,6 +983,12 @@ function KockaEngine() {
     }
     st.bday = Math.min(st.bday, new Date(now).getFullYear());
     if (st.pill > tomorrow(now)) st.pill = tomorrow(now);
+    const T = st.tease;   // teasing: every moment moves (st.wet too, so splash === st.wet still holds); the days are clamped
+    if (T.kind) T.until += d;
+    T.at = mv(T.at); T.warnAt = mv(T.warnAt); T.gainAt = mv(T.gainAt); T.splash = mv(T.splash);
+    T.boops = T.boops.map(b => b + d);
+    if (T.pay) T.pay = { kind: T.pay.kind, at: T.pay.at + d };
+    T.payDay = Math.min(T.payDay, today); T.bondDay = Math.min(T.bondDay, today);
   }
   function advance(st, now) {
     const ev = [];
@@ -917,11 +1031,13 @@ function KockaEngine() {
       st.litterAt = now + 4 * HOUR;
       if (st.ill && now - st.ill.since >= 4 * DAY) cure(st, 'time', ev);
       st.off = { until: now + DAY, turned: false };
+      st.tease.kind = null; st.tease.until = 0; st.tease.pay = null;   // the heat cools by itself
       addBond(st, -20, ev);
       ev.push({ type: 'offended', days: Math.floor(days) });
       const y = new Date(now).getFullYear();
       if (st.bday < y && birthdayAge(st.born, now)) { st.bday = y; addBond(st, 10, ev); ev.push({ type: 'birthday', age: birthdayAge(st.born, now) }); }
     }
+    teaseTidy(st);
     const w = wants(st);
     if (w && w !== st.want && watching) ev.push({ type: 'meow', want: w });
     st.want = w;
@@ -945,8 +1061,9 @@ function KockaEngine() {
     const TREE_OK = ['call', 'fetchDown', 'vetCure', 'goHouse', 'sow', 'waterBeds', 'harvest', 'buy', 'sell', 'place', 'photo', 'feedVisitor', 'strokeVisitor', 'deletePhoto',
       'treatVisitor', 'playVisitor'];   // not invite: she would stay stuck up there (canInvite says so)
     if (st.yard && st.yard.tree && !TREE_OK.includes(action)) return no(`${name} je na stromě.`);
-    // on the lap: stroking, scratching, a treat from the hand, calling and a photo keep her there; anything else = standing up
-    if (st.lap && !['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff', 'photo'].includes(action)) {
+    // on the lap: stroking, scratching, a treat from the hand, calling, a photo, patting and a nose tap keep her there;
+    // anything else = standing up
+    if (st.lap && !['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff', 'photo', 'pat', 'boop'].includes(action)) {
       ev.push({ type: 'lapOff', dozing: st.lap.doze }); st.lap = null;
     }
     const onLap = !!st.lap, lapK = onLap ? 1.5 : 1;
@@ -958,6 +1075,21 @@ function KockaEngine() {
     if (st.out && !home.includes(action)) return no(`${name} je venku.`);
     const wakeUp = () => { if (st.asleep) { st.asleep = false; st.wokeAt = t; ev.push({ type: 'wake', early: false }); } };
     const sleeping = () => { if (st.asleep) { seenQuirk(st, 'box', t, ev); no(`${name} spí, nebuď ji.`); return true; } return false; };
+    // teasing (SPEC §13.3): while she is cross a touch gets a swat (no claws); a sulk is made up by a stroke along the fur,
+    // a scratch or a treat while she is awake
+    const cross = () => teaseKind(st, t) === 'cross';
+    const swat = why => ev.push({ type: 'swat', why });
+    const awake0 = !st.asleep;
+    const reconcile = by => {
+      const T = st.tease;
+      if (!awake0 || teaseKind(st, t) !== 'sulk') return;
+      T.kind = null; T.until = 0;
+      N.love = Math.min(100, N.love + TEASE.love.reconcile);
+      const bond = T.bondDay !== dkey(t);
+      ev.push({ type: 'reconcile', by, bond });
+      if (bond) { T.bondDay = dkey(t); addBond(st, TEASE.bond, ev); }
+      find(st, 'reconcile', t, ev);
+    };
     const hr = new Date(t).getHours();
     if (hr >= 5 && hr < 10 && !st.day.acted && !st.out && !st.asleep) {   // the first thing in the morning: she woke them
       st.day.acted = true;
@@ -1015,6 +1147,7 @@ function KockaEngine() {
         const dir = a.along === false || a.along === 'against' ? 'against' : a.along === 'sideways' ? 'sideways' : 'along';
         const sp = typeof a.speed === 'number' ? (a.speed < 120 ? 'slow' : a.speed > 900 ? 'fast' : 'good') : ['slow', 'fast'].includes(a.speed) ? a.speed : 'good';
         if (sp === 'slow') break;                // too slow: she does not notice
+        if (!st.asleep && cross()) { swat('stroke'); break; }
         const half = sad ? 0.5 : 1;
         if (region === 'belly') { belly(); break; }
         if (st.asleep) { N.love = Math.min(100, N.love + 1); ev.push({ type: 'purr', region, sleeping: true }); seenQuirk(st, 'box', t, ev); break; }
@@ -1029,11 +1162,13 @@ function KockaEngine() {
         else if (nm === 'calm' || rnd(st) < 0.3) ev.push({ type: 'content', region });
         else ev.push({ type: 'tolerate', region });
         if (REGIONS[region].spot) { const c = 'spot_' + region; if (inc(st, c) >= 10 && spot) find(st, c, t, ev); }
+        reconcile('stroke');                     // along the fur at a good speed: made up after a sulk
         break;
       }
       case 'scratch': {
         const region = regionOf(a.region, 'head');
         const sec = typeof a.seconds === 'number' && Number.isFinite(a.seconds) ? clamp(a.seconds, 0, 5) : 1;
+        if (!st.asleep && cross()) { swat('scratch'); break; }
         if (region === 'belly') { belly(); break; }
         const per = REGIONS[region].scratch ? 4 : 1, half = sad || st.asleep ? 0.5 : 1;
         if (!st.asleep) soothe();
@@ -1045,10 +1180,12 @@ function KockaEngine() {
           const c = 'spot_' + region; st.cnt[c] = Math.min(CMAX, st.cnt[c] + Math.round(sec));
           if (st.cnt[c] >= 10) find(st, c, t, ev);
         }
+        reconcile('scratch');
         break;
       }
       case 'pickUp': {
         if (sleeping()) return { st, events: ev };
+        if (cross()) { ev.push({ type: 'wriggle' }); break; }
         if (st.held) break;
         if (moodValue(st) >= 10 && N.energy >= 20 && !(st.off && t < st.off.until && !st.off.turned) && st.scared <= t) {
           st.held = true; st.heldAt = t;
@@ -1065,6 +1202,7 @@ function KockaEngine() {
       }
       case 'play': {
         if (sleeping()) return { st, events: ev };
+        if (cross()) { ev.push({ type: 'ignore', reason: `${name} si s tebou teď hrát nechce. Zlobí se.` }); break; }
         const toy = typeof arg === 'string' && Object.prototype.hasOwnProperty.call(TOYS, arg) ? arg : 'mouse';
         if (TOYS[toy].shop && !st.owned[toy]) return no('Tuhle hračku nemáš. Je v obchůdku.');
         if (N.energy < 10) { ev.push({ type: 'ignore', reason: `${name} je moc unavená.` }); break; }
@@ -1168,6 +1306,7 @@ function KockaEngine() {
       case 'lapOn': {
         if (st.lap) break;
         if (sleeping()) return { st, events: ev };
+        if (cross()) { st.held = false; ev.push({ type: 'wriggle' }); break; }
         const off = st.off && t < st.off.until, tummy = st.ill && st.ill.kind === 'tummy';
         if (off || tummy || st.scared > t || N.food < 15 || N.water < 15 || moodValue(st) < -30) { st.held = false; ev.push({ type: 'wriggle' }); break; }
         st.held = false;
@@ -1192,6 +1331,7 @@ function KockaEngine() {
         if (stick ? !(st.stock.stick > 0) : st.pamlsky < 1) return no(stick ? 'Nemáš žádné tyčinky.' : 'Nemáš žádné pamlsky.');
         giveTreat(stick, !!st.train && t - st.train.at <= TREAT_WINDOW && t >= st.train.at);
         if (st.train) rewardTrick(st, t, ev);       // the treat right after a trick: a training success
+        reconcile('treat');                          // a sulk is made up (a cross is not: she eats it and stays cross)
         break;
       }
       case 'buy': {
@@ -1304,6 +1444,7 @@ function KockaEngine() {
           else ev.push({ type: 'ignore', reason: `${name} se bojí slézt. Zkus to znovu.` });
           break;
         }
+        if (cross()) { ev.push({ type: 'ignore', reason: `${name} tě teď schválně neposlouchá.` }); break; }
         if (st.off && t < st.off.until && !st.off.turned) { st.off.turned = true; ev.push({ type: 'turnBack' }); break; }
         ev.push({ type: 'come' });
         break;
@@ -1314,11 +1455,143 @@ function KockaEngine() {
         meet(st, 'vacuum', t, ev);
         break;
       }
+      case 'pat': case 'boop': case 'splash': {
+        const why = teaseAct(st, action, a, t, nm, ev);
+        if (why) return no(why);
+        break;
+      }
     }
     // a satisfied want: bond +1, at most once an hour for each need
     if (before && needs(st)[before] >= 40 && !(t - (st.wantAt[before] || 0) < HOUR)) { st.wantAt[before] = t; addBond(st, 1, ev); }
     st.want = wants(st);
+    teaseTidy(st);
     return { st, events: ev };
+  }
+
+  /* --- Škádlení: teasing out of love (SPEC §13.3) --- */
+  // pat / boop / splash; returns a Czech refusal or null. No rnd(st): the payback draws are keyed on the moment (salts 53–55)
+  function teaseAct(st, action, a, t, nm, ev) {
+    const T = st.tease, N = st.needs, today = dkey(t), lap = !!st.lap;
+    const touch = () => { T.heat = Math.round(heatNow(T, t) * 1e6) / 1e6; T.at = t; };   // heat brought up to date at t
+    const addHeat = k => { T.heat = Math.min(TEASE.heatMax, T.heat + k); };
+    const love = d => { N.love = clamp(N.love + d, 0, 100); };
+    if (action === 'boop') {
+      if (st.asleep || (st.lap && st.lap.doze)) return `${st.name} spí, nebuď ji.`;
+      if (teaseKind(st, t) === 'cross') { ev.push({ type: 'swat', why: 'boop' }); return null; }
+      T.boops = T.boops.filter(b => b > t - TEASE.boopWin);
+      T.boops.push(t); touch();
+      if (T.boops.length >= TEASE.boopN) { T.boops = []; addHeat(TEASE.heat.boop); offence(st, t, { type: 'boop', swat: true }, true, ev); }
+      else { ev.push({ type: 'boop' }); find(st, 'boop', t, ev); }   // she squints, sneezes, shakes her head
+      return null;
+    }
+    if (action === 'splash') {
+      if (!st.yard) return 'Konví se zalévá na zahradě.';
+      if (season(t) === 'winter') return 'V zimě ne – byla by jí zima.';
+      if (st.asleep) return `${st.name} spí. Nech ji spát.`;
+      st.held = false;
+      const w = t + TEASE.wetMin * MIN;
+      if (w > (st.wet > t ? st.wet : 0)) { st.wet = w; T.splash = w; }   // else she is wetter from the rain already
+      love(TEASE.love.splash); touch(); addHeat(TEASE.heat.splash);
+      offence(st, t, { type: 'splash' }, true, ev);
+      find(st, 'splash', t, ev);
+      return null;
+    }
+    // pat: { region, n, ms, cv, eating }
+    const region = regionOf(a.region, 'head');
+    const n = Number.isInteger(a.n) ? clamp(a.n, 1, 999) : 1;
+    const ms = typeof a.ms === 'number' && Number.isFinite(a.ms) ? clamp(a.ms, 0, 5000) : 0;
+    const cv = typeof a.cv === 'number' && Number.isFinite(a.cv) ? clamp(a.cv, 0, 3) : 0;
+    const eating = a.eating === true;
+    const pat = (stage, x) => { ev.push(Object.assign({ type: 'pat', region, stage }, x || {}, eating ? { eating: true } : {})); };
+    // asleep (or dozing on the lap): nothing changes, she never blows up (the UI only flicks an ear)
+    if (st.asleep || (st.lap && st.lap.doze)) { pat('tolerate', { sleeping: true }); return null; }
+    if (n <= 2 || t - T.at > TEASE.runGap) T.warnAt = 0;   // a fresh run
+    touch();
+    // a path at its warning tap: warn; the outcome only when the run goes on 1.8 s after the warning
+    const warn = outcome => {
+      if (!T.warnAt) { T.warnAt = t; pat('warn'); } else if (t - T.warnAt >= TEASE.warnMs) outcome(); else pat('warn');
+    };
+    const blowUp = why => {
+      const eat = why === 'eat';
+      love(eat ? TEASE.love.eat : TEASE.love.blowUp); addHeat(eat ? TEASE.heat.eat : TEASE.heat.blowUp); T.warnAt = 0;
+      offence(st, t, { type: 'blowUp', why, lap }, !eat, ev);   // the meal one plans no payback
+    };
+    const loveBite = () => {
+      love(TEASE.love.loveBite); addHeat(TEASE.heat.loveBite); T.warnAt = 0;
+      if (st.lap) leaveLap(st, t, 'annoyed', ev);
+      ev.push({ type: 'loveBite', lap });
+    };
+    // love from pats: at most +8 in a 10-minute window
+    const gain = amount => {
+      if (!T.gainAt || t - T.gainAt >= TEASE.gainWin * MIN) { T.gainAt = t; T.gain = 0; }
+      const add = Math.min(amount, TEASE.gainMax - T.gain);
+      if (add > 0) { T.gain = Math.min(TEASE.gainMax, Math.round((T.gain + add) * 1e6) / 1e6); love(add); }
+    };
+    const irritate = why => { if (n < TEASE.warnN) { T.warnAt = 0; pat('tolerate'); } else warn(() => blowUp(why)); };
+    const gentle = path => {
+      if (n >= TEASE.overN) { warn(loveBite); return; }   // over-patting
+      T.warnAt = 0;
+      if (path === 'tolerate') { pat('tolerate'); return; }
+      if (path === 'like') { gain(TEASE.like); pat('like'); }
+      else {
+        const close = ms > 0 ? r2(clamp(1 - Math.abs(ms - patTempo(st)) / TEASE.closeSpan, 0, 1)) : 0;
+        gain(TEASE.bliss + TEASE.blissClose * close);
+        pat('bliss', { close, rear: n >= TEASE.rearN });
+        if (n === TEASE.flopN && close >= TEASE.flopClose) {   // she flops on her side with bliss
+          ev.push({ type: 'flop', lap });
+          if (T.gain < TEASE.gainMax) { love(TEASE.flopLove); T.gain = TEASE.gainMax; }
+          if (T.bondDay !== today) { T.bondDay = today; addBond(st, TEASE.bond, ev); }
+          find(st, 'bliss', t, ev);
+        }
+      }
+      if (st.jealous) { N.love = Math.min(100, N.love + JEALOUS.love); ev.push({ type: 'jealousOk', id: st.jealous.id }); st.jealous = null; }
+      if (st.lap) st.lap.pet = t;
+    };
+    if (teaseKind(st, t) === 'cross') { T.warnAt = 0; ev.push({ type: 'swat', why: 'pat' }); return null; }
+    if (eating) {   // at the bowl: warned from the 2nd tap, then she leaves it (mild)
+      if (n >= 2) warn(() => blowUp('eat')); else { T.warnAt = 0; pat('tolerate'); }
+      return null;
+    }
+    if (region === 'belly') {   // a trap: she grabs the hand and kicks (no claws); no love, no sulk
+      addHeat(TEASE.heat.trap); T.warnAt = 0;
+      if (st.lap) st.lap.annoy = Math.min(10, st.lap.annoy + 2);
+      ev.push({ type: 'trap' });
+      return null;
+    }
+    if (region === 'head' || region === 'chin' || region === 'ears' || region === 'paws') gentle('tolerate');
+    else if (region === 'tail') irritate('tail');
+    else if (ms > 0 && ms < TEASE.fast) irritate('fast');                 // back / tailBase from here on
+    else if (nm === 'sad') gentle('tolerate');
+    else if (nm === 'grumpy' || teaseKind(st, t) === 'sulk' || longOff(st, t)) irritate('grumpy');
+    else if (region === 'back' || cv >= TEASE.regular) gentle('like');
+    else gentle('bliss');                                                 // tailBase, regular, calm or happy
+    return null;
+  }
+  // start or prolong a sulk / renew a cross (heat already added); the cause is pushed after lapLeave, before sulk/cross.
+  // While the long offence (st.off) runs: only the cause, nothing starts and no payback is planned
+  function offence(st, t, cause, plan, ev) {
+    const T = st.tease;
+    if (longOff(st, t)) { ev.push(cause); return; }
+    if (st.lap) leaveLap(st, t, 'annoyed', ev);
+    st.held = false;
+    ev.push(cause);
+    const k = teaseKind(st, t);
+    if (k === 'cross' || heatNow(T, t) >= TEASE.crossAt) {
+      T.kind = 'cross'; T.until = t + TEASE.crossMin * MIN;
+      ev.push({ type: 'cross', until: T.until });
+    } else {
+      T.until = Math.max(k === 'sulk' ? T.until : 0, t + TEASE.sulkMin * MIN); T.kind = 'sulk';
+      ev.push({ type: 'sulk', until: T.until });
+    }
+    if (plan) planPay(st, t);
+  }
+  // her payback: a cross always, a sulk with chance 0.5 (salt 53); due 5–25 min after the end (salt 54), 'shelf' or
+  // 'ambush' (salt 55), one a day; an existing plan only waits until 5 min after the new end
+  function planPay(st, t) {
+    const T = st.tease, P = TEASE.pay, k = Math.floor(t / 1000);
+    if (T.pay) { T.pay = { kind: T.pay.kind, at: Math.max(T.pay.at, T.until + P.ext * MIN) }; return; }
+    if (T.payDay === dkey(t) || !(T.kind === 'cross' || rndSeed(st.seed, k, 53) < P.p)) return;
+    T.pay = { kind: rndSeed(st.seed, k, 55) < 0.5 ? 'shelf' : 'ambush', at: T.until + (P.min + Math.floor(rndSeed(st.seed, k, 54) * (P.max - P.min + 1))) * MIN };
   }
 
   const ROOM_TO = { living: 'do obýváku', kitchen: 'do kuchyně', hall: 'do předsíně', garden: 'na zahradu' };
@@ -1630,7 +1903,8 @@ function KockaEngine() {
     return ids[ids.length - 1];
   }
   // Koxa can do something with the visitor: in the garden, awake, not up the tree, on the lap or in the arms
-  const palAwake = st => !!(st.yard && !st.out && !st.yard.tree && !st.asleep && !st.lap && !st.held);
+  // (not while she sulks or is cross: a joint act ends at the next step, none starts, no jealousy; SPEC §13.3)
+  const palAwake = st => !!(st.yard && !st.out && !st.yard.tree && !st.asleep && !st.lap && !st.held && !teasing(st));
   const palAsleep = st => !!(st.yard && !st.out && !st.yard.tree && st.asleep);
   const pondFrozen = t => season(t) === 'winter';
   function pickSolo(st, cur, t, r) {
@@ -2130,7 +2404,7 @@ function KockaEngine() {
   return {
     NEEDS, FOODS, TOYS, REGIONS, FEARS, QUIRKS, ILLS, LEVELS, HOLIDAYS, ACTIONS, CROPS, PRESENTS, WEATHERS, POSTCARDS, BEDS,
     SHOP, GAMES, TRICKS, ROOMS, EARN_CAP, VISITORS, VISIT_ACTS, VISITOR_LIKES, ALBUM_MAX, album, canInvite, visitorLikes,
-    KIT, KIT_NAMES, visitor, visitorIds, kitsNew,
+    KIT, KIT_NAMES, visitor, visitorIds, kitsNew, TEASE, patTempo,
     create, valid, repair, rename, advance, act, consumeTreats, minigameResult, shop, tricks,
     mood, moodValue, wants, needs, health, bondLevel, diary,
     dayPhase, season, holiday, easter, weather, postcardAt, bedCount,
