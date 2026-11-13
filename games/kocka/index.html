@@ -5027,7 +5027,7 @@ const toys = {};
 for (const id of TOY_IDS) {
   const el = document.createElement('div'); el.className = 'toy'; el.hidden = true; el.innerHTML = A.item(ITEMS[id].art());
   $('#toys').appendChild(el);
-  toys[id] = { id, el, on: false, room: 'living', x: 0, y: 0, vx: 0, vy: 0, r: 18, moving: false, kicked: false };
+  toys[id] = { id, el, on: false, room: 'living', x: 0, y: 0, vx: 0, vy: 0, r: 18, moving: false, kicked: false, waiting: false };
 }
 const TOY_SIZE = 50;
 function placeToy(id) {
@@ -5048,17 +5048,18 @@ function toyAt(cx, cy) {
 function putToy(id, rx, ry, vx = 0, vy = 0) {
   const T = toys[id];
   T.on = true; T.room = G.view; T.x = clamp(rx, T.r, 400 - T.r); T.y = clamp(ry, FLOOR + T.r, 600 - T.r); T.vx = vx; T.vy = vy;
-  T.kicked = false; T.moving = Math.hypot(vx, vy) > 5;
+  T.kicked = false; T.waiting = false; T.moving = Math.hypot(vx, vy) > 5;
   placeToy(id); drawTray();
   if (!T.moving) landed(id);
 }
 let lastPlay = -1e9;
-// a toy came to rest: she goes for it (the engine decides whether she wants to play)
+// a toy came to rest: she goes for it (the engine decides whether she wants to play); while she is busy with
+// another toy (or carried, the laser on, the lap view) it waits and she comes for it as soon as she can (stepToys)
 function landed(id) {
   const T = toys[id];
   if (!T.on || T.kicked) return;
-  if (perf() - lastPlay < 2200 || K.carry || laser.on || K.lapView) return;
-  lastPlay = perf();
+  if (perf() - lastPlay < 2200 || K.carry || laser.on || K.lapView || K.act || MODE.game) { T.waiting = true; return; }
+  T.waiting = false; lastPlay = perf();
   doAct('play', TOY_ENGINE[id]);
 }
 function stepToys(dt) {
@@ -5075,8 +5076,9 @@ function stepToys(dt) {
       T.x = b.x; T.y = b.y + FLOOR; T.vx = b.vx; T.vy = b.vy;
       placeToy(id);
     }
-    // she goes for it once it has nearly stopped
+    // she goes for it once it has nearly stopped, or later when it had to wait
     if (T.moving && Math.hypot(T.vx, T.vy) < 60) { T.moving = false; landed(id); }
+    else if (T.waiting && !T.moving && T.room === G.her && perf() - lastPlay > 2600) landed(id);
   }
 }
 

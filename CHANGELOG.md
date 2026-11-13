@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Kočka: když položíš dvě hračky hned po sobě, Koxa si po první sama doběhne i pro druhou (dřív ji nechala ležet).
+
 ## 1.0.16 – 2026-11-13
 
 - Nová hra Šroubky: přesouvej barevné matky mezi šrouby, dokud na každém nezůstane jen jedna barva. Čtyři obtížnosti, každá hra jde vyřešit, s tlačítkem Poradit.
