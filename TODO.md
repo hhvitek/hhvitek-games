@@ -15,7 +15,24 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 - [ ] Check that an old game in progress survives the update (old `hry.*.rozehrano` and `<id>.v1` keys are migrated).
 - [ ] Open a game straight from disk once (double-click `games/<id>/index.html`): the Playwright MCP blocks `file:///`, so this is not tested automatically.
 
+## Code that does not follow CLAUDE.md yet (found by the CLAUDE.md audit, 2026-11-13)
+
+- [ ] A new difficulty, size or opponent level applies from the next game (user's decision 2026-11-13), but the template and Logik, Sudoku, Skládání kostek, Padající tvary, Barevné kostky, Mahjong, Spojování obrázků, Pexeso, Spoj tři, Přelévání, Hanojské věže, Spojování čísel, Patnáctka, Kulička and Zavři čísla (tiles) still start a new game when Settings close. Copy `closeSettings` and the start block from Hledání min; fix the template first, so new games stop copying it.
+- [ ] Settings changed and the app closed while Settings were open: Logik, Sudoku, Skládání kostek, Padající tvary, Barevné kostky, Mahjong, Pexeso and Prší (`S.opp !== G.opp`) do not apply the change at the next start (template, section Start).
+- [ ] Přelévání has levels 1–999 but writes no `games.prelevani.progress` ("Úroveň N", contract point 3a).
+- [ ] Padající tvary trusts a saved `status: 'over'` instead of deriving the end from the board (`validGame`).
+- [ ] Code is English: Czech helper names `kostek()`, `bodu()` (Barevné kostky) and `tahu` (Hanojské věže, Šroubky).
+- [ ] Code is English: `tools/reversi-test.js` and `tools/mlyn-test.js` print Czech headings and results (the other engine tests print English, Czech only for level names).
+- [ ] Hanojské věže: a tap on the hinted target rod (with no disc selected) should play the hint, as in Pavouk; now only a tap on the hinted disc does.
+
 ## Open questions for the user
+
+- [ ] Paper screens' headings: CLAUDE.md says they keep Georgia, which the launcher and 15 older games do, but the template and 22 newer games (Dáma, Piškvorky, Kočka, all games since…) show the system font. Georgia everywhere (copy the heading rules into the template and the newer games), or the system font everywhere?
+- [ ] Usage guard (CLAUDE.md): "denní limit" was taken as the plan's 5-hour limit (the plan has no daily limit): 80 % graceful / 90 % kill; every weekly limit 75 % / 80 %. Is that what you meant?
+- [ ] Prší: a change of "Soupeři" starts a new game at once (written down as "who plays, not a level", so an exception to "a new difficulty applies from the next game"). Keep it, or apply it from the next game like a level?
+- [ ] Spojování obrázků: being stuck is never an end (Zamíchat always goes on), so "played" always equals "won" and Settings show "vyhráno N z N". Show only "vyhráno N" (and "bez Zamíchat"), or count a game as played at its first pair?
+- [ ] `.claude/settings.json` turns off the `playwright`, `code-review` and `context7` plugins, but not `security-guidance`, which your own settings enable. Turn every plugin off for this project, or keep `security-guidance` on?
+- [ ] CLAUDE.md audit (2026-11-13): commit the changes (CLAUDE.md, new-game skill, TODO.md, README Dáma row, the drawings' author in images/sets.js, Kočka SPEC §10, a launcher comment)? Commit 18b9679 (the orchestrator rule) is already in master, not pushed.
 
 
 - [ ] Kočka (choices made while building, keep?): two tray rows (care items above, toys + Laser + Zavolat + Víc below; labels 12.5 px); the toast at the top of the room; "Vysát pokoj" in Nastavení → Pokoj; the Veterinář button only while she is ill; toys stay on the floor until picked up; a wide short window shows the room narrower with the wall continuing at the sides; the album shows the newest 24 photos; gardening pays a little (a seed pack sells for 1.5× its price) but far less than the minigames.
@@ -50,6 +67,9 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 
 ## Ideas
 
+- [ ] `tools/check.js`: also require the `# vX.Y.Z` version comment after each pinned GitHub Action (now only the 40-character SHA is checked; the comment is written by hand).
+- [ ] `tools/dama-test.js --deep`: add the 1.2 M vs 0.1 M nodes pairing, so the number in CLAUDE.md (now "a one-off run outside the tool") can be repeated; the same for Piškvorky's "Běžný hráč without its mistakes".
+- [ ] The simulated win rates in CLAUDE.md (Oko bere 53 % / 50 %, plus mínus 54 % / 33 %, Kostky levels) were not re-run by the audit; re-measure them after any change of those opponents.
 - [ ] Patnáctka: a picture variant (a photo cut into tiles). Needs larger images than the shared ones (about 132×176 px).
 - [ ] Mahjong: a closer photo of the Náchod castle (the current one is a telephoto view from a distance).
 - [ ] Mahjong: optional "no dead ends" mode (each picture only twice, so wrong choices can never get the game stuck).

@@ -312,7 +312,7 @@ swCat.addEventListener('click', () => {
 /* ---------- Kočka link (off by default) ---------- */
 // When it is on, every other game started from here leaves Koxa one treat in games.kocka.treats = { n, day, taken }
 // (n waiting, taken = already moved into the game today; at most CAT_TREATS a day), and the line under the header
-// shows how she is from games.kocka.mood = { name, mood, wants, ill } (written by the game on every save).
+// shows how she is from games.kocka.mood = { name, mood, wants, ill, ahead } (written by the game on every save).
 const CAT_TREATS = 5;
 const catDay = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
 function giveCatTreat() {

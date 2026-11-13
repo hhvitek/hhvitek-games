@@ -12,7 +12,8 @@ CLAUDE.md is the source of the rules; this file only says what to do when.
 results; subagents (Agent tool) do the analysis (rules, which game to copy from, engine design) and the implementation
 (steps 2–4, the engine test, the fixes of step 7). Brief each one narrowly and tell it to read CLAUDE.md, the template
 and this skill. Only one agent at a time uses the Playwright MCP. Steps 5–6 you verify yourself (check.js, reading the
-sheet), and step 7 is always last and done by a fresh, independent agent.
+sheet), and step 7 is always last and done by a fresh, independent agent. Before step 1 start the usage guard
+(CLAUDE.md "Usage guard": check the limits, set up the 10-minute watcher) and keep to it until the end.
 
 ## 1. Read first
 - `CLAUDE.md` completely: the rules, both "Decisions…" sections (the user's choices), "Patterns every game follows", Testing.
@@ -29,11 +30,12 @@ sheet), and step 7 is always last and done by a fresh, independent agent.
 ## 3. Write the game: copy each pattern from the game that does it best
 | Pattern | Copy from |
 |---|---|
-| records per variant (`bests[rulesKey]`) + `bb` in history, Undo puts the record back | `games/spojovani-cisel/` |
+| records per variant (`bests[rulesKey]`) + `bb` in history, Undo puts the record back | `games/patnactka/` (`rulesKey`, `bb` in `move` and Undo) |
 | randomness after a move from `G.seed` (saved with the game and in every history entry) | `games/zavri-cisla/` (dice), `games/spoj-tri/` (stones) |
 | `busy` (generating, animation): taps explain themselves "Chvilku, …", a second Nová hra is ignored | `games/cesta-ven/` `newGame` |
-| hint: a tap on the hinted piece and on its place does the hinted move | `games/hanojske-veze/`, `games/pavouk/` |
+| hint: a tap on the hinted piece and on its place does the hinted move | `games/pavouk/` (Hanojské věže plays it only from a tap on the disc) |
 | settings that need a new game: notice in Settings and toast after returning, both with `!isFresh()` | `games/patnactka/` `closeSettings` |
+| a new difficulty, size or opponent level applies from the next game, an untouched game is replaced at once (the template does not do this yet) | `games/hledani-min/` `closeSettings` and its start block |
 | saved game validated, the end derived from the board, a broken history only loses Undo | `games/zavri-cisla/` `validGame` |
 | end dialog only for its game, never over Settings/Help | `whenFree(g0, ms, fn)` from the template |
 | sizes from the room left (no scrolling); sizes in px from a CSS variable, never `%` padding | template `layout()`, `games/zavri-cisla/` dice |

@@ -37,7 +37,7 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Paprsek         | `games/paprsek/`         | Otáčej zrcadly, ať paprsky světla trefí všechny terče; barevné paprsky se mísí, úrovně postupně těžší, Poradit a Zpět     |
 | Kulička         | `games/kulicka/`         | Nakláněj telefon (nebo ťukej na šipky) a doveď kuličku bludištěm do cíle kolem děr; bez spěchu, Poradit ukáže cestu     |
 | Zavři čísla     | `games/zavri-cisla/`     | Kostková hra (Shut the Box): hoď kostkami a zavři destičky se stejným součtem; 9, 10 nebo 12 destiček, statistika         |
-| Dáma            | `games/dama/`            | Klasická česká dáma proti počítači: dlouhá dáma, braní je povinné; soupeř běžný hráč nebo mistr, Poradit a Zpět            |
+| Dáma            | `games/dama/`            | Klasická česká dáma proti počítači: dlouhá dáma, braní je povinné; soupeř začátečník, běžný hráč nebo mistr, Poradit a Zpět |
 | Piškvorky       | `games/piskvorky/`       | Pět v řadě proti počítači na ploše 13 × 13, 15 × 15 nebo 19 × 19; soupeř běžný hráč nebo mistr, Poradit, Zpět a přiblížení |
 | Šroubky         | `games/sroubky/`         | Přesouvej barevné matky mezi šrouby, dokud na každém nezůstane jedna barva; čtyři obtížnosti, každá hra jde vyřešit, Poradit, Zpět a Od začátku |
 | Malované křížovky | `games/malovane-krizovky/` | Čísla u řádků a sloupců říkají, kolik políček vybarvit; z vyluštěné křížovky je barevný obrázek; 36 obrázků 5 × 5 až 15 × 15 |
