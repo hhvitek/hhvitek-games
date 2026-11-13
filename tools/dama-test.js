@@ -221,14 +221,29 @@ function match(label, A, B, n) {
   console.log(`  ${label}: ${res.A} : ${res.B}, remíz ${res.d} (z ${n})`);
   return res;
 }
+console.log('Začátečník');
+{
+  // the same position and seed always give the same move (Undo, reload), and the move is legal
+  let p = E.parse(E.START, 0), same = 0, n = 0;
+  for (let ply = 0; ply < 60; ply++) {
+    const l = E.moves(p); if (!l.length) break;
+    const o = { pos: E.text(p), stm: p.stm, hist: [], quiet: 0, level: 'beginner', seed: 777, myMove: ply >> 1 };
+    const a = E.think(o).i, b = E.think(o).i;
+    n++; if (a === b && a >= 0 && a < l.length) same++;
+    p = E.play(p, l[a]);
+  }
+  ok(same === n, `beginner: ${n - same} of ${n} moves not repeatable or illegal`);
+}
 console.log('Zápasy');
 const t0 = Date.now();
+const r0 = match('Začátečník – náhodné tahy', ai('beginner'), randomPlayer, MATCHES);
+const r01 = match('Běžný hráč – Začátečník', ai('normal'), ai('beginner'), MATCHES);
 const r1 = match('Běžný hráč – náhodné tahy', ai('normal'), randomPlayer, MATCHES);
 const r2 = match('Mistr – Běžný hráč', ai('master'), ai('normal'), MATCHES);
 if (think.n) console.log(`  Mistr: ${Math.round(think.ms / think.n)} ms na tah (nejvíc ${think.max} ms), ${Math.round(think.nodes / think.n)} uzlů, hloubka ${(think.depth / think.n).toFixed(1)}, ${Math.round(think.nodes / Math.max(1, think.ms))}k uzlů/s`);
 if (args.includes('--deep')) match('Mistr – Mistr s dvojnásobným rozpočtem', ai('master'), ai('master', { nodes: 2400000 }), MATCHES);
 console.log(`  (${Math.round((Date.now() - t0) / 1000)} s)`);
-void r1; void r2;
+void r0; void r01; void r1; void r2;
 
 console.log(failed ? `\n${failed} chyb` : '\nVše v pořádku');
 process.exit(failed ? 1 : 0);

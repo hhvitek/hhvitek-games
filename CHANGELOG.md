@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Dáma: nový nejslabší soupeř Začátečník ★☆☆ pro ty, kdo se dámu teprve učí: táhne hlavně vpřed, nepromýšlí, co uděláš ty, a často ti daruje kámen.
+
 ## 1.0.18 – 2026-11-13
 
 - Kočka: kočky od sousedů na zahradě ožily – chodí, pijí z jezírka, spí na lavičce a lezou na strom. Když je Koxa venku, očichají se s ní, honí se, hravě se pošťuchují, myjí si kožíšky nebo spolu podřimují; Koxa si s nimi buduje vlastní kamarádství (v Deníčku má každá kočka srdíčka tvoje i její).
