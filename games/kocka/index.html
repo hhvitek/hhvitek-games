@@ -431,12 +431,15 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 //   room(o) / room(phase, season)  <svg> viewBox 0 0 400 600, preserveAspectRatio xMidYMid slice.
 //                            o = { id: 'living'|'kitchen'|'hall'|'garden', phase: 'morning'|'day'|'evening'|'night',
 //                            season: 'spring'|'summer'|'autumn'|'winter', sunX: 0..1, holiday: null | id | [ids],
-//                            flap: bool (cat flap in the hall door), weather: null|'rain'|'snow' }. Holiday ids: advent,
+//                            flap: bool (cat flap in the hall door), weather: null|'rain'|'snow', beds: 4|6 (garden:
+//                            how many beds, see bedSpots) }. Holiday ids: advent,
 //                            mikulas, vanoce, silvestr, masopust, velikonoce, carodejnice, dusicky, narozeniny.
 //   rooms                    { id: { name (Czech), spots: { name: {x, y} } } } for the four places (room coordinates,
 //                            where an item or Koxa stands): living (Obývák: rug, bed, window, chair = armchair seat, sun),
 //                            kitchen (Kuchyně: bowl, water, counter, window), hall (Předsíň: litter, door, shoe, mat),
 //                            garden (Zahrada: door, gate, tree, branch, branch2, bench, feeder, yard, bed1..bed4).
+//   bedSpots(n)              the garden beds in one row along the bottom: n = 4 (wide, = bed1..bed4) or 6 (narrower,
+//                            from bond level Parťačka): [{ x, y, w }] (x = middle, y = the spot's foot, w = width).
 //   spots                    the old single-room spots { bowl, water, litter, bed, window, door }, kept for old code.
 //   sunPatch(sunX)           {x, y}: the middle of the living-room sun patch on the floor (x 95…235), for a sun nap.
 //   lap({ phase, season, place: 'chair'|'bench' })  the lap close-up (400×600, slice); lapSpot = { x, y, size }: her
@@ -1675,6 +1678,12 @@ function KockaArt() {
     `<path d="M262 470V368Q262 350 279 350Q296 350 296 368V470Z" fill="${AC.fab}"/><path d="M368 470V368Q368 350 384 350Q400 350 400 368V470Z" fill="${AC.fab}"/></g>` +
     `<g fill="${AC.line}"><circle cx="314" cy="324" r="2.4"/><circle cx="350" cy="324" r="2.4"/><circle cx="332" cy="352" r="2.4"/><circle cx="314" cy="376" r="2.4"/><circle cx="350" cy="376" r="2.4"/></g>`;
   const rug = () => '<ellipse cx="200" cy="534" rx="172" ry="46" fill="#5f8580"/><g fill="none"><ellipse cx="200" cy="534" rx="154" ry="39" stroke="#7fa39d" stroke-width="7"/><ellipse cx="200" cy="534" rx="122" ry="29" stroke="#c9b38a" stroke-width="5"/><ellipse cx="200" cy="534" rx="88" ry="19" stroke="#7fa39d" stroke-width="6"/><ellipse cx="200" cy="534" rx="172" ry="46" stroke="#4d6e6a" stroke-width="2"/></g>';
+  // the garden beds in one row along the bottom (y 508–580): 4 wide ones, or 6 narrower ones that end at x 330, so the
+  // camera button in the scene's bottom right corner covers none of them
+  function bedSpots(n) {
+    const six = n === 6, w = six ? 48 : 86, gap = six ? 6 : 10, x0 = six ? 12 : 16;
+    return Array.from({ length: six ? 6 : 4 }, (_, i) => ({ x: x0 + i * (w + gap) + w / 2, y: 566, w }));
+  }
   const PLACES = {
     living: {
       name: 'Obývák',
@@ -1790,10 +1799,10 @@ function KockaArt() {
         if (snow) s += '<path d="M262 226Q300 232 330 242M354 198Q372 188 394 178" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none"/>' + crown('winter', 340, 140, 3.2);
         else s += `<g opacity="${se === 'autumn' ? 0.95 : 1}">${crown(se, 336, 132, 3.4)}</g>`;
         // the beds (záhony): wooden edges, soil, snow in winter
-        for (let i = 0; i < 4; i++) {
-          const x = 16 + i * 96;
-          s += `<rect x="${x}" y="508" width="86" height="72" rx="6" fill="#8a5a32" stroke="#4a2e18" stroke-width="2.5"/><rect x="${x + 7}" y="515" width="72" height="58" rx="4" fill="${snow ? '#f2f6f9' : '#5a3a22'}"/>` +
-            (snow ? '' : `<path d="M${x + 12} 530H${x + 74}M${x + 12} 546H${x + 74}M${x + 12} 562H${x + 74}" stroke="#46301c" stroke-width="2"/>`);
+        for (const b of bedSpots(c.beds)) {
+          const x = b.x - b.w / 2, w = b.w;
+          s += `<rect x="${x}" y="508" width="${w}" height="72" rx="6" fill="#8a5a32" stroke="#4a2e18" stroke-width="2.5"/><rect x="${x + 7}" y="515" width="${w - 14}" height="58" rx="4" fill="${snow ? '#f2f6f9' : '#5a3a22'}"/>` +
+            (snow ? '' : `<path d="M${x + 12} 530H${x + w - 12}M${x + 12} 546H${x + w - 12}M${x + 12} 562H${x + w - 12}" stroke="#46301c" stroke-width="2"/>`);
         }
         // the light of the day phase; fireflies on summer nights; the weather
         if (ph === 'morning') s += '<rect width="400" height="600" fill="#ffb36b" opacity=".08"/>';
@@ -1812,7 +1821,7 @@ function KockaArt() {
     const o = typeof a === 'string' ? { phase: a, season: b } : Object.assign({}, a);
     const P = PLACES[o.id] || PLACES.living;
     const c = { ph: SKY[o.phase] ? o.phase : 'day', se: HILL[o.season] ? o.season : 'summer', sunX: Number.isFinite(o.sunX) ? Math.min(1, Math.max(0, o.sunX)) : 0.5,
-      hol: [].concat(o.holiday || []), flap: !!o.flap, weather: o.weather === 'rain' || o.weather === 'snow' ? o.weather : null, holes: [] };
+      hol: [].concat(o.holiday || []), flap: !!o.flap, weather: o.weather === 'rain' || o.weather === 'snow' ? o.weather : null, beds: o.beds === 6 ? 6 : 4, holes: [] };
     return `<svg class="kx-room" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${P.draw(c)}</svg>`;
   }
   const rooms = {};
@@ -2078,7 +2087,7 @@ function KockaArt() {
 @media (prefers-reduced-motion:reduce){.koxa,.koxa *,.kx-item *,.kx-room *,.kx-fx-float{animation:none!important}.koxa .kx-z{opacity:.9}}
 `;
 
-  return { css, cat, poses: Object.keys(POSES), regions, kitScale, kitAnchor, room, spots: spotsAt, item, items: Object.keys(ITEMS), face,
+  return { css, cat, poses: Object.keys(POSES), regions, kitScale, kitAnchor, room, bedSpots, spots: spotsAt, item, items: Object.keys(ITEMS), face,
     mouth, itemHeld, sunPatch, rooms, lap, lapSpot, crop, crops: CROPS, cropSlot, anchors: ANCHORS, itemSize, itemPoints, mouseHole, mousePeek, fish, fishes: Object.keys(FISH), marker,
     shop, shopSpots, postcardFrame, postcardHole, photoFrame, photoHole, neighbour, neighbours, icon, icons: Object.keys(ICONS), fx, fxs: Object.keys(FX), vet, vetSpots };
 }
@@ -3302,7 +3311,8 @@ function KockaEngine() {
   });
   const BASE_TOYS = deep(['mouse', 'feather', 'ball', 'laser']);
   const ROOMS = deep(['living', 'kitchen', 'hall', 'garden']);
-  // the shop (Obchůdek); bond = the bond level (0–4) from which it is offered; room: where furniture goes (fixed: only there)
+  // the shop (Obchůdek); bond = the bond level (0–4) from which it is offered; room: where furniture goes (fixed: only there;
+  // install: put there at once when bought, the player never places it)
   const SHOP = deep([
     { id: 'pouch5', kind: 'food', name: 'Kapsičky (5 porcí)', price: 8, bond: 0, room: null, stock: 'pouch', n: 5 },
     { id: 'chicken5', kind: 'food', name: 'Kuře (5 porcí)', price: 12, bond: 0, room: null, stock: 'chicken', n: 5 },
@@ -3320,7 +3330,7 @@ function KockaEngine() {
     { id: 'sillCushion', kind: 'furniture', name: 'Parapet s polštářem', price: 40, bond: 1, room: 'living' },
     { id: 'bedDeluxe', kind: 'furniture', name: 'Pelíšek deluxe', price: 60, bond: 1, room: 'living' },
     { id: 'catTree', kind: 'furniture', name: 'Kočičí strom', price: 120, bond: 2, room: 'living' },
-    { id: 'catFlap', kind: 'furniture', name: 'Kočičí dvířka', price: 80, bond: 2, room: 'hall', fixed: true },
+    { id: 'catFlap', kind: 'furniture', name: 'Kočičí dvířka', price: 80, bond: 2, room: 'hall', fixed: true, install: true },
     { id: 'visitorBowl', kind: 'furniture', name: 'Miska pro návštěvy', price: 15, bond: 0, room: 'garden', fixed: true },
     { id: 'seedsRadish', kind: 'seed', name: 'Semínka ředkvičky (3 sáčky)', price: 8, bond: 0, room: null, stock: 'seed_radish', n: 3 },
     { id: 'seedsCarrot', kind: 'seed', name: 'Semínka mrkve (3 sáčky)', price: 12, bond: 0, room: null, stock: 'seed_carrot', n: 3 },
@@ -3538,9 +3548,10 @@ function KockaEngine() {
     st.wet = soon(st.wet, GARDEN.wetFor * MIN);
     const B = Array.isArray(st.beds) ? st.beds : [];
     st.beds = [];
+    const open = bedCount(st);   // from the repaired lvl: a crop on a bed not open yet (a broken save) would be invisible
     for (let i = 0; i < BEDS; i++) {
       const b = B[i];
-      st.beds.push(b && typeof b === 'object' && has(CROPS, b.crop) && okT(b.sown) ? {
+      st.beds.push(i < open && b && typeof b === 'object' && has(CROPS, b.crop) && okT(b.sown) ? {
         crop: b.crop, sown: Math.min(b.sown, t), days: Math.floor(num(b.days, 0, 0, CROPS[b.crop].days)),
         watered: isKey(b.watered) && b.watered <= dkey(t) ? b.watered : 0,
       } : null);
@@ -3558,6 +3569,8 @@ function KockaEngine() {
       if (it && st.owned[k] && it.room && ROOMS.includes(p.room) && (!it.fixed || p.room === it.room))
         st.furniture[k] = { room: p.room, x: num(p.x, 0.5, 0, 1), y: num(p.y, 0.5, 0, 1) };
     }
+    // installed things (the cat flap) are in place whenever they are owned (older saves bought them without it)
+    for (const it of SHOP) if (it.install && st.owned[it.id] && !st.furniture[it.id]) st.furniture[it.id] = { room: it.room, x: 0.5, y: 0.5 };
     const RE = obj(st.records); st.records = {};
     for (const k of Object.keys(RE)) { const r = obj(RE[k]); if (has(GAMES, k) && r.best >= 1 && okT(r.t)) st.records[k] = { best: Math.floor(num(r.best, 0, 0, 999)), t: Math.min(r.t, t) }; }
     const TK = obj(st.tricks); st.tricks = {};
@@ -3793,9 +3806,9 @@ function KockaEngine() {
     ev.push(Object.assign({ type: 'cured', kind, by }, extra || {}));
   }
   function comeBack(st, t, ev) {
-    const d = t - st.out.since, walk = st.out.walk;
+    const d = t - st.out.since, walk = st.out.walk, flap = walk && !st.out.byPlayer;   // a walk she began by herself: through the cat flap
     st.out = null; st.acc.cold = 0;
-    const e = { type: 'back', minutes: Math.round(d / MIN), walk, postcard: null, present: null };
+    const e = { type: 'back', minutes: Math.round(d / MIN), walk, flap, postcard: null, present: null };
     if (walk) {
       // a walk (toulka): a postcard 60 %, a dárek 20 %, nothing 20 %
       if (d > st.walkMax) st.walkMax = d;
@@ -4352,6 +4365,7 @@ function KockaEngine() {
         st.pamlsky -= it.price;
         if (it.stock) st.stock[it.stock] = Math.min(CMAX, (st.stock[it.stock] || 0) + it.n); else st.owned[it.id] = true;
         ev.push({ type: 'bought', id: it.id, kind: it.kind });
+        if (it.install) st.furniture[it.id] = { room: it.room, x: 0.5, y: 0.5 };   // the cat flap: in the předsíň door at once
         break;
       }
       case 'place': {
@@ -5446,8 +5460,10 @@ const spot = (p, k) => spotsOf(p)[k] || null;
 const placeOf = k => places().find(p => spotsOf(p)[k]) || null;
 const hasPose = p => Array.isArray(A.poses) && A.poses.includes(p);
 const can = a => E.ACTIONS.includes(a);
-// the garden beds: spots.beds (a list) or bed1 … bed6
+// the garden beds: the art's row for as many beds as she has (4, 6 from Parťačka), or spots.beds (a list) or bed1 … bed6
+const bedsNow = () => (typeof E.bedCount === 'function' && G && G.st ? E.bedCount(G.st) : 4);
 function bedSpots(p) {
+  if (p === 'garden' && typeof A.bedSpots === 'function' && A.rooms && A.rooms.garden) return A.bedSpots(bedsNow());
   const s = spotsOf(p);
   if (Array.isArray(s.beds)) return s.beds;
   const out = []; for (let i = 1; i <= 6; i++) if (s['bed' + i]) out.push(s['bed' + i]);
@@ -5508,7 +5524,7 @@ function spotRect(k, p = G.view) {
 }
 function bedRect(i) {
   const sp = bedSpots(G.view)[i]; if (!sp) return null;
-  const a = toPx(sp.x - 46, sp.y - 70), b = toPx(sp.x + 46, sp.y + 14);
+  const hw = sp.w ? sp.w / 2 + 3 : 46, a = toPx(sp.x - hw, sp.y - 70), b = toPx(sp.x + hw, sp.y + 14);
   return { l: a.x, t: a.y, r: b.x, b: b.y };
 }
 const inRect = (p, r) => !!r && p.x >= r.l && p.x <= r.r && p.y >= r.t && p.y <= r.b;
@@ -5523,6 +5539,7 @@ function drawRoom() {
   const t = now(), phase = E.dayPhase(t);
   const hol = E.holiday(t, G.st).map(x => x === 'birthday' ? 'narozeniny' : x);
   const o = { id: G.view, phase, season: E.season(t), sunX: sunX(), holiday: hol, flap: !!((G.st.furniture && G.st.furniture.catFlap) || (G.st.owned && G.st.owned.catFlap)), weather: ['rain', 'snow'].includes(weatherNow()) ? weatherNow() : null };
+  if (G.view === 'garden') o.beds = bedsNow();
   const lap = K.lapView ? (G.seat || 'chair') : '';
   const key = JSON.stringify(o) + lap;
   if (key === roomKey) return;
@@ -5557,7 +5574,7 @@ function placeItems() {
   cropEls.forEach((el, i) => {
     const sp = beds[i], b = G.st.beds && G.st.beds[i];
     el.hidden = !sp || !b; if (el.hidden) return;
-    const s = 64 * V.s, p = toPx(sp.x, sp.y);
+    const s = (sp.w && sp.w < 80 ? 52 : 64) * V.s, p = toPx(sp.x, sp.y);   // a little smaller on the 6 narrower beds
     Object.assign(el.style, { left: p.x - s / 2 + 'px', top: p.y - 0.9 * s + 'px', width: s + 'px', height: s + 'px', zIndex: 4 });
     const c = E.CROPS[b.crop], stage = b.days >= c.days ? 3 : Math.min(2, Math.floor(b.days / c.days * 3));
     const key = b.crop + stage;
@@ -6023,7 +6040,22 @@ function catLoose(cx, cy) {   // a dropped treat or brush counts anywhere on her
 
 /* ---------- The tray: things to drag ---------- */
 const TOY_IDS = ['mouse', 'feather', 'yarn'];
-const TOY_ENGINE = { mouse: 'mouse', feather: 'feather', yarn: 'ball', laser: 'laser' };
+// each tray toy has two kinds: the basic one and the shop toy of the same kind (once bought it is in the tray; a tap
+// switches them); the engine's toy ids, their pictures, short tray labels and the tap hints
+const TOY_KINDS = { mouse: ['mouse', 'catnipMouse'], feather: ['feather', 'featherWand'], yarn: ['ball', 'bellBall'] };
+const TOY_ART = { mouse: 'mouse', catnipMouse: 'catnipMouse', feather: 'feather', featherWand: 'featherWand', ball: 'yarn', bellBall: 'ballBell' };
+const TOY_LABEL = { mouse: 'Myška', catnipMouse: 'Myška', feather: 'Peříčko', featherWand: 'Udice', ball: 'Klubko', bellBall: 'Míček' };   // the green catnip mouse tells itself apart by its picture
+const TOY_HINT = { mouse: 'Polož myšku na zem nebo ji švihni.', catnipMouse: 'Polož myšku se šantou na zem nebo ji švihni.',
+  feather: 'Mávej peříčkem kousek od ní.', featherWand: 'Mávej udicí s peříčkem kousek od ní.',
+  ball: 'Polož klubíčko na zem nebo ho švihni.', bellBall: 'Polož míček s rolničkou na zem nebo ho švihni.' };
+const toyKind = {};   // tray id → the kind chosen by a tap (for this visit; unset: the shop toy when bought)
+const toyOwned = k => !(E.TOYS && E.TOYS[k] && E.TOYS[k].shop) || !!(G && G.st && G.st.owned && G.st.owned[k]);
+function toyNow(id) {   // the engine's toy in this tray place now
+  const L = TOY_KINDS[id]; if (!L) return id;
+  const k = toyKind[id]; if (k && toyOwned(k)) return k;
+  return toyOwned(L[1]) ? L[1] : L[0];
+}
+const toyName = k => (E.TOYS && E.TOYS[k] ? E.TOYS[k].name : TOY_LABEL[k] || k);
 const FOOD_CHOICES = ['kibble'];          // Etapa 1: granule only (the engine knows kapsička, kuře, tuňák for later)
 let foodKind = 'kibble';
 const FOOD_ITEM = { kibble: 'foodBag', pouch: 'pouch', chicken: 'chicken', tuna: 'tuna' };
@@ -6038,9 +6070,9 @@ const ITEMS = {
   pill: { art: () => 'pill', label: () => 'Pilulka', to: ['cat'] },
   seeds: { art: () => artOr('seedPacket', 'treat'), label: () => 'Semínka', to: ['beds'] },
   can: { art: () => artOr('wateringCan', 'jug'), label: () => 'Konev', to: ['beds'] },
-  mouse: { art: () => 'mouse', label: () => 'Myška', toy: true },
-  feather: { art: () => 'feather', label: () => 'Peříčko', toy: true },
-  yarn: { art: () => 'yarn', label: () => 'Klubko', toy: true },
+  mouse: { art: () => TOY_ART[toyNow('mouse')], label: () => TOY_LABEL[toyNow('mouse')], name: () => toyName(toyNow('mouse')), toy: true },
+  feather: { art: () => TOY_ART[toyNow('feather')], label: () => TOY_LABEL[toyNow('feather')], name: () => toyName(toyNow('feather')), toy: true },
+  yarn: { art: () => TOY_ART[toyNow('yarn')], label: () => TOY_LABEL[toyNow('yarn')], name: () => toyName(toyNow('yarn')), toy: true },
 };
 const NEED_SPOT = { bowl: 'Miska', water: 'Miska s vodou', litter: 'Kočičí záchod', beds: 'Záhony' };
 function trayButton(id) { return `<button class="it" data-item="${id}"><span class="ic"></span><span class="lb"></span></button>`; }
@@ -6060,7 +6092,7 @@ function drawTray() {
       trayKeys[id] = key;
       b.querySelector('.ic').innerHTML = A.item(it.art());
       b.querySelector('.lb').textContent = it.label();
-      b.setAttribute('aria-label', it.label());
+      b.setAttribute('aria-label', it.name ? it.name().replace(/^./, c => c.toUpperCase()) : it.label());
     }
     if (it.count) { b.dataset.count = it.count(); b.setAttribute('aria-label', `${it.label()}: ${it.count()}`); }
     b.classList.toggle('away', !!(toys[id] && toys[id].on));
@@ -6085,7 +6117,7 @@ const toys = {};
 for (const id of TOY_IDS) {
   const el = document.createElement('div'); el.className = 'toy'; el.hidden = true; el.innerHTML = A.item(ITEMS[id].art());
   $('#toys').appendChild(el);
-  toys[id] = { id, el, on: false, room: 'living', x: 0, y: 0, vx: 0, vy: 0, r: 18, moving: false, kicked: false, waiting: false };
+  toys[id] = { id, el, kind: null, on: false, room: 'living', x: 0, y: 0, vx: 0, vy: 0, r: 18, moving: false, kicked: false, waiting: false };
 }
 const TOY_SIZE = 50;
 function placeToy(id) {
@@ -6105,6 +6137,9 @@ function toyAt(cx, cy) {
 }
 function putToy(id, rx, ry, vx = 0, vy = 0) {
   const T = toys[id];
+  // the toy on the floor keeps the kind it was thrown as (a tap on the tray or buying the shop toy changes only the tray)
+  const kind = toyNow(id);
+  if (T.kind !== kind) { T.kind = kind; T.el.innerHTML = A.item(TOY_ART[kind] || ITEMS[id].art()); }
   T.on = true; T.room = G.view; T.x = clamp(rx, T.r, 400 - T.r); T.y = clamp(ry, FLOOR + T.r, 600 - T.r); T.vx = vx; T.vy = vy;
   T.kicked = false; T.waiting = false; T.moving = Math.hypot(vx, vy) > 5;
   placeToy(id); drawTray();
@@ -6119,7 +6154,7 @@ function landed(id) {
   if (T.room === G.her) freeKoxa();   // a toy wins over the visitor's scene
   if (perf() - lastPlay < 2200 || K.carry || laser.on || K.lapView || K.act || MODE.game) { T.waiting = true; return; }
   T.waiting = false; lastPlay = perf();
-  doAct('play', TOY_ENGINE[id]);
+  doAct('play', T.kind || toyNow(id));
 }
 function stepToys(dt) {
   for (const id of TOY_IDS) {
@@ -6205,6 +6240,7 @@ const FEAR_ACC = { vacuum: 'vysavač', storm: 'bouřku', fireworks: 'ohňostroj'
 const ILL_TEXT = { fleas: 'má blechy: škrábe se a srst nemá lesk.', tummy: 'má bolavé bříško: leží schoulená a málo jí.', cold: 'má rýmu: kýchá a teče jí z nosu.' };
 function handle(events) {
   const n = nm();
+  let newRoom = false;   // the room's picture changes (more beds, the cat flap): redrawn at once, not at the next tick
   for (const ev of events) {
     switch (ev.type) {
       case 'refused': toast(ev.reason); break;
@@ -6244,7 +6280,7 @@ function handle(events) {
       }
       case 'held': say('chirp'); buzz('tap'); break;
       case 'played': {
-        const id = Object.keys(TOY_ENGINE).find(k => TOY_ENGINE[k] === ev.toy);
+        const id = TOY_IDS.find(k => TOY_KINDS[k].includes(ev.toy));
         const T = toys[id], c = curBox(), at = T && T.on ? { x: T.x, y: T.y } : laser.dot ? { x: laser.dot.x, y: laser.dot.y } : { x: c.bx + 100 * KC, y: 560 };
         const right = at.x > c.bx + 100 * KC * c.sc;
         if (ev.toy !== 'laser') busy('play', { room: T && T.on ? T.room : G.her, pose: 'pounce', fx: at.x, fy: clamp(at.y + 8, 440, 596), ax: 36, flip: right, fast: true }, 1300, () => {
@@ -6261,17 +6297,17 @@ function handle(events) {
       case 'pill': notify(`${n} spolkla pilulku. Je úplně zdravá.`); popFx('sparkle'); break;
       case 'out': {
         say('meow');
-        const ex = ev.walk ? spot('garden', 'gate') : spot('hall', 'door');
-        if (ex) busy('leave', { room: ev.walk ? 'garden' : 'hall', pose: 'walk', fx: ex.x, fy: Math.max(ex.y + 8, 430) }, 300);
-        notify(ev.walk ? `${n} vyklouzla brankou na toulky. Vrátí se sama.` : `${n} šla ven. Vrátí se sama.`);
+        const gate = ev.walk && !ev.flap, ex = gate ? spot('garden', 'gate') : spot('hall', 'door');   // the cat flap is in the předsíň door
+        if (ex) busy('leave', { room: gate ? 'garden' : 'hall', pose: 'walk', fx: ex.x, fy: Math.max(ex.y + 8, 430) }, 300);
+        notify(ev.flap ? `${n} proklouzla dvířky v předsíni na toulky. Vrátí se sama.` : ev.walk ? `${n} vyklouzla brankou na toulky. Vrátí se sama.` : `${n} šla ven. Vrátí se sama.`);
         break;
       }
       case 'back': {
-        const back = ev.walk ? 'garden' : 'hall', ex = ev.walk ? spot('garden', 'gate') : spot('hall', 'door');
+        const gate = ev.walk && !ev.flap, back = gate ? 'garden' : 'hall', ex = gate ? spot('garden', 'gate') : spot('hall', 'door');
         if (places().includes(back)) G.her = back;
         if (ex) { const b = boxOf({ fx: ex.x, fy: Math.max(ex.y + 8, 430) }); setBox(b.bx, b.by, b.sc, 0); }
         showCat(G.her === G.view); say('trill');
-        let msg = ev.walk ? `${n} je zpátky z toulek!` : `${n} je zpátky doma!`;
+        let msg = ev.flap ? `${n} je zpátky z toulek – přišla dvířky v předsíni!` : ev.walk ? `${n} je zpátky z toulek!` : `${n} je zpátky doma!`;
         if (ev.postcard != null) msg += ' Přinesla pohlednici – je v Deníčku.';
         if (ev.present) msg += ` Přinesla ti ${presentAcc(ev.present)}.`;
         notify(msg, 4600, true);
@@ -6300,7 +6336,7 @@ function handle(events) {
         if (ev.delta < 0 && ev.kg < 3.6) notify(`${n} zhubla – potřebuje víc jíst.`);
         else if (ev.delta > 0 && ev.kg > 5) notify(`${n} trochu přibrala.`);
         break;
-      case 'levelUp': notify(`Přátelství roste: ${n} je teď ${ev.name.toLowerCase()}!`, 4200, true); popFx('heart', -14); popFx('heart', 14); say('trill'); break;
+      case 'levelUp': notify(`Přátelství roste: ${n} je teď ${ev.name.toLowerCase()}!`, 4200, true); popFx('heart', -14); popFx('heart', 14); say('trill'); newRoom = true; break;
       case 'birthday': notify(`${n} slaví výročí – je u nás už ${ev.age} ${plural(ev.age, 'rok', 'roky', 'let')}!`, 4200, true); break;
       case 'offended': notify(`${n} byla ${ev.days} ${plural(ev.days, 'den', 'dny', 'dní')} u paní Novákové. Je uražená, chvíli to potrvá.`, 5200, true); break;
       case 'gift': notify(`Za hry z výběru: +${ev.n} ${plural(ev.n, 'pamlsek', 'pamlsky', 'pamlsků')}.`); break;
@@ -6308,8 +6344,12 @@ function handle(events) {
       case 'tolerate': stay(); break;
       case 'bought': {
         const it = (E.SHOP || []).find(x => x.id === ev.id) || { name: 'to' };
-        toast(`Koupeno: ${it.name}.` + (ev.id === 'catFlap' ? ' Kočičí dvířka jsou na dveřích v předsíni.' : it.room && ev.id !== 'catFlap' ? ' Postavíš to přes Víc → Zařídit pokoj.' : ''), 3000);
-        if (ev.id === 'catFlap') roomKey = '';
+        const tid = TOY_IDS.find(k => TOY_KINDS[k][1] === ev.id);   // a toy for the tray: there at once instead of the basic one
+        if (tid) { toyKind[tid] = ev.id; trayKeys[tid] = ''; }
+        toast(`Koupeno: ${it.name}.` + (ev.id === 'catFlap' ? ' Dvířka jsou ve dveřích v předsíni. Když tu nejsi, chodí jimi sama ven a zase domů.'
+          : tid ? ` Je v liště místo ${{ mouse: 'myšky', feather: 'peříčka', yarn: 'klubíčka' }[tid]}. Ťuknutím je vyměníš.`
+          : it.room ? ' Postavíš to přes Víc → Zařídit pokoj.' : ''), 3200);
+        if (ev.id === 'catFlap') newRoom = true;
         trayKeys.food = ''; break;
       }
       case 'placed': popFx('sparkle'); break;
@@ -6386,10 +6426,14 @@ function handle(events) {
       case 'sown': toast(`Zaseto: ${E.CROPS[ev.crop].name}.`, 1800); break;
       case 'watered': toast('Záhony jsou zalité.', 1800); break;
       case 'ripe': notify(`Na zahradě dozrálo: ${E.CROPS[ev.crop].name}.`, 3200, true); break;
-      case 'harvested': toast(`Sklizeno: ${E.CROPS[ev.crop].name}.`, 1800); break;
+      case 'harvested':
+        if (ev.crop === 'catnip' && !events.some(e => e.type === 'catnip')) toast(`Sklizeno: šanta kočičí. Je v Deníčku v Pokladech – až bude ${n} vzhůru a doma, dáš jí ji odtamtud.`, 3400);
+        else toast(`Sklizeno: ${E.CROPS[ev.crop].name}.`, 1800);
+        break;
       case 'catnip': purr(3000, 1); popFx('sparkle'); popFx('heart', 20); notify(`Šanta kočičí! ${n} úplně šílí.`); busy('zoom', { room: G.her, pose: pose('trot', 'walk'), fx: 60 + Math.random() * 280, fy: 560, fast: true }, 400); break;
     }
   }
+  if (newRoom) { roomKey = ''; drawRoom(); placeItems(); }
 }
 function drawDiaryPill() { $('#btnDiary').classList.toggle('new', G.unread > 0); }
 // she comes by herself (called while the player sits, or happy): to the seat, jump up, and the lap
@@ -6594,7 +6638,12 @@ function onTap(ev) {
     const T = { food: `Přetáhni ${E.FOODS[foodKind].acc} do misky.`, water: 'Přetáhni konvici k misce s vodou.', scoop: 'Přetáhni lopatku na kočičí záchod.',
       brush: 'Přetáhni kartáč na ni a přejížděj po srsti.', treat: 'Přetáhni pamlsek k ní.', pill: 'Přetáhni pilulku k ní.',
       seeds: 'Přetáhni semínka na prázdný záhon.', can: 'Přetáhni konev na záhony – zalévá se jednou za den.',
-      mouse: 'Polož myšku na zem nebo ji švihni.', feather: 'Mávej peříčkem kousek od ní.', yarn: 'Polož klubíčko na zem nebo ho švihni.' };
+      mouse: TOY_HINT[toyNow('mouse')], feather: TOY_HINT[toyNow('feather')], yarn: TOY_HINT[toyNow('yarn')] };
+    if (TOY_KINDS[ev.item] && toyOwned(TOY_KINDS[ev.item][1])) {   // a bought toy of this kind: a tap switches them
+      const L = TOY_KINDS[ev.item], k = toyNow(ev.item) === L[0] ? L[1] : L[0];
+      toyKind[ev.item] = k; drawTray();
+      toast(`V liště je teď ${toyName(k)}. ${TOY_HINT[k]}`, 2600); return;
+    }
     toast(T[ev.item] || '', 2200); return;
   }
   if (ev.cat || regionAtClient(w.cx, w.cy)) {
@@ -6686,7 +6735,7 @@ function moveDrag(ev) {
       drag.nearMs += dt;
       if (drag.nearMs > 1100 && perf() - lastPlay > 2500) {
         drag.nearMs = 0; lastPlay = perf();
-        const evs = doAct('play', 'feather');
+        const evs = doAct('play', toyNow('feather'));
         if (evs.some(e => e.type === 'played') && K.act) K.act.p = Object.assign({}, K.act.p, { fx: w.r.x, fy: clamp(w.r.y + 60, 440, 596) });
       }
     }
@@ -8510,11 +8559,16 @@ function photoHTML(p) {
   }
   return `<div class="ph-in">${room}${vis}${cat}${kits}</div>${typeof A.photoFrame === 'function' ? A.photoFrame() : ''}`;
 }
+// the album shows the newest photos first, PHOTO_PAGE at a time (each photo is a whole drawn scene); "Ukázat starší
+// fotky" adds the next page, so every photo can be seen and deleted
+const PHOTO_PAGE = 24;
+let albumN = PHOTO_PAGE;
 function albumHTML(st) {
   const al = E.album ? E.album(st) : { photos: [], postcards: [], visitors: [] };
   const set = globalThis.IMAGE_SETS && IMAGE_SETS.nachod;
   let s = '';
-  s += `<section class="card"><h3>Fotky</h3>${al.photos.length ? `<div class="photos">${al.photos.slice(0, 24).map(p => `<figure class="ph">${photoHTML(p)}<figcaption>${date(p.t)}<button class="del" data-del="${p.t}" aria-label="Smazat fotku">✕</button></figcaption></figure>`).join('')}</div>${al.photos.length > 24 ? `<p class="fnote">A dalších ${al.photos.length - 24} starších fotek.</p>` : ''}`
+  const shown = Math.min(al.photos.length, albumN), rest = al.photos.length - shown;
+  s += `<section class="card"><h3>Fotky${al.photos.length > PHOTO_PAGE ? ` (${al.photos.length})` : ''}</h3>${al.photos.length ? `<div class="photos">${al.photos.slice(0, shown).map(p => `<figure class="ph">${photoHTML(p)}<figcaption>${date(p.t)}<button class="del" data-del="${p.t}" aria-label="Smazat fotku">✕</button></figcaption></figure>`).join('')}</div>${rest > 0 ? `<button class="big alt" data-more-photos>Ukázat starší fotky (ještě ${rest})</button>` : ''}`
     : '<p class="fnote">Zatím žádné. Fotoaparátem v rohu pokoje ji vyfotíš.</p>'}</section>`;
   const cards = al.postcards.filter(p => set && set.items[p.id]);
   if (cards.length) s += `<section class="card"><h3>Pohlednice z toulek</h3><div class="pcards">${cards.slice().reverse().map(p => { const it = set.items[p.id];
@@ -8550,17 +8604,31 @@ function diaryMore(st) {
   let s = typeof albumHTML === 'function' ? albumHTML(st) : '';
   const pr = st.presents || {}, pk = Object.keys(pr).filter(x => pr[x] > 0);
   const pa = st.pantry || {}, ck = Object.keys(pa).filter(x => pa[x] > 0 && E.CROPS && E.CROPS[x]);
-  if (pk.length || ck.length) s += `<section class="card"><h3>Poklady</h3>${pk.map(x => `<div class="stat">${icon('pamlsky')}<span>${esc((E.PRESENTS[x] || { name: x }).name)}</span><b>${pr[x]}</b></div>`).join('')}${ck.map(x => `<div class="stat">${icon('food')}<span>${esc(E.CROPS[x].name)}</span><b>${pa[x]}</b></div>`).join('')}</section>`;
+  if (pk.length || ck.length) s += `<section class="card"><h3>Poklady</h3>${pk.map(x => `<div class="stat">${icon('pamlsky')}<span>${esc((E.PRESENTS[x] || { name: x }).name)}</span><b>${pr[x]}</b></div>`).join('')}${ck.map(x => `<div class="stat">${icon('food')}<span>${esc(E.CROPS[x].name)}</span><b>${pa[x]}</b>${x === 'catnip' && can('catnip') ? `<button class="buy" data-catnip aria-label="Dát šantu kočce">Dát jí</button>` : ''}</div>`).join('')}</section>`;
   return s;
 }
-function openDiary() { hideToast(); renderDiary(); G.unread = 0; save(); drawDiaryPill(); $('#screenDiary').hidden = false; $('#screenDiary').scrollTop = 0; }
+function openDiary() { hideToast(); albumN = PHOTO_PAGE; renderDiary(); G.unread = 0; save(); drawDiaryPill(); $('#screenDiary').hidden = false; $('#screenDiary').scrollTop = 0; }
 $('#diaryIn').addEventListener('click', e => {
   if (e.target.closest('[data-act="close"]')) { $('#screenDiary').hidden = true; return; }
+  if (e.target.closest('[data-more-photos]')) { const y = $('#screenDiary').scrollTop; albumN += PHOTO_PAGE; renderDiary(); $('#screenDiary').scrollTop = y; return; }
+  if (e.target.closest('[data-catnip]')) { giveCatnip(); return; }
   const d = e.target.closest('[data-del]'); if (!d) return;
   const t = +d.dataset.del;
   showModal('<h2>Smazat fotku?</h2><p>Smazanou fotku už nejde vrátit.</p>', [{ text: 'Smazat', fn: () => { const y = $('#screenDiary').scrollTop; doAct('deletePhoto', { t }); renderDiary(); $('#screenDiary').scrollTop = y; } }, { text: 'Nechat', cls: 'alt' }]);
 });
 $('#btnDiary').addEventListener('click', openDiary);
+// šanta from the Poklady (harvested while she slept or was out): she gets it now, the Deníček closes so she is seen
+function giveCatnip() {
+  const n = nm(), evs = doAct('catnip'), bad = evs.find(e => e.type === 'refused');
+  if (bad) {
+    const h = E.health(G.st);
+    toast(h.out ? `${n} je venku. Šantu jí dáš, až bude doma.` : h.asleep ? `${n} spí. Šantu jí dáš, až se vzbudí.` : bad.reason, 2600);
+    const y = $('#screenDiary').scrollTop; renderDiary(); $('#screenDiary').scrollTop = y;
+    return;
+  }
+  $('#screenDiary').hidden = true;
+  if (G.her !== G.view && places().includes(G.her)) go(G.her, ORDER.indexOf(G.her) > ORDER.indexOf(G.view) ? 1 : -1);
+}
 
 /* ---------- Veterinář and the Pilulka minigame (15 s: drag the pill into her mouth while she wriggles) ---------- */
 let PG = null;
@@ -8797,6 +8865,7 @@ function renderHelp() {
     </section>
     <section class="card"><h3>Hraní</h3>
       ${hrow({ two: true, s: A.item('mouse') + A.item('feather') }, 'Hračky', `Myšku nebo klubko polož na zem, nebo je švihni – poletí a ${n} za nimi skočí. Ze země je zvedneš prstem. Peříčkem mávej kousek od ní, za chvilku po něm skočí. Jednu hračku má nejradši.`)}
+      ${hrow({ two: true, s: A.item(artOr('catnipMouse', 'mouse')) + A.item(artOr('ballBell', 'yarn')) }, 'Hračky z Obchůdku', 'Myška se šantou, míček s rolničkou a udice s peříčkem baví víc než obyčejné. Koupená hračka je v liště místo myšky, klubka nebo peříčka. Ťuknutím na ni je vyměníš.')}
       ${hrow(A.item('laserDot'), 'Laser', `Ťukni na Laser a přejížděj prstem po pokoji – ${n} běží za tečkou. Dalším ťuknutím laser vypneš. Vypne se i sám, když sáhneš na věc v liště.`)}
       ${hrow(icon('tilt'), 'Naklápění', 'Když je klubko na zemi, nakloň telefon a klubko se kutálí. Vypnout to jde v Nastavení.')}
       ${hrow(A.item('mouse'), 'Minihry', 'Víc → Minihry: Chyť myšku, Laserová honička, Peříčko a Rybaření (na zahradě u jezírka). Hra trvá 30 sekund, za body dostaneš pamlsky.')}
@@ -8808,7 +8877,8 @@ function renderHelp() {
       ${ul([
         '<b>Známá</b>: trik Sedni a další věci v Obchůdku.',
         '<b>Kamarádka</b>: toulky, trik Dej pac, v Obchůdku kočičí strom a kočičí dvířka.',
-        '<b>Parťačka</b> a nakonec <b>Nejlepší kamarádka</b>: ještě bližší přátelství.',
+        '<b>Parťačka</b>: na zahradě 6 záhonů místo 4.',
+        '<b>Nejlepší kamarádka</b>: ještě bližší přátelství.',
       ])}
     </section>
     <section class="card"><h3>Pamlsky</h3>
@@ -8841,14 +8911,15 @@ function renderHelp() {
         '<b>Krabice, parapet s polštářem</b>: ráda si v nich zdřímne.',
         '<b>Koberec, tunel</b>: ráda si tam lehne. <b>Lampa</b> je pro ozdobu.',
         '<b>Krmítko pro ptáky</b> (na zahradě): víc zábavy a víc dárků.',
+        '<b>Kočičí dvířka</b>: hned po koupi jsou ve dveřích v předsíni. Když tu nejsi, chodí jimi sama na toulky a zase domů.',
         '<b>Miska pro návštěvy</b> na zahradě: kočky od sousedů chodí častěji. Pomůže i pelíšek deluxe nebo parapet s polštářem postavený na zahradu.',
       ])}
     </section>
     <section class="card"><h3>Zahrada</h3>
       ${hrow(cat('stalk', 'happy'), 'Ven', `Na zahradu vedou dveře z předsíně. ${n} jde s tebou. Doma zůstane, jen když spí nebo má rýmu. Plíží se k ptáčkům a nosí ti dárky: pírko, lísteček nebo šišku. Déšť nesnáší: zmokne a je mrzutá. Domů jde zase s tebou, jen ze stromu musí nejdřív slézt.`)}
       ${hrow(cat('onBranch', 'calm'), 'Strom', 'Ráda leze na strom a někdy neumí dolů. Zavolej ji, nebo na ni podrž prst a sundáš ji. Nejpozději za půl hodiny sleze sama.')}
-      ${hrow({ two: true, s: A.item(artOr('seedPacket', 'treat')) + A.item(artOr('wateringCan', 'jug')) }, 'Záhony', 'Přetáhni semínka na prázdný záhon a vyber, co zaseješ. Jednou za den záhony zalij konví (když prší, zalije je déšť). Každý zalitý den rostlina povyroste: ředkvička je zralá za 2 dny, rajče za 6. Zralou úrodu sklidíš ťuknutím. Od prosince do února záhony spí.')}
-      ${typeof A.crop === 'function' ? hrow(A.crop('catnip', 3), 'Šanta kočičí', `Je jen pro kočku, nikdo ji nekoupí. Sklízej ji, když ${n} nespí a není na toulkách: radostí úplně šílí. Jinak šanta skončí v Pokladech v Deníčku a dát jí ji už nepůjde.`) : ''}
+      ${hrow({ two: true, s: A.item(artOr('seedPacket', 'treat')) + A.item(artOr('wateringCan', 'jug')) }, 'Záhony', 'Přetáhni semínka na prázdný záhon a vyber, co zaseješ. Jednou za den záhony zalij konví (když prší, zalije je déšť). Každý zalitý den rostlina povyroste: ředkvička je zralá za 2 dny, rajče za 6. Zralou úrodu sklidíš ťuknutím. Od prosince do února záhony spí. Od přátelství Parťačka máš 6 záhonů.')}
+      ${typeof A.crop === 'function' ? hrow(A.crop('catnip', 3), 'Šanta kočičí', `Je jen pro kočku, nikdo ji nekoupí. Sklidíš-li ji, když ${n} nespí a je doma, dostane ji hned a radostí úplně šílí. Jinak šanta počká v Deníčku v Pokladech: tlačítkem Dát jí ji dostane později.`) : ''}
       ${hrow(cat('walk', 'happy'), 'Toulky', 'Od přátelství Kamarádka ji můžeš pustit na toulky: na zahradě ťukni na Pustit ven. Vrátí se sama za 2 až 8 hodin, často s pohlednicí nebo dárkem. Pohlednice sbíráš v Deníčku.')}
     </section>
     <section class="card"><h3>Výcvik</h3>
@@ -8884,7 +8955,7 @@ function renderHelp() {
       ])}
     </section>
     <section class="card"><h3>Fotky a Deníček</h3>
-      ${hrow(icon('camera') || '<svg class="kx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.6"/></svg>', 'Fotky', 'Fotoaparátem vpravo dole v pokoji ji vyfotíš, i s návštěvou. V Deníčku uvidíš posledních 24 fotek. Smazat je jde křížkem.')}
+      ${hrow(icon('camera') || '<svg class="kx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.6"/></svg>', 'Fotky', 'Fotoaparátem vpravo dole v pokoji ji vyfotíš, i s návštěvou. V Deníčku jsou nejnovější fotky, starší ukáže tlačítko Ukázat starší fotky. Smazat je jde křížkem.')}
       ${hrow(icon('diary'), 'Deníček', 'Tlačítko nahoře. Je tam přátelství, váha, pamlsky a všechno, co už o ní víš, dál fotky, pohlednice z toulek, koťátka, kočky od sousedů a poklady (dárky a úroda). Tečka na tlačítku znamená něco nového.')}
     </section>
     <section class="card"><h3>Tipy</h3>

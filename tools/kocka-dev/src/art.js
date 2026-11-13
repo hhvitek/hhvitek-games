@@ -36,12 +36,15 @@
 //   room(o) / room(phase, season)  <svg> viewBox 0 0 400 600, preserveAspectRatio xMidYMid slice.
 //                            o = { id: 'living'|'kitchen'|'hall'|'garden', phase: 'morning'|'day'|'evening'|'night',
 //                            season: 'spring'|'summer'|'autumn'|'winter', sunX: 0..1, holiday: null | id | [ids],
-//                            flap: bool (cat flap in the hall door), weather: null|'rain'|'snow' }. Holiday ids: advent,
+//                            flap: bool (cat flap in the hall door), weather: null|'rain'|'snow', beds: 4|6 (garden:
+//                            how many beds, see bedSpots) }. Holiday ids: advent,
 //                            mikulas, vanoce, silvestr, masopust, velikonoce, carodejnice, dusicky, narozeniny.
 //   rooms                    { id: { name (Czech), spots: { name: {x, y} } } } for the four places (room coordinates,
 //                            where an item or Koxa stands): living (Obývák: rug, bed, window, chair = armchair seat, sun),
 //                            kitchen (Kuchyně: bowl, water, counter, window), hall (Předsíň: litter, door, shoe, mat),
 //                            garden (Zahrada: door, gate, tree, branch, branch2, bench, feeder, yard, bed1..bed4).
+//   bedSpots(n)              the garden beds in one row along the bottom: n = 4 (wide, = bed1..bed4) or 6 (narrower,
+//                            from bond level Parťačka): [{ x, y, w }] (x = middle, y = the spot's foot, w = width).
 //   spots                    the old single-room spots { bowl, water, litter, bed, window, door }, kept for old code.
 //   sunPatch(sunX)           {x, y}: the middle of the living-room sun patch on the floor (x 95…235), for a sun nap.
 //   lap({ phase, season, place: 'chair'|'bench' })  the lap close-up (400×600, slice); lapSpot = { x, y, size }: her
@@ -1280,6 +1283,12 @@ function KockaArt() {
     `<path d="M262 470V368Q262 350 279 350Q296 350 296 368V470Z" fill="${AC.fab}"/><path d="M368 470V368Q368 350 384 350Q400 350 400 368V470Z" fill="${AC.fab}"/></g>` +
     `<g fill="${AC.line}"><circle cx="314" cy="324" r="2.4"/><circle cx="350" cy="324" r="2.4"/><circle cx="332" cy="352" r="2.4"/><circle cx="314" cy="376" r="2.4"/><circle cx="350" cy="376" r="2.4"/></g>`;
   const rug = () => '<ellipse cx="200" cy="534" rx="172" ry="46" fill="#5f8580"/><g fill="none"><ellipse cx="200" cy="534" rx="154" ry="39" stroke="#7fa39d" stroke-width="7"/><ellipse cx="200" cy="534" rx="122" ry="29" stroke="#c9b38a" stroke-width="5"/><ellipse cx="200" cy="534" rx="88" ry="19" stroke="#7fa39d" stroke-width="6"/><ellipse cx="200" cy="534" rx="172" ry="46" stroke="#4d6e6a" stroke-width="2"/></g>';
+  // the garden beds in one row along the bottom (y 508–580): 4 wide ones, or 6 narrower ones that end at x 330, so the
+  // camera button in the scene's bottom right corner covers none of them
+  function bedSpots(n) {
+    const six = n === 6, w = six ? 48 : 86, gap = six ? 6 : 10, x0 = six ? 12 : 16;
+    return Array.from({ length: six ? 6 : 4 }, (_, i) => ({ x: x0 + i * (w + gap) + w / 2, y: 566, w }));
+  }
   const PLACES = {
     living: {
       name: 'Obývák',
@@ -1395,10 +1404,10 @@ function KockaArt() {
         if (snow) s += '<path d="M262 226Q300 232 330 242M354 198Q372 188 394 178" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none"/>' + crown('winter', 340, 140, 3.2);
         else s += `<g opacity="${se === 'autumn' ? 0.95 : 1}">${crown(se, 336, 132, 3.4)}</g>`;
         // the beds (záhony): wooden edges, soil, snow in winter
-        for (let i = 0; i < 4; i++) {
-          const x = 16 + i * 96;
-          s += `<rect x="${x}" y="508" width="86" height="72" rx="6" fill="#8a5a32" stroke="#4a2e18" stroke-width="2.5"/><rect x="${x + 7}" y="515" width="72" height="58" rx="4" fill="${snow ? '#f2f6f9' : '#5a3a22'}"/>` +
-            (snow ? '' : `<path d="M${x + 12} 530H${x + 74}M${x + 12} 546H${x + 74}M${x + 12} 562H${x + 74}" stroke="#46301c" stroke-width="2"/>`);
+        for (const b of bedSpots(c.beds)) {
+          const x = b.x - b.w / 2, w = b.w;
+          s += `<rect x="${x}" y="508" width="${w}" height="72" rx="6" fill="#8a5a32" stroke="#4a2e18" stroke-width="2.5"/><rect x="${x + 7}" y="515" width="${w - 14}" height="58" rx="4" fill="${snow ? '#f2f6f9' : '#5a3a22'}"/>` +
+            (snow ? '' : `<path d="M${x + 12} 530H${x + w - 12}M${x + 12} 546H${x + w - 12}M${x + 12} 562H${x + w - 12}" stroke="#46301c" stroke-width="2"/>`);
         }
         // the light of the day phase; fireflies on summer nights; the weather
         if (ph === 'morning') s += '<rect width="400" height="600" fill="#ffb36b" opacity=".08"/>';
@@ -1417,7 +1426,7 @@ function KockaArt() {
     const o = typeof a === 'string' ? { phase: a, season: b } : Object.assign({}, a);
     const P = PLACES[o.id] || PLACES.living;
     const c = { ph: SKY[o.phase] ? o.phase : 'day', se: HILL[o.season] ? o.season : 'summer', sunX: Number.isFinite(o.sunX) ? Math.min(1, Math.max(0, o.sunX)) : 0.5,
-      hol: [].concat(o.holiday || []), flap: !!o.flap, weather: o.weather === 'rain' || o.weather === 'snow' ? o.weather : null, holes: [] };
+      hol: [].concat(o.holiday || []), flap: !!o.flap, weather: o.weather === 'rain' || o.weather === 'snow' ? o.weather : null, beds: o.beds === 6 ? 6 : 4, holes: [] };
     return `<svg class="kx-room" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${P.draw(c)}</svg>`;
   }
   const rooms = {};
@@ -1683,7 +1692,7 @@ function KockaArt() {
 @media (prefers-reduced-motion:reduce){.koxa,.koxa *,.kx-item *,.kx-room *,.kx-fx-float{animation:none!important}.koxa .kx-z{opacity:.9}}
 `;
 
-  return { css, cat, poses: Object.keys(POSES), regions, kitScale, kitAnchor, room, spots: spotsAt, item, items: Object.keys(ITEMS), face,
+  return { css, cat, poses: Object.keys(POSES), regions, kitScale, kitAnchor, room, bedSpots, spots: spotsAt, item, items: Object.keys(ITEMS), face,
     mouth, itemHeld, sunPatch, rooms, lap, lapSpot, crop, crops: CROPS, cropSlot, anchors: ANCHORS, itemSize, itemPoints, mouseHole, mousePeek, fish, fishes: Object.keys(FISH), marker,
     shop, shopSpots, postcardFrame, postcardHole, photoFrame, photoHole, neighbour, neighbours, icon, icons: Object.keys(ICONS), fx, fxs: Object.keys(FX), vet, vetSpots };
 }

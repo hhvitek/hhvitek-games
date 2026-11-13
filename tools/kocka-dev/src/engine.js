@@ -149,7 +149,8 @@ function KockaEngine() {
   });
   const BASE_TOYS = deep(['mouse', 'feather', 'ball', 'laser']);
   const ROOMS = deep(['living', 'kitchen', 'hall', 'garden']);
-  // the shop (Obchůdek); bond = the bond level (0–4) from which it is offered; room: where furniture goes (fixed: only there)
+  // the shop (Obchůdek); bond = the bond level (0–4) from which it is offered; room: where furniture goes (fixed: only there;
+  // install: put there at once when bought, the player never places it)
   const SHOP = deep([
     { id: 'pouch5', kind: 'food', name: 'Kapsičky (5 porcí)', price: 8, bond: 0, room: null, stock: 'pouch', n: 5 },
     { id: 'chicken5', kind: 'food', name: 'Kuře (5 porcí)', price: 12, bond: 0, room: null, stock: 'chicken', n: 5 },
@@ -167,7 +168,7 @@ function KockaEngine() {
     { id: 'sillCushion', kind: 'furniture', name: 'Parapet s polštářem', price: 40, bond: 1, room: 'living' },
     { id: 'bedDeluxe', kind: 'furniture', name: 'Pelíšek deluxe', price: 60, bond: 1, room: 'living' },
     { id: 'catTree', kind: 'furniture', name: 'Kočičí strom', price: 120, bond: 2, room: 'living' },
-    { id: 'catFlap', kind: 'furniture', name: 'Kočičí dvířka', price: 80, bond: 2, room: 'hall', fixed: true },
+    { id: 'catFlap', kind: 'furniture', name: 'Kočičí dvířka', price: 80, bond: 2, room: 'hall', fixed: true, install: true },
     { id: 'visitorBowl', kind: 'furniture', name: 'Miska pro návštěvy', price: 15, bond: 0, room: 'garden', fixed: true },
     { id: 'seedsRadish', kind: 'seed', name: 'Semínka ředkvičky (3 sáčky)', price: 8, bond: 0, room: null, stock: 'seed_radish', n: 3 },
     { id: 'seedsCarrot', kind: 'seed', name: 'Semínka mrkve (3 sáčky)', price: 12, bond: 0, room: null, stock: 'seed_carrot', n: 3 },
@@ -385,9 +386,10 @@ function KockaEngine() {
     st.wet = soon(st.wet, GARDEN.wetFor * MIN);
     const B = Array.isArray(st.beds) ? st.beds : [];
     st.beds = [];
+    const open = bedCount(st);   // from the repaired lvl: a crop on a bed not open yet (a broken save) would be invisible
     for (let i = 0; i < BEDS; i++) {
       const b = B[i];
-      st.beds.push(b && typeof b === 'object' && has(CROPS, b.crop) && okT(b.sown) ? {
+      st.beds.push(i < open && b && typeof b === 'object' && has(CROPS, b.crop) && okT(b.sown) ? {
         crop: b.crop, sown: Math.min(b.sown, t), days: Math.floor(num(b.days, 0, 0, CROPS[b.crop].days)),
         watered: isKey(b.watered) && b.watered <= dkey(t) ? b.watered : 0,
       } : null);
@@ -405,6 +407,8 @@ function KockaEngine() {
       if (it && st.owned[k] && it.room && ROOMS.includes(p.room) && (!it.fixed || p.room === it.room))
         st.furniture[k] = { room: p.room, x: num(p.x, 0.5, 0, 1), y: num(p.y, 0.5, 0, 1) };
     }
+    // installed things (the cat flap) are in place whenever they are owned (older saves bought them without it)
+    for (const it of SHOP) if (it.install && st.owned[it.id] && !st.furniture[it.id]) st.furniture[it.id] = { room: it.room, x: 0.5, y: 0.5 };
     const RE = obj(st.records); st.records = {};
     for (const k of Object.keys(RE)) { const r = obj(RE[k]); if (has(GAMES, k) && r.best >= 1 && okT(r.t)) st.records[k] = { best: Math.floor(num(r.best, 0, 0, 999)), t: Math.min(r.t, t) }; }
     const TK = obj(st.tricks); st.tricks = {};
@@ -640,9 +644,9 @@ function KockaEngine() {
     ev.push(Object.assign({ type: 'cured', kind, by }, extra || {}));
   }
   function comeBack(st, t, ev) {
-    const d = t - st.out.since, walk = st.out.walk;
+    const d = t - st.out.since, walk = st.out.walk, flap = walk && !st.out.byPlayer;   // a walk she began by herself: through the cat flap
     st.out = null; st.acc.cold = 0;
-    const e = { type: 'back', minutes: Math.round(d / MIN), walk, postcard: null, present: null };
+    const e = { type: 'back', minutes: Math.round(d / MIN), walk, flap, postcard: null, present: null };
     if (walk) {
       // a walk (toulka): a postcard 60 %, a dárek 20 %, nothing 20 %
       if (d > st.walkMax) st.walkMax = d;
@@ -1199,6 +1203,7 @@ function KockaEngine() {
         st.pamlsky -= it.price;
         if (it.stock) st.stock[it.stock] = Math.min(CMAX, (st.stock[it.stock] || 0) + it.n); else st.owned[it.id] = true;
         ev.push({ type: 'bought', id: it.id, kind: it.kind });
+        if (it.install) st.furniture[it.id] = { room: it.room, x: 0.5, y: 0.5 };   // the cat flap: in the předsíň door at once
         break;
       }
       case 'place': {

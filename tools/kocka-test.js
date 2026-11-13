@@ -909,6 +909,13 @@ section('Beds');
   E.repair(rp);
   ok(rp.beds.length === 6 && rp.beds.every(b => b === null) && JSON.stringify(rp.pantry) === '{"carrot":2}' && JSON.stringify(rp.presents) === '{"cone":2}' && rp.yard === null && rp.wet === 0, 'repair: beds, pantry, presents, yard, wet');
   const ok2 = clone(st); E.repair(ok2); ok(JSON.stringify(ok2) === JSON.stringify(st), 'a garden state is canonical');
+  // a crop on a bed that is not open yet (a broken save: beds 5–6 below Parťačka) is dropped, the open beds keep theirs
+  const hb = clone(bp); hb.bond = 300; hb.lvl = 2; hb.beds[1] = clone(hb.beds[5]); hb.beds[4] = clone(hb.beds[5]);
+  E.repair(hb);
+  ok(E.bedCount(hb) === 4 && hb.beds.length === 6 && hb.beds[4] === null && hb.beds[5] === null && hb.beds[1] && hb.beds[1].crop === 'radish',
+    'repair: crops on beds not open yet are dropped, the open ones kept');
+  const hb2 = clone(hb); E.repair(hb2); ok(JSON.stringify(hb2) === JSON.stringify(hb), 'repair of the hidden beds is idempotent');
+  const bp2 = clone(bp); E.repair(bp2); ok(JSON.stringify(bp2) === JSON.stringify(bp) && bp2.beds[5] && bp2.beds[5].crop === 'radish', 'repair keeps the crop on bed 6 at Parťačka');
 }
 
 /* ---------- 18. every good stroke gets a visible reaction ---------- */
@@ -2356,6 +2363,67 @@ section('Visitors 4 (kittens)');
     console.log(`  kitten fuzz: ${need.map(k => `${k} ${seen[k] || 0}`).join(', ')}`);
     ok(need.every(k => seen[k] > 0), `the kitten fuzz meets the kitten events (missing: ${need.filter(k => !seen[k]).join(', ')})`);
   }
+}
+
+section('Cat flap installed, shop toys, šanta from the pantry');
+{
+  const t0 = at(2026, 6, 10, 10);
+  // buying the cat flap puts it in the předsíň door at once (it used to stay unplaced, so she never went out by herself)
+  const cf = friend(E.create(31, t0, 'Koxa')); cf.pamlsky = 100;
+  ok(E.act(cf, 'buy', 'catFlap', t0).events.some(e => e.type === 'bought') && cf.furniture.catFlap && cf.furniture.catFlap.room === 'hall' && cf.pamlsky === 20,
+    'buying the cat flap installs it in the předsíň');
+  invariants(cf, 'cat flap bought');
+  let walks = 0;
+  for (let s = 1; s <= 10; s++) {
+    const st = friend(E.create(100 + s, at(2026, 6, 10, 8), 'Koxa')); st.pamlsky = 100;
+    E.act(st, 'buy', 'catFlap', st.t);
+    const r = E.advance(st, at(2026, 6, 11, 20)).events;
+    if (r.some(e => e.type === 'out' && e.flap) && r.some(e => e.type === 'back' && e.walk && e.flap)) walks++;
+    invariants(st, `cat flap walks ${s}`);
+  }
+  ok(walks >= 8, `a bought cat flap: she goes out by herself and comes back through it (${walks}/10 cats in 36 h)`);
+  // a walk through the garden gate (Pustit ven) comes back as a gate walk, not through the flap
+  const gw = clone(cf); const go = E.act(gw, 'letOut', null, gw.t).events, gb = E.advance(gw, gw.t + 9 * H).events.find(e => e.type === 'back');
+  ok(go.some(e => e.type === 'out' && e.walk && !e.flap) && gb && gb.walk && gb.flap === false, 'a walk through the gate: out and back without the flap');
+  // an older save that bought it without installing it gets it on load; nothing without owning it
+  const old = clone(cf); delete old.furniture.catFlap; E.repair(old);
+  ok(old.furniture.catFlap && old.furniture.catFlap.room === 'hall' && JSON.stringify(old) === JSON.stringify(cf), 'repair installs an owned cat flap in an older save');
+  const no = clone(cf); no.owned = {}; E.repair(no); ok(!no.furniture.catFlap, 'no cat flap without owning it');
+  const moved = clone(cf); moved.furniture.catFlap = { room: 'living', x: 0.1, y: 0.1 }; E.repair(moved);
+  ok(moved.furniture.catFlap && moved.furniture.catFlap.room === 'hall', 'a cat flap in a wrong room goes back to the předsíň');
+
+  // shop toys: refused until bought, then they play like their basic toy plus the bonus (her favourite counts for its kind)
+  for (const [k, base] of [['catnipMouse', 'mouse'], ['bellBall', 'ball'], ['featherWand', 'feather']]) {
+    const a = friend(E.create(40, t0, 'Koxa')), b = friend(E.create(40, t0, 'Koxa'));   // the udice is offered from Známá
+    a.needs.fun = b.needs.fun = 50; b.pamlsky = 100;
+    ok(E.act(b, 'play', k, t0).events[0].type === 'refused', `${k}: refused before it is bought`);
+    ok(E.act(b, 'buy', k, t0).events.some(e => e.type === 'bought' && e.kind === 'toy') && b.owned[k] === true, `${k}: bought`);
+    const pa = E.act(a, 'play', base, t0).events.find(e => e.type === 'played'), pb = E.act(b, 'play', k, t0).events.find(e => e.type === 'played');
+    ok(pa && pb && pb.toy === k && pb.fav === pa.fav && pb.gain === pa.gain + E.TOYS[k].bonus && E.TOYS[k].bonus > 0,
+      `${k} plays as ${base} with its bonus (+${pb && pb.gain} vs +${pa && pa.gain})`);
+    invariants(b, `shop toy ${k}`);
+  }
+  const fv = E.create(41, t0, 'Koxa'); fv.traits.toy = 'mouse'; fv.owned.catnipMouse = true;
+  ok(E.act(fv, 'play', 'catnipMouse', t0).events.some(e => e.type === 'played' && e.fav), 'her favourite kind counts for the shop toy too');
+
+  // šanta harvested while she sleeps (or is out) goes to the pantry and she gets it later
+  const cn = E.create(50, at(2026, 6, 10, 14), 'Koxa');
+  cn.beds[0] = { crop: 'catnip', sown: cn.t - 3 * D, days: 3, watered: 0 };
+  cn.asleep = true; cn.sleepAt = cn.t; cn.needs.energy = 20;
+  const hv = E.act(cn, 'harvest', { bed: 0 }, cn.t).events;
+  ok(hv.some(e => e.type === 'harvested' && e.crop === 'catnip') && !hv.some(e => e.type === 'catnip') && cn.pantry.catnip === 1, 'šanta harvested while she sleeps: into the pantry');
+  invariants(cn, 'catnip in the pantry');
+  ok(E.act(cn, 'catnip', null, cn.t).events.some(e => e.type === 'refused') && cn.pantry.catnip === 1, 'šanta from the pantry: not while she sleeps (kept)');
+  cn.asleep = false; cn.wokeAt = cn.t; cn.needs.fun = 20; cn.needs.energy = 80;
+  const gv = E.act(cn, 'catnip', null, cn.t).events;
+  ok(gv.some(e => e.type === 'catnip') && !cn.pantry.catnip && cn.needs.fun === 80, 'šanta from the pantry: she goes wild (fun +60), the pantry is empty');
+  ok(E.act(cn, 'catnip', null, cn.t).events[0].reason === 'Nemáš žádnou šantu.', 'no more šanta: refused');
+  invariants(cn, 'catnip given');
+  const co = E.create(51, at(2026, 6, 10, 14), 'Koxa'); co.pantry.catnip = 2;
+  co.out = { since: co.t, until: co.t + 3 * H, walk: true, byPlayer: true };
+  ok(E.act(co, 'catnip', null, co.t).events[0].type === 'refused' && co.pantry.catnip === 2, 'šanta from the pantry: not while she is out (kept)');
+  co.beds[1] = { crop: 'catnip', sown: co.t - 3 * D, days: 3, watered: 0 };
+  ok(!E.act(co, 'harvest', { bed: 1 }, co.t).events.some(e => e.type === 'catnip') && co.pantry.catnip === 3, 'šanta harvested while she is out: into the pantry');
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

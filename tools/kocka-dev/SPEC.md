@@ -161,18 +161,23 @@ Pointer Events on the scene; mouse and pen behave like one finger.
   3–8, vet 15. Care must stay possible with free granule and water only (tested: 30 days, no pamlsky).
 - **Tricks (Výcvik):** sedni (bond 100, gesture: swipe up), dej pac (300, tap her paw), otoč se (500, a circle),
   panáček (750, two swipes up); a treat within 1.5 s after she performs; 5 successes learn it.
-- **Garden (Etapa 3):** 4 beds (6 with bond 600), crops from `IMAGE_SETS.produce` drawings (ředkvička 2 days, mrkev 4,
-  jahody 5, rajče 6, šanta kočičí 3 → catnip toy: fun +60, wild zoomies), watering once a day by dragging the can
+- **Garden (Etapa 3):** 4 beds (6 with bond 600: the garden then draws 6 narrower beds in the same row, clear of the camera button, `A.bedSpots(n)`), crops from `IMAGE_SETS.produce` drawings (ředkvička 2 days, mrkev 4,
+  jahody 5, rajče 6, šanta kočičí 3 → catnip toy: fun +60, wild zoomies; harvested while she sleeps or is out it goes to
+  the pantry and the player gives it later with "Dát jí" in Deníček → Poklady, action `catnip`), watering once a day by dragging the can
   (an unwatered day pauses growth, never kills), nothing grows outdoors Dec–Feb ("záhony spí pod sněhem");
   birds from `IMAGE_SETS.birds` visit the feeder and she stalks them; dárky (pírko, lísteček, šiška).
-- **Toulky (Etapa 4):** "Pustit ven" starts a walk of 2–8 h (seeded); with the cat flap (bond 300) she also goes out by
+- **Toulky (Etapa 4):** "Pustit ven" starts a walk of 2–8 h (seeded); with the cat flap (bond 300; `install: true`: buying
+  it puts it in the předsíň door at once, repair installs it for older saves that own it) she also goes out by
   herself while the player is away; returns with a postcard (`IMAGE_SETS.nachod` item, no repeat until all 42 are
   collected; Czech text "Byla jsem u …"), a dárek or nothing. Credits screen `#screenCredits` lists photo authors and
   licenses (copy from games/mahjong or games/pexeso).
 - **Visitors:** neighbour cats Mourek, Líza, Bivoj, Čiperka, Pacička, Rambo, Šedivka, Fousek (recoloured rig, each a
   trait); they come to the garden when a bowl or cushion is placed there; friendship 0–5 hearts.
 - **Album:** photos taken with the in-game camera (stores pose + scene + date, redrawn, not pixels), postcards,
-  visitors, deník.
+  visitors, deník. At most 200 photos; the Deníček shows the newest 24 and "Ukázat starší fotky" adds 24 more each tap.
+- **Shop toys:** myška se šantou (base mouse, fun +15), míček s rolničkou (base ball, +10), udice s peříčkem (base
+  feather, +10) take the place of their basic toy in the tray once bought; a tap on the tray toy switches between the
+  two. They play like the basic toy (her favourite counts for its kind) with the bonus.
 - **Room:** furniture by drag (škrabadlo, pelíšek, parapet s polštářem, kočičí strom, krabice, koberec, lampa),
   unlocked by bond + bought with pamlsky; positions saved; the window shows season and day phase.
 
