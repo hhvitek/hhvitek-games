@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Kočka: přehlednější nápověda s kratšími větami. Nově v ní najdeš, jak získat pamlsky a za co je utratit, co přináší přátelství, co dělá nábytek, jak fungují záhony, nemoci a co se děje, když tu nejsi.
+
 ## 1.0.19 – 2026-11-13
 
 - Dáma: nový nejslabší soupeř Začátečník ★☆☆ pro ty, kdo se dámu teprve učí: táhne hlavně vpřed, nepromýšlí, co uděláš ty, a často ti daruje kámen.

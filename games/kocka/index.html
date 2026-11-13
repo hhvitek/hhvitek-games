@@ -160,14 +160,15 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 .name{width:100%;height:52px;border-radius:14px;border:3px solid var(--pline);background:var(--popt);color:var(--pink);font:inherit;font-size:20px;padding:0 14px}
 
 /* ---------- Help, Deníček and the vet (paper screens) ---------- */
-.hrow{display:flex;gap:12px;align-items:center;padding:12px 0;border-top:2px solid var(--pline)}
+/* the text flows round the picture and then uses the whole width (a narrow column beside it made tall thin walls) */
+.hrow{display:flow-root;padding:10px 0;border-top:2px solid var(--pline)}
 .card h3 + .hrow{border-top:0}
-.hpic{flex:none;position:relative;width:96px;height:96px;border-radius:14px;background:#ead7b6;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+.hpic{float:left;margin:2px 12px 4px 0;position:relative;width:96px;height:96px;border-radius:14px;background:#ead7b6;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
 .hpic > svg{width:100%;height:100%}
 .hpic.two > svg{width:50%;height:60%;align-self:center}
 .hpic .ov{position:absolute;inset:0;width:100%;height:100%}
 .hrow p{font-size:18px;line-height:1.4}
-.hrow p b{display:block;font-size:19px;margin-bottom:2px}
+.hrow p b{font-size:19px}
 .nlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-top:8px}
 .nlist span{display:flex;align-items:center;gap:8px;font-size:18px}
 .nlist .kx-icon{width:26px;height:26px;color:var(--pbtn)}
@@ -348,6 +349,11 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 .ph-v2 svg{width:100%;height:100%}
 .vlikes{margin:0 0 12px 22px;font-size:17px;line-height:1.4;color:var(--pink)}
 .vlikes li{margin:4px 0}
+.hlist{margin:6px 0 4px 22px;font-size:18px;line-height:1.4}
+.hlist li{margin:4px 0}
+.card h4{font-size:19px;margin:14px 0 0}
+.hpic > .kx-icon{width:56%;height:56%;align-self:center;color:var(--pbtn)}
+@media (max-width:400px){.hpic{width:66px;height:66px;margin-right:10px}}
 </style>
 </head>
 <body>
@@ -8566,7 +8572,7 @@ function renderVet() {
     ${h.ill ? `<section class="card"><h3>Co jí je</h3>${pic}
       <p class="fnote">${esc(n)} ${ILL_TEXT[h.ill] || ''}</p>
       <div class="stat">${icon('pamlsky')}<span>Léčba stojí 15 pamlsků</span><b>máš ${have}</b></div>
-      ${have < 15 ? '<div class="notice">Co chybí, zaplatíš příště. Veterinář ji vyléčí i tak.</div>' : ''}
+      ${have < 15 ? '<div class="notice">Máš jich míň, tak si vezme jen ty, co máš. Vyléčí ji i tak.</div>' : ''}
       <p class="fnote">Dej jí pilulku: přetáhni ji do pusy, když ji otevře. Máš na to 15 sekund.</p>
       <div id="pillGame" hidden></div>
       <button class="big" id="btnPill">Dát pilulku</button></section>`
@@ -8649,7 +8655,7 @@ function finishPill(won) {
     <div class="vetpic">${typeof A.vet === 'function' ? A.vet() : ''}${A.cat('sit', { mood: won ? 'happy' : 'calm' })}</div>
     <p class="fnote">${won ? `${esc(n)} spolkla pilulku a je zdravá.` : `Veterinář ji i tak vyléčil. Zítra jí doma dej ještě jednu pilulku.`}</p>
     <div class="stat">${icon('pamlsky')}<span>Zaplaceno</span><b>${paid} ${plural(paid, 'pamlsek', 'pamlsky', 'pamlsků')}</b></div>
-    ${c && c.short ? '<div class="notice">Zbytek zaplatíš příště.</div>' : ''}
+    ${c && c.short ? '<div class="notice">Víc pamlsků nebylo, tak si vzal jen tyhle.</div>' : ''}
     <button class="big" data-act="close">Zpět domů</button>`;
 }
 
@@ -8735,7 +8741,7 @@ const arrow = (x1, y1, x2, y2, c = '#2a8a3a') => { const a = Math.atan2(y2 - y1,
   return `<path d="M${x1} ${y1}L${x2} ${y2}M${p(Math.PI * .8)}L${x2} ${y2}L${p(-Math.PI * .8)}" fill="none" stroke="#fff" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><path d="M${x1} ${y1}L${x2} ${y2}M${p(Math.PI * .8)}L${x2} ${y2}L${p(-Math.PI * .8)}" fill="none" stroke="${c}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`; };
 const finger = (x, y) => `<circle cx="${x}" cy="${y}" r="13" fill="#fff" fill-opacity=".75" stroke="#7a4520" stroke-width="4"/>`;
 const ov = s => `<svg class="ov" viewBox="0 0 200 200">${s}</svg>`;
-const hrow = (pic, title, text) => `<div class="hrow"><div class="hpic${pic.two ? ' two' : ''}">${pic.s || pic}</div><p><b>${title}</b>${text}</p></div>`;
+const hrow = (pic, title, text) => `<div class="hrow"><div class="hpic${pic.two ? ' two' : ''}">${pic.s || pic}</div><p><b>${title}${/[.!?]$/.test(title) ? '' : '.'}</b> ${text}</p></div>`;
 // the stroking tips of the cats already met (help)
 function metLikes() {
   if (typeof E.visitorLikes !== 'function') return '';
@@ -8745,66 +8751,149 @@ function metLikes() {
   return L.length ? `<ul class="vlikes">${L.map(x => `<li>${esc(x.text)}</li>`).join('')}</ul>` : '';
 }
 function renderHelp() {
-  const n = esc(nm());
+  const raw = nm(), n = esc(raw), sN = esc(withHer(raw));
+  const ul = items => `<ul class="hlist">${items.map(x => `<li>${x}</li>`).join('')}</ul>`;
+  const nb = (id, pose, o) => (typeof A.neighbour === 'function' ? A.neighbour(id, pose, o) : '');
+  const cat = (pose, o, alt = 'sit') => A.cat(hasPose(pose) ? pose : alt, o);
+  const tap = (x, y) => `<circle cx="${x}" cy="${y}" r="27" fill="none" stroke="#fff" stroke-width="9"/><circle cx="${x}" cy="${y}" r="27" fill="none" stroke="#7a4520" stroke-width="4"/>${finger(x, y)}`;
+  const likes = metLikes();
   $('#helpIn').innerHTML = `
     <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Kočka<small>Jak hrát</small></h2></div>
-    <section class="card help"><h3>${n} a ty</h3>
-      <p>${n} žije v chaloupce podle skutečných hodin v telefonu: v noci spí, ráno má hlad, odpoledne si zdřímne na sluníčku a večer si chce hrát. Starej se o ni prstem – hlaď ji, krm ji a hraj si s ní. Dole se vždy dočteš, co zrovna potřebuje.</p></section>
-    <section class="card"><h3>Mazlení</h3>
-      ${hrow(A.cat('sit', 'happy') + ov(arrow(84, 96, 128, 160)), 'Hlazení', 'Přejeď prstem po srsti – od hlavy k ocasu, ne moc rychle. Proti srsti se jí to nelíbí. Každá kočka má svá oblíbená místa.')}
-      ${hrow(A.cat('sit', 'happy') + ov(finger(80, 46) + finger(120, 46)), 'Drbání', 'Dvěma prsty ji drbej za ušima, na hlavě nebo na bradě – prsty sem a tam.')}
-      ${hrow(A.cat('carried', 'happy'), 'Chování', 'Podrž na ní prst a zvedneš ji. Přenes ji do pelíšku, na okno nebo ke dveřím – tam ji pustíš ven. Když nemá náladu, vykroutí se.')}
-      ${hrow(A.cat('sit', 'calm') + ov('<path d="M60 40c20-30 60-30 80 0" fill="none" stroke="#7a4520" stroke-width="6" stroke-dasharray="8 8"/>'), 'Klepnutí', 'Klepni na ni a podívá se na tebe. Když něco chce, ukáže ti to.')}
+    <section class="card"><h3>Začni tady</h3>
+      ${ul([
+        '<b>Jídlo:</b> v kuchyni přetáhni Granule z lišty do misky.',
+        '<b>Pití:</b> přetáhni Vodu z lišty k misce s vodou.',
+        '<b>Záchod:</b> v předsíni přetáhni Lopatku na špinavý záchod.',
+        '<b>Hlazení:</b> přejeď prstem po srsti od hlavy k ocasu.',
+        `<b>Zavolat:</b> tlačítko v liště ji přivolá.`,
+      ])}
+      <p class="fnote">Co potřebuje, ukazují čárky nahoře a řádek dole pod pokojem. Tuhle nápovědu otevřeš kdykoli otazníkem.</p>
     </section>
-    <section class="card"><h3>Dům a zahrada</h3>
-      <p class="fnote">Šipkami na krajích pokoje přejdeš do kuchyně, obýváku, předsíně a dveřmi na zahradu. ${n} chodí po celém domě: když není v pokoji, kde jsi, dole se dočteš, kde je, a na šipce k ní je její hlava. Misky jsou v kuchyni, kočičí záchod v předsíni, pelíšek a křeslo v obýváku.</p>
-    </section>
-    <section class="card"><h3>Na klíně</h3>
-      ${hrow(A.cat(hasPose('lapLoaf') ? 'lapLoaf' : 'loaf', 'happy'), 'Křeslo', `Klepni na křeslo v obýváku (nebo na lavičku na zahradě) a sedneš si. Pak na ni zavolej, nebo ji přenes na křeslo – lehne si ti na klín. Hlaď ji a drbej, na klíně to má nejradši. Jako každá kočka ale někdy seskočí a uteče. Tlačítko Vstát tě zvedne.`)}
+    <section class="card"><h3>Jak to funguje</h3>
+      ${ul([
+        `${n} žije podle skutečných hodin a kalendáře v telefonu, i když hru zavřeš: mezitím dostane hlad a žízeň a začne se nudit.`,
+        'V noci spí, odpoledne si ráda zdřímne a večer si nejradši hraje.',
+        'Bez péče zhubne, je smutná a může onemocnět. Nikdy ale neumře a natrvalo neuteče.',
+      ])}
     </section>
     <section class="card"><h3>Péče</h3>
-      ${hrow({ two: true, s: A.item('foodBag') + A.item('bowlFull') }, 'Jídlo', 'Přetáhni sáček s granulemi do misky.')}
-      ${hrow({ two: true, s: A.item('jug') + A.item('waterBowl') }, 'Pití', 'Přetáhni konvici k misce s vodou.')}
-      ${hrow({ two: true, s: A.item('scoop') + A.item('litterDirty') }, 'Záchod', 'Přetáhni lopatku na kočičí záchod.')}
-      ${hrow({ two: true, s: A.item('brush') + A.cat('sit', 'happy') }, 'Česání', 'Přetáhni kartáč na ni a přejížděj po srsti sem a tam.')}
-      ${hrow(A.item('treat'), 'Pamlsky', 'Pamlsek přetáhni k ní. Moc pamlsků za den jí ale nedělá dobře.')}
+      <p class="fnote">Krátká čárka nahoře znamená, že něco potřebuje. Ťukni na ikonku a uvidíš, jak na tom je.</p>
+      <div class="nlist">${NEEDS.map(([k, t]) => `<span>${icon(k)}${t}</span>`).join('')}</div>
+      ${hrow({ two: true, s: A.item('foodBag') + A.item('bowlFull') }, 'Jídlo', `Granule jsou zdarma. Ťukni na Granule v liště a vybereš kapsičku, kuře nebo tuňáka: stojí 2, 3 a 4 pamlsky, nebo je koupíš do zásoby v Obchůdku. Jedno z nich má ${n} nejradši.`)}
+      ${hrow({ two: true, s: A.item('brush') + A.cat('sit', 'happy') }, 'Česání', 'Přetáhni na ni Kartáč a přejížděj sem a tam. Sama se umyje jen trochu. Na zahradě a v dešti se jí srst cuchá víc.')}
+      <p class="fnote">Mazlení a Zábavu doplníš hlazením a hrou. Energii si dobije spánkem – když spí, nebuď ji.</p>
+    </section>
+    <section class="card"><h3>Po domě</h3>
+      <p class="fnote">Kuchyň, obývák, předsíň a zahrada: přecházíš tlačítky nahoře v rozích pokoje. ${n} chodí po celém domě. Když není tam, kde jsi ty, řádek dole řekne, kde je, a na tlačítku k ní je její hlavička.</p>
+    </section>
+    <section class="card"><h3>Mazlení</h3>
+      ${hrow(A.cat('sit', 'happy') + ov(arrow(84, 96, 128, 160)), 'Hlazení', 'Přejeď prstem po srsti od hlavy k ocasu, ne moc pomalu a ne moc rychle. Proti srsti se jí to nelíbí. Dvě místa má nejradši – tam přede nejvíc.')}
+      ${hrow(A.cat('sit', 'happy') + ov(finger(80, 46) + finger(120, 46)), 'Drbání', 'Jedním nebo dvěma prsty ji drbej za ušima, na hlavě nebo na bradě. Prsty pohybuj sem a tam na jednom místě.')}
+      ${hrow(cat('belly', 'happy', 'loaf'), 'Bříško', 'Bříško si nechá podrbat jen někdy, jindy tě hravě kousne. Když je mrzutá, kousne pokaždé.')}
+      ${hrow(A.cat('sit', 'calm') + ov(tap(100, 120)), 'Ťuknutí', 'Ťukni na ni a podívá se na tebe. Když něco chce, ukáže ti to v bublině.')}
+      ${hrow(A.cat('carried', 'happy'), 'Nošení', 'Podrž na ní prst a zvedneš ji. Přenes ji do pelíšku, na okno nebo do křesla. Doneseš-li ji ke dveřím v předsíni, půjdete spolu na zahradu. Když nemá náladu, vykroutí se.')}
+      ${hrow(A.face('happy'), 'Zavolat', 'Tlačítko Zavolat ji přivolá i z jiné místnosti. Se zapnutým mikrofonem (Nastavení) ji zavoláš nahlas.')}
+      ${hrow(cat('lapLoaf', 'happy', 'loaf'), 'Na klíně', `Ťukni na křeslo v obýváku nebo na lavičku na zahradě a sedneš si. Pak ji zavolej, nebo ji na křeslo přenes – lehne si ti na klín. Z jiné místnosti na zavolání jen přijde, pak ji zavolej znovu. Na klíně má hlazení nejradši a často usne, ale jako každá kočka někdy seskočí a odběhne. Když je spokojená, přijde si na klín sama. Tlačítko Vstát tě zvedne.`)}
     </section>
     <section class="card"><h3>Hraní</h3>
-      ${hrow({ two: true, s: A.item('mouse') + A.item('yarn') }, 'Hračky', `Polož hračku na zem nebo ji švihni – poletí a ${n} za ní skočí. Hračku na zemi zase zvedneš prstem.`)}
-      ${hrow(A.item('feather'), 'Peříčko', 'Mávej peříčkem kousek od ní – za chvíli po něm skočí.')}
-      ${hrow(A.item('laserDot'), 'Laser', `Klepni na Laser a přejížděj prstem po pokoji: ${n} běží za tečkou. Dalším klepnutím laser vypneš. Když se dotkneš věci v liště, laser se vypne sám.`)}
-      ${hrow(icon('tilt'), 'Naklápění', 'Když je klubíčko na zemi, nakloň telefon a klubíčko se kutálí (zapíná se v Nastavení).')}
-      ${hrow(A.face('happy'), 'Zavolat', 'Tlačítko Zavolat ji přivolá. S mikrofonem (Nastavení) ji zavoláš nahlas.')}
+      ${hrow({ two: true, s: A.item('mouse') + A.item('feather') }, 'Hračky', `Myšku nebo klubko polož na zem, nebo je švihni – poletí a ${n} za nimi skočí. Ze země je zvedneš prstem. Peříčkem mávej kousek od ní, za chvilku po něm skočí. Jednu hračku má nejradši.`)}
+      ${hrow(A.item('laserDot'), 'Laser', `Ťukni na Laser a přejížděj prstem po pokoji – ${n} běží za tečkou. Dalším ťuknutím laser vypneš. Vypne se i sám, když sáhneš na věc v liště.`)}
+      ${hrow(icon('tilt'), 'Naklápění', 'Když je klubko na zemi, nakloň telefon a klubko se kutálí. Vypnout to jde v Nastavení.')}
+      ${hrow(A.item('mouse'), 'Minihry', 'Víc → Minihry: Chyť myšku, Laserová honička, Peříčko a Rybaření (na zahradě u jezírka). Hra trvá 30 sekund, za body dostaneš pamlsky.')}
+      <p class="fnote">Když je moc unavená, smutná nebo se bojí, hrát si nechce.</p>
+    </section>
+    <section class="card"><h3>Přátelství</h3>
+      ${hrow(icon('bond'), 'Roste péčí', 'Přibývá, když jí dáš, co zrovna chce, když dostane jídlo, které má nejradši, a když předvede naučený trik. Spokojený den přidá, smutný ubere. Dosaženou úroveň ale už neztratíte.')}
+      <p class="fnote">Začínáte na úrovni Nová. Kterou úroveň máte a kolik zbývá do další, ukazuje Deníček.</p>
+      ${ul([
+        '<b>Známá</b>: trik Sedni a další věci v Obchůdku.',
+        '<b>Kamarádka</b>: toulky, trik Dej pac, v Obchůdku kočičí strom a kočičí dvířka.',
+        '<b>Parťačka</b> a nakonec <b>Nejlepší kamarádka</b>: ještě bližší přátelství.',
+      ])}
+    </section>
+    <section class="card"><h3>Pamlsky</h3>
+      ${hrow(A.item('treat'), 'Pamlsky jsou peníze této hry.', 'Kolik jich máš, ukazuje číslo na pamlsku v liště dole. Na začátku máš 5.')}
+      <h4>Jak je získat</h4>
+      ${ul([
+        '<b>Minihry</b>: podle bodů, ze všech dohromady nejvýš 30 za den.',
+        '<b>Triky</b>: každý naučený trik předveď jednou za den a dostaneš 1 pamlsek.',
+        '<b>Zahrada</b>: úrodu prodáš v Obchůdku.',
+        '<b>Ostatní hry</b>: ve výběru her otevři Nastavení a zapni „Koxa a ostatní hry“. Za každou jinou hru, kterou odtud spustíš, dostaneš 1 pamlsek, nejvýš 5 za den.',
+      ])}
+      <h4>Za co je utratíš</h4>
+      ${ul([
+        '<b>Nákupy v Obchůdku</b>.',
+        '<b>Lepší jídlo a semínka</b>, když je nemáš v zásobě. Semínka stojí 3 až 9 za záhon.',
+        '<b>Pamlsek</b> pro ni, pro návštěvu nebo při výcviku: 1.',
+        '<b>Veterinář</b>: 15.',
+      ])}
+      <p class="fnote">Moc pamlsků jí škodí (tyčinky se počítají taky). Víc než 8 za den – přibírá. Víc než 12 – rozbolí ji bříško. Malé pamlsky při výcviku tolik nevadí.</p>
+    </section>
+    <section class="card"><h3>Obchůdek a nábytek</h3>
+      ${hrow(A.item(artOr('pouchPack', 'pouch')), 'Obchůdek', 'Víc → Obchůdek. Za pamlsky tu koupíš jídlo do zásoby, kočičí tyčinky, nábytek a semínka. Jak roste přátelství, přibývají další věci. Úrodu ze zahrady tu prodáš.')}
+      ${hrow(A.item(artOr('treatBag', 'treat')), 'Tyčinky', 'Potěší ji víc než pamlsek a pamlsky ti neubývají – bereš je ze zásoby. Jsou jen pro ni, ne pro návštěvy. Když nějaké máš, ťukni na pamlsek v liště a přepneš na tyčinku.')}
+      ${hrow(A.item(artOr('scratcher', 'bed')), 'Zařídit pokoj', 'Víc → Zařídit pokoj. Koupený nábytek přetáhni z lišty do pokoje, postavený můžeš posunout. Pak ťukni na Hotovo.')}
+      <p class="fnote">Co nábytek dělá:</p>
+      ${ul([
+        '<b>Škrabadlo</b>: hezčí srst, tolik se jí nestýská.',
+        '<b>Pelíšek deluxe</b>: líp se vyspí.',
+        '<b>Kočičí strom</b>: tolik se nenudí.',
+        '<b>Krabice, parapet s polštářem</b>: ráda si v nich zdřímne.',
+        '<b>Koberec, tunel</b>: ráda si tam lehne. <b>Lampa</b> je pro ozdobu.',
+        '<b>Krmítko pro ptáky</b> (na zahradě): víc zábavy a víc dárků.',
+        '<b>Miska pro návštěvy</b> na zahradě: kočky od sousedů chodí častěji. Pomůže i pelíšek deluxe nebo parapet s polštářem postavený na zahradu.',
+      ])}
     </section>
     <section class="card"><h3>Zahrada</h3>
-      <p class="fnote">Na zahradu jde ${n} s tebou. Na záhony přetáhni semínka, jednou denně je zalij konví a zralou úrodu sklidíš klepnutím. Šanta kočičí ji úplně rozdivočí. ${n} leze na strom (někdy neumí dolů – zavolej ji, nebo ji podrž a sundej), plíží se k ptáčkům u krmítka a nosí dárky. Déšť nesnáší. Od přátelství Kamarádka ji můžeš brankou pouštět na toulky – vrátí se sama, často s pohlednicí.</p>
+      ${hrow(cat('stalk', 'happy'), 'Ven', `Na zahradu vedou dveře z předsíně. ${n} jde s tebou. Doma zůstane, jen když spí nebo má rýmu. Plíží se k ptáčkům a nosí ti dárky: pírko, lísteček nebo šišku. Déšť nesnáší: zmokne a je mrzutá. Domů jde zase s tebou, jen ze stromu musí nejdřív slézt.`)}
+      ${hrow(cat('onBranch', 'calm'), 'Strom', 'Ráda leze na strom a někdy neumí dolů. Zavolej ji, nebo na ni podrž prst a sundáš ji. Nejpozději za půl hodiny sleze sama.')}
+      ${hrow({ two: true, s: A.item(artOr('seedPacket', 'treat')) + A.item(artOr('wateringCan', 'jug')) }, 'Záhony', 'Přetáhni semínka na prázdný záhon a vyber, co zaseješ. Jednou za den záhony zalij konví (když prší, zalije je déšť). Každý zalitý den rostlina povyroste: ředkvička je zralá za 2 dny, rajče za 6. Zralou úrodu sklidíš ťuknutím. Od prosince do února záhony spí.')}
+      ${typeof A.crop === 'function' ? hrow(A.crop('catnip', 3), 'Šanta kočičí', `Je jen pro kočku, nikdo ji nekoupí. Sklízej ji, když ${n} nespí a není na toulkách: radostí úplně šílí. Jinak šanta skončí v Pokladech v Deníčku a dát jí ji už nepůjde.`) : ''}
+      ${hrow(cat('walk', 'happy'), 'Toulky', 'Od přátelství Kamarádka ji můžeš pustit na toulky: na zahradě ťukni na Pustit ven. Vrátí se sama za 2 až 8 hodin, často s pohlednicí nebo dárkem. Pohlednice sbíráš v Deníčku.')}
     </section>
-    <section class="card"><h3>Víc</h3>
-      ${hrow(A.item(artOr('treatBag', 'treat')), 'Obchůdek', 'Tlačítko Víc → Obchůdek: kapsičky, kuře a tuňák, tyčinky, hračky, nábytek a semínka za pamlsky. Úrodu ze zahrady tam prodáš. Granule jsou vždycky zdarma – ťuknutím na sáček vybereš, čím nakrmíš.')}
-      ${hrow(A.item(artOr('scratcher', 'bed')), 'Zařídit pokoj', `Koupený nábytek přetáhni z lišty do pokoje; postavený můžeš posunout. ${n} ho používá: spí v pelíšku deluxe, leze na kočičí strom, škrábe škrabadlo, sedí v krabici. Kočičí dvířka jsou na dveřích v předsíni.`)}
-      ${hrow(A.item(artOr('featherWand', 'feather')), 'Minihry', 'Chyť myšku, Laserová honička, Peříčko a Rybaření (na zahradě u rybníčku). Hra trvá 30 sekund, za body dostaneš pamlsky – nejvýš 30 za den.')}
-      ${hrow(A.cat(hasPose('trickPaw') ? 'trickPaw' : 'sit', 'happy'), 'Výcvik', 'Zvol trik a dej gesto: Sedni = přejeď nahoru, Dej pac = ťukni na tlapku, Otoč se = zakruž prstem, Panáček = dvakrát nahoru. Když trik předvede, hned jí dej pamlsek. Pětkrát odměněný trik umí – pak ho můžeš předvést, jednou denně za pamlsek. Těžší triky jsou až od většího přátelství.')}
-      ${hrow(typeof A.neighbour === 'function' ? A.neighbour('mourek', 'sit', { mood: 'calm' }) : '', 'Návštěvy', `Na zahradu chodí kočky od sousedů. Chodí po zahradě, pijí z jezírka, spí na lavičce nebo lezou na strom. Když je ${n} venku s tebou, dělají něco spolu: očichají se, honí se, hravě se pošťuchují, myjí si kožíšky nebo spolu podřimují. Ťukni na návštěvu – pohladíš ji, nakrmíš nebo ji pozveš na noc. V Deníčku má každá kočka dvoje srdíčka: „Ty“ je vaše kamarádství, „${esc(withHer(nm()))}“ to její. Když návštěvu hladíš nebo krmíš, zatímco je ${n} na zahradě, pomáháš skamarádit se i jim dvěma. Bivoj a Rambo na ni zpočátku prskají – potřebují čas.`)}
-      ${hrow(typeof A.neighbour === 'function' ? A.neighbour('sedivka', 'sit', { mood: 'happy' }) + ov(arrow(96, 92, 140, 128)) : '', 'Hlazení návštěvy', `Návštěvu hladíš prstem jako ${acc(n)}, jen každá kočka má ráda něco jiného – co, se dozvíš, když na ni ťukneš. Moc rychle, proti srsti nebo na místě, kde to nemá ráda, to nepomůže: plachá Líza se lekne a uteče, Rambo se po tobě ožene. Kamarádství od hlazení roste nejvýš jednou za minutu.`)}${metLikes()}
-      ${hrow(A.item('treat'), 'Pamlsek z ruky', 'Přetáhni pamlsek přímo k návštěvě – dostane ho jednou za návštěvu. Plachá kočka si pro něj přijde, jen když ho chvilku držíš klidně kousek od ní.')}
-      ${hrow(A.item('feather'), 'Peříčko pro dva', `Mávej peříčkem u návštěvy. Když je na zahradě i ${n}, skočí po něm obě – chytí ho ta, která je blíž. Pak si chvilku oddechnou.`)}
-      ${hrow(hasPose('rub') ? A.cat('rub', 'grumpy') : A.cat('sulk', 'grumpy'), 'Žárlivost', `Když se věnuješ návštěvě, ${n} někdy žárlí: přijde se mezi vás otírat. Do dvou minut ji pohlaď nebo podrbej, jinak se trochu urazí.`)}
-      ${hrow(typeof A.neighbour === 'function' ? A.neighbour('pacicka', 'sleep', { mood: 'calm', asleep: true }) : '', 'Návštěva na noc', `Nejlepší kamarádku (5 srdíček u „Ty“ a aspoň 3 u „${esc(withHer(nm()))}“) můžeš večer od 18 do 22 hodin pozvat na noc, jednou za den. Přespí v obýváku a ráno v 7 půjde domů. ${n} jde ze zahrady dovnitř s ní. Když jsou opravdu dobré kamarádky, spí ${n} vedle ní.`)}
-      ${typeof A.kitScale === 'function' ? hrow(kitIcon({ id: 'k1', coat: 'liza', kit: 1 }, 'tumble'), 'Koťátka', `Kamarádka od sousedů (Líza, Čiperka nebo Pacička), se kterou se dobře znáš, může mít koťátka. Pár dní se neukáže a pak je přivede s sebou na zahradu. Ty jim dáš jména (přejmenovat je můžeš, když na koťátko ťukneš). Hladit se nechají všude a ${n} si s nimi hraje, myje je – nebo před nimi uteče na strom. Asi po třech týdnech začnou chodit na návštěvu sama a za dva měsíce jsou z nich dospělé kočky.`) : ''}
-      ${hrow('<svg viewBox="0 0 24 24" fill="none" stroke="#7a4520" stroke-width="2"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.6"/></svg>', 'Fotky', 'Fotoaparátem v rohu pokoje ji vyfotíš – i s návštěvou, nebo jen návštěvu. Fotky, pohlednice z toulek a kamarády od sousedů najdeš v Deníčku.')}
+    <section class="card"><h3>Výcvik</h3>
+      ${hrow(cat('trickPaw', 'happy'), 'Jak učit', 'Víc → Výcvik. Vyber trik a dej gesto. Jakmile ho předvede, do vteřiny a půl ťukni na tlačítko Pamlsek vpravo od řádku dole. Po pěti odměnách trik umí a předvede ho, kdykoli ho ve Výcviku vybereš – jen unavené nebo mrzuté se jí nechce. Tlačítko Konec výcvik ukončí.')}
+      ${ul([
+        '<b>Sedni</b>: přejeď prstem nahoru (od přátelství Známá).',
+        '<b>Dej pac</b>: ťukni jí na tlapku (od přátelství Kamarádka).',
+        '<b>Otoč se</b>: zakruž prstem kolem ní (až jste si hodně blízko).',
+        '<b>Panáček</b>: přejeď dvakrát rychle za sebou nahoru (ještě později).',
+      ])}
+      <p class="fnote">U triku, který ještě nejde, ukáže Výcvik, kolik přátelství máte a kolik je potřeba.</p>
     </section>
-    <section class="card"><h3>Co potřebuje</h3>
-      <p class="fnote">Čárky nahoře ukazují, jak na tom je. Klepnutím na obrázek se dozvíš víc.</p>
-      <div class="nlist">${NEEDS.map(([k, t]) => `<span>${icon(k)}${t}</span>`).join('')}</div>
+    <section class="card"><h3>Kočky od sousedů</h3>
+      ${hrow(nb('mourek', 'sit', { mood: 'calm' }), 'Návštěvy', 'Přes plot chodí na zahradu kočky od sousedů: od rána do večera (6 až 22 h), za deště ne. V noci přichází jen Bivoj. Zůstanou 20 až 90 minut. Ťukni na návštěvu: pohladíš ji, nakrmíš ji (jednou za den, zdarma) nebo ji pozveš na noc.')}
+      ${hrow(nb('ciperka', 'sit', { mood: 'happy' }), 'Srdíčka', `Každá návštěva má dvě řady srdíček, nejvýš 5. Řádek Ty je vaše kamarádství: roste hlazením, krmením a hrou. Řádek ${sN} je kamarádství jich dvou: roste, když jsou spolu na zahradě, a víc, když se návštěvě věnuješ a ${n} je u toho. Bivoj a Rambo na ni zpočátku prskají, potřebují čas.`)}
+      ${hrow(nb('sedivka', 'sit', { mood: 'happy' }) + ov(arrow(96, 92, 140, 128)), 'Hlazení návštěvy', 'Hladíš ji stejně, jen každá kočka má ráda něco jiného – co, uvidíš, když na ni ťukneš. Moc rychle, proti srsti nebo tam, kde to nemá ráda, to nepomůže. Zpočátku se plachá Líza lekne a uteče a Rambo se po tobě ožene. Kamarádství z hlazení roste nejvýš jednou za minutu.')}
+      ${likes ? `<p class="fnote">Kočky, které už znáš:</p>${likes}` : ''}
+      ${hrow({ two: true, s: A.item('treat') + A.item('feather') }, 'Pamlsek a peříčko', `Pamlsek přetáhni přímo k návštěvě, dostane ho jednou za návštěvu. Plachá kočka si pro něj přijde, jen když ho chvilku držíš klidně kousek od ní. Když u návštěvy máváš peříčkem a ${n} je na zahradě, skočí po něm obě – chytí ho ta, která je blíž.`)}
+      ${hrow(cat('rub', 'grumpy', 'sulk'), 'Žárlivost', `Když se věnuješ návštěvě, ${n} někdy žárlí a přijde se mezi vás otírat. Do dvou minut ji pohlaď nebo podrbej, jinak jí to bude trochu líto.`)}
+      ${hrow(nb('pacicka', 'sleep', { mood: 'calm', asleep: true }), 'Návštěva na noc', `Večer od 18 do 22 h můžeš návštěvu pozvat na noc. Potřebuješ plných 5 srdíček v řádku Ty a aspoň 3 v řádku ${sN}. Nejde to s maminkou malých koťátek ani s koťátkem do 2 měsíců. Přespí v obýváku a v 7 ráno půjde domů. ${n} jde ze zahrady dovnitř s ní, a když spolu mají aspoň 4 srdíčka, spí vedle sebe. Na noc může přijít jen jedna návštěva za den.`)}
+      ${typeof A.kitScale === 'function' ? hrow(kitIcon({ id: 'k1', coat: 'liza', kit: 1 }, 'tumble'), 'Koťátka', `Líza, Čiperka nebo Pacička může mít koťátka, když s ní máš aspoň 3 srdíčka. Pár dní se neukáže, pak je přivede na zahradu a ty jim dáš jména (přejmenuješ je ťuknutím na koťátko). Malá se nechají hladit všude a místo krmení dostanou pamlsek. ${n} si s nimi hraje a myje je, nebo před nimi uteče na strom. Po 3 týdnech chodí na návštěvu sama, za 2 měsíce jsou dospělá.`) : ''}
     </section>
-    <section class="card"><h3>Když se o ni nikdo nestará</h3>
-      <p class="fnote">Zhubne, je smutná a nechce spolupracovat, a může i onemocnět. Nikdy ale neumře a neuteče. Když tu déle než tři dny nikdo není, pohlídá ji paní Nováková – ${n} pak bude chvíli uražená.</p>
+    <section class="card"><h3>Zdraví</h3>
+      ${hrow(A.cat('sit', { mood: 'sad', ill: 'cold' }), 'Nemoci', 'Blechy chytí, když je dlouho špinavý záchod nebo neučesaná srst. Bříško ji rozbolí z dlouhého hladu a žízně nebo z moc pamlsků. Rýmu dostane v zimě, když je v noci venku nebo když je hodně unavená. Nemocná má horší náladu a všechno potřebuje rychleji. Sama se uzdraví za 4 dny.')}
+      ${hrow(A.item('pill'), 'Veterinář', 'Když je nemocná, objeví se dole tlačítko Veterinář (ne když sedíš v křesle nebo na lavičce). Ťukni na něj a pak na Dát pilulku. Když otevře pusu, přetáhni do ní pilulku – máš 15 sekund. Vyléčí ji, i když to nestihneš; pak jí zítra doma dej ještě jednu (Pilulka bude v liště). Stojí to 15 pamlsků. Když jich máš míň, vezme si jen ty, co máš.')}
+      ${hrow(icon('weight'), 'Váha', 'Vidíš ji v Deníčku. Když má dlouho hlad, zhubne, z moc pamlsků přibere. Obyčejnou péčí se váha zase spraví.')}
     </section>
-    <section class="card"><h3>Veterinář</h3>
-      ${hrow(A.item('pill'), 'Pilulka', 'Nemocnou kočku vyléčí veterinář (tlačítko vedle nápovědy dole). Léčba stojí 15 pamlsků; když je nemáš, zaplatíš příště. U veterináře jí dáš pilulku: přetáhni ji do pusy, když ji otevře. Když to nestihneš, doma jí zítra dáš ještě jednu.')}
+    <section class="card"><h3>Když tu nejsi</h3>
+      ${ul([
+        'Po dni bez tebe se k ní zajde podívat paní Nováková a postará se o to nejnutnější.',
+        'Když tu nikdo není déle než 3 dny, vezme si ji paní Nováková k sobě. Pak je den uražená a přátelství trochu klesne.',
+        'Když hru zavřeš na zahradě, zůstane venku sama a do 3 hodin se vrátí. Dřív ji pustíš domů, když ťukneš na dveře v předsíni.',
+      ])}
     </section>
-    <section class="card"><h3>Deníček</h3>
-      <p class="fnote">Tlačítko Deníček nahoře: přátelství, váha, pamlsky a všechno, co už o ní víš – co má nejradši, kde se ráda nechá hladit, čeho se bojí.</p>
+    <section class="card"><h3>Fotky a Deníček</h3>
+      ${hrow(icon('camera') || '<svg class="kx-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.6"/></svg>', 'Fotky', 'Fotoaparátem vpravo dole v pokoji ji vyfotíš, i s návštěvou. V Deníčku uvidíš posledních 24 fotek. Smazat je jde křížkem.')}
+      ${hrow(icon('diary'), 'Deníček', 'Tlačítko nahoře. Je tam přátelství, váha, pamlsky a všechno, co už o ní víš, dál fotky, pohlednice z toulek, koťátka, kočky od sousedů a poklady (dárky a úroda). Tečka na tlačítku znamená něco nového.')}
+    </section>
+    <section class="card"><h3>Tipy</h3>
+      ${ul([
+        'Každá kočka je jiná. Zkoušej různá jídla, hračky a místa na hlazení – co zjistíš, zapíše se do Deníčku.',
+        'Něčeho se bojí: vysavače, bouřky nebo ohňostroje. Pokoj vysaješ v Nastavení.',
+        'Ve svátky je chaloupka vyzdobená. V den, kdy k tobě přišla, slaví každý rok výročí.',
+        'V Nastavení ji přejmenuješ. Je tam i Začít od začátku: hra začne znovu, jméno a nastavení zůstanou.',
+      ])}
     </section>
     <button class="big" data-act="close">Rozumím</button>`;
 }

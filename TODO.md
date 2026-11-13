@@ -17,7 +17,9 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 
 ## Open questions for the user
 
-- [ ] Kočka (choices made while building, keep?): two tray rows (care items above, toys + Laser + Zavolat + Víc below; labels 12.5 px); the toast at the top of the room; "Vysát pokoj" in Nastavení → Pokoj; the Veterinář button only while she is ill; toys stay on the floor until picked up; a wide short window shows the room narrower with the wall continuing at the sides; neighbour cats are stroked with a button (no gesture); the album shows the newest 24 photos; gardening pays a little (a seed pack sells for 1.5× its price) but far less than the minigames.
+- [ ] Kočka bugs found by the help review (2026-11-13), not fixed yet; the help does not promise them: the kočičí dvířka are bought but never placed (`st.furniture.catFlap` is never set, so she never goes out by herself); the shop toys Myška se šantou, Míček s rolničkou and Udice s peříčkem have no use (the tray only has the basic toys); Parťačka unlocks beds 5–6 in the engine but the garden draws only 4; šanta harvested while she sleeps or is out goes to Poklady and cannot be given later; Deníček shows only the newest 24 of up to 200 photos (older ones cannot be seen or deleted). Fix them?
+
+- [ ] Kočka (choices made while building, keep?): two tray rows (care items above, toys + Laser + Zavolat + Víc below; labels 12.5 px); the toast at the top of the room; "Vysát pokoj" in Nastavení → Pokoj; the Veterinář button only while she is ill; toys stay on the floor until picked up; a wide short window shows the room narrower with the wall continuing at the sides; the album shows the newest 24 photos; gardening pays a little (a seed pack sells for 1.5× its price) but far less than the minigames.
 
 - [ ] Dáma: is the default opponent "Běžný hráč" about right for the players (not too easy, not frustrating)? It looks two half-moves ahead with noise and sometimes plays the second best move; tune it after playing on the phone.
 
