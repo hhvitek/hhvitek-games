@@ -118,6 +118,11 @@ Added in Phase 1 (engine): `call` (Zavolat / microphone: offended → `turnBack`
 else `come`), `vacuum` ("Vysát pokoj", the only way to meet the vacuum fear), `pill` (the extra pill the day after a
 lost Pilulka minigame), `rename` (the UI calls `E.rename(st, name)` when the name changes; refusals use `st.name`).
 `letOut` is refused while she is ill; outside she comes back by herself after 2–8 h (seeded) or when energy < 25.
+Added for Škádlení (§13): `pat { region, n, ms, cv, eating }` (a run of taps on her: like, bliss, a warning, then a
+blowUp, a loveBite or a trap), `boop` (a single tap on her nose: she squints and sneezes; the third within 60 s = a swat)
+and `splash` (the watering can on her in the garden). `pat` and `boop` keep her on the lap; none of the three works
+while she is out or up the tree. Sulking (`st.tease.kind`) also changes `stroke`, `scratch`, `treat`, `call`, `play`,
+`pickUp` and `lapOn` (§13.3).
 
 **Settled rules (Phase 1):** she grooms herself, so her coat never falls below 50 unless she is sad, ill or outside
 (fleas come in practice from a dirty litter box); paní Nováková helps only after 72 h away, and from hour 12 of the
@@ -134,7 +139,10 @@ once. Food prices exist (`FOODS[k].price`) but are charged only from Etapa 2 (`C
 
 ## 7. Gestures (Input)
 Pointer Events on the scene; mouse and pen behave like one finger.
-- **tap**: < 250 ms, < 10 px movement.
+- **tap**: < 250 ms, < 10 px movement. Every tap carries its time `t`; in 'care' a tap on a cat also carries `pat`
+  (the run of taps it belongs to: `n`, tempo `ms`, regularity `cv`, `region`) for Škádlení (§13.1).
+- **pat run** (Škádlení, §13.1): taps on a cat at most `PAT_GAP` 900 ms apart, in the same region or within
+  `PAT_NEAR` 24 px of the previous tap. Two-finger drumming stays what it is (overlapping fingers = scratch).
 - **long press**: 450 ms still (< 10 px) on Koxa → `pickup`; then drag carries her; release over a place → `drop`.
 - **stroke**: one pointer moving ≥ 40 px over a body region; direction compared with that region's fur vector
   (cos ≥ 0.5 along, ≤ −0.5 against, else `sideways`); speed px/s: < 120 too slow (nothing), 120–900 good,
@@ -148,7 +156,8 @@ Pointer Events on the scene; mouse and pen behave like one finger.
 - **microphone** (opt-in, default off): "Zavolat {name}" button → getUserMedia audio → AnalyserNode loudness only,
   nothing recorded or sent; a loud call (> threshold for 250 ms) → she turns her ears and comes (unless asleep or
   offended). Denied permission → toast and the switch turns off.
-- **sound** (default on): WebAudio synthesized meow (pitch by mood), purr (low rumble while stroked), soft "nom".
+- **sound** (default on): WebAudio synthesized meow (pitch by mood), purr (low rumble while stroked), soft "nom";
+  effects `I.sound.fx('sneeze'|'splash'|'shake'|'clink')` for Škádlení (§13.1), not meow kinds.
 - **vibration** (default on): purr = short pulses, bite = one sharp buzz.
 
 ## 8. Later stages (outline; detailed before each stage)
@@ -420,3 +429,407 @@ letting her out (`letOut`). Night: the garden is dark with fireflies in summer; 
   "Koxa chce pomazlit", "Kočičí záchod potřebuje uklidit", "Koxa spí, nebuď ji", "Koxa je nemocná – zajdi
   k veterináři", "Koxa je uražená".
 - Help explains every gesture with a small drawing (Art) and the needs.
+
+## 13. Škádlení (teasing out of love, user's decision 2026-11-13: "co se škádlívá, to se rádo mívá")
+Small, funny teasing, nothing complicated: patting (taps in a row), the watering can on her, a tap on her nose, her
+payback and making it up. **Rules:** the consequences are mild (a short sulk, making up, nothing is lost); no real fear
+(no cucumber, no jump scares, no pulling the tail) and **never claws** (every swat, grab and pounce says "bez drápků" or
+shows none); **a sleeping Koxa never blows up**. This section is the contract between the three blocks and the UI:
+Engine (`src/engine.js` + `tools/kocka-test.js`), Art (`src/art.js` + `art.html`), Input (`src/input.js` +
+`feel.html`) are built in parallel without talking to each other; nobody but the UI step runs `assemble.js`. Where the
+plan left a detail open, the answer chosen here is marked **Decided:** — follow it, do not choose another.
+
+Player-visible Czech: Koxa is "ona" (vyletěla, plácla); the player is always in the present tense ("když ji
+pokropíš", "když ťukneš"), never in a past tense with a gendered ending. `{n}` below = the cat's current name (`nm()`
+in the UI, `st.name` in the engine); `{an}` = its accusative from the UI's `acc(n)`.
+
+### 13.1 Input (`src/input.js`)
+**`tap` gets two fields:**
+
+| Field | Mode | Value |
+|---|---|---|
+| `t` | every mode | ms of the release, from `opts.time(e)` (the same clock as the other gesture times) |
+| `pat` | `'care'` only (the key is absent in other modes) | `{ n, ms, cv, region }` when the tap is on a cat (`cat: true`, a region was hit, no `item`); otherwise `null` |
+
+`pat.n` = the number of taps in the run including this one (1, 2, 3 …, not capped); `pat.ms`, `pat.cv` = `rhythm()` of
+the run's last `PAT_WINDOW` tap times; `pat.region` = the hit region's id as `hitRegion` gave it (`'nose'`, `'back'`,
+`'v:liza:head'` …).
+
+**The run** (one per `attach()`): new thresholds in `T`: `PAT_GAP: 900`, `PAT_NEAR: 24` (CSS px), `PAT_WINDOW: 6`.
+- A tap with a `pat` **continues** the run when `t − last ≤ PAT_GAP` **and** (its region id equals the previous tap's
+  **or** both region ids belong to the same cat — no `v:` prefix for Koxa, the same `v:<id>:` prefix for a visitor — and
+  the tap is at most `PAT_NEAR` px from the previous tap). Otherwise it **starts a new run** (`n = 1`).
+- **The run is cleared** (the next pat tap is `n = 1`) by: a tap whose `pat` is `null`; every emitted event other than
+  `tap` (stroke, scratchStart, pickup, longpress, dragStart, swipe, laser, …); every pointer released without a tap
+  (moved, rubbed, long press); `setMode()`, `cancel()`, `detach()`.
+- **Decided:** `ms`/`cv` look only at the last 6 taps, so a run that slows down is judged by its present tempo.
+- **Two fingers:** alternate drumming with two fingers on Koxa stays exactly what Input makes of it today: fingers that
+  overlap in time are a scratch (no taps); taps that do not overlap form a pat run like any taps. Nothing new may throw.
+
+**Pure helper** `rhythm(times)` (exported with the other helpers): `times` = ascending ms →
+`{ n: times.length, ms, cv }`; fewer than 2 times → `ms: 0, cv: 0`; else over the intervals: `ms = Math.round(mean)`,
+`cv = round2(populationStdDev / mean)` (0 when the mean is 0). One interval → `cv: 0`.
+
+**Sounds:** `I.sound.fx(name)` → `name` when started, `null` when the name is unknown, sound is off, before the first
+gesture or while the page is hidden (the same gates as `say`). `I.sound.FX = ['sneeze', 'splash', 'shake', 'clink']`.
+They are **not** meow kinds: never added to `KINDS` (`say()` silently turns an unknown kind into a meow). Synthesized,
+no files: `sneeze` a short "hapčí" (a breath in, then a sharp noise burst with a high formant, ~0.35 s); `splash` water
+poured on fur (filtered noise burst with a bubbly decay, ~0.5 s); `shake` a quick whole-body shake (fluttering noise,
+amplitude modulated ~12 Hz, ~0.6 s); `clink` an enamel mug hitting tiles (a few inharmonic partials 1.2–3.5 kHz with a
+fast decay, then a smaller clink ~120 ms later). Randomized a little each time like the meows.
+
+**feel.html:** a "Škádlení" section: a pad on the cat that prints every tap's `pat` (n, ms, cv, region; the run
+visibly continuing or restarting) and a button for each `fx` name.
+
+### 13.2 Art (`src/art.js`)
+**Region `nose`** (Koxa, visitors and kittens alike, since they share `head()`):
+- in `head()`, only when the face is visible (`!h.back`), a polygon of about 26 × 18 head units round (0, 11) in the
+  head's own frame (x −13…13, y 2…20), mapped like the other head regions (kitten head scale and lap zoom included);
+  `fur` = `v(0, -1)` (as the head);
+- `ORDER = ['nose', 'chin', 'tail', 'paws', 'head', 'ears', 'tailBase', 'belly', 'back']` (the nose wins over chin and
+  head). The UI's visitor ids become `v:<id>:nose`; the engine maps `nose` to `head` (§13.3), Input passes it on as is.
+
+**New poses** (both stand on (100, 186), no anchor entry):
+
+| Pose | Picture | Regions | Animation |
+|---|---|---|---|
+| `rearUp` | "zadeček jako výtah": front low (chest near the floor, front paws flat), the rear and hind legs straight up, tail straight up; side view facing left, happy face | nose, chin, head, ears, paws, tail, tailBase, back (no belly) | front paws tread alternately: class `kx-tread` on them, ~0.6 s cycle, infinite |
+| `shake` | standing, shaking her whole body (motion lines at the sides, ears flat); with `o.wet` drops fly off | nose, chin, head, ears, paws, tail, tailBase, back | `kx-shake` on the body group, ~0.4 s side wobble, 3 cycles then still; with `o.wet` the drops `kx-drops` fly out once |
+
+`rearUp`'s `tailBase` centroid lies within 15 art units of the `tailBase` centroid in `loaf` (**Decided:** `loaf` is the
+reference; art.html prints the distance to `loaf` and to `sit`), so a tap run on her rear goes on when she lifts it
+(`PAT_NEAR` and the same region id cover the rest).
+
+**New options** of `cat()` (and of `regions()`/`mouth()`/`headPoint()` where they move something):
+
+| Option | Effect |
+|---|---|
+| `o.eyes: 'cross' \| 'squint'` | overrides the eyes **after** the pose chose its own (applied inside `head()` / `faceDetails`, so no pose overrides it); `cross` = cross-eyed, both pupils turned to the nose; `squint` = tightly pinched, contented-annoyed. Ignored when the head faces away |
+| `o.achoo` | a one-time sneeze: the head jerks forward and down once (`kx-achoo` on the head group, ~0.5 s, plays once), eyes `squint` unless `o.eyes` says otherwise, mouth open. Not the cold's `h.sneeze` (that one keeps its `kx-sneeze` loop) |
+| `o.shakeHead` | the head shakes left–right twice (`kx-shakeHead`, ~0.6 s, once) |
+| `o.warn` | the tail tip lashes fast (`kx-warn` on the tail tip, ~0.35 s, infinite), ears `'turned'` unless `o.ears` is given, the skin on the back twitches (`kx-twitch`, a ripple of the back patch, ~0.9 s, infinite). Every pose with a tail; a pose without a visible tail only turns the ears |
+| `o.grab` | in `belly` and `lapBelly`: the front legs hug the space just above the belly (the hand), the hind legs kick (`kx-kick`, ~0.4 s, infinite); claws are never drawn |
+
+Also the CSS class **`kx-flick`** on any ancestor: her right ear twitches once (~0.4 s), for taps on a sleeping cat.
+
+**New exports:**
+- `A.headPoint(pose, opts)` → `{ x, y, nose, back }` in the cat's 0…200 viewBox (kitten and lap zoom applied as in
+  `mouth()`): `x, y` = the middle of the head, `nose` = `{ x, y }` of the nose tip or `null` when she faces away,
+  `back` = she faces away; `null` for an unknown pose. **Decided:** it also returns the nose so the UI can put the sneeze
+  puff on it.
+- `fx('splash')` (a splash of water with drops) and `fx('puff')` (a small sneeze cloud with two droplets): the usual
+  40 × 40 effects, listed in `A.fxs`.
+- `item('mug')`: the enamel mug (smaltovaný plecháček: cream-white, blue rim and handle, a small chip), standing on
+  y≈90; `itemSize.mug = { w: 26, h: 26 }` (room units). **Decided:** one picture; the UI turns it while it falls.
+- Every new animation is under the existing `prefers-reduced-motion` rule (no movement, the still picture stays clear).
+
+**art.html:** a "Škádlení" sheet: `rearUp`, `shake` (dry and wet), `cross`/`squint` in `sit`, `loaf` and `lapLoaf`,
+`achoo`, `shakeHead`, `warn` in `sit`/`loaf`/`lapLoaf`, `belly` and `lapBelly` with `grab`, the `nose` region outlined on
+`sit`, `loaf`, `lapLoaf`, a neighbour and a kitten, `fx('splash')`, `fx('puff')`, `item('mug')`.
+
+### 13.3 Engine (`src/engine.js`)
+**State.** The only new field is `st.tease` (create → `STATE_KEYS` → canonical repair → `shiftTimes`):
+
+| Key | Type, range | Default | Meaning |
+|---|---|---|---|
+| `kind` | `null \| 'sulk' \| 'cross'` | `null` | uražená (sulk) / opravdu se zlobí (cross) |
+| `until` | ms | 0 | when `kind` ends (0 when `kind` is null) |
+| `heat` | 0…10 | 0 | how teased she is, the value at the moment `at` |
+| `at` | ms ≤ t | 0 | the last pat, boop or splash; `heat` was brought up to date then |
+| `warnAt` | ms ≤ t | 0 | the warning of the current run (0 = none) |
+| `boops` | `[ms]`, ascending, ≤ 2 in a saved state | `[]` | nose taps of the last 60 s (the third makes the swat and empties it) |
+| `gain` | 0…8 | 0 | love from pats in the current window |
+| `gainAt` | ms ≤ t | 0 | start of that 10-minute window (0 = none) |
+| `pay` | `null \| { kind: 'shelf' \| 'ambush', at: ms }` | `null` | a planned payback: due from `at`, lapses at `at + 120 min` |
+| `payDay` | day key or 0 | 0 | the local day of the last payback (one a day) |
+| `bondDay` | day key or 0 | 0 | the local day bond +1 was given for a flop or a reconcile (one a day, shared) |
+| `splash` | ms or 0 | 0 | **Decided (added):** `st.wet` as the can set it; she is "wet from the can" while `st.wet > t && st.wet === tease.splash` |
+
+`heat` cools analytically, never in steps: `heatNow(t) = max(0, heat − (t − at) / (10 min))`. Before any change of
+`heat` (and on every pat, boop and splash) `heat = heatNow(t); at = t`. So the step length of `advance()` never matters.
+
+**Repair (canonical; after `st.wet` and `st.off` are repaired):** not an object → the default.
+`kind` stays only when it is `'sulk'`/`'cross'`, `until` is a valid time with `t < until ≤ t + 3 min` (sulk) or
+`t + 20 min` (cross), and no long offence is running (`!(st.off && t < st.off.until)`); else `kind: null, until: 0`.
+`heat` = number clamped 0…10 (else 0); `at` = a moment ≤ t (else 0); `at` 0 → `heat` 0. `warnAt` = a moment ≤ `at`
+(else 0). `boops` = the valid times in `(t − 60 s, t]`, sorted, the last 2. `gain` clamped 0…8, `gainAt` a moment ≤ t;
+`gainAt` 0 or `t − gainAt ≥ 10 min` → both 0. `pay` = `{ kind, at }` only with a known kind, a valid `at` in
+`(t − 120 min, t + 45 min]` and no long offence; else `null`. `payDay`, `bondDay` = a day key ≤ `dkey(t)`, else 0.
+`splash` = a valid time `> t` that equals `st.wet`, else 0. Unknown keys dropped. An older save without `tease` gets
+the default; `st.off` is never changed by any of this.
+
+**shiftTimes (the clock moved back by d):** `until` (when `kind`), `at`, `warnAt`, `gainAt`, `splash` (when non-zero),
+every `boops` entry and `pay.at` move by d (`st.wet` moves too, so `splash === st.wet` still holds); `payDay`,
+`bondDay` = `min(key, dkey(now))`; `heat`, `gain` stay.
+
+**`st.off` is untouched.** It stays the 24 h offence after an absence over 72 h. While it runs (`st.off && t <
+st.off.until`) teasing **never starts** a sulk or a cross and **never plans** a payback (the blowUp, the swat and their
+love and heat still happen). The absence over 72 h (the `gap > AWAY` branch of `advance`) sets `tease.kind = null,
+until = 0, pay = null` (heat cools by itself).
+
+**Teasing active** = `teasing(st) = st.tease.kind && st.t < st.tease.until`. While it is active **`palAwake()` is
+false** (**Decided:** so a joint visit act ends at the next step via `apart()`, no joint act or jealousy starts while she
+sulks; the visit programme is otherwise unchanged).
+
+**Constants** (exported frozen as `E.TEASE`; copy exactly):
+```js
+const TEASE = deep({
+  fast: 260,           // ms: a mean interval under this is drumming ("fast")
+  regular: 0.3,        // cv under this is regular
+  warnN: 3,            // irritation paths warn from this tap of the run
+  overN: 14,           // every other path warns (over-patting) from this tap
+  warnMs: 1800,        // blowUp / loveBite only when the run goes on at least this long after the warning
+  runGap: 1500,        // ms: a pat later than this after tease.at belongs to a new run (the engine's own check)
+  rearN: 3, flopN: 8, flopClose: 0.4,   // bliss: the rear up from tap 3; the flop exactly at tap 8 when close >= 0.4
+  closeSpan: 300,      // close = clamp(1 - |ms - fav| / 300, 0, 1)
+  fav: [400, 650],     // her favourite tempo (ms): patTempo(st)
+  like: 1, bliss: 1, blissClose: 0.5,   // love per pat: like +1, bliss +1 + 0.5 × close
+  gainMax: 8, gainWin: 10,              // love from pats: at most +8 per 10-minute window
+  flopLove: 4, bond: 1,                 // the flop: love +4 (once a window), bond +1 (once a day, shared with reconcile)
+  heatMax: 10, cool: 10,                // heat 0..10, −1 per 10 minutes
+  heat: { blowUp: 2, eat: 1, loveBite: 1, trap: 1, boop: 1, splash: 2 },
+  crossAt: 5,                           // heat >= 5 after adding = cross, else sulk
+  sulkMin: 3, crossMin: 20,
+  love: { blowUp: -2, eat: -1, loveBite: -1, splash: -3, reconcile: 3 },
+  boopN: 3, boopWin: 60000,             // the 3rd nose tap within 60 s = a swat
+  wetMin: 30,                           // splash: wet until max(st.wet, t + 30 min)
+  pay: { p: 0.5, min: 5, max: 25, lapse: 120, ext: 5 },   // payback: chance for a sulk, delay after the end, lapse, see below
+  mood: { sulk: -10, cross: -20 },
+});
+```
+**Decided:** `heat.eat 1` and `love.eat −1` (the meal blowUp is the mild one); `heat.boop` is for the boop swat;
+`runGap` is the engine's run check (Input's own run uses `PAT_GAP`).
+
+`E.patTempo(st)` = `400 + Math.floor(hash32(st.seed, 0x7A17, 8) / 4294967296 * 251)` (400–650 ms, not stored; `k = 8` is
+free in `drawTraits`). `close = clamp(1 − |ms − patTempo(st)| / 300, 0, 1)` (`ms` 0 → close 0).
+
+**New actions** (added to `ACTIONS`); `REGION_ALIAS` gets `nose: 'head'` (so `stroke`, `scratch`, `strokeVisitor` and
+the visitors' `v:<id>:nose` count the nose as the head; `REGIONS` and the diary spots do not change). `pat` and `boop`
+join the lap-keeping list (`['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff', 'photo', 'pat', 'boop']`);
+`splash` does not. None of the three is in `home` or `TREE_OK`, so out → "{n} je venku.", up the tree → "{n} je na
+stromě." (the existing general refusals).
+
+| Action | Argument (clamped) | Refusals (exact) |
+|---|---|---|
+| `pat` | `{ region: regionOf(region, 'head'), n: integer 1…999 (else 1), ms: 0…5000 (else 0), cv: 0…3 (else 0), eating: === true }` | only the general ones |
+| `boop` | — | "{n} spí, nebuď ji." (asleep, or dozing on the lap) |
+| `splash` | — | in this order: "Konví se zalévá na zahradě." (`!st.yard`), "V zimě ne – byla by jí zima." (`season(t) === 'winter'`), "{n} spí. Nech ji spát." (asleep) |
+
+**Helpers used below.**
+- *fresh run*: `n ≤ 2 || t − at > runGap` → `warnAt = 0` (evaluated before `at = t`).
+- *warn logic* (for a path that has reached its warning tap): `warnAt === 0` → `warnAt = t`, event `pat { stage: 'warn' }`;
+  else `t − warnAt ≥ warnMs` → the outcome (blowUp or loveBite); else `pat { stage: 'warn' }` again.
+- *offence(t, mins)* (start or prolong sulk/cross): heat was already added. If the long offence runs: nothing. Else if on
+  the lap: `leaveLap(st, t, 'annoyed', ev)` first (lapLeave comes before the cause's event — **Decided:** the engine pushes
+  the lapLeave event before blowUp/loveBite/boop/splash); `st.held = false`. A cross running or `heatNow ≥ crossAt` → `kind 'cross'`,
+  `until = t + 20 min`, event `cross { until }` (a running cross is renewed); else `kind 'sulk'`, `until = max(until, t + 3 min)`, event `sulk { until }`. Then plan the payback.
+- *plan payback* (at the start or prolonging of an offence; never for the meal blowUp): if `pay` exists → `pay.at =
+  max(pay.at, until + 5 min)`; else if `payDay !== dkey(t)` and (`kind === 'cross'` or `rndSeed(seed, floor(t/1000), 53)
+  < 0.5`) → `pay = { kind: rndSeed(…, 55) < 0.5 ? 'shelf' : 'ambush', at: until + (5 + floor(rndSeed(…, 54) × 21)) min }`.
+  All three draws keyed on `Math.floor(t / 1000)` of that moment.
+
+**`pat` decision** (the action emits exactly one of `pat`, `swat`, `trap`, `blowUp`, `loveBite`, plus what the table
+adds):
+
+| # | Case | Result |
+|---|---|---|
+| 0 | asleep, or dozing on the lap | `pat { region, stage: 'tolerate', sleeping: true }`; nothing changes (no wake, no heat, no `at`) |
+| — | (then: fresh-run check, `heat = heatNow(t)`, `at = t`) | |
+| 1 | cross running | `swat { why: 'pat' }`; no heat, no love; `warnAt = 0` |
+| 2 | `eating` | warn from n ≥ 2 → outcome `blowUp { why: 'eat' }` (mild) |
+| 3 | `belly` | `trap`; heat +1; on the lap annoy +2; no love change, no offence; `warnAt = 0` |
+| 4 | `head`, `chin`, `ears`, `paws` (the nose is `head`) | path *tolerate* |
+| 5 | `tail` | path *irritate* `'tail'` |
+| 6 | `back` / `tailBase`, `ms > 0 && ms < 260` | path *irritate* `'fast'` |
+| 7 | `back` / `tailBase`, mood sad | path *tolerate* |
+| 8 | `back` / `tailBase`, mood grumpy, or sulk running, or the long offence | path *irritate* `'grumpy'` |
+| 9 | `back` (calm or happy) | path *like* |
+| 10 | `tailBase` (calm or happy), `cv < 0.3` | path *bliss* |
+| 11 | `tailBase` (calm or happy), irregular | path *like* |
+
+- *irritate*: n < 3 → `pat { stage: 'tolerate' }`, `warnAt = 0`; n ≥ 3 → warn logic → outcome `blowUp { why }`.
+- *tolerate / like / bliss*: n ≥ 14 → warn logic → outcome `loveBite`. Below 14: `warnAt = 0` and
+  - tolerate: `pat { stage: 'tolerate' }`, no love;
+  - like: love +1 within the window, `pat { stage: 'like' }`;
+  - bliss: love `1 + 0.5 × close` within the window, `pat { stage: 'bliss', close, rear: n ≥ 3 }`; at **n === 8 with close ≥
+    0.4** also `flop { lap }`: if `gain < 8` → love +4 and `gain = 8` (the window is used up), bond +1 when `bondDay !==
+    today` (then `bondDay = today`), Deníček `bliss`.
+  - like and bliss also `soothe()` the jealousy and, on the lap, set `st.lap.pet = t`.
+- *the love window*: `!gainAt || t − gainAt ≥ 10 min` → `gainAt = t, gain = 0`; then `add = min(amount, 8 − gain)`,
+  `gain += add`, love += add.
+- **blowUp** `{ why: 'fast' | 'grumpy' | 'tail' | 'eat', lap }`: love −2 (eat −1), heat +2 (eat +1), `warnAt = 0`, then
+  offence (sulk 3 min or cross); the payback is planned except for `'eat'`. `lap: true` when she was on the lap.
+- **loveBite** `{ lap }`: love −1, heat +1, `warnAt = 0`, **no** offence; on the lap `leaveLap('annoyed')` (pushed first).
+
+**`boop`:** the lap stays. Cross running → `swat { why: 'boop' }` (no heat, `boops` unchanged). Else drop `boops` older
+than 60 s, push t, `heat = heatNow(t)`, `at = t`. Three in the list → `boops = []`, heat +1, event `boop { swat: true }`
+then offence (sulk or cross; on the lap she leaves it). Otherwise event `boop {}` (she squints, sneezes, shakes her
+head), Deníček `boop`. A boop gives no love. (A run of taps on the nose is never a boop: from `n ≥ 2` the UI sends
+`pat` with the region `nose` = head.)
+
+**`splash`:** `st.held = false`; `w = t + 30 min`: if `w > (st.wet > t ? st.wet : 0)` → `st.wet = w`, `tease.splash = w`
+(else she is already wetter from the rain and `splash` stays as it was); love −3; heat +2 (`at = t`); event `splash {}`
+then offence (a running cross is renewed to t + 20 min); Deníček `splash`. **Rain after a splash still soaks her:** the
+garden's rain check becomes `if (!(st.wet > t) || st.wet === st.tease.splash) { coat −10; event wet }` and then sets
+`st.wet = t + 120 min` as now (so she is no longer "from the can"). Mood: the existing wet −15 applies.
+
+**Making up (reconcile)** — only a **sulk** (never a cross), only while she is awake:
+- `stroke` along the fur at a good speed (not belly, not sideways), `scratch` (not belly), `treat` (pamlsek or tyčinka):
+  the action does what it always does, then `kind = null, until = 0`, love +3, bond +1 when `bondDay !== today` (then
+  `bondDay = today`), event `reconcile { by: 'stroke' | 'scratch' | 'treat', bond }` (bond = whether +1 was given),
+  Deníček `reconcile`. No `sulkEnd` after a reconcile.
+- a stroke against the fur, too fast, sideways, or on the belly leaves the sulk as it is.
+
+**While cross runs** (and she is awake):
+
+| Action | Result |
+|---|---|
+| `stroke` (not too slow), `scratch` | `swat { why: 'stroke' \| 'scratch' }` instead of the usual effect; no love, no heat |
+| `pat`, `boop` | `swat { why: 'pat' \| 'boop' }` (above) |
+| `call` | `ignore { reason: '{n} tě teď schválně neposlouchá.' }` (after the out, asleep and tree checks) |
+| `play` | `ignore { reason: '{n} si s tebou teď hrát nechce. Zlobí se.' }` (after `sleeping()`) |
+| `treat` | she eats it as always (`treat`), stays cross |
+| `pickUp`, `lapOn` | `wriggle` |
+| `splash` | as above (the cross is renewed) |
+
+Asleep she behaves as asleep (the sleeping purr), never swats. Training, feeding, brushing and the rest are unchanged.
+
+**Ending:** in `step()`, when `kind` and `t + dt ≥ until`: event `sulkEnd {}` or `crossEnd {}`, `kind = null, until = 0`
+(in any advance, watching or not). The moment is exact, so the step length does not matter.
+
+**Payback** (checked in `step()` after the ending, at `te = t + dt`): `pay` and `te ≥ pay.at + 120 min` → `pay = null`
+(lapsed, silent); `payDay === dkey(te)` → `pay = null`; else when `te ≥ pay.at`, **the advance is watching**
+(**Decided:** never inside a long catch-up, so the player sees it) and she is free — not asleep, not out, not on the lap,
+not held, not up the tree, not scared, no joint visit act (`st.visit.act.with`), not jealous, not teasing, no long offence —
+event `payback { kind }` with `kind = st.yard ? 'ambush' : pay.kind` (**Decided:** no counter in the garden), `payDay =
+dkey(te)`, `pay = null`, Deníček `payback`. Not free → it waits until it lapses.
+
+**Events** (add to the header comment of engine.js):
+
+| Event | Fields | When |
+|---|---|---|
+| `pat` | `region` (after the alias), `stage: 'like'\|'bliss'\|'tolerate'\|'warn'`, `close?` and `rear?` (bliss), `sleeping?` (true), `eating?` (true while `eating`) | a pat that did nothing bigger |
+| `flop` | `lap` | after `pat` bliss at tap 8 |
+| `blowUp` | `why: 'fast'\|'grumpy'\|'tail'\|'eat'`, `lap` | the warned run went on 1.8 s |
+| `loveBite` | `lap` | over-patting went on 1.8 s after its warning |
+| `trap` | — | a pat on the belly |
+| `boop` | `swat?` (true on the 3rd within 60 s) | a nose tap |
+| `swat` | `why: 'pat'\|'boop'\|'stroke'\|'scratch'` | touched while cross |
+| `splash` | — | the can on her |
+| `sulk` / `cross` | `until` | an offence starts or is prolonged / a cross starts or is renewed |
+| `sulkEnd` / `crossEnd` | — | the time ran out |
+| `reconcile` | `by: 'stroke'\|'scratch'\|'treat'`, `bond` | made up after a sulk |
+| `payback` | `kind: 'shelf'\|'ambush'` | her revenge, at most once a day |
+| `found` | `id`, `text` | as before; the five new diary ids |
+
+Order inside one action: `lapLeave` → the cause (`blowUp`/`loveBite`/`boop`/`splash`) → `sulk`/`cross` → `found`.
+
+**`health()` adds:** `sulk` (sulk running), `cross` (cross running), `splashed` (`st.wet > t && st.wet ===
+st.tease.splash`), `teaseUntil` (`until` while teasing, else 0). **`moodValue()`:** sulk −10, cross −20 (the wet −15
+exists). The launcher's `ahead` follows by itself.
+
+**Deníček:** five new ids, after `birthday` and before the cat entries: `['bliss', 'boop', 'reconcile', 'splash',
+'payback']` (in `DIARY_IDS` and in `diary()`; 16 → **21** entries, each reachable, tested with `discover`):
+
+| id | Found at | Text | Hint (not found) |
+|---|---|---|---|
+| `bliss` | the first flop | "{n} má ráda, když ji poplácáváš u kořene ocasu – svižně. Zvedne zadeček jako výtah a přešlapuje." (`svižně` when `patTempo ≤ 520`, else `pomalu a pravidelně`) | "Co jí udělá radost u kořene ocasu?" |
+| `boop` | the first `boop {}` (not the swat) | "Když jí ťukneš do nosu, {n} zašilhá a kýchne." | "Co udělá, když jí ťukneš do nosu?" |
+| `reconcile` | the first reconcile | "{n} se po škádlení usmířila: otřela se ti o ruku." | "Jak se usmíříte, když ji naštveš?" |
+| `splash` | the first splash | "{n} dostala sprchu z konve. Otřepala se a hodnou chvíli se zlobila." | "Možná se jednou dozvíš…" |
+| `payback` | the first payback | "{n} ti to vrátila. Co se škádlívá, to se rádo mívá!" | "Kdo ví, co ji jednou napadne…" |
+
+**Decided:** the boop text avoids the dative of the name ("{Koxe}" breaks for other names, §11).
+
+**Exports:** `TEASE`, `patTempo`. **Tests** (`tools/kocka-test.js`): as in the plan's §5; the existing test at about
+line 1564 that expects `'nose'` to be an unknown visitor region uses `'whiskers'` instead, plus a test that a visitor's
+`nose` counts as its head.
+
+### 13.4 UI (`games/kocka/index.html`, after the three blocks are assembled)
+**Tap routing** in `onTap` (the item and visitor branches stay first; then for a tap on Koxa):
+1. asleep (not on the lap) → today's tip "{n} spí, nebuď ji." and `zzz`, **plus** the class `kx-flick` on her for 450 ms;
+   dozing on the lap → `zzz` as now; up the tree → as now. None of them sends `pat` or `boop`.
+2. `K.teaseLock > perf()` → the tap is ignored (no meow).
+3. cross running: `pat.n === 1` → `tip('cross', '{n} dělá, že tě nevidí.', 4000)` (no meow, no bubble); `n ≥ 2` → `doAct('pat', …)`.
+4. `!ev.pat || ev.pat.n === 1` → today's meow and bubble; when the region is `nose` also `doAct('boop')`.
+5. `ev.pat.n ≥ 2` and the region is Koxa's (no `v:` prefix) → `doAct('pat', { region: ev.pat.region, n, ms, cv, eating:
+   !!(K.act && K.act.kind === 'eat') })` instead of the meow. Never while `K.gone`, carrying, on the tree, asleep or
+   dozing (rule 1 already returned).
+After an outcome that ends the run (`blowUp`, `loveBite`, `trap`, `swat`, `flop`) the UI calls `gest.cancel()`, so the
+next tap starts a new run. **Locks** (`K.teaseLock = perf() + ms`): blowUp 2500, trap 2200, loveBite 1200, swat 1000,
+flop 1500, boop 1600 (only against a second boop animation; pats are not locked by a boop).
+
+**`decide()` order:** the jealousy clean-up, `K.act`, out, tree, asleep, scared, then **new: `K.sulkPlace`** (while
+`h.sulk || h.cross`; made lazily from `kPos()` when missing, e.g. after a reload; cleared when neither runs, on
+`reconcile`, and on `put` when the player carried her somewhere), then `K.place`, the long offence, wants … as now.
+`K.sulkPlace = { p: { room: here, pose: 'sulk', fx: k.x < 200 ? 330 : 70, fy: garden ? clamp(k.y, 470, 590) : 560, fast:
+true, o: { mood: 'grumpy', ears: 'back' } }, until: perf() + (teaseUntil − now()) }`. The events `blowUp`, `sulk`,
+`cross`, `splash` and `swat` clear `K.place` (as `K.jealousPlace`). `rearUp` is played with `busy('rearUp', { room: G.her,
+pose: 'rearUp', fx: k.x, fy: k.y, o: { mood: 'happy', purring: true } }, 1600)` from `kPos()` (each bliss pat renews it),
+never through `K.place`. When a batch holds `lapLeave` and `blowUp`/`loveBite` with `lap: true`, `lapLeave` is handled
+first (`exitLap()`), but its own text, sound and `K.place` are skipped: the blowUp or loveBite says it.
+
+**The watering can:** `ITEMS.can.to = ['beds', 'cat']`. In `hitTarget` for `'can'`, only when `G.view === 'garden'`,
+`G.her === 'garden'` and `!K.gone`: `catHit()` (the exact regions, the cat in front wins) → `'cat'` when the front one
+is Koxa; a visitor in front is never a target (the check falls through to the beds). Only the beds light up while
+dragging (Koxa is not offered as a target). `dropItem`: target `'cat'` → `doAct('splash')`, else `doAct('waterBeds')`.
+
+**Choreography and texts** (`notify` unless "tip"; `{n}` = `nm()`):
+
+| Event | What she does | Text |
+|---|---|---|
+| `pat` like | purr 1200 ms, intensity 0.6 | — |
+| `pat` bliss | purr 1500 ms, intensity `min(1, 0.5 + 0.08 × n)` (it grows); `rear` → `rearUp` (not on the lap) | — |
+| `pat` tolerate | `o.eyes 'squint'`, ears back for 900 ms | — |
+| `pat` warn | `o.warn` for 1800 ms, `I.sound.meow('grumpy')` | tip('warn', "Pozor! Švihá ocasem a dává uši do stran. Radši přestaň.", 5000) |
+| `flop` | `sideLie` 8 s (`o.mood 'happy'`); on the lap `lapBelly` 8 s | tip('flop', "{n} se blahem svalila na bok.", 60000) |
+| `blowUp` (not eat) | `arch` + `openMouth` 900 ms, `say('hiss')`, `popFx('bang')`, then runs (`fast`) to `K.sulkPlace`, `sulk` there | "{n} vyletěla, naježila se a utekla. Takové bubnování nemá ráda." (fast) / "… Dnes na poplácávání nemá náladu." (grumpy) / "… Na ocas jí nesahej." (tail) |
+| `blowUp` eat | ears back, walks away from the bowl to `K.sulkPlace` (no arch, no hiss) | "{n} odešla od misky. Při jídle ji nech." |
+| `loveBite` | `openMouth`, ears back 700 ms, vibrate `bite` | "Kous! {n} tě jemně kousla. Tolik poplácávání už je moc." (on the lap: "Kous! {n} tě jemně kousla a seskočila z klína. Tolik poplácávání už je moc.") |
+| `trap` | `belly` with `o.grab` 2200 ms (on the lap `lapBelly` + grab), vibrate `bite` | "Past! Chytila tě za ruku a kope zadníma. Drápky ale nechala schované." |
+| `boop` | her current pose: `o.eyes 'cross'` 600 ms → `o.achoo` + `fx('puff')` at `A.headPoint(...).nose` + `I.sound.fx('sneeze')` + bubble "Hapčí!" 500 ms → `o.shakeHead` 600 ms | — |
+| `boop` swat / `swat` why boop | `swipe` toward the player 900 ms, vibrate `bite` | "Plác! {n} tě varovně plácla tlapkou. Bez drápků." |
+| `swat` (pat, stroke, scratch) | `swipe` 900 ms | tip('swat', "Plác! {n} se pořád zlobí – nech ji chvíli být.", 4000) |
+| `splash` | `fx('splash')` at `A.headPoint` + `I.sound.fx('splash')`, `arch` (no hiss) 500 ms, `shake` with `o.wet` 1200 ms + `I.sound.fx('shake')`, then to `K.sulkPlace` | "Šplouch! {n} vyskočila, otřepala se a je celá mokrá. Teď se zlobí." |
+| `sulk` | (the cause already moved her) a timer `setTimeout(tick, until − now() + 50)` | — |
+| `cross` | as sulk, ears back | "{n} se opravdu zlobí. Tohle škádlení už bylo moc – nech ji chvíli být." (after the cause's text) |
+| `sulkEnd` | `K.sulkPlace = null` | — |
+| `crossEnd` | `K.sulkPlace = null` | tip('crossEnd', "{n} už se nezlobí.", 10000) |
+| `reconcile` | trots to the front (fx 200, fy 575) and does `rub` 2200 ms, `say('trill')`, two hearts | "{n} se otočila a otřela se ti o ruku. Usmířeno!" |
+| `payback` shelf | she goes to the kitchen counter (`counter` spot, jumps up), the mug stands next to her; she looks at the player 1.5 s, pushes it with a paw (`trickPaw`), it falls to the floor (the UI turns `item('mug')` as it falls), `I.sound.fx('clink')`; she jumps down and walks off | "{n} shodila z linky plecháček. Cink! A celou dobu se na tebe dívala." |
+| `payback` ambush | `stalk` 2.5 s low at the side of the room, tail twitching, then `pounce` to the bottom edge (the player's ankle), vibrate `bite`, then `run` off | "Útok ze zálohy! {n} ti skočila po kotníku. Drápky nechala schované." |
+
+The mug on the kitchen floor stays until the player leaves the kitchen (not saved).
+
+**Holding the payback.** The UI queues `payback` (and a `found` with id `payback` from the same batch, shown after the
+scene) and plays it only when: nothing is open (`nothingOpen()`), no minigame, training or arranging, not carrying, not
+on the lap or seated, no drag, no finger down (`!gest.active()`), the page visible, at least 5 s since the welcome (the
+page opened or came back: `K.welcomeAt`), no `K.act`, Koxa still free (`health()`: not asleep, out, tree, lap, held,
+sulk, cross), **and the player looks at her room** (`G.view === G.her`). Then: ambush → the scene in that room; shelf →
+the scene when that room is the kitchen, otherwise she walks off to the kitchen (`K.place` at the counter) and 3 s
+later the text "Z kuchyně se ozvalo cink… {n} shodila z linky plecháček." with a quiet clink. **Decided:** when the
+conditions are not met within 3 minutes of visible time, it is shown as text only: shelf → that same text (she is put in
+the kitchen); ambush → "{n} na tebe chvíli číhala za rohem a pak to vzdala." A reload drops a held payback (the engine
+already counted the day).
+
+**`hintText()`** (after `h.scared`/`h.asleep`, before the long offence and the wants):
+- cross: "{n} se zlobí – nech ji chvíli být."
+- sulk: "{n} se urazila – pohlaď ji po srsti nebo jí dej pamlsek."
+- the wet line becomes `h.splashed ? '{n} je mokrá od konve a mrzutá.' : '{n} zmokla a je mrzutá.'`
+
+**Help (`renderHelp`)** — four rows in **Mazlení** after "Ťuknutí", one in **Zahrada** after "Záhony" (`${n}` =
+`esc(nm())`, `${an}` = `esc(acc(nm()))`):
+
+| Row | Picture | Text |
+|---|---|---|
+| Poplácání | `rearUp` (fallback `loaf`), happy, a tap ring | "Ťukej na ni lehce prstem pořád dokola. Na zádech má ráda klidné, pravidelné poplácávání a na jednom místě úplně nejradši – zkus ho najít, i správné tempo. Hlavu, bradu a tlapky snese. Ocas nech být a bříško je past: chytí tě za ruku a kope." |
+| Než se naštve | `sit` grumpy with `warn` | "Když švihá špičkou ocasu, dává uši do stran a cuká jí kůže na zádech, má toho dost. Přestaň – když ťukáš dál, naježí se, uteče a urazí se. Rychlé bubnování nemá ráda nikdy, a když je mrzutá, ani pomalé. Při jídle ji nech. Spící ${n} jen cukne uchem." |
+| Ťuknutí do nosu | `sit` calm with `eyes: 'cross'` | "Ťukni jí jednou do nosu: zašilhá, kýchne a zatřepe hlavou. Třikrát za minutu je ale moc – plácne tě tlapkou (drápky nechá schované) a urazí se." |
+| Usmíření | `rub` happy (fallback `sit`) | "Uražená sedí zády k tobě na druhém konci pokoje. Pohlaď ji po srsti, podrbej ji nebo jí dej pamlsek a usmíříte se – otře se ti o ruku. Za pár minut ji to přejde i samo. Když to se škádlením přeženeš, opravdu se zlobí: 20 minut tě neposlouchá, nehraje si a na pohlazení plácne tlapkou. Pak ji nech být. A někdy ti to vrátí…" |
+| Konev (Zahrada) | the can + `shake` wet (two) | "Konví zaléváš záhony. Když zaliješ i ${an}, vyskočí, otřepe se a je mokrá a uražená. Návštěvy konví nepokropíš. V zimě a když spí, to nejde." |
+
+**Test hook** (`window.Kocka`): `events` (the last 100 events passed to `handle()`, oldest first, the objects as the
+engine gave them), `get tease()` (a copy of `G.st.tease` plus `health()`'s `sulk`, `cross`, `splashed`, `teaseUntil`),
+`forcePayback(kind)` (puts `{ type: 'payback', kind }` through `handle()` and skips only the 5 s welcome wait; the other
+holding rules apply; returns true when queued). `tools/shots.js` gets a step with a tap on her nose and one with the can
+on her in the garden.
