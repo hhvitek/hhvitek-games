@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.20 – 2026-11-13
+
 - Kočka: přehlednější nápověda s kratšími větami. Nově v ní najdeš, jak získat pamlsky a za co je utratit, co přináší přátelství, co dělá nábytek, jak fungují záhony, nemoci a co se děje, když tu nejsi.
 - Kočka: kočičí dvířka se po koupi osadí v předsíni a Koxa jimi chodí ven sama. Hračky z Obchůdku jsou v nabídce hraček (ťukni na hračku a vyměníš ji). S přátelstvím Parťačka je na zahradě opravdu šest záhonů. Šantu z Pokladů jí dáš tlačítkem „Dát jí“. V Deníčku najdeš všechny fotky, i ty starší.
 
