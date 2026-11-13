@@ -1,7 +1,14 @@
 // The app version, shown in the launcher's Nastavení and used by sw.js to name its cache.
 // Written by tools/release.js from CHANGELOG.md: never edit by hand.
-globalThis.APP_VERSION = { version: '1.0.20', date: '2026-11-13' };
+globalThis.APP_VERSION = { version: '1.0.21', date: '2026-11-13' };
 globalThis.APP_CHANGES = [
+  {
+    "version": "1.0.21",
+    "date": "2026-11-13",
+    "items": [
+      "Kočka: co se škádlívá, to se rádo mívá. Koxu můžeš poplácat (u kořene ocasu pomalu a pravidelně je to blaho, rychlé bubnování ji naštve), ťuknout jí do nosu nebo ji na zahradě pokropit konví. Když se urazí, usmíříte se pohlazením nebo pamlskem – a někdy ti to později vrátí."
+    ]
+  },
   {
     "version": "1.0.20",
     "date": "2026-11-13",
