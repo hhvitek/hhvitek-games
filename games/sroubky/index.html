@@ -461,8 +461,9 @@ let verdict = null;   // what the solver says about the current position (cached
 const busyToast = () => moving ? toast('Chvilku, matky se ještě přesouvají') : toast('Chvilku, připravuji hru…', 60000);
 const L = () => levelOf(G.level);
 const cap = () => L().cap;
-// a game counts as played (statistics) from its first move (G.counted); it is untouched while no move is on the board
-// (also after Od začátku or undoing every move), so it may be replaced and needs no confirmation
+// rule: only a finished game counts in the statistics, once (G.counted): at the win, or when the game first says it
+// cannot be solved from here; a game with Poradit (G.hinted) is not counted at all. A game is untouched while no move
+// is on the board (also after Od začátku or undoing every move), so it may be replaced and needs no confirmation
 const isFresh = () => G.moves === 0 && !G.history.length && G.status === 'playing';
 const inProgress = () => G && G.status === 'playing' && !isFresh();
 const stat = id => bests[id] || (bests[id] = { played: 0, won: 0, best: null });
@@ -495,7 +496,8 @@ function validGame(g) {
     if (g.history.length > HISTORY_MAX) g.history = g.history.slice(-HISTORY_MAX);
     if (!Number.isInteger(g.moves) || g.moves < 0) g.moves = g.history.length;
     g.hinted = g.hinted === true;
-    g.counted = g.counted === true || g.moves > 0 || g.history.length > 0;
+    // a save from before the flag existed was counted as played at its first move: never count it twice
+    g.counted = g.counted === true || (typeof g.counted !== 'boolean' && (g.moves > 0 || g.history.length > 0));
     g.wonCounted = g.wonCounted === true;
     g.status = isWon(g.bolts, lv.cap) ? 'won' : 'playing'; // never trusted from the save
     if (g.status === 'won') g.counted = true;
@@ -775,7 +777,6 @@ function finishMove(a, b) {
   if (G.history.length > HISTORY_MAX) G.history.shift();
   applyMove(G.bolts, cap(), a, b);
   G.moves++;
-  if (!G.counted) { G.counted = true; stat(G.level).played++; } // a game counts as played from its first move
   sel = null; busy = false; moving = false;
   if (isDone(G.bolts[b], cap())) popCap = b;
   if (isWon(G.bolts, cap())) {
@@ -787,22 +788,30 @@ function finishMove(a, b) {
     return;
   }
   if (popCap === b) buzz([20, 40, 20]);
+  if (stuck()) countEnd(); // the game says it is over: counted as played (Undo can still bring a win)
   save(); render(true);
   if (stuck()) toast(analyse().kind === 'nomove' ? 'Už není kam táhnout – zkus Zpět' : 'Odsud už to vyřešit nejde – zkus pár tahů Zpět', 3500);
 }
+// The first end of a game (a win, or "cannot be solved from here") counts it as played, once, unless Poradit was used
+function countEnd() {
+  if (G.counted) return;
+  G.counted = true;
+  if (!G.hinted) stat(G.level).played++;
+}
 // The record is set only at the win and Undo is not possible after it, so it cannot be inflated by undoing
 // (no record-before-the-move needs to be kept in the history). A won game is counted once; replaying it
-// "Od začátku" may still improve the record.
+// "Od začátku" may still improve the record. A game with Poradit adds neither a win nor a record.
 function recordWin() {
+  countEnd();
   const st = stat(G.level), prev = st.best;
-  if (!G.wonCounted) { G.wonCounted = true; st.won++; }
+  if (!G.wonCounted) { G.wonCounted = true; if (!G.hinted) st.won++; }
   let rec = false;
   if (!G.hinted && (prev === null || G.moves < prev)) { st.best = G.moves; rec = true; }
   return { moves: G.moves, prev, rec, hinted: G.hinted };
 }
 function showWin(res) {
   if (G.status !== 'won') return;
-  const line = res.hinted ? 'S radou se rekord nepočítá.' : res.rec ? (res.prev ? `<b>Nový rekord!</b> Předtím ${tahu(res.prev)}.` : '<b>První rekord!</b>') : `Rekord: ${tahu(res.prev)}.`;
+  const line = res.hinted ? 'Hra s radou se do statistik nepočítá.' : res.rec ? (res.prev ? `<b>Nový rekord!</b> Předtím ${tahu(res.prev)}.` : '<b>První rekord!</b>') : `Rekord: ${tahu(res.prev)}.`;
   showModal(`<h2>Hotovo! 🎉</h2><p>Všechny šrouby jsou hotové za <b>${tahu(res.moves)}</b>.</p><p>${line}</p>`,
     [{ text: 'Další hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]);
 }
@@ -838,8 +847,10 @@ $('#btnHint').addEventListener('click', () => {
   if (v.kind === 'lost' || v.kind === 'nomove') { toast('Odsud už to vyřešit nejde – vrať pár tahů Zpět', 3500); return; }
   if (v.kind !== 'ok') { toast('Tady si nevím rady – zkus pár tahů Zpět', 3500); return; }
   sel = v.move[0]; hint = v.move;
-  if (!G.hinted) { G.hinted = true; save(); }
+  const first = !G.hinted;
+  if (first) { G.hinted = true; save(); } // rule: kept by Undo and Od začátku, a new game resets it
   buzz(8); render(true);
+  if (first) toast('S radou se tahle hra nepočítá do statistik');
 });
 // rule: a new game in the middle of one asks first
 $('#btnNew').addEventListener('click', () => {
@@ -879,8 +890,8 @@ function renderSettings() {
       ${toggleRow('vibrate', 'Vibrace')}
     </section>
     <section class="card"><h3>Statistika</h3>
-      <table class="stat"><thead><tr><th>Obtížnost</th><th>Hráno</th><th>Vyřešeno</th><th>Rekord</th></tr></thead><tbody>${rows}</tbody></table>
-      <div class="fnote">Rekord je nejmenší počet tahů. Hra s radou se do rekordu nepočítá.</div>
+      <table class="stat"><thead><tr><th>Obtížnost</th><th>Dohráno</th><th>Vyřešeno</th><th>Rekord</th></tr></thead><tbody>${rows}</tbody></table>
+      <div class="fnote">Rekord je nejmenší počet tahů. Počítají se jen dohrané hry bez Poradit: vyřešené, nebo takové, kde hra ohlásí, že už vyřešit nejdou.</div>
     </section>
     <button class="big" data-act="close">Zpět ke hře</button>
     <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
@@ -924,10 +935,10 @@ function renderHelp() {
       <li>Na šroub se vejdou 4 matky (Lehká a Střední), nebo 5 (Těžká a Mistr).</li>
       <li>Plný šroub jedné barvy dostane navrch kloboučkovou matku. Ten je hotový a už se nemění.</li>
       <li><b>Zpět</b> vrátí poslední tah, klidně i víckrát. <b>Od začátku</b> rozehraje stejnou hru znovu.</li>
-      <li><b>Poradit</b> zvedne matky a označí šroub, kam s nimi – stačí na něj ťuknout. S radou se rekord nepočítá.</li>
+      <li><b>Poradit</b> zvedne matky a označí šroub, kam s nimi – stačí na něj ťuknout.</li>
       <li>Když už se z pozice vyřešit nedá, hra to hned řekne. Pak vrať pár tahů Zpět.</li>
       <li>Obtížnost se mění v Nastavení: Lehká má 4 barvy, Střední 6, Těžká 8 a Mistr 10, vždy se dvěma prázdnými šrouby navíc. Každá hra jde vyřešit, hra to před začátkem ověří.</li>
-      <li>Statistika v Nastavení ukazuje pro každou obtížnost, kolik her bylo rozehráno a vyřešeno, a rekord: nejmenší počet tahů.</li>
+      <li>Statistika v Nastavení ukazuje pro každou obtížnost, kolik her bylo dohráno a vyřešeno, a rekord: nejmenší počet tahů. Počítají se jen dohrané hry bez Poradit.</li>
       <li><b>Značky na matkách</b> v Nastavení přidají na každou barvu jiný tvar, když se barvy špatně rozlišují.</li>
     </ol></section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;

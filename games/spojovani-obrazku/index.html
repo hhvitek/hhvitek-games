@@ -577,7 +577,7 @@ function validGame(x) {
       : okF(h.s) && okR(h.r) && Number.isInteger(h.seed));
     if (!Array.isArray(x.hist) || !x.hist.every(okH)) x.hist = [];
     x.status = x.a.some(v => v) ? 'playing' : 'won';
-    x.started = x.started === true; x.counted = x.counted === true; x.mixed = x.mixed === true;
+    x.started = x.started === true; x.counted = x.counted === true; x.mixed = x.mixed === true; x.hinted = x.hinted === true;
     if (x.status === 'won') x.counted = true;
     x.sel = -1;
     return true;
@@ -596,7 +596,7 @@ function makeGame(size) {
     const d = deal(C, R, new Array(n).fill(1), newPairs(g, n, size, setOf(S.set).must), g);
     // seed0: the seed right after dealing, so "Začít tuto znovu" shuffles the same way again
     if (d) return { size, C, R, f0: d.f.slice(), f: d.f, r0: d.r.slice(), r: d.r, a: new Array(n).fill(1), seed: g.seed, seed0: g.seed,
-      hist: [], status: 'playing', sel: -1, started: false, counted: false, mixed: false };
+      hist: [], status: 'playing', sel: -1, started: false, counted: false, mixed: false, hinted: false };
   }
   throw new Error('Spojování obrázků: the board could not be dealt');
 }
@@ -606,23 +606,29 @@ function newGame(msg) {
   if (msg) toast(msg);
 }
 function restart() {
-  // the same deal again, without its shuffles: a win now counts as one without Zamíchat (G.counted keeps it from counting twice)
+  // the same deal again, without its shuffles (G.counted keeps a won game from counting twice, G.hinted stays)
   G.f = G.f0.slice(); G.r = G.r0.slice(); G.a.fill(1); G.hist = []; G.seed = G.seed0; G.status = 'playing'; G.sel = -1; G.mixed = false;
   hintPair = hintLine = null; save(); render();
 }
-// Statistics per board size: a game counts as played at its first pair, as won at its first win (Undo after the
-// end takes nothing back, and winning the same game again is not counted twice)
+// Statistics per board size (user's rule 2026-11-13): only a finished game counts, once, at its first win (Undo
+// after the end takes nothing back, and winning the same game again is not counted twice), and never a game in which
+// Poradit was used (G.hinted: kept by Undo and "Začít tuto znovu", a new game resets it). Being stuck is no end here:
+// Zamíchat always goes on. G.started = "played" was added (versions before it added that at the first pair, so such
+// a game gets only the win).
 const statOf = size => stats[size] || { played: 0, won: 0, clean: 0 };
-function countStart() {
-  if (G.started) return;
-  G.started = true;
-  const st = { ...statOf(G.size) }; st.played++; stats[G.size] = st;
-}
 function countWin() {
-  if (G.counted) return false;
+  if (G.counted || G.hinted) return false;
   G.counted = true;
-  const st = { ...statOf(G.size) }; st.won++; if (!G.mixed) st.clean++; stats[G.size] = st;
+  const st = { ...statOf(G.size) };
+  if (!G.started) { G.started = true; st.played++; }
+  st.won++; if (!G.mixed) st.clean++; stats[G.size] = st;
   return true;
+}
+// Marks the game as hinted; true the first time in a game not counted yet (then the player is told)
+function markHinted() {
+  if (G.hinted) return false;
+  G.hinted = true; save();
+  return !G.counted;
 }
 
 /* ---------- Helpers ---------- */
@@ -690,7 +696,6 @@ function removePair(a, b, pts) {
   const done = () => {
     G.a[a] = G.a[b] = 0; hintLine = null;
     G.hist.push({ p: [a, b] });
-    countStart();
     busy = false; buzz(18);
     let fresh = false;
     if (!aliveCount()) { G.status = 'won'; fresh = countWin(); }
@@ -700,7 +705,7 @@ function removePair(a, b, pts) {
       const st = statOf(G.size), name = sizeOf(G.size).name;
       // only while it is still won (a quick Zpět may have brought a pair back)
       whenFree(G, 250, () => { if (G.status === 'won') showModal(`<h2>Výborně! 🎉</h2><p>Všechny kameny jsou pryč.</p>
-        <p>${name} plán: vyhráno <b>${st.won}</b> z ${st.played} ${plural(st.played, 'hry', 'her', 'her')}${fresh && !G.mixed ? ', tahle bez míchání' : ''}.</p>`,
+        ${G.hinted ? '<p>Hra s radou se do statistiky nepočítá.</p>' : `<p>${name} plán: vyhráno <b>${st.won}</b> z ${st.played} ${plural(st.played, 'hry', 'her', 'her')}${fresh && !G.mixed ? ', tahle bez míchání' : ''}.</p>`}`,
         [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Zavřít', cls: 'alt' }]); });
     } else if (!pairsNow(G.C, G.R, G.a, G.f).length) { const h0 = G.hist.length; whenFree(G, 250, () => { if (G.hist.length === h0) stuck(); }); }
   };
@@ -765,8 +770,13 @@ function showHint() {
   let p = r.first;
   if (!p) p = pairsNow(G.C, G.R, G.a, G.f).sort((x, y) => (G.r[x[0]] + G.r[x[1]]) - (G.r[y[0]] + G.r[y[1]]))[0];
   G.sel = -1; hintPair = p; hintLine = linePath(G.C, G.R, G.a, p[0], p[1]);
+  const note = markHinted();
   buzz(); render();
-  toast('Tyhle dva kameny jdou spojit. Stačí ťuknout na jeden z nich.', [...document.querySelectorAll('.t.hl')]);
+  const msg = 'Tyhle dva kameny jdou spojit. Stačí ťuknout na jeden z nich.', keep = () => [...document.querySelectorAll('.t.hl')];
+  if (!note) { toast(msg, keep()); return; }
+  // the first hint of a game says first that the game no longer counts
+  toast('S radou se tahle hra nepočítá do statistiky', keep());
+  setTimeout(() => { if (hintPair === p) toast(msg, keep()); }, 2600);
 }
 
 /* ---------- Rendering ---------- */
@@ -893,7 +903,7 @@ const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><d
 const mini = (f, set, sel) => `<span class="mini${sel ? ' sel' : ''}" style="--tw:38px;--e:3px;--tsh:${edgeShadow(3)}">${faceHTML(f, set)}</span>`;
 function statsHTML() {
   const rows = SIZES.map(x => { const st = statOf(x.id); return `<div class="stat"><span>${x.name}</span><b>${st.played ? `vyhráno ${st.won} z ${st.played}${st.won ? `, bez míchání ${st.clean}` : ''}` : 'zatím nehráno'}</b></div>`; }).join('');
-  return `<section class="card"><h3>Statistika</h3>${rows}<p class="fnote">Hra se počítá, jakmile spojíš první dvojici.</p>
+  return `<section class="card"><h3>Statistika</h3>${rows}<p class="fnote">Počítají se jen dohrané hry bez Poradit.</p>
     ${SIZES.some(x => statOf(x.id).played) ? '<button class="link" data-act="clearstats">Smazat statistiku</button>' : ''}</section>`;
 }
 function renderSettings() {
@@ -986,7 +996,7 @@ function renderHelp() {
       <div class="legend">${ico('undo')}<span><b>Zpět</b> vrátí poslední tah, i zamíchání. Dá se ťukat opakovaně.</span></div>
       <div class="legend">${ico('hint')}<span><b>Poradit</b> ukáže dvojici, kterou jde spojit – když to jde, takovou, se kterou se dá hra dohrát.</span></div>
       <div class="legend">${ico('shuffle')}<span><b>Zamíchat</b> přeskládá zbylé kameny tak, aby se hra dala dohrát.</span></div>
-      <p class="fnote">Každé rozdání jde dohrát. Kdo spojí dvojice ve špatném pořadí, může se zaseknout: pak pomůže Zpět nebo Zamíchat. Na čas se nehraje. Statistika v nastavení počítá výhry a výhry bez míchání.</p>
+      <p class="fnote">Každé rozdání jde dohrát. Kdo spojí dvojice ve špatném pořadí, může se zaseknout: pak pomůže Zpět nebo Zamíchat. Na čas se nehraje. Statistika v nastavení počítá výhry a výhry bez míchání; hra s radou se do ní nepočítá.</p>
     </section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;
 }

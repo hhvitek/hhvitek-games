@@ -549,7 +549,7 @@ const nm = () => G.foe.name;
    G = { level, rules: { fleet, again }, foe, seed, starter: who shoots first (0 you, 1 the computer),
          mine: your fleet [{ r, c, len, v }], theirs: the computer's fleet (from the seed), hist: your fleet before each
          change while placing (Zpět), started: the battle began (your fleet is fixed), shots: [[who, square]] in order,
-         helped: Poradit was used (no record), counted: the end is in the statistics, record: it was a new record }
+         helped: Poradit was used (the game never goes into the statistics), counted: the end is in the statistics, record: it was a new record }
    Everything else (both seas, whose turn, the end) comes from the shots (E.battle), so a reload goes on exactly. */
 let S, G, ST, B;
 const rnd = n => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; } catch (e) { return Math.floor(Math.random() * n); } };
@@ -607,7 +607,7 @@ function normalize(s) {
   if (!SPEEDS.some(t => t.id === s.speed)) s.speed = DEFAULTS.speed;
   s.again = !!s.again; s.vibrate = !!s.vibrate;
 }
-// played / won games and the fewest shots of a win without Poradit, per opponent level and fleet
+// played / won games and the fewest shots of a win, per opponent level and fleet (only finished games without Poradit)
 const stKey = (level, fleet) => `${level}.${fleet}`;
 function validStats(v) {
   const n = x => Number.isInteger(x) && x >= 0 ? x : 0;
@@ -618,16 +618,17 @@ function validStats(v) {
   }
   return out;
 }
-// the end goes into the statistics once (also when Nová hra comes right after it)
+// rule: only a finished game counts, once, at its first end, and never one with Poradit
 function count() {
   if (G.counted || G.status === 'playing') return;
   G.counted = true;
+  if (G.helped) return;
   const st = ST[stKey(G.level, G.rules.fleet)];
   st.played++;
   if (G.status !== 'won') return;
   st.won++;
   const n = yourShots();
-  if (!G.helped && (st.best == null || n < st.best)) { G.record = st.best != null; st.best = n; }
+  if (st.best == null || n < st.best) { G.record = st.best != null; st.best = n; }
 }
 // a new game: the starter changes every game (a game in which you did not shoot yet keeps its starter);
 // keepMine (a settings change before your first shot) keeps your arranged ships when the fleet is the same
@@ -943,13 +944,13 @@ $('#btnStart').addEventListener('click', () => {
   toast(`Bitva začala! Tvoje lodě jsou ${$('#mid').classList.contains('side') ? 'vpravo' : 'dole vlevo'}.`);
   cpuTurn();
 });
-// Poradit: the square the Mistr would shoot at, from what you know (a game with advice gives no record)
+// Poradit: the square the Mistr would shoot at, from what you know (a game with advice is not in the statistics)
 $('#btnHint').addEventListener('click', () => {
   if (G.status !== 'playing') { toast('Hra skončila'); return; }
   if (!yourTurn() || thinking) { toast(`Chvilku, ${nm()} míří`); return; }
   const b0 = B.B[0];
   hintCell = E.aim(b0.k, E.afloat(b0), 'master', E.rng(E.mix(G.seed, G.shots.length, 0x51ED27)));
-  if (!G.helped) toast('Rada je orámovaná. Hra s radou se nepočítá do rekordu.', 3200);
+  if (!G.helped && !G.counted) toast('Rada je orámovaná. S radou se hra nepočítá do statistik.', 3600);
   G.helped = true;
   save(); render();
 });
@@ -968,11 +969,12 @@ function endDialog() {
     if (G.status === 'won') {
       head = 'Výhra! 🎉';
       why = `Celé loďstvo soupeře je na dně. Stačilo ti <b>${plural(yourShots(), 'výstřel', 'výstřely', 'výstřelů')}</b>.`
-        + (G.record ? '<br>To je tvůj nový rekord!' : G.helped ? '<br>Hra s radou se do rekordu nepočítá.' : '');
+        + (G.record ? '<br>To je tvůj nový rekord!' : G.helped ? '<br>Hra s radou se do statistik nepočítá.' : '');
     } else {
       const left = B.B[0].left;
       head = `${O.past(G.foe, 'Vyhrál', 'Vyhrála')} ${nm()}`;
-      why = `${nm()} ${O.past(G.foe, 'potopil', 'potopila')} všechny tvé lodě. Tobě ${left === 1 ? 'chyběl jen jeden zásah' : left <= 4 ? `chyběly ještě ${left} zásahy` : `chybělo ještě ${left} zásahů`}. Zbylé lodě soupeře jsou teď v moři vidět.`;
+      why = `${nm()} ${O.past(G.foe, 'potopil', 'potopila')} všechny tvé lodě. Tobě ${left === 1 ? 'chyběl jen jeden zásah' : left <= 4 ? `chyběly ještě ${left} zásahy` : `chybělo ještě ${left} zásahů`}. Zbylé lodě soupeře jsou teď v moři vidět.`
+        + (G.helped ? '<br>Hra s radou se do statistik nepočítá.' : '');
     }
     showModal(`<h2>${head}</h2><p>${why}</p>`, [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]);
   });
@@ -1011,7 +1013,7 @@ function renderSettings() {
       ${toggleRow('vibrate', 'Vibrace')}
     </section>
     <section class="card"><h3>Statistika</h3>
-      <div class="fnote" style="margin:0 0 8px">${fl.name}. Nejméně výstřelů se počítá jen ve vyhrané hře bez rady.</div>
+      <div class="fnote" style="margin:0 0 8px">${fl.name}. Počítají se jen dohrané hry bez Poradit.</div>
       ${LEVELS.map((l, i) => { const st = ST[stKey(l.id, S.fleet)]; return `<p class="stats"><b>${O.levelName(LEVELS, i)}</b><br>Odehráno ${plural(st.played, 'hra', 'hry', 'her')}, výher ${st.won}${st.best ? `, nejméně výstřelů ${st.best}` : ''}</p>`; }).join('')}
     </section>
     <button class="big" data-act="close">Zpět ke hře</button>
@@ -1062,7 +1064,7 @@ function renderHelp() {
       <li><b>V bitvě</b> je velké moře soupeřovo: ťukni na pole a vystřel. Tečka je voda, křížek zásah, tmavá loď potopená. Proužky pod soupeřovým jménem jsou jeho lodě; potopené jsou bledé.</li>
       <li>Malé moře pod ním (na širokém okně vedle něj) je tvoje: tvoje lodě a soupeřovy výstřely. Jeho poslední výstřel je orámovaný.</li>
       <li>Výstřel se vrátit nedá (to už by bylo vidět, co tam je). Zpět funguje jen při rozmisťování lodí.</li>
-      <li><b>Poradit</b> orámuje pole, kam se nejvíc vyplatí střílet; ťukni na něj. Hra s radou se počítá, ale ne do rekordu nejméně výstřelů.</li>
+      <li><b>Poradit</b> orámuje pole, kam se nejvíc vyplatí střílet; ťukni na něj. Hra, ve které použiješ Poradit, se do statistik nepočítá; počítají se jen dohrané hry.</li>
     </ol></section>
     <section class="card help"><h3>Rady</h3><ul>
       <li>Po zásahu zkoušej pole nahoře, dole, vlevo a vpravo. Šikmo od zásahu loď být nemůže.</li>

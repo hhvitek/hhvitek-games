@@ -739,7 +739,8 @@ const ptName = i => 'abcdefg'[XY[i][0]] + (7 - XY[i][1]);
    G = { level, jump: three stones may jump (the rules of this game), foe, seed, you: your colour (0 white, 1 black;
          white starts), starter: who started (0 you, 1 the computer), line: every position of the game (27 characters
          each, see the engine), last: the computer's last move (marked until you move), status: 'playing' | 'won' |
-         'lost' | 'draw', why: how it ended, counted: the end is in the statistics }
+         'lost' | 'draw', why: how it ended, counted: the end is in the statistics,
+         hinted: Poradit was used (the game never goes into the statistics; Undo keeps it) }
    Everything else (the stones, whose turn, Undo) comes from line, so a reload goes on exactly where it was. */
 let S, G, ST;
 const rnd = n => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; } catch (e) { return Math.floor(Math.random() * n); } };
@@ -786,6 +787,7 @@ function validGame(g) {
     g.last = Number.isInteger(g.last) && g.line.length > 1 && +g.line[g.line.length - 2][26] !== g.you && moveAt(g.line, g.line.length - 2, g.jump) === g.last ? g.last : null;
     g.status = judge(g);
     g.counted = g.counted === true || g.status !== 'playing';
+    g.hinted = g.hinted === true;
     return true;
   } catch (e) { return false; }
 }
@@ -804,9 +806,11 @@ function validStats(v) {
   for (const l of LEVELS) for (const k of [l.id, l.id + NOJUMP]) { const x = v && v[k], played = n(x && x.played); out[k] = { played, won: Math.min(n(x && x.won), played), draw: Math.min(n(x && x.draw), played) }; }
   return out;
 }
+// rule: only a finished game counts, once, at its first end, and never one with Poradit
 function count() {
   if (G.counted || G.status === 'playing') return;
   G.counted = true;
+  if (G.hinted) return;
   const st = ST[statKey(G)]; st.played++;
   if (G.status === 'won') st.won++;
   if (G.status === 'draw') st.draw++;
@@ -816,7 +820,7 @@ function newGame(msg) {
   stopThinking();
   const starter = !G ? 0 : isFresh() ? G.starter : 1 - G.starter;
   G = { level: S.level, jump: S.jump, foe: O.create(rnd, G && G.foe ? [G.foe.name] : []), seed: rnd(2 ** 31), starter, you: starter === 0 ? 0 : 1,
-        line: [E.START], last: null, status: 'playing', why: '', counted: false };
+        line: [E.START], last: null, status: 'playing', why: '', counted: false, hinted: false };
   sel = -1; pend = null; hintM = -1;
   save(); render();
   if (msg) toast(msg);
@@ -1211,18 +1215,23 @@ $('#btnHint').addEventListener('click', () => {
   if (busy()) { toast(busyMsg()); return; }
   if (hintBusy) { toast('Chvilku, hledám dobrý tah'); return; }
   const list = pend ? pend.list : E.moves(cur(), G.jump);
+  // returns true for the first advice in a game that is not counted yet (the toast says it)
   const show = m => {
     hintM = m;
     if (!pend && E.mFrom(m) >= 0) sel = E.mFrom(m); // the advised stone is chosen, a tap on the blue point plays it
-    render();
+    const first = !G.hinted && !G.counted;
+    G.hinted = true;
+    save(); render();
+    return first;
   };
-  if (list.length === 1) { show(list[0]); toast('Jiný tah tu není'); return; }
+  if (list.length === 1) { const first = show(list[0]); toast(first ? 'Jiný tah tu není. S radou se hra nepočítá do statistik.' : 'Jiný tah tu není', first ? 3600 : 2600); return; }
   const g0 = G, n = G.line.length, p0 = pend;
   hintBusy = true; render();
   ask(engineInput('hint', pend ? pend.list : null), r => {
     hintBusy = false;
     if (G !== g0 || G.line.length !== n || pend !== p0) { render(); return; }
-    if (list.includes(r.m)) show(r.m); else render();
+    if (!list.includes(r.m)) { render(); return; }
+    if (show(r.m)) toast('S radou se tahle hra nepočítá do statistik', 3200);
   });
 });
 // rule: a new game in the middle of one asks first
@@ -1252,7 +1261,7 @@ function endDialog() {
     const btns = [{ text: 'Nová hra', fn: () => newGame() }];
     if (G.status !== 'won') btns.push({ text: 'Vrátit tah', cls: 'alt', fn: () => $('#btnUndo').click() });
     btns.push({ text: 'Prohlédnout', cls: 'alt' });
-    showModal(`<h2>${head}</h2><p>${whyText()}</p>`, btns);
+    showModal(`<h2>${head}</h2><p>${whyText()}</p>${G.hinted ? '<p>Hra s radou se do statistik nepočítá.</p>' : ''}`, btns);
   });
 }
 
@@ -1288,6 +1297,7 @@ function renderSettings() {
     </section>
     <section class="card"><h3>Statistika</h3>
       ${LEVELS.map((l, i) => [l.id, l.id + NOJUMP].map(k => { const st = ST[k]; if (k !== l.id && !st.played) return ''; return `<p class="stats"><b>${O.levelName(LEVELS, i)}${k === l.id ? '' : ', bez skákání'}</b><br>Odehráno ${plural(st.played, 'hra', 'hry', 'her')}, výher ${st.won}, remíz ${st.draw}</p>`; }).join('')).join('')}
+      <p class="fnote">Počítají se jen dohrané hry bez Poradit.</p>
     </section>
     <button class="big" data-act="close">Zpět ke hře</button>
     <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
@@ -1340,7 +1350,7 @@ function renderHelp() {
       <li>Když složíš mlýn, soupeřovy kameny, které smíš vzít, mají oranžový kroužek. Ťukni na jeden z nich.</li>
       <li>Soupeřův poslední kámen má červenou tečku, prázdný kroužek ukazuje, odkud přišel, a čárkovaný kroužek, odkud ti vzal kámen.</li>
       <li><b>Zpět</b> vrátí tvůj poslední tah i soupeřovu odpověď. Dá se ťukat opakovaně, i po konci hry.</li>
-      <li><b>Poradit</b> ukáže modře dobrý tah. Ťukni na modrý bod a tah se zahraje.</li>
+      <li><b>Poradit</b> ukáže modře dobrý tah. Ťukni na modrý bod a tah se zahraje. Hra, ve které použiješ Poradit, se do statistik nepočítá; počítají se jen dohrané hry.</li>
     </ol></section>
     <section class="card help"><h3>Soupeř</h3>
       <p>${LEVELS.map((l, i) => `<b>${O.levelName(LEVELS, i)}</b>: ${l.desc}`).join('<br><br>')}</p>

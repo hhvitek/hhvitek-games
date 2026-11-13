@@ -9,13 +9,16 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 - Nová hra Šroubky: přesouvej barevné matky mezi šrouby, dokud na každém nezůstane jen jedna barva. Čtyři obtížnosti, každá hra jde vyřešit, s tlačítkem Poradit.
 - Nová hra Malované křížovky: podle čísel u řádků a sloupců vybarvuješ políčka a odhalíš barevný obrázek; 36 obrázků od 5 × 5 po 15 × 15, křížky, tažení prstem, Poradit, Zpět a přiblížení velkých mřížek.
-- Nová hra Šipky ven: ťukej na šipky a pouštěj je z plochy; šipka, které stojí v cestě jiná, narazí. Úrovně od malých po velké, hvězdy za hru bez chyby, volitelné životy, Poradit a Zpět.
+- Nová hra Šipky ven: ťukej na šipky a pouštěj je z plochy; šipka, které stojí v cestě jiná, narazí. Úrovně od malých po velké, hvězdy za hru bez chyby, tři životy (nebo jeden či bez omezení), Poradit a Zpět.
 - Nová hra Hledání min: odkrývej políčka a vyhni se minám; vlajky přepínačem nebo podržením prstu, tři velikosti, rozdání vždy bez hádání, Poradit, Zpět, přiblížení a nejlepší časy.
 - Nová hra Generál: kostky s tabulkou proti počítači – pět kostek, tři hody za kolo, pak body zapíšeš do jednoho z 15 okének (od jedniček po generál). Tři soupeři od začátečníka po mistra, statistika a nejlepší skóre.
 - Nová hra Reversi: pokládej kameny tak, aby obklíčily soupeřovy, a ty se otočí na tvou barvu. Soupeř běžný hráč nebo mistr, který konec hry spočítá přesně, Poradit a Zpět.
 - Nová hra Lodě: rozmísti své lodě, střílej do moře soupeře a potop celé jeho loďstvo dřív než on tvoje. Pět nebo deset lodí, tři soupeři od začátečníka po mistra, Poradit.
 - Nová hra Mlýn: klasický mlýn s devíti kameny proti počítači – pokládej, posouvej a skládej mlýny, za každý vezmeš soupeři kámen; se třemi kameny se skáče. Soupeř běžný hráč nebo mistr, Poradit a Zpět.
 - Nová hra Věžičky: pokládej věžičky z barevných šestiúhelníků na plástev; stejné barvy u sousedů se sesypou na jednu věžičku a deset dílků jedné barvy zmizí. Tři obtížnosti, rekordy, značky barev, Poradit a Zpět.
+- Statistiky a rekordy ve všech hrách počítají jen dohrané hry: rozehraná a opuštěná hra se nepočítá a hra, ve které použiješ Poradit, se do statistik ani rekordů nepočítá vůbec (hra to při první radě řekne).
+- Skládání kostek, Padající tvary, Barevné kostky a Spojování čísel: rekord se zapíše až na konci hry, ne už během ní.
+- Solitér, FreeCell, Pyramida a Pavouk: hra, ve které už nejde žádný tah, se počítá jako odehraná a nevyhraná.
 - Dáma a Piškvorky: hláška už nezakrývá tvůj řádek „Ty – Na tahu“ pod deskou, ukáže se dole přes tlačítka.
 
 ## 1.0.15 – 2026-11-12

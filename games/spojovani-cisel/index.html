@@ -432,9 +432,12 @@ function validGame(g) {
     g.won = !!g.won;
     g.capped = !!g.capped;
     if (!Number.isInteger(g.seed)) g.seed = rnd(2 ** 31);
-    if (typeof g.bestAtStart !== 'number') g.bestAtStart = 0;
+    delete g.bestAtStart; // not used any more (older saves have it)
     if (g.board.every(v => !v)) { spawn(g.board); spawn(g.board); }
     g.status = canMove(g.board, N) ? 'playing' : 'over'; // the end comes from the board, never from the save
+    // counted: the record already took this game's first end; older saves updated the record during play,
+    // so a game that is already over was counted then
+    if (typeof g.counted !== 'boolean') g.counted = g.status === 'over';
     return true;
   } catch (e) { return false; }
 }
@@ -443,7 +446,7 @@ function newGame() {
   const N = S.size, b = new Array(N * N).fill(0);
   spawn(b); spawn(b);
   best = bests[N] || 0;
-  G = { n: N, board: b, score: 0, history: [], status: 'playing', won: false, bestAtStart: best, seed: rnd(2 ** 31) };
+  G = { n: N, board: b, score: 0, history: [], status: 'playing', won: false, counted: false, seed: rnd(2 ** 31) };
   $('#modal').hidden = true;
   save(); render();
 }
@@ -538,6 +541,17 @@ function layout() {
   root.style.setProperty('--bpad', bpad + 'px');
 }
 
+// rule: only a finished game counts. The record is taken once, at the first end of the game (no move left); Undo
+// after the end does not take it back and a later end of the same game is not counted again (so playing and
+// undoing cannot inflate it). A game left unfinished (Nová hra, closing the app) never touches the record.
+let endCounted = true, endRec = false; // the end just reached: was it counted, and was it a new record
+function recordEnd() {
+  endCounted = !G.counted; endRec = false;
+  if (G.counted) return;
+  G.counted = true;
+  if (G.score > best) { best = G.score; endRec = true; }
+}
+
 /* ---------- Moving ---------- */
 let anim = null, modalT = null, winDue = null; // winDue: the game whose "Výborně!" dialog is still to come
 function finishAnim() {
@@ -552,16 +566,14 @@ function move(dir) {
   if (G.status === 'over') { toast('Už se nedá táhnout – ťukni na Zpět nebo Nová hra'); return; }
   const N = G.n, prev = G.board, res = slide(prev, N, dir);
   if (!res.moved) { toast('Směrem ' + DIR_NAMES[dir] + ' se nic nepohne'); return; }
-  // bb = the record before this move: Undo puts it back, so the record cannot be inflated by playing and undoing
-  G.history.push({ b: prev.slice(), s: G.score, w: G.won, bb: best, seed: G.seed });
+  G.history.push({ b: prev.slice(), s: G.score, w: G.won, seed: G.seed });
   if (G.history.length > HISTORY) { G.history.shift(); G.capped = true; } // older moves can no longer be undone
   G.board = res.board;
   G.score += res.gained;
-  if (G.score > best) best = G.score;
   const spawned = spawn(G.board, G);
   let win = false;
   if (!G.won && maxTile(G.board) >= goal()) { G.won = true; win = true; winDue = G; }
-  if (!canMove(G.board, N)) G.status = 'over';
+  if (!canMove(G.board, N)) { G.status = 'over'; recordEnd(); }
   save();
 
   // Animation: old tiles slide to their new places, then the final board is drawn
@@ -592,7 +604,6 @@ function undo() {
   // the goal may have been raised since that move: it is reached only when the board has it
   G.board = h.b; G.score = h.s; G.won = !!h.w && maxTile(h.b) >= goal(); G.status = 'playing';
   if (!G.won) winDue = null;
-  if (typeof h.bb === 'number' && isFinite(h.bb)) best = Math.max(h.bb, G.bestAtStart || 0);
   if (Number.isInteger(h.seed)) G.seed = h.seed; // the same move again gives the same new tile
   $('#modal').hidden = true;
   buzz(); save(); render();
@@ -644,16 +655,16 @@ function showWin() {
   const over = G.status === 'over';
   showModal(
     `<h2>Výborně! 🎉</h2><p>Na desce je <b>${maxTile(G.board)}</b>.</p><p class="pts">${fmt(G.score)}</p>`
-      + (over && G.score >= best && G.score > G.bestAtStart && G.score > 0 ? '<p><b>Nový rekord! 🎉</b></p>' : '<p>bodů</p>'),
+      + (over && endRec ? '<p><b>Nový rekord! 🎉</b></p>' : '<p>bodů</p>'),
     over ? [{ text: 'Nová hra', fn: newGame }, { text: 'Vrátit tah', cls: 'alt', fn: undo }, { text: 'Prohlédnout desku', cls: 'alt' }]
          : [{ text: 'Hrát dál', fn: () => toast('Hraj dál, jak dlouho to půjde') }, { text: 'Nová hra', cls: 'alt', fn: newGame }]
   );
 }
 function showOver() {
   if (!$('#modal').hidden) return;
-  const rec = G.score >= best && G.score > G.bestAtStart && G.score > 0;
   showModal(
-    `<h2>Už se nedá táhnout</h2><p class="pts">${fmt(G.score)}</p><p>${rec ? '<b>Nový rekord! 🎉</b>' : `bodů · rekord ${fmt(best)}`}</p>`,
+    `<h2>Už se nedá táhnout</h2><p class="pts">${fmt(G.score)}</p><p>${endRec ? '<b>Nový rekord! 🎉</b>' : `bodů · rekord ${fmt(best)}`}</p>`
+      + (endCounted ? '' : '<p>Tahle hra už jednou skončila, do rekordu se znovu nepočítá.</p>'),
     [{ text: 'Nová hra', fn: newGame }, { text: 'Vrátit tah', cls: 'alt', fn: undo }, { text: 'Prohlédnout desku', cls: 'alt' }]
   );
 }
@@ -686,7 +697,7 @@ function renderSettings() {
         <button class="sbtn${si > 0 ? '' : ' off'}" data-act="size:-1" aria-label="Menší">−</button>
         <div class="sval">${S.size} × ${S.size}</div>
         <button class="sbtn${si < SIZES.length - 1 ? '' : ' off'}" data-act="size:1" aria-label="Větší">+</button>
-      </div><div class="fnote">Větší mřížka je snazší (víc místa), menší je těžší. Každá velikost má svůj rekord.</div>${pending}</div>
+      </div><div class="fnote">Větší mřížka je snazší (víc místa), menší je těžší. Každá velikost má svůj rekord. Počítají se jen dohrané hry.</div>${pending}</div>
       <div class="field"><div class="flabel">Cíl hry</div>${GOALS.map(g => `<button class="opt" data-act="goal:${g.id}" aria-pressed="${S.goal === g.id}"><span class="radio"></span><span><b>${S.size === 3 ? g.id / 4 : g.name}</b><span class="d">${g.desc}</span></span></button>`).join('')}
         <div class="fnote">Cíl platí hned. Po dosažení cíle se dá hrát dál.${S.size === 3 ? ' Na mřížce 3 × 3 jsou cíle menší, větší čísla se na ni nevejdou.' : ''}</div></div>
     </section>
@@ -767,6 +778,7 @@ function renderHelp() {
         <li>Cílem je poskládat číslo <b>${goal()}</b>. Potom se dá hrát dál.</li>
         <li>Body přibývají za každé spojení. Nikam se nespěchá.</li>
         <li>Hra končí, když je deska plná a nic se nedá spojit. Tlačítko <b>Zpět</b> vrátí poslední tah – i na konci hry.</li>
+        <li>Do rekordu se počítají jen dohrané hry: body se zapíšou, až se už nedá táhnout. Když hru po konci vrátíš tlačítkem Zpět a dohraješ znovu, rekord se už nezmění.</li>
         <li>Rada: drž největší číslo v jednom rohu a posouvej hlavně dvěma směry.</li>
       </ol>
     </section>
@@ -816,6 +828,7 @@ const hasGame = saved && validGame(saved.game);
 if (saved && okRec(saved.best) && !saved.bests) bests[hasGame ? saved.game.n : DEFAULTS.size] = saved.best;
 if (hasGame) {
   G = saved.game; best = bests[G.n] || 0;
+  if (G.status === 'over') recordEnd();
   // closed while Settings were open after the size was changed: the new game starts now, as closing Settings would
   if (S.size !== G.n) closeSettings(); else render();
 }

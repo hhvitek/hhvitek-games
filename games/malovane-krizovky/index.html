@@ -1355,7 +1355,10 @@ $('#btnHint').addEventListener('click', () => {
   if (G.status !== 'playing') { toast('Křížovka je hotová'); return; }
   const { cl, sol } = info(P);
   const wrong = G.cells.findIndex((v, i) => (v === 1 && !sol[i]) || (v === 2 && sol[i]));
+  // the first hint of a puzzle that could still get its ★ says once that it no longer can (rule: no star with Poradit)
+  let first = false;
   if (!hint || (hint.wrong && wrong !== hint.i) || (!hint.wrong && G.cells[hint.i])) {
+    first = G.hints === 0 && !G.warned && !G.counted;
     G.hints++;
     if (wrong >= 0) hint = { i: wrong, wrong: true };
     else {
@@ -1365,7 +1368,8 @@ $('#btnHint').addEventListener('click', () => {
     }
   }
   const where = hint.line === 'r' ? `u ${hint.k + 1}. řádku` : `u ${hint.k + 1}. sloupce`;
-  toast(hint.wrong ? 'Tady je chyba. Ťukni na políčko a smaže se.'
+  if (first) toast('S radou tahle křížovka nedostane ★. Ťukni na označené políčko.', 4000);
+  else toast(hint.wrong ? 'Tady je chyba. Ťukni na políčko a smaže se.'
     : !hint.line ? (hint.v === 1 ? 'Tohle políčko má být vybarvené. Ťukni na něj.' : 'Tohle políčko zůstane prázdné. Ťukni na něj.')
     : hint.v === 1 ? `Podle čísel ${where} musí být tohle políčko vybarvené` : `Podle čísel ${where} musí tohle políčko zůstat prázdné`, 4000);
   showCell(hint.i);
@@ -1394,6 +1398,7 @@ function renderList() {
       const ps = PZ.filter(p => p.w === n), k = ps.filter(p => D.done[p.id]).length;
       return `<section class="card"><h3>${GROUP_NAMES[n] || ''} ${n} × ${n}</h3><div class="lsub">vyřešeno ${k} z ${ps.length}</div><div class="ltiles">${ps.map(tileHTML).join('')}</div></section>`;
     }).join('')}
+    <div class="fnote">★ dostane křížovka vyřešená bez Poradit a bez upozorňování na chyby. Rada platí i po Zpět a po začátku znovu.</div>
     <button class="big" data-act="close">Zpět ke křížovce</button>`;
 }
 function openList() { hideToast(); renderList(); $('#screenList').hidden = false; $('#screenList').scrollTop = 0; }
@@ -1402,7 +1407,8 @@ $('#listIn').addEventListener('click', e => {
   if (b.dataset.act === 'close') { $('#screenList').hidden = true; return; }
   if (b.dataset.act === 'restart') {
     showModal('<h2>Začít znovu?</h2><p>Všechny značky v této křížovce se smažou.</p>', [
-      { text: 'Ano, začít znovu', fn: () => { $('#screenList').hidden = true; openPuzzle(G.id, true); toast('Křížovka začíná znovu'); } },
+      // rule: a hint stays with the puzzle when it starts over (no ★); only a new game (another or a solved puzzle) resets it
+      { text: 'Ano, začít znovu', fn: () => { const h = G.hints; $('#screenList').hidden = true; openPuzzle(G.id, true); if (h) { G.hints = h; save(); } toast('Křížovka začíná znovu'); } },
       { text: 'Ne', cls: 'alt' },
     ]);
     return;
@@ -1476,7 +1482,7 @@ function renderHelp() {
       <li>V Nastavení jde zapnout <b>Upozorňovat na chyby</b> (špatné značky zčervenají) a <b>Doplňovat křížky</b>.</li>
       <li>Velké křížovky přiblížíš tlačítkem <b>Zvětšit</b> nebo roztažením dvěma prsty; dvěma prsty pak mřížkou i posouváš. Jedním prstem se kreslí.</li>
       <li><b>Nová hra</b> otevře seznam křížovek. Rozpracované křížovky zůstanou tak, jak jsou, takže můžeš přecházet mezi nimi.</li>
-      <li>Vyřešená křížovka se ukáže v barvách. Když ji vyřešíš bez Poradit a bez upozorňování na chyby, dostane v seznamu <b>★</b>.</li>
+      <li>Vyřešená křížovka se ukáže v barvách. Když ji vyřešíš bez Poradit a bez upozorňování na chyby, dostane v seznamu <b>★</b>. Rada platí i po Zpět a po začátku znovu.</li>
     </ol></section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;
 }

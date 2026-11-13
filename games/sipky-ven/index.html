@@ -500,16 +500,19 @@ const THEMES = [
   { id: 'night', name: 'Noc',   meta: '#131c2e' },
   { id: 'sky',   name: 'Obloha', meta: '#d8e9f5' },
 ];
-// lives: 0 = no limit (mistakes are only counted), else the level starts over after that many bumps
-const LIVES = [0, 3, 1];
-const DEFAULTS = { theme: 'paper', lives: 0, vibrate: true };
+// lives: 0 = no limit (mistakes are only counted), else the level starts over after that many bumps (3 by default,
+// the usual number in this kind of game; user's decision 2026-11-13)
+const LIVES = [3, 1, 0];
+const DEFAULTS = { theme: 'paper', lives: 3, vibrate: true };
 const MAX_LEVEL = E.MAX_LEVEL;
 
 /* ---------- State ---------- */
 // level = the level to play next (after a win the following one), top = the highest level open to play,
-// bests[level] = the fewest slips (bumps + hints) a win of that level had. G = the level being played:
-// the board (cols, rows, mask, pieces), history = the pieces taken out in order, bumps, hints, lives, status,
-// hint = the arrow Poradit framed (kept until it goes out or Zpět, saved with the game).
+// bests[level] = the fewest bumps a win of that level without Poradit had (older saves: bumps + hints). G = the level
+// being played: the board (cols, rows, mask, pieces), history = the pieces taken out in order, bumps, hints, lives,
+// status, hint = the arrow Poradit framed (kept until it goes out or Zpět, saved with the game), hinted = Poradit was
+// used: rule, such a win gets no stars and no record (kept by Undo and by starting the level over, a new level resets it;
+// the next level still opens).
 let S, G, level = 1, top = 1, bests = {}, openLevel = null;
 const isFresh = () => G.history.length === 0 && G.bumps === 0 && G.hints === 0;
 const inProgress = () => G && G.status === 'playing' && !isFresh();
@@ -545,6 +548,7 @@ function validGame(g) {
     }
     g.history = ok;
     g.bumps = count(g.bumps, 9999); g.hints = count(g.hints, 9999);
+    g.hinted = g.hinted === true || g.hints > 0;
     if (!LIVES.includes(g.lives)) g.lives = 0;
     g.status = statusOf(g);
     // the framed arrow must still be on the board, free and the game going on; else no frame (the hint stays counted)
@@ -561,15 +565,16 @@ function normalize(s) {
 // starts level lv from its beginning (the same board every time for the same number)
 function newGame(lv, msg) {
   const r = E.generate(clampLevel(lv));
-  G = { level: r.level, seed: r.seed, cols: r.cols, rows: r.rows, mask: r.mask, pieces: r.pieces, history: [], bumps: 0, hints: 0, lives: S.lives, status: 'playing', hint: null };
+  G = { level: r.level, seed: r.seed, cols: r.cols, rows: r.rows, mask: r.mask, pieces: r.pieces, history: [], bumps: 0, hints: 0, lives: S.lives, status: 'playing', hint: null, hinted: false };
   level = G.level;
   save(); build(); render();
   if (msg) toast(msg);
 }
-// the same level again: every arrow back, mistakes and hints back to zero, the lives from the settings
+// the same level again: every arrow back, mistakes and hints back to zero, the lives from the settings; a new attempt
+// can earn stars again (the levels are fixed: going to another level and back would give the same clean start)
 function restart(msg) {
   // a new object, so a dialog still waiting for the old attempt (whenFree) is dropped
-  G = Object.assign({}, G, { history: [], bumps: 0, hints: 0, lives: S.lives, status: 'playing', hint: null });
+  G = Object.assign({}, G, { history: [], bumps: 0, hints: 0, lives: S.lives, status: 'playing', hint: null, hinted: false });
   buzz(); save(); build(); render();
   toast(msg || `Úroveň ${G.level} začíná znovu`);
 }
@@ -617,7 +622,7 @@ function showModal(html, buttons) {
 const plural = (n, one, few, many) => n === 1 ? one : n >= 2 && n <= 4 ? few : many;
 const livesWord = n => `${n} ${plural(n, 'život', 'životy', 'životů')}`;
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-// stars of a win: no bump and no hint = 3, at most two together = 2, else 1
+// stars of a win without Poradit: no bump = 3, at most two = 2, else 1
 const starsOf = slips => slips === 0 ? 3 : slips <= 2 ? 2 : 1;
 const starText = n => '★'.repeat(n) + '☆'.repeat(3 - n);
 
@@ -673,7 +678,7 @@ function render() {
     ? `<span class="hearts" aria-label="Životy: ${left} z ${G.lives}">${Array.from({ length: G.lives }, (_, k) => `<svg viewBox="0 0 24 24" class="${k < left ? 'full' : 'empty'}">${HEART}</svg>`).join('')}</span>`
     : `Chyby: <b>${G.bumps}</b>`;
   $('#stats').innerHTML = `Úroveň <b>${G.level}</b> · Zbývá <b>${leftCount()}</b> · ${tail}`;
-  $('#hint').textContent = won ? `Vyřešeno! ${starText(starsOf(G.bumps + G.hints))}`
+  $('#hint').textContent = won ? (G.hinted ? 'Vyřešeno! S radou bez hvězd' : `Vyřešeno! ${starText(starsOf(G.bumps))}`)
     : lost ? 'Došly životy, zkus to znovu'
     : G.hint !== null ? 'Ťukni na šipku v rámečku'
     : 'Pusť ven šipku s volnou cestou';
@@ -763,8 +768,8 @@ function tapPiece(i) {
   if (b.by < 0) takeOut(i); else bump(i, b);
 }
 function win() {
-  const slips = G.bumps + G.hints, prev = bests[G.level];
-  if (prev === undefined || slips < prev) bests[G.level] = slips;
+  const slips = G.bumps, prev = bests[G.level];
+  if (!G.hinted && (prev === undefined || slips < prev)) bests[G.level] = slips; // rule: no stars, no record with Poradit
   top = Math.max(top, clampLevel(G.level + 1));
   level = clampLevel(G.level + 1);
   hideToast(); save(); render();
@@ -773,11 +778,16 @@ function win() {
   whenFree(G, reducedMotion() ? 400 : 900, () => showWin(prev));
 }
 function showWin(prev) {
-  const slips = G.bumps + G.hints, st = starsOf(slips);
-  const how = !slips ? 'bez jediné chyby a bez rady' : `Chyby: ${G.bumps}, rady: ${G.hints}`;
+  if (G.hinted) {
+    showModal(`<h2>Výborně!</h2><p>Úroveň ${G.level} je vyřešená.</p><p>Hra s radou nedostane hvězdy ani rekord.</p>`,
+      [{ text: nextLabel(), fn: () => newGame(level) }, { text: 'Zavřít', cls: 'alt' }]);
+    return;
+  }
+  const slips = G.bumps, st = starsOf(slips);
+  const how = !slips ? 'bez jediné chyby' : `Chyby: ${G.bumps}`;
   showModal(`<h2>Výborně!</h2><div class="stars" aria-label="Hvězdy: ${st} ze 3">${starText(st)}</div><p>Úroveň ${G.level} je vyřešená${slips ? '.</p><p>' + how + '.' : ' ' + how + '.'}</p>`
     + (prev === undefined || slips >= prev ? '' : st > starsOf(prev) ? `<p>Víc hvězd než minule (${starText(starsOf(prev))}).</p>`
-      : `<p>Lepší než minule: chyb a rad ${slips}, minule ${prev}.</p>`),
+      : `<p>Lepší než minule: chyb ${slips}, minule ${prev}.</p>`),
     [{ text: nextLabel(), fn: () => newGame(level) }, { text: 'Zavřít', cls: 'alt' }]);
 }
 function lose() {
@@ -833,7 +843,10 @@ $('#btnGo').addEventListener('click', () => {
     const f = freeNow();
     if (!f.length) { toast('Poradit se teď nepovedlo, zkus Zpět'); return; }
     G.hint = f[0]; G.hints++;
+    const first = !G.hinted;
+    G.hinted = true;
     save();
+    if (first) { buzz(8); render(); toast('S radou tahle úroveň nedostane hvězdy ani rekord', 3200); return; }
   }
   hideToast(); buzz(8); render(); // the hint line says what to do
 });
@@ -851,7 +864,7 @@ $('#btnNew').addEventListener('click', () => {
 /* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
 const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
 const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
-const LIVES_TEXT = { 0: ['Bez omezení', 'Nárazy se jen počítají jako chyby.'], 3: ['3 životy', 'Po třetím nárazu začíná úroveň znovu.'], 1: ['1 život', 'Jediný náraz a úroveň začíná znovu.'] };
+const LIVES_TEXT = { 3: ['3 životy', 'Po třetím nárazu začíná úroveň znovu.'], 1: ['1 život', 'Jediný náraz a úroveň začíná znovu.'], 0: ['Bez omezení', 'Nárazy se jen počítají jako chyby.'] };
 function renderSettings() {
   const solved = Object.keys(bests).length, b = bests[level];
   const stars = Object.values(bests).reduce((s, v) => s + starsOf(v), 0);
@@ -866,7 +879,7 @@ function renderSettings() {
         <div class="sval">Úroveň ${level}${b !== undefined ? `<small aria-label="Hvězdy: ${starsOf(b)} ze 3">${starText(starsOf(b))}</small>` : ''}</div>
         <button class="sbtn${level < top ? '' : ' dim'}" data-act="inc" aria-label="Vyšší úroveň">+</button>
       </div>
-      <div class="fnote">${b !== undefined ? 'Vyřešeno.' : 'Zatím nevyřešeno.'} Vyřešených úrovní: ${solved}, hvězd: ${stars}${solved ? ` z ${solved * 3}` : ''}. Každá vyřešená úroveň otevře další.</div>
+      <div class="fnote">${b !== undefined ? 'Vyřešeno bez Poradit.' : 'Zatím bez hvězd.'} Úrovní s hvězdami: ${solved}, hvězd: ${stars}${solved ? ` z ${solved * 3}` : ''}. Každá vyřešená úroveň otevře další. Hvězdy a rekord dostane jen úroveň dohraná bez Poradit.</div>
       ${openLevel !== null && level !== openLevel ? `<div class="notice">Po návratu do hry začne <b>úroveň ${level}</b>${inProgress() ? ' a rozehraná úroveň se ztratí' : ''}.</div>` : ''}
       </div>
     </section>
@@ -930,9 +943,9 @@ function renderHelp() {
       <li>Když jí v cestě stojí jiná šipka, <b>narazí</b> a zůstane na místě. To je chyba.
         <div class="mini" data-theme="${th}">${miniSVG(4, 3, EX, { 1: 'bump', 0: 'blk' })}</div></li>
       <li>Vyveď ven <b>všechny šipky</b>. Každá úroveň jde vyřešit a pořadí je na tobě: šipka, která jednou může ven, může i později.</li>
-      <li>Za vyřešenou úroveň dostaneš hvězdy: <b>★★★</b> bez chyby a bez rady, <b>★★☆</b> nejvýš se dvěma chybami nebo radami dohromady, jinak <b>★☆☆</b>.</li>
-      <li><b>Poradit</b> ukáže v rámečku šipku, která může ven; ťukni na ni. <b>Zpět</b> vrátí poslední šipku na plochu, chyby a rady zůstávají.</li>
-      <li>V Nastavení si můžeš zapnout <b>životy</b>: se třemi nebo s jedním životem začíná úroveň po posledním nárazu znovu.</li>
+      <li>Za vyřešenou úroveň dostaneš hvězdy: <b>★★★</b> bez chyby, <b>★★☆</b> nejvýš se dvěma chybami, jinak <b>★☆☆</b>. Hvězdy a rekord dostane jen úroveň dohraná bez Poradit.</li>
+      <li><b>Poradit</b> ukáže v rámečku šipku, která může ven; ťukni na ni. <b>Zpět</b> vrátí poslední šipku na plochu, chyby zůstávají.</li>
+      <li>Máš <b>3 životy</b>: po třetím nárazu začíná úroveň znovu. V Nastavení si můžeš vybrat jeden život, nebo hrát bez omezení.</li>
       <li>Úrovně jsou postupně větší a těžší: víc šipek, delší šipky a plochy různých tvarů. <b>Nová hra</b> začne úroveň znovu od začátku, po vyřešení přejde na další. Vyřešené úrovně si můžeš znovu zahrát v Nastavení.</li>
     </ol></section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;

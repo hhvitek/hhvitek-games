@@ -411,6 +411,7 @@ function validGame(g) {
     if (typeof g.init !== 'string' || !validSnap(g, g.init)) g.init = snap(g);
     g.moves = Number.isInteger(g.moves) ? g.moves : 0;
     if (typeof g.stuckAt !== 'number') g.stuckAt = -1;
+    g.counted = g.counted === true; g.hinted = g.hinted === true; g.scored = g.scored === true || g.status === 'won'; // a won game was counted
     return true;
   } catch (e) { return false; }
 }
@@ -429,7 +430,7 @@ function newGame(msg) {
   NS = S.suits;
   const deck = shuffle([...Array(N).keys()]), tab = [], down = [];
   for (let col = 0; col < COLS; col++) { const n = col < 4 ? 6 : 5; tab.push(deck.splice(0, n)); down.push(n - 1); }
-  G = { suits: NS, tab, down, stock: deck, done: [], hist: [], status: 'playing', moves: 0, counted: false, stuckAt: -1 };
+  G = { suits: NS, tab, down, stock: deck, done: [], hist: [], status: 'playing', moves: 0, counted: false, hinted: false, scored: false, stuckAt: -1 };
   G.init = snap(G);
   save(); render({ deal: true });
   if (msg) toast(msg, 3500);
@@ -515,7 +516,6 @@ function deal() {
 }
 function after(order) {
   G.moves++;
-  if (!G.counted) { G.counted = true; ST[G.suits].played++; }
   SEL = null; clearHint();
   buzz(); save(); render(order ? { order } : {});
   if (G.tab.some((a, i) => fullAt(G, i))) {
@@ -572,17 +572,43 @@ function shake(cards) {
   buzz(30);
 }
 
+/* ---------- Statistics ---------- */
+// User's rule 2026-11-13: a game counts once, at its first end (won, or "Dál to nejde" declared), and never when
+// Poradit was used in it. G.counted = "played" was added (versions before it added that at the first move, so such a
+// game gets only what is missing), G.scored = the end was counted, G.hinted = Poradit was used (kept by Undo and
+// "Od začátku", a new game resets it).
+function countEnd(won) {
+  if (G.scored || G.hinted) return;
+  G.scored = true;
+  if (!G.counted) { G.counted = true; ST[G.suits].played++; }
+  if (won) ST[G.suits].won++;
+}
+// Marks the game as hinted; true the first time in a game whose end was not counted yet (then the player is told)
+function markHinted() {
+  if (G.hinted) return false;
+  G.hinted = true; save();
+  return !G.scored;
+}
+const NOTE_MS = 2600;
+// the hint's message, the first time after the note that the game no longer counts
+function hintToast(msg, ms, note) {
+  if (!note) { toast(msg, ms); return; }
+  toast('S radou se tahle hra nepočítá do statistiky', NOTE_MS);
+  const h = HINT;
+  setTimeout(() => { if (HINT && HINT === h) toast(msg, ms); }, NOTE_MS);
+}
+
 /* ---------- End of game ---------- */
 function checkEnd() {
   if (G.done.length === 8) {
-    G.status = 'won'; ST[G.suits].won++;
+    G.status = 'won'; countEnd(true);
     save(); render();
     buzz([40, 60, 40, 60, 80]);
     const st = ST[G.suits];
     const wonGame = G;
     whenFree(wonGame, 900, () => {
       if (busy) return;
-      showModal(`<h2>Vyhráno! 🎉</h2><p>Všech osm řad je složených.</p><p>${SUIT_NAMES[G.suits]}: vyhrané hry <b>${st.won}</b> z ${st.played}</p>`,
+      showModal(`<h2>Vyhráno! 🎉</h2><p>Všech osm řad je složených.</p>${wonGame.hinted ? '<p>Hra s radou se do statistiky nepočítá.</p>' : `<p>${SUIT_NAMES[G.suits]}: vyhrané hry <b>${st.won}</b> z ${st.played}</p>`}`,
       [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout stůl', cls: 'alt' }]);
     });
     return;
@@ -592,6 +618,7 @@ function checkEnd() {
     const g0 = G, h0 = G.hist.length;
     whenFree(g0, 500, () => {
       if (G.hist.length !== h0 || busy || !playing()) return;
+      countEnd(false); save(); // the stuck end counts the game as played, not won
       showModal('<h2>Dál to nejde</h2><p>Všechny karty jsou rozdané a žádný užitečný tah už nevidím.</p>',
         [{ text: 'Vrátit tah zpět', fn: undo }, { text: 'Nová hra', fn: () => newGame() }, { text: 'Ještě se podívám', cls: 'alt' }]);
     });
@@ -633,9 +660,10 @@ function hint() {
   els.forEach(e => e.classList.add('hint'));
   HINT = els;
   HINT_MOVE = typeof hintMove !== 'undefined' ? hintMove : null;
-  hintT = setTimeout(() => { clearHint(); }, 4000);
+  const note = markHinted();
+  hintT = setTimeout(() => { clearHint(); }, (note ? NOTE_MS : 0) + 4000);
   buzz(8);
-  toast(msg, 4000);
+  hintToast(msg, 4000, note);
 }
 
 /* ---------- Layout and rendering ---------- */
@@ -952,6 +980,7 @@ function renderSettings() {
     ${CARDS.appearanceHTML(S, tile, minis, '--cw:52px;--ch:73px', toggleRow('vibrate', 'Vibrace'))}
     <section class="card"><h3>Statistika</h3>
       <p class="stats">${[1, 2, 4].map(n => `${SUIT_NAMES[n]}: vyhráno <b>${ST[n].won}</b> z ${ST[n].played}`).join('<br>')}</p>
+      <p class="fnote">Počítají se jen dohrané hry (vyhrané, nebo když už nejde žádný tah) bez Poradit.</p>
     </section>
     <button class="big" data-act="close">Zpět ke hře</button>
     <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
@@ -1005,7 +1034,7 @@ function renderHelp() {
     </section>
     <section class="card help"><h3>Tlačítka</h3>
       <div class="legend">${ico('undo')}<span><b>Zpět</b> vrátí poslední tah. Dá se ťukat opakovaně.</span></div>
-      <div class="legend">${ico('hint')}<span><b>Poradit</b> ukáže dobrý tah: karta i místo, kam patří, zablikají.</span></div>
+      <div class="legend">${ico('hint')}<span><b>Poradit</b> ukáže dobrý tah: karta i místo, kam patří, zablikají. Hra s radou se nepočítá do statistiky.</span></div>
       <div class="legend">${ico('deal')}<span><b>Rozdat</b> dá do každého sloupce jednu kartu. Číslo říká, kolikrát to ještě jde.</span></div>
       <p class="fnote">Na čas se nehraje. Počet barev (obtížnost), vzhled stolu, karet a obrázky jdou změnit v nastavení ⚙.</p>
     </section>

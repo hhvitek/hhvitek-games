@@ -455,11 +455,14 @@ function validGame(g) {
     if (!Array.isArray(g.bag) || !g.bag.every(okT)) g.bag = [];
     if (!Array.isArray(g.history)) g.history = [];
     g.history = g.history.filter(h => h && okBoard(h.b, sz) && okT(h.t) && okT(h.n) && okNum(h.s) && okNum(h.l) && Array.isArray(h.bag) && h.bag.every(okT)).slice(-HISTORY);
-    if (typeof g.bestAtStart !== 'number') g.bestAtStart = 0;
+    delete g.bestAtStart; // not used any more (older saves have it)
     if (g.status === 'playing' && (p.y < -4 || pieceHits(g, p))) {
       g.piece = spawn(p.t, sz);
       if (pieceHits(g, g.piece)) g.status = 'over';
     }
+    // counted: the record already took this game's first end; older saves updated the record during play,
+    // so a game that is already over was counted then
+    if (typeof g.counted !== 'boolean') g.counted = g.status === 'over';
     return true;
   } catch (e) { return false; }
 }
@@ -468,11 +471,24 @@ function newGame() {
   stop();
   const r = rulesOf(S), sz = sizeOf(r.size);
   best = bests[rulesKey(r)] || 0;
-  G = { rules: r, board: new Array(sz.w * sz.h).fill(-1), bag: [], score: 0, lines: 0, history: [], status: 'playing', bestAtStart: best, seed: rnd(2 ** 31) };
+  G = { rules: r, board: new Array(sz.w * sz.h).fill(-1), bag: [], score: 0, lines: 0, history: [], status: 'playing', counted: false, seed: rnd(2 ** 31) };
   G.piece = spawn(takeNext(G), sz);
   G.next = takeNext(G);
   flash = null;
   save(); render();
+}
+
+// rule: only a finished game counts. The record is taken once, at the first end of the game; Undo after the end
+// does not take it back and a later end of the same game is not counted again (so playing and undoing cannot
+// inflate it). A game left unfinished (Nová hra, closing the app) never touches the record.
+let endCounted = true, endRec = false; // the end just reached: was it counted, and was it a new record
+function recordEnd() {
+  endCounted = !G.counted; endRec = false;
+  if (G.counted) return;
+  G.counted = true;
+  const k = rulesKey(G.rules);
+  if (G.score > (bests[k] || 0)) { bests[k] = G.score; endRec = true; }
+  best = bests[k] || 0;
 }
 
 /* ---------- Helpers ---------- */
@@ -579,8 +595,7 @@ function hardDrop() {
 }
 function lock(bonus) {
   const sz = dims(), p = G.piece, color = COLOR[p.t], lvl0 = level();
-  // bb = the record before this move: Undo puts it back, so the record cannot be inflated by playing and undoing
-  G.history.push({ b: G.board.slice(), s: G.score, l: G.lines, t: p.t, n: G.next, bag: G.bag.slice(), bb: best, seed: G.seed });
+  G.history.push({ b: G.board.slice(), s: G.score, l: G.lines, t: p.t, n: G.next, bag: G.bag.slice(), seed: G.seed });
   if (G.history.length > HISTORY) G.history.shift();
   const b = G.board.slice(); let out = false;
   for (const [dr, dc] of SHAPES[p.t][p.r]) {
@@ -596,10 +611,9 @@ function lock(bonus) {
   G.lines += rows.length;
   const pts = POINTS[rows.length] + bonus;
   G.score += pts;
-  if (G.score > best) { best = G.score; bests[rulesKey(G.rules)] = best; }
   G.piece = spawn(G.next, sz);
   G.next = takeNext(G);
-  if (out || pieceHits(G, G.piece)) { G.status = 'over'; stop(); }
+  if (out || pieceHits(G, G.piece)) { G.status = 'over'; stop(); recordEnd(); }
   save();
 
   // Effects (the state above is already final; the flash only delays the picture)
@@ -623,7 +637,6 @@ function undo() {
   const h = G.history.pop(), wasOver = G.status === 'over';
   G.board = h.b; G.score = h.s; G.lines = h.l; G.next = h.n; G.bag = h.bag;
   if (Number.isInteger(h.seed)) G.seed = h.seed;
-  if (okNum(h.bb)) { best = Math.max(h.bb, G.bestAtStart || 0); bests[rulesKey(G.rules)] = best; }
   G.piece = spawn(h.t, dims());
   G.status = 'playing';
   if (wasOver) stop();
@@ -760,9 +773,9 @@ new MutationObserver(() => {
   if (G.status === 'playing' && $('#screenSettings').hidden && $('#screenHelp').hidden) setRunning(true);
 }).observe($('#modal'), { attributes: true, attributeFilter: ['hidden'] });
 function showOver() {
-  const rec = G.score >= best && G.score > G.bestAtStart && G.score > 0;
   showModal(
-    `<h2>Konec hry</h2><p>Nový tvar se už nevejde.</p><p class="pts">${fmt(G.score)}</p><p>${rec ? '<b>Nový rekord! 🎉</b>' : `bodů · rekord ${fmt(best)}`}</p>`,
+    `<h2>Konec hry</h2><p>Nový tvar se už nevejde.</p><p class="pts">${fmt(G.score)}</p><p>${endRec ? '<b>Nový rekord! 🎉</b>' : `bodů · rekord ${fmt(best)}`}</p>`
+      + (endCounted ? '' : '<p>Tahle hra už jednou skončila, do rekordu se znovu nepočítá.</p>'),
     [{ text: 'Nová hra', fn: newGame }, { text: 'Vrátit tah', cls: 'alt', fn: undo }, { text: 'Prohlédnout desku', cls: 'alt' }]
   );
 }
@@ -872,6 +885,7 @@ function renderHelp() {
         <li>${fall}</li>
         <li>Body: 10 za jeden řádek, 30 za dva, 50 za tři a 80 za čtyři naráz.${S.showNext ? ' Vpravo nahoře u slova <b>Další</b> je vidět, jaký tvar přijde potom.' : ''}</li>
         <li>Hra končí, když se nový tvar už nevejde. <b>Zpět</b> vrátí poslední položený tvar – i na konci hry.</li>
+        <li>Do rekordu se počítají jen dohrané hry: body se zapíšou, až se nový tvar nevejde. Když hru po konci vrátíš tlačítkem Zpět a dohraješ znovu, rekord se už nezmění.</li>
       </ol>
     </section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;
@@ -917,7 +931,7 @@ if (saved && saved.bests && typeof saved.bests === 'object') for (const [k, v] o
 const okGame = saved && validGame(saved.game);
 // older versions kept one record for all variants: it now belongs to the variant that was being played
 if (saved && okNum(saved.best) && saved.best > 0) { const k = rulesKey(okGame ? saved.game.rules : rulesOf(S)); bests[k] = Math.max(bests[k] || 0, saved.best); }
-if (okGame) { G = saved.game; best = bests[rulesKey(G.rules)] || 0; render(); }
+if (okGame) { G = saved.game; best = bests[rulesKey(G.rules)] || 0; if (G.status === 'over') recordEnd(); render(); }
 else newGame();
 
 // a phone turned sideways shows the rotate notice over the game ("Hra počká"): the falling stops, as for a hidden page

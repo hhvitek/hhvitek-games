@@ -442,8 +442,10 @@ function seededRnd(n) {
 const diffOf = id => DIFFS.find(d => d.id === id) || DIFFS[1];
 
 /* ---------- State ---------- */
-// best = the record of the running game's difficulty; bests[diff] = the records of all difficulties
-let S, G, best = 0, bests = {};
+// bests[diff] = the records of all difficulties. Rule: only a finished game counts, once, at its first end (G.counted;
+// Undo after the end does not take it back), and never a game in which Poradit was used (G.hinted, kept by Undo)
+let S, G, bests = {};
+const recOf = () => bests[G.diff] || 0;
 let sel = null;   // the tray stack chosen by a tap (then a tap on an empty cell places it)
 let hint = null;  // Poradit: { i, cell }
 let drag = null, pv = null; // dragging a stack, and the cell it would land on
@@ -451,7 +453,6 @@ const isFresh = () => G.score === 0 && G.history.length === 0;
 function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
 function save() {
   try {
-    if (G) bests[G.diff] = best;
     localStorage.setItem(KEY, JSON.stringify({ settings: S, game: G, bests }));
     if (G.status === 'playing' && !isFresh()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
   } catch (e) {} // rule: storage may be full or blocked; the game goes on
@@ -465,12 +466,14 @@ function validGame(g) {
   try {
     if (!g || !DIFFS.some(d => d.id === g.diff) || !okBoard(g.board) || !okTray(g.tray) || !okNum(g.score) || !okCols(g.cols)) return false;
     if (!Number.isInteger(g.seed)) g.seed = rnd(2 ** 31);
-    if (!okNum(g.bestAtStart)) g.bestAtStart = 0;
-    if (!Array.isArray(g.history) || !g.history.every(h => h && okBoard(h.b) && okTray(h.t) && okNum(h.s) && okCols(h.c) && Number.isInteger(h.seed) && okNum(h.bb))) g.history = [];
+    if (!Array.isArray(g.history) || !g.history.every(h => h && okBoard(h.b) && okTray(h.t) && okNum(h.s) && okCols(h.c) && Number.isInteger(h.seed))) g.history = [];
     g.history = g.history.slice(-HISTORY);
     if (g.tray.every(s => s === null)) { G = g; g.tray = E.genTray(seededRnd, g.cols); }
     // rule: the end comes from the board, the saved status is never trusted
     g.status = E.empties(g.board).length ? 'playing' : 'over';
+    g.hinted = g.hinted === true;
+    // an older save kept its record during play: a finished one was counted already
+    g.counted = g.counted === true || g.status === 'over';
     return true;
   } catch (e) { return false; }
 }
@@ -482,8 +485,7 @@ function normalize(s) {
 function newGame(msg) {
   finishAnim();
   const d = diffOf(S.diff);
-  best = bests[d.id] || 0;
-  G = { diff: d.id, board: Array.from({ length: E.N }, () => []), tray: [null, null, null], score: 0, cols: d.start, seed: rnd(2 ** 31), history: [], status: 'playing', bestAtStart: best };
+  G = { diff: d.id, board: Array.from({ length: E.N }, () => []), tray: [null, null, null], score: 0, cols: d.start, seed: rnd(2 ** 31), history: [], status: 'playing', hinted: false, counted: false };
   G.tray = E.genTray(seededRnd, G.cols);
   sel = null; hint = null; pv = null;
   save(); render();
@@ -636,11 +638,12 @@ function renderTray() {
     slot.innerHTML = s ? `<svg viewBox="0 0 ${f1(w)} ${f1(hh)}" aria-hidden="true">${stackSVG(s, w / 2, hh - 6 - HK * Rt, Rt, tileT(TH * Rt, s.length))}</svg>` : '';
   });
 }
-// during an animation the score shown rises when a tower vanishes (the game itself is already final)
+// during an animation the score shown rises when a tower vanishes (the game itself is already final);
+// the record shown is the stored one (it changes only at the end of a game)
 function renderScore() {
   const sc = A ? A.score : G.score;
   $('#score').textContent = fmt(sc);
-  $('#best').textContent = fmt(A ? Math.max(A.best, sc) : best);
+  $('#best').textContent = fmt(A ? A.best : recOf());
 }
 const bump = () => { const sc = $('#score'); sc.classList.remove('bump'); void sc.offsetWidth; sc.classList.add('bump'); };
 function renderCols() {
@@ -764,14 +767,12 @@ function finishAnim() {
 function place(i, cell) {
   finishAnim();
   if (G.status !== 'playing' || !G.tray[i] || G.board[cell].length) return false;
-  // bb = the record before this move: Undo puts it back, so the record cannot be inflated by playing and undoing
-  G.history.push({ b: G.board.map(s => s.slice()), t: G.tray.map(s => s && s.slice()), s: G.score, c: G.cols, bb: best, seed: G.seed });
+  G.history.push({ b: G.board.map(s => s.slice()), t: G.tray.map(s => s && s.slice()), s: G.score, c: G.cols, seed: G.seed });
   if (G.history.length > HISTORY) G.history.shift();
   const before = G.board.map(s => s.slice());
   before[cell] = G.tray[i].slice();
   const r = E.settle(before, cell);
   G.board = r.board; G.tray[i] = null; G.score += r.points;
-  if (G.score > best) best = G.score;
   let fresh = 0;
   if (G.tray.every(s => s === null)) {
     const c = Math.max(G.cols, E.colorsFor(diffOf(G.diff).start, G.score));
@@ -781,13 +782,21 @@ function place(i, cell) {
   }
   G.status = E.empties(G.board).length ? 'playing' : 'over';
   sel = null; hint = null; pv = null;
+  const rec0 = recOf();
+  // rule: the first end counts the game once: a record only without Poradit; a later end (after Zpět) adds nothing
+  let end = null;
+  if (G.status === 'over' && !G.counted) {
+    G.counted = true;
+    end = { prev: rec0, rec: !G.hinted && G.score > rec0 };
+    if (end.rec) bests[G.diff] = G.score;
+  }
   save();
-  const dur = startAnim(before, r.events, G.score - r.points, G.history[G.history.length - 1].bb);
+  const dur = startAnim(before, r.events, G.score - r.points, rec0);
   render();
   buzz(12);
   if (r.points && !A) bump();
   if (fresh) { toast(`Přibyla nová barva: ${COLORS[fresh - 1].name}`); const dots = $('#cols').children; if (dots[fresh - 1]) dots[fresh - 1].classList.add('new'); }
-  if (G.status === 'over') whenFree(G, dur + 600, () => { if (G.status === 'over') showOver(); });
+  if (G.status === 'over') whenFree(G, dur + 600, () => { if (G.status === 'over') showOver(end); });
   return true;
 }
 function undo() {
@@ -795,16 +804,18 @@ function undo() {
   if (!G.history.length) { toast('Zatím není co vrátit'); return; }
   const h = G.history.pop();
   G.board = h.b; G.tray = h.t; G.score = h.s; G.cols = h.c; G.seed = h.seed;
-  best = Math.max(h.bb, G.bestAtStart || 0);
   G.status = E.empties(G.board).length ? 'playing' : 'over';
   sel = null; hint = null; pv = null;
   $('#modal').hidden = true;
   buzz(); save(); render();
 }
-function showOver() {
-  const rec = G.score >= best && G.score > G.bestAtStart && G.score > 0;
+// end = what the first end of this game counted (null for a later end after Zpět: it counts nothing)
+function showOver(end) {
+  const line = G.hinted ? `bodů · rekord ${fmt(recOf())}<br>Hra s radou se do rekordů nepočítá.`
+    : end && end.rec ? '<b>Nový rekord! 🎉</b>' : end ? `bodů · rekord ${fmt(recOf())}`
+    : `bodů · rekord ${fmt(recOf())}<br>Rekord počítá jen první konec hry.`;
   showModal(
-    `<h2>Deska je plná</h2><p class="pts-big">${fmt(G.score)}</p><p>${rec ? '<b>Nový rekord! 🎉</b>' : `bodů · rekord ${fmt(best)}`}</p>`,
+    `<h2>Deska je plná</h2><p class="pts-big">${fmt(G.score)}</p><p>${line}</p>`,
     [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Vrátit tah', cls: 'alt', fn: undo }, { text: 'Prohlédnout desku', cls: 'alt' }]
   );
 }
@@ -898,8 +909,10 @@ $('#btnHint').addEventListener('click', () => {
   hint = E.advise(G.board, G.tray);
   if (!hint) return;
   sel = null;
-  buzz(8); render();
-  toast('Ťukni na označené políčko, nebo tam věžičku přetáhni');
+  const first = !G.hinted;
+  G.hinted = true; // rule: a game with a hint sets no record; Undo does not clear it
+  save(); buzz(8); render();
+  toast(first ? 'S radou se tahle hra nepočítá do rekordů' : 'Ťukni na označené políčko, nebo tam věžičku přetáhni');
 });
 $('#btnAgain').addEventListener('click', () => newGame());
 // rule: a new game in the middle of one asks first
@@ -923,7 +936,7 @@ function renderSettings() {
       <div class="field"><div class="flabel">Obtížnost</div>
         ${DIFFS.map(d => opt('diff:' + d.id, S.diff === d.id, d.name, `${d.desc} Každých ${E.STEP} bodů přibude další, nejvýš ${E.MAXC}.`)).join('')}
         ${pending && !isFresh() ? `<div class="notice">Nová obtížnost platí od <b>příští hry</b>.${G.status === 'playing' ? ' Rozehraná hra zůstává.' : ''}</div>` : ''}
-        <div class="fnote">Každá obtížnost má svůj rekord.</div>
+        <div class="fnote">Každá obtížnost má svůj rekord. Počítají se jen dohrané hry bez Poradit.</div>
       </div>
     </section>
     <section class="card"><h3>Vzhled</h3>
@@ -970,7 +983,7 @@ function renderHelp() {
       <li>Když položíš všechny tři, přijdou nové. Každých ${E.STEP} bodů přibude další barva, nejvýš ${E.MAXC}: v řádku nahoře vidíš, kolik jich je ve hře.</li>
       <li>Hra končí, když už není kam položit. Nikam se nespěchá.</li>
       <li><b>Poradit</b> označí věžičku a políčko, kam by se hodila; ťuknutím na políčko ji tam položíš. <b>Zpět</b> vrací tahy, i po konci hry. Nové věžičky budou zase stejné.</li>
-      <li>Rekord se počítá zvlášť pro každou obtížnost. Číslo na věžičce říká, kolik dílků stejné barvy je navrchu; vypnout jde v Nastavení, stejně jako zapnout <b>značky barev</b>.</li>
+      <li>Rekord se počítá zvlášť pro každou obtížnost, jen z dohraných her bez Poradit (při prvním zaplnění desky). Číslo na věžičce říká, kolik dílků stejné barvy je navrchu; vypnout jde v Nastavení, stejně jako zapnout <b>značky barev</b>.</li>
     </ol><div class="pal">${pal}</div></section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;
 }
@@ -1014,7 +1027,7 @@ normalize(S);
 if (saved && saved.bests && typeof saved.bests === 'object') for (const d of DIFFS) if (okNum(saved.bests[d.id])) bests[d.id] = saved.bests[d.id];
 // rule: a difficulty chosen just before the app was closed (Settings still open) is applied now, as closing Settings would
 if (saved && validGame(saved.game)) {
-  G = saved.game; best = Math.max(bests[G.diff] || 0, G.score);
+  G = saved.game;
   if (S.diff !== G.diff && isFresh()) newGame(''); else render(); // as closing Settings would
 } else newGame();
 
@@ -1027,7 +1040,7 @@ if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
 // For testing: the rules, a move, and a board one stack short of full (the next move usually ends the game)
 window.Vezicky = {
   E, place, undo, advise: () => E.advise(G.board, G.tray),
-  get state() { return { S, G, best, bests }; },
+  get state() { return { S, G, best: recOf(), bests }; },
   setBoard(b) { finishAnim(); G.board = b.map(s => s.slice()); G.status = E.empties(G.board).length ? 'playing' : 'over'; save(); render(); },
   nearEnd() {
     // every cell but one gets a stack whose top differs from all its neighbours, so nothing gathers

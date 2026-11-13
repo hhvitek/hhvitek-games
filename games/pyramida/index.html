@@ -500,7 +500,7 @@ function validStats(v, oldKey) {
 }
 const statsHTML = () => {
   const rows = VARIANTS.filter(([k]) => ST[k].played).map(([k, label]) => `${label}: vyhráno <b>${ST[k].won}</b> z ${ST[k].played}`);
-  return rows.length ? rows.join('<br>') : 'Zatím žádná rozehraná hra.';
+  return rows.length ? rows.join('<br>') : 'Zatím žádná dohraná hra.';
 };
 function validGame(g) {
   try {
@@ -514,6 +514,7 @@ function validGame(g) {
     g.moves = Number.isInteger(g.moves) ? g.moves : 0;
     if (!['solv', 'rand'].includes(g.deal)) g.deal = 'rand';
     if (typeof g.stuckAt !== 'number' && typeof g.stuckAt !== 'string') g.stuckAt = -1;
+    g.counted = g.counted === true; g.hinted = g.hinted === true; g.scored = g.scored === true || g.status === 'won'; // a won game was counted
     return true;
   } catch (e) { return false; }
 }
@@ -533,7 +534,7 @@ function newGame(msg) {
   setTimeout(async () => {
     const r = S.deal === 'solv' ? await solvableDeck(S.passes) : { deck: shuffle([...Array(52).keys()]), ok: true };
     // a deal that could not be verified in time counts as random, and the player is told
-    G = Object.assign(dealFrom(r.deck), { deal: r.ok ? S.deal : 'rand', asked: S.deal, passes: S.passes, hist: [], status: 'playing', moves: 0, counted: false, stuckAt: -1 });
+    G = Object.assign(dealFrom(r.deck), { deal: r.ok ? S.deal : 'rand', asked: S.deal, passes: S.passes, hist: [], status: 'playing', moves: 0, counted: false, hinted: false, scored: false, stuckAt: -1 });
     G.init = snap(G);
     busy = false;
     hideToast();
@@ -620,7 +621,6 @@ function draw() {
 }
 function after() {
   G.moves++;
-  if (!G.counted) { G.counted = true; st().played++; }
   SEL = null; clearHint();
   buzz(); save(); render();
   checkEnd();
@@ -636,6 +636,32 @@ function undo() {
 function shake(cards) {
   for (const c of cards) { const el = EL[c]; el.classList.remove('no'); void el.offsetWidth; el.classList.add('no'); }
   buzz(30);
+}
+
+/* ---------- Statistics ---------- */
+// User's rule 2026-11-13: a game counts once, at its first end (won, or "Dál to nejde" declared), and never when
+// Poradit was used in it. G.counted = "played" was added (versions before it added that at the first move, so such a
+// game gets only what is missing), G.scored = the end was counted, G.hinted = Poradit was used (kept by Undo and
+// "Od začátku", a new game resets it).
+function countEnd(won) {
+  if (G.scored || G.hinted) return;
+  G.scored = true;
+  if (!G.counted) { G.counted = true; st().played++; }
+  if (won) st().won++;
+}
+// Marks the game as hinted; true the first time in a game whose end was not counted yet (then the player is told)
+function markHinted() {
+  if (G.hinted) return false;
+  G.hinted = true; save();
+  return !G.scored;
+}
+const NOTE_MS = 2600;
+// the hint's message, the first time after the note that the game no longer counts
+function hintToast(msg, ms, note) {
+  if (!note) { toast(msg, ms); return; }
+  toast('S radou se tahle hra nepočítá do statistiky', NOTE_MS);
+  const h = HINT;
+  setTimeout(() => { if (HINT && HINT === h) toast(msg, ms); }, NOTE_MS);
 }
 
 /* ---------- End of game ---------- */
@@ -658,13 +684,13 @@ function hasUseful() {
 }
 function checkEnd() {
   if (G.gone === FULL) {
-    G.status = 'won'; st().won++;
+    G.status = 'won'; countEnd(true);
     save(); render();
     buzz([40, 60, 40, 60, 80]);
     const wonGame = G;
     whenFree(wonGame, 900, () => {
       if (busy) return;
-      showModal(`<h2>Vyhráno! 🎉</h2><p>Pyramida je celá pryč.</p><p>Vyhrané hry: <b>${st().won}</b> z ${st().played}</p>`,
+      showModal(`<h2>Vyhráno! 🎉</h2><p>Pyramida je celá pryč.</p>${wonGame.hinted ? '<p>Hra s radou se do statistiky nepočítá.</p>' : `<p>Vyhrané hry: <b>${st().won}</b> z ${st().played}</p>`}`,
       [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout stůl', cls: 'alt' }]);
     });
     return;
@@ -676,6 +702,7 @@ function checkEnd() {
     const g0 = G, h0 = G.hist.length;
     whenFree(g0, 500, () => {
       if (G.hist.length !== h0 || busy || !playing()) return;
+      countEnd(false); save(); // the stuck end counts the game as played, not won
       showModal('<h2>Dál to nejde</h2><p>Žádnou další dvojici už odebrat nejde.</p>',
         [{ text: 'Vrátit tah zpět', fn: undo }, { text: 'Nová hra', fn: () => newGame() }, { text: 'Ještě se podívám', cls: 'alt' }]);
     });
@@ -740,9 +767,10 @@ function showHint() {
   render();
   els.forEach(e => e.classList.add('hint'));
   HINT = els;
-  hintT = setTimeout(clearHint, 4000);
+  const note = markHinted();
+  hintT = setTimeout(clearHint, (note ? NOTE_MS : 0) + 4000);
   buzz(8);
-  toast(msg, 4000);
+  hintToast(msg, 4000, note);
 }
 
 /* ---------- Layout and rendering ---------- */
@@ -1011,6 +1039,7 @@ function renderSettings() {
     ${CARDS.appearanceHTML(S, tile, minis, '--cw:56px;--ch:78px', toggleRow('vibrate', 'Vibrace'))}
     <section class="card"><h3>Statistika</h3>
       <p class="stats">${statsHTML()}</p>
+      <p class="fnote">Počítají se jen dohrané hry (vyhrané, nebo když už nejde žádný tah) bez Poradit.</p>
     </section>
     <button class="big" data-act="close">Zpět ke hře</button>
     <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
@@ -1062,7 +1091,7 @@ function renderHelp() {
     </section>
     <section class="card help"><h3>Tlačítka</h3>
       <div class="legend">${ico('undo')}<span><b>Zpět</b> vrátí poslední tah. Dá se ťukat opakovaně.</span></div>
-      <div class="legend">${ico('hint')}<span><b>Poradit</b> ukáže dobrý tah: karty, které patří k sobě, zablikají.</span></div>
+      <div class="legend">${ico('hint')}<span><b>Poradit</b> ukáže dobrý tah: karty, které patří k sobě, zablikají. Hra s radou se nepočítá do statistiky.</span></div>
       <div class="legend">${ico('draw')}<span><b>Líznout</b> otočí další kartu z balíčku, stejně jako ťuknutí na balíček.</span></div>
       <p class="fnote">Na čas se nehraje. Vzhled stolu, karet a obrázky jdou změnit v nastavení ⚙.</p>
     </section>

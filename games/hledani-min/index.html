@@ -460,7 +460,9 @@ function num() { if (numFor !== G.mine) { numFor = G.mine; numCache = G.mine ? E
 /* ---------- State ---------- */
 // G.st[i]: 0 hidden, 1 open, 2 flag. G.mine: null until the first tap places the mines (from G.seed and that cell).
 // G.history: { k: 'o', c: [cells opened] } or { k: 'f', c: cell } (a flag put or taken).
-// G.helped: Poradit was used or a mine was undone, so the win does not count for the best time.
+// G.helped: Poradit was used or a mine was undone (help like Poradit: every mine was seen), kept by Undo.
+// Rule: only a finished game counts in the statistics, once, at its first end (G.counted: a win or a mine), and a game
+// with help is not counted at all (a mine undone was already counted as a loss: the later win adds nothing).
 let S, G, stats = {}, hint = null;
 const isFresh = () => G.history.length === 0;
 const inProgress = () => G && G.status === 'playing' && !isFresh();
@@ -508,7 +510,8 @@ function validGame(g) {
     if (!validHistory(g)) g.history = [];
     g.time = Number.isFinite(g.time) && g.time >= 0 ? g.time : 0;
     g.helped = g.helped === true; g.record = g.record === true;
-    g.counted = g.counted === true || g.mine !== null;
+    // a save from before the flag existed was counted as played at its first tap: never count it twice
+    g.counted = g.counted === true || (typeof g.counted !== 'boolean' && g.mine !== null);
     // the end from the board: an opened mine is a loss, every safe cell open is a win
     const booms = g.mine ? g.st.map((v, i) => v === 1 && g.mine[i] ? i : -1).filter(i => i >= 0) : [];
     const opened = g.st.filter(v => v === 1).length;
@@ -533,7 +536,14 @@ function newGame(msg) {
   save(); render();
   if (msg) toast(msg);
 }
+// helped = wins with help counted by an older version (kept as they are, no longer added to)
 const stat = () => { const k = rulesKey(G.rules); return stats[k] || (stats[k] = { played: 0, won: 0, helped: 0, best: null }); };
+// the first end (a win or a mine) counts the game as played, once; a game with help is not counted
+function countEnd() {
+  if (G.counted) return;
+  G.counted = true;
+  if (!G.helped) stat().played++;
+}
 
 /* ---------- Clock: runs only while a game with mines is played and nothing covers it ---------- */
 let runFrom = 0; // performance.now() when the clock last started, 0 = stopped
@@ -561,7 +571,6 @@ addEventListener('pagehide', saveClock);
 function placeMines(first) {
   const r = E.generate(G.w, G.h, G.m, first, G.seed, G.rules.noGuess, MAX_TRIES);
   G.mine = r.mine;
-  if (!G.counted) { G.counted = true; stat().played++; }
   if (!r.ok) toast('Rozdání bez hádání se nenašlo, možná bude třeba hádat');
 }
 function openCell(c) {
@@ -587,6 +596,7 @@ function afterOpen(opened) {
   const boom = opened.find(c => G.mine[c]);
   if (boom !== undefined) {
     clockSync(); G.status = 'lost'; G.boom = boom; G.record = false;
+    countEnd();
     buzz([70, 50, 140]); save(); render(opened);
     whenFree(G, 700, () => { if (G.status === 'lost') showEnd(); });
     return;
@@ -597,11 +607,11 @@ function afterOpen(opened) {
 }
 function win() {
   clockSync(); G.status = 'won'; G.record = false;
+  countEnd();
   if (!G.wonCounted) {
     G.wonCounted = true;
     const st = stat(), t = Math.round(G.time);
-    if (G.helped) st.helped++;
-    else { st.won++; G.record = st.best !== null && t < st.best; if (st.best === null || t < st.best) st.best = t; }
+    if (!G.helped) { st.won++; G.record = st.best !== null && t < st.best; if (st.best === null || t < st.best) st.best = t; }
   }
   buzz([40, 60, 40, 60, 90]); save(); render();
   whenFree(G, 600, () => { if (G.status === 'won') showEnd(); });
@@ -612,7 +622,8 @@ function toggleFlag(c) {
   G.history.push({ k: 'f', c });
   hint = null; buzz(G.st[c] === 2 ? 22 : 12); save(); render();
 }
-// Undo: the last opening or flag; also a step on a mine (the game then counts as helped: all mines were seen)
+// Undo: the last opening or flag; also a step on a mine (help like Poradit: all mines were seen; the game stays
+// counted as a loss and its win adds nothing)
 function undo() {
   hideToast(); // an old message (e.g. about the mine) never stays over the game that goes on
   if (G.status === 'won') { toast('Hra je vyhraná – ťukni na Nová hra'); return; }
@@ -623,7 +634,7 @@ function undo() {
   let msg = '';
   if (G.status === 'lost') {
     G.status = 'playing'; G.boom = -1;
-    if (!G.helped) msg = 'Tah je vrácený, čas se už nezapíše';
+    if (!G.helped) msg = 'Tah je vrácený. Do statistik už hra zůstane jako prohraná.';
     G.helped = true;
   }
   // the first opening undone: the mines are placed again by the next first tap (the same cell gives the same mines)
@@ -655,7 +666,7 @@ function onHold(c) {
   } else toggleFlag(c);
 }
 // Poradit: a cell that is certain from the open numbers alone (flags are not trusted): a wrong flag first, then a
-// safe cell, then a mine without a flag, the nearest to the last move. Using it makes the win a helped one.
+// safe cell, then a mine without a flag, the nearest to the last move. Using it keeps the game out of the statistics.
 function giveHint() {
   hideToast();
   if (G.status !== 'playing') { ended(); return; }
@@ -674,7 +685,7 @@ function giveHint() {
   const first = !G.helped;
   G.helped = true; hint = { c, kind };
   buzz(8); save(); render(); showCell(c);
-  if (first) toast('S radou se čas nezapíše', 3000);
+  if (first) toast('S radou se tahle hra nepočítá do statistik', 3000);
 }
 
 /* ---------- Helpers ---------- */
@@ -722,13 +733,13 @@ function showEnd() {
   let html;
   if (G.status === 'won') {
     html = `<h2>Vyhráno! 🎉</h2><p>Všechna bezpečná políčka jsou odkrytá.<br>Čas: <b>${fmtTime(G.time)}</b></p>`;
-    if (G.helped) html += '<p>Hrálo se s pomocí (Poradit nebo Zpět po mině), proto se čas nezapisuje do nejlepších.</p>';
+    if (G.helped) html += '<p>Hrálo se s pomocí (Poradit nebo Zpět po mině), proto se výhra do statistik nepočítá.</p>';
     else if (G.record) html += '<p><b>Nejlepší čas!</b></p>';
     else if (st.best !== null) html += `<p>Nejlepší čas: <b>${fmtTime(st.best)}</b></p>`;
-    html += `<p>Výhry: <b>${st.won + st.helped}</b> z ${st.played} her</p>`;
+    html += `<p>Výhry: <b>${st.won}</b> z ${st.played} dohraných her</p>`;
     showModal(html, [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]);
   } else {
-    html = `<h2>Bum! 💥</h2><p>Pod tímhle políčkem byla mina.</p><p>Zpět vrátí poslední tah, výhra se pak ale nezapíše do nejlepších časů.</p>`;
+    html = `<h2>Bum! 💥</h2><p>Pod tímhle políčkem byla mina.</p><p>Zpět vrátí poslední tah${G.helped ? '' : ', do statistik ale hra zůstane jako prohraná'}.</p>`;
     showModal(html, [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Vrátit tah', cls: 'alt', fn: undo }, { text: 'Prohlédnout', cls: 'alt' }]);
   }
 }
@@ -944,11 +955,11 @@ function renderSettings() {
     </section>
     <section class="card"><h3>Statistika</h3>
       <div class="fnote" style="margin:0 0 6px">${variant}</div>
-      <div class="srow"><span>Odehrané hry</span><b>${st ? st.played : 0}</b></div>
-      <div class="srow"><span>Výhry bez pomoci</span><b>${st ? st.won : 0}</b></div>
-      <div class="srow"><span>Výhry s pomocí</span><b>${st ? st.helped : 0}</b></div>
+      <div class="srow"><span>Dohrané hry</span><b>${st ? st.played : 0}</b></div>
+      <div class="srow"><span>Výhry</span><b>${st ? st.won : 0}</b></div>
+      ${st && st.helped ? `<div class="srow"><span>Starší výhry s pomocí</span><b>${st.helped}</b></div>` : ''}
       <div class="srow"><span>Nejlepší čas</span><b>${st && st.best !== null ? fmtTime(st.best) : '–'}</b></div>
-      <div class="fnote">Hra se počítá od prvního ťuknutí. S pomocí znamená, že pomohlo Poradit nebo Zpět po šlápnutí na minu; taková výhra nemá nejlepší čas.</div>
+      <div class="fnote">Počítají se jen dohrané hry (výhra nebo mina) bez Poradit. Zpět po mině je taky pomoc: hra zůstane prohraná.</div>
       <button class="link" data-act="clearStats">Smazat statistiku</button>
     </section>
     <button class="big" data-act="close">Zpět ke hře</button>
@@ -963,7 +974,7 @@ $('#settingsIn').addEventListener('click', e => {
       { text: 'Ano, smazat', fn: () => {
         stats = {}; G.record = false;
         // the game on the board was counted as played already: it stays counted, so its win can still be added
-        if (G.counted && !G.wonCounted) stat().played = 1;
+        if (G.counted && !G.wonCounted && !G.helped) stat().played = 1;
         save(); renderSettings(); toast('Statistika je smazaná'); } },
       { text: 'Ne, nechat', cls: 'alt' }]);
     return;
@@ -1002,7 +1013,7 @@ function renderHelp() {
       <li>Nahoře je počet min, které zbývá označit (miny minus vlajky), a čas.</li>
       <li><b>Bez hádání</b> (v Nastavení, zapnuto): každé rozdání jde celé vyřešit úvahou. Program to před hrou ověří.</li>
       <li><b>Poradit</b> orámuje políčko, o kterém se dá s jistotou říct, co skrývá: bezpečné políčko, minu bez vlajky nebo špatnou vlajku. Ťuknutím na něj se tah udělá.</li>
-      <li><b>Zpět</b> vrátí poslední tah, i šlápnutí na minu. Když pomohlo Poradit nebo Zpět po mině, je to výhra s pomocí: počítá se, ale její čas se nezapisuje mezi nejlepší.</li>
+      <li><b>Zpět</b> vrátí poslední tah, i šlápnutí na minu. Do statistik se počítají jen dohrané hry bez Poradit; hra se Zpět po mině zůstane prohraná, i když ji pak vyhraješ.</li>
       <li><b>Zvětšit</b> přiblíží plochu, přiblížit jde i dvěma prsty. Přiblíženou plochu posouváš jedním prstem.</li>
       <li>Statistika a nejlepší časy jsou v Nastavení, zvlášť pro každou velikost a pro hru s hádáním a bez.</li>
     </ol></section>

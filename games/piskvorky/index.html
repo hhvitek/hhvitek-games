@@ -765,7 +765,7 @@ const nm = () => G.foe.name;
 /* ---------- State ----------
    G = { n, level, foe, seed, starter: who started (0 you, 1 the computer), you: your mark (0 ×, 1 ○; × starts),
          moves: every mark in order (cells r * n + c; even indexes ×, odd ○), status: 'playing' | 'won' | 'lost' | 'draw',
-         counted: the end is in the statistics }
+         counted: the end is in the statistics, hinted: Poradit was used (the game never goes into the statistics; Undo keeps it) }
    Everything else (the board, whose turn, the five, Undo) comes from moves, so a reload goes on exactly where it was. */
 let S, G, ST;
 const rnd = n => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] % n; } catch (e) { return Math.floor(Math.random() * n); } };
@@ -794,6 +794,7 @@ function validGame(g) {
     if (!O.valid(g.foe)) g.foe = O.create(rnd);
     g.status = judge(g);
     g.counted = g.counted === true || g.status !== 'playing';
+    g.hinted = g.hinted === true;
     return true;
   } catch (e) { return false; }
 }
@@ -814,9 +815,11 @@ function validStats(v) {
   }
   return out;
 }
+// rule: only a finished game counts, once, at its first end, and never one with Poradit
 function count() {
   if (G.counted || G.status === 'playing') return;
   G.counted = true;
+  if (G.hinted) return;
   const st = ST[G.level][G.n]; st.played++;
   if (G.status === 'won') st.won++;
   if (G.status === 'draw') st.draw++;
@@ -826,7 +829,7 @@ function newGame(msg) {
   stopThinking();
   const starter = !G ? 0 : isFresh() ? G.starter : 1 - G.starter;
   G = { n: S.size, level: S.level, foe: O.create(rnd, G && G.foe ? [G.foe.name] : []), seed: rnd(2 ** 31), starter, you: starter,
-        moves: [], status: 'playing', counted: false };
+        moves: [], status: 'playing', counted: false, hinted: false };
   pending = -1; hintCell = -1; resetZoom();
   save(); render();
   if (msg) toast(msg);
@@ -1150,8 +1153,10 @@ $('#btnHint').addEventListener('click', () => {
     if (G !== g0 || G.moves.length !== k) return;
     hintCell = Number.isInteger(r.m) && r.m >= 0 && !G.moves.includes(r.m) ? r.m : -1;
     pending = -1;
-    if (hintCell >= 0) showCell(hintCell);
+    const first = hintCell >= 0 && !G.hinted && !G.counted;
+    if (hintCell >= 0) { showCell(hintCell); G.hinted = true; save(); }
     render();
+    if (first) toast('S radou se tahle hra nepočítá do statistik', 3200);
   });
 });
 // rule: a new game in the middle of one asks first
@@ -1170,7 +1175,7 @@ function endDialog() {
     const btns = [{ text: 'Nová hra', fn: () => newGame() }];
     if (G.status !== 'won') btns.push({ text: 'Vrátit tah', cls: 'alt', fn: () => $('#btnUndo').click() });
     btns.push({ text: 'Prohlédnout', cls: 'alt' });
-    showModal(`<h2>${head}</h2><p>${why}</p>`, btns);
+    showModal(`<h2>${head}</h2><p>${why}</p>${G.hinted ? '<p>Hra s radou se do statistik nepočítá.</p>' : ''}`, btns);
   });
 }
 
@@ -1210,6 +1215,7 @@ function renderSettings() {
         const rows = SIZES.filter(z => ST[l.id][z.n].played).map(z => { const st = ST[l.id][z.n]; return `${z.name} plocha: ${plural(st.played, 'hra', 'hry', 'her')}, výher ${st.won}, remíz ${st.draw}`; });
         return `<p class="stats"><b>${O.levelName(LEVELS, i)}</b><br>${rows.length ? rows.join('<br>') : 'Zatím žádná dohraná hra'}</p>`;
       }).join('')}
+      <p class="fnote">Počítají se jen dohrané hry bez Poradit.</p>
     </section>
     <button class="big" data-act="close">Zpět ke hře</button>
     <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
@@ -1235,7 +1241,7 @@ function closeSettings() {
   if (changed() && isFresh()) {
     stopThinking();
     const g = G, foe = S.level !== g.level ? O.create(rnd, [g.foe.name]) : g.foe;
-    G = Object.assign({}, g, { n: S.size, level: S.level, foe, moves: [], status: 'playing', counted: false });
+    G = Object.assign({}, g, { n: S.size, level: S.level, foe, moves: [], status: 'playing', counted: false, hinted: false });
     pending = -1; hintCell = -1; resetZoom();
     save(); render(); cpuTurn();
     toast(S.level !== g.level ? `Hraješ proti soupeři: ${O.levelName(LEVELS, lvIdx(S.level))}` : `Nová hra na ploše ${S.size} × ${S.size}`);
@@ -1258,7 +1264,7 @@ function renderHelp() {
       <li>Ťukni na volné políčko. Když je zapnuté <b>Potvrzovat tah</b> (v Nastavení), značka se ukáže slabě a další ťuknutí na stejné políčko ji položí; ťuknutím jinam ji přesuneš.</li>
       <li>Soupeřova poslední značka má podbarvené políčko.</li>
       <li><b>Zpět</b> vrátí tvůj poslední tah i soupeřovu odpověď. Dá se ťukat opakovaně, i po konci hry.</li>
-      <li><b>Poradit</b> označí dobré políčko. Ťukni na něj a tah se hned zahraje.</li>
+      <li><b>Poradit</b> označí dobré políčko. Ťukni na něj a tah se hned zahraje. Hra, ve které použiješ Poradit, se do statistik nepočítá; počítají se jen dohrané hry.</li>
       <li><b>Zvětšit</b> přiblíží plochu kolem poslední značky, <b>Zmenšit</b> ukáže zase celou. Přibližovat jde i roztažením dvěma prsty; přiblíženou plochou posouváš jedním prstem.</li>
     </ol></section>
     <section class="card help"><h3>Soupeř</h3>

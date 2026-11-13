@@ -500,7 +500,7 @@ function load() {
 function save() {
   try {
     const g = G && { n: G.n, kinds: G.kinds, moves: G.moves, specials: G.specials, cells: G.cells.map(enc), score: G.score,
-      left: G.left, made: G.made, status: G.status, pics: G.pics, undo: G.undo, seed: G.seed, recPrev: G.recPrev };
+      left: G.left, made: G.made, status: G.status, pics: G.pics, undo: G.undo, seed: G.seed, recPrev: G.recPrev, hinted: G.hinted };
     localStorage.setItem(KEY, JSON.stringify({ settings: S, game: g, records: R }));
     // Launcher contract: unfinished game = "in progress" badge on the tile
     if (G && G.status === 'playing' && G.made > 0) localStorage.setItem(BADGE, '1');
@@ -538,7 +538,7 @@ function restoreGame(g) {
       && u.c.every(v => dec(v, kinds)) && num(u.score) && num(u.left) && num(u.made)).slice(-UNDO_MAX);
     const out = { n, kinds, moves: g.moves, specials: !!g.specials, cells, score: g.score, left, made: g.made,
       status, pics: validPics(g.pics) ? g.pics : null, undo, seed: Number.isInteger(g.seed) ? g.seed : rnd(2 ** 31),
-      recPrev: num(g.recPrev) ? g.recPrev : undefined };
+      recPrev: num(g.recPrev) ? g.recPrev : undefined, hinted: g.hinted === true };
     if (findRuns(cells, n).length || !findMoves(cells, n).length) out.cells = reshuffle(cells, n, kinds);
     return out;
   } catch (e) { return null; }
@@ -558,7 +558,7 @@ const picsNow = () => S.symbols !== 'shapes' && G && G.pics && G.pics.set === S.
 function newGame() {
   token++; busy = false; sel = null; hintPair = null;
   G = { n: S.n, kinds: S.kinds, moves: S.moves, specials: S.specials, cells: generate(S.n, S.kinds),
-    score: 0, left: S.moves, made: 0, status: 'playing', pics: null, undo: [], seed: rnd(2 ** 31) };
+    score: 0, left: S.moves, made: 0, status: 'playing', pics: null, undo: [], seed: rnd(2 ** 31), hinted: false };
   ensurePics(); clearFx();
   save(); layout(); rebuild(); render();
 }
@@ -706,7 +706,8 @@ async function trySwap(a, b) {
     if (last) {
       G.status = 'over';
       const prev = best();
-      end = { prev, record: G.score > prev && G.score > 0 };
+      // rule: a game in which Poradit was used never sets a record (G.hinted, kept by Undo)
+      end = { prev, record: !G.hinted && G.score > prev && G.score > 0, hinted: G.hinted };
       if (end.record) { G.recPrev = prev; R[recKey(G)] = G.score; }
     }
     busy = false; save(); render();
@@ -827,7 +828,10 @@ function showHint() {
   const plain = m.filter(([i, j]) => G.cells[i].s !== 3 && G.cells[j].s !== 3);
   const pick = plain.length ? plain : m;
   hintPair = pick[rnd(pick.length)]; sel = null;
-  buzz(); render();
+  const first = !G.hinted;
+  G.hinted = true; // rule: a game with a hint never counts for the record; Undo does not clear it
+  buzz(); save(); render();
+  if (first && G.moves) toast('S radou se tahle hra nepočítá do rekordů');
 }
 function tap(i) {
   if (busy) { toast('Chvilku, kameny ještě padají'); return; }
@@ -938,8 +942,8 @@ function showModal(html, buttons) {
 }
 function showEnd(end) {
   buzz([40, 60, 40, 60, 80]);
-  const rec = end.record
-    ? (end.prev ? `<p><b>Nový rekord! 🎉</b><br>Předchozí rekord: ${fmt(end.prev)}</p>` : '<p><b>První rekord! 🎉</b></p>')
+  const rec = end.hinted ? `<p>Hra s radou se do rekordů nepočítá.${end.prev ? `<br>Rekord: ${fmt(end.prev)}` : ''}</p>`
+    : end.record ? (end.prev ? `<p><b>Nový rekord! 🎉</b><br>Předchozí rekord: ${fmt(end.prev)}</p>` : '<p><b>První rekord! 🎉</b></p>')
     : `<p>Rekord: ${fmt(end.prev)}</p>`;
   showModal(`<h2>Konec hry</h2><p>Tahy došly. Získané body:</p><div class="score">${fmt(G.score)}</div>${rec}`,
     [{ text: 'Nová hra', fn: newGame }, ...(G.undo.length ? [{ text: 'Vrátit tah', cls: 'alt', fn: undo }] : []), { text: 'Prohlédnout desku', cls: 'alt' }]);
@@ -975,7 +979,7 @@ function renderSettings() {
     <section class="card"><h3>Pravidla hry</h3>
       ${stepper('n', 'Velikost desky', `${S.n} × ${S.n}`, S.n > LIMITS.n[0], S.n < LIMITS.n[1], '<div class="fnote">Menší deska má větší kameny.</div>')}
       ${stepper('kinds', 'Počet druhů kamenů', S.kinds, S.kinds > LIMITS.kinds[0], S.kinds < LIMITS.kinds[1], `<div class="dots">${dots}</div><div class="fnote">Méně druhů = snazší hra a víc řad samo od sebe.</div>`)}
-      ${stepper('moves', 'Počet tahů', S.moves ? S.moves : 'Bez omezení', mi > 0, mi < MOVES.length - 1, `<div class="fnote">${S.moves ? `Hra skončí po ${S.moves} tazích.` : 'Hra nikdy neskončí, sbírají se jen body.'}</div>`)}
+      ${stepper('moves', 'Počet tahů', S.moves ? S.moves : 'Bez omezení', mi > 0, mi < MOVES.length - 1, `<div class="fnote">${S.moves ? `Hra skončí po ${S.moves} tazích. Rekord se počítá jen z dohraných her bez Poradit.` : 'Hra nikdy neskončí, sbírají se jen body.'}</div>`)}
       ${toggleRow('specials', 'Zvláštní kameny')}
       <div class="fnote legend" style="margin:0 0 6px">${demo(0, 1)}<span><b>Raketa</b> ze 4 kamenů smaže celý řádek nebo sloupec.</span></div>
       <div class="fnote legend" style="margin:0 0 4px">${demo(-1, 3)}<span><b>Duha</b> z 5 kamenů smaže všechny kameny jedné barvy.</span></div>
@@ -1058,7 +1062,7 @@ function renderHelp() {
         <li><b>Jak prohodit:</b> ťukni na kámen a potom na jeho souseda. Nebo kámen přetáhni prstem k sousedovi.</li>
         <li>Spojené kameny zmizí, kameny nad nimi spadnou dolů a shora přibudou nové. Když tím vznikne další řada, zmizí také a body se násobí.</li>
         <li>Body: 3 kameny = 30, 4 kameny = 60, 5 kamenů = 100.</li>${sp}
-        <li>${S.moves ? `Na hru je <b>${S.moves} tahů</b>. Potom hra skončí a ukáže body. Zkus překonat svůj rekord!` : 'Tahů je <b>bez omezení</b>, hra nikdy neskončí.'}</li>
+        <li>${S.moves ? `Na hru je <b>${S.moves} tahů</b>. Potom hra skončí a ukáže body. Zkus překonat svůj rekord! Počítají se jen dohrané hry bez Poradit.` : 'Tahů je <b>bez omezení</b>, hra nikdy neskončí.'}</li>
         <li><b>Zpět</b> vrátí poslední tah. <b>Poradit</b> ukáže jeden možný tah.</li>
         <li>Když už žádný tah není, kameny se samy zamíchají.</li>
       </ol>

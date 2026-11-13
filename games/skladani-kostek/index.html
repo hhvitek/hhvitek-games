@@ -481,7 +481,10 @@ function validGame(g) {
     if (g.tray.every(x => x === null)) g.tray = genTray(g.board, N, g.rules.boxes, g.rules.diff);
     // The end of the game is derived from the board and the tray (a damaged or stale status is fixed)
     g.status = g.tray.some(x => x !== null && anyFit(g.board, N, PIECES[x])) ? 'playing' : 'over';
-    if (typeof g.bestAtStart !== 'number') g.bestAtStart = 0;
+    delete g.bestAtStart; // not used any more (older saves have it)
+    // counted: the record already took this game's first end; older saves updated the record during play,
+    // so a game that is already over was counted then
+    if (typeof g.counted !== 'boolean') g.counted = g.status === 'over';
     return true;
   } catch (e) { return false; }
 }
@@ -489,9 +492,22 @@ function validGame(g) {
 function newGame() {
   const r = rulesOf(S), b = new Array(r.size * r.size).fill(-1);
   best = bests[rulesKey(r)] || 0;
-  G = { rules: r, board: b, tray: genTray(b, r.size, r.boxes, r.diff), score: 0, history: [], status: 'playing', bestAtStart: best, seed: rnd(2 ** 31) };
+  G = { rules: r, board: b, tray: genTray(b, r.size, r.boxes, r.diff), score: 0, history: [], status: 'playing', counted: false, seed: rnd(2 ** 31) };
   sel = null; pv = null;
   save(); render();
+}
+
+// rule: only a finished game counts. The record is taken once, at the first end of the game; Undo after the end
+// does not take it back and a later end of the same game is not counted again (so playing and undoing cannot
+// inflate it). A game left unfinished (Nová hra, closing the app) never touches the record.
+let endCounted = true, endRec = false; // the end just reached: was it counted, and was it a new record
+function recordEnd() {
+  endCounted = !G.counted; endRec = false;
+  if (G.counted) return;
+  G.counted = true;
+  const k = rulesKey(G.rules);
+  if (G.score > (bests[k] || 0)) { bests[k] = G.score; endRec = true; }
+  best = bests[k] || 0;
 }
 
 /* ---------- Helpers ---------- */
@@ -525,8 +541,7 @@ function doPlace(i, r, c) {
   const id = G.tray[i]; if (id === null || G.status !== 'playing') return false;
   const p = PIECES[id], N = G.rules.size;
   if (!fits(G.board, N, p, r, c)) return false;
-  // bb = the record before this move: Undo puts it back, so the record cannot be inflated by playing and undoing
-  G.history.push({ b: G.board.slice(), t: G.tray.slice(), s: G.score, bb: best, seed: G.seed });
+  G.history.push({ b: G.board.slice(), t: G.tray.slice(), s: G.score, seed: G.seed });
   if (G.history.length > HISTORY) G.history.shift();
   for (const [dr, dc] of p.cells) G.board[(r + dr) * N + c + dc] = p.color;
   G.tray[i] = null;
@@ -540,9 +555,8 @@ function doPlace(i, r, c) {
     if (G.board.every(v => v < 0)) { bonus += 100; msg = 'Prázdná deska! '; }
   }
   G.score += p.n + bonus;
-  if (G.score > best) { best = G.score; bests[rulesKey(G.rules)] = best; }
   if (G.tray.every(x => x === null)) G.tray = genTray(G.board, N, G.rules.boxes, G.rules.diff);
-  if (!G.tray.some((x, k) => x !== null && anyFit(G.board, N, PIECES[x]))) G.status = 'over';
+  if (!G.tray.some((x, k) => x !== null && anyFit(G.board, N, PIECES[x]))) { G.status = 'over'; recordEnd(); }
   sel = null; pv = null;
   save(); render();
   // Effects (visual only, the game does not wait for them)
@@ -566,7 +580,6 @@ function undo() {
   const h = G.history.pop();
   G.board = h.b; G.tray = h.t; G.score = h.s; G.status = 'playing';
   if (Number.isInteger(h.seed)) G.seed = h.seed;
-  if (Number.isInteger(h.bb)) { best = Math.max(h.bb, G.bestAtStart || 0); bests[rulesKey(G.rules)] = best; }
   sel = null; pv = null;
   $('#modal').hidden = true;
   buzz(); save(); render();
@@ -794,9 +807,9 @@ function showModal(html, buttons) {
   };
 }
 function showOver() {
-  const rec = G.score >= best && G.score > G.bestAtStart && G.score > 0;
   showModal(
-    `<h2>Už se nic nevejde</h2><p class="pts">${fmt(G.score)}</p><p>${rec ? '<b>Nový rekord! 🎉</b>' : `bodů · rekord ${fmt(best)}`}</p>`,
+    `<h2>Už se nic nevejde</h2><p class="pts">${fmt(G.score)}</p><p>${endRec ? '<b>Nový rekord! 🎉</b>' : `bodů · rekord ${fmt(best)}`}</p>`
+      + (endCounted ? '' : '<p>Tahle hra už jednou skončila, do rekordu se znovu nepočítá.</p>'),
     [{ text: 'Nová hra', fn: newGame }, { text: 'Vrátit tah', cls: 'alt', fn: undo }, { text: 'Prohlédnout desku', cls: 'alt' }]
   );
 }
@@ -901,6 +914,7 @@ function renderHelp() {
         <li>Po položení všech tří kostek přijdou nové. Kostky se neotáčejí, nic nepadá a nikam se nespěchá.</li>
         <li>Body: 1 za každý položený čtvereček. Za zmizelé řady je víc, když zmizí naráz: 1 řada 10 bodů, 2 řady 40, 3 řady 90.${G.rules.boxes ? ' Plný čtverec 3 × 3 se počítá jako řada.' : ''} Když po tahu zůstane deska celá prázdná, je navíc 100 bodů.</li>
         <li>Hra končí, když se už žádná kostka nevejde. Tlačítko <b>Zpět</b> vrátí poslední tah – i na konci hry.</li>
+        <li>Do rekordu se počítají jen dohrané hry: body se zapíšou, až se už nic nevejde. Když hru po konci vrátíš tlačítkem Zpět a dohraješ znovu, rekord se už nezmění.</li>
       </ol>
     </section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;
@@ -953,7 +967,7 @@ if (saved && saved.bests && typeof saved.bests === 'object') for (const [k, v] o
 const okGame = saved && validGame(saved.game);
 // older versions kept one record for all variants: it now belongs to the variant that was being played
 if (saved && okRec(saved.best)) { const k = rulesKey(okGame ? saved.game.rules : rulesOf(S)); bests[k] = Math.max(bests[k] || 0, saved.best); }
-if (okGame) { G = saved.game; best = bests[rulesKey(G.rules)] || 0; render(); }
+if (okGame) { G = saved.game; best = bests[rulesKey(G.rules)] || 0; if (G.status === 'over') recordEnd(); render(); }
 else newGame();
 
 window.addEventListener('resize', layout);

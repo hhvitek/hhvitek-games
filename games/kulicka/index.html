@@ -422,6 +422,7 @@ function validGame(g) {
     g.moved = g.moved === true || g.ball !== m.start;
     g.status = g.ball === m.goal ? 'won' : 'playing';
     g.counted = g.counted === true || g.status === 'won';
+    g.hinted = g.hinted === true; // Poradit was used: the maze does not count in the statistics
     return m;
   } catch (e) { return null; }
 }
@@ -437,7 +438,7 @@ function normalize(s) {
 }
 function placeBall(i) { [B.x, B.y] = center(i); B.vx = B.vy = 0; B.s = 1; }
 function newGame(msg) {
-  G = { rules: { size: S.size, holes: S.holes }, seed: rnd(2 ** 31), ball: 0, history: [], falls: 0, moved: false, status: 'playing', counted: false };
+  G = { rules: { size: S.size, holes: S.holes }, seed: rnd(2 ** 31), ball: 0, history: [], falls: 0, moved: false, status: 'playing', counted: false, hinted: false };
   M = makeMaze(G.rules, G.seed);
   G.ball = M.start; G.history = [M.start];
   anim = roll = null; clearHint(); placeBall(G.ball);
@@ -446,12 +447,14 @@ function newGame(msg) {
   save(); render(); layout();
   if (msg) toast(msg);
 }
-// A finished maze goes into the statistics of its variant once (the end cannot be undone)
+// A finished maze goes into the statistics of its variant once (the end cannot be undone);
+// rule: a maze in which Poradit was used is not counted at all
 let newBest = false;
 function recordWin() {
   newBest = false;
   if (G.counted) return;
   G.counted = true;
+  if (G.hinted) return;
   const k = rulesKey(G.rules), prev = stats[k], st = prev ? { ...prev } : { done: 0, best: null };
   st.done++;
   newBest = !!prev && prev.best !== null && G.falls < prev.best;
@@ -631,6 +634,7 @@ function showEnd() {
   const falls = G.falls === 0 ? 'Ani jednou nespadla do díry.' : G.falls === 1 ? 'Do díry spadla jednou.' : `Do díry spadla ${G.falls}krát.`;
   showModal(`<h2>Výborně! 🎉</h2><p>Kulička je v cíli. ${M.holes.length ? falls : ''}</p>
     ${newBest ? '<p><b>Nejméně pádů v tomhle bludišti!</b></p>' : ''}
+    ${G.hinted ? '<p>Hra s radou se do statistik nepočítá.</p>' : ''}
     <p class="stat">${SIZES[G.rules.size].name} bludiště, díry: ${HOLES[G.rules.holes].name.toLowerCase()}<br>Hotovo: <b>${st.done}</b>${M.holes.length && st.best !== null ? ` · Nejméně pádů: <b>${st.best}</b>` : ''}</p>`,
     [{ text: 'Další bludiště', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]);
 }
@@ -889,7 +893,10 @@ $('#btnHint').addEventListener('click', () => {
     hintDir = d;
     const btn = document.querySelector(`.arrow[data-d="${d}"]`); if (btn) btn.classList.add('hint');
   }
-  toast('Tečky ukazují cestu do cíle');
+  const first = !G.hinted;
+  G.hinted = true; // rule: a maze with a hint is not counted; Undo does not clear it
+  save();
+  toast(first ? 'Tečky ukazují cestu do cíle. S radou se hra nepočítá do statistik.' : 'Tečky ukazují cestu do cíle', first ? 3500 : undefined);
 });
 $('#btnLevel').addEventListener('click', () => {
   if (sensor !== 'ok' && !testTilt) { toast(sensor === 'ask' ? 'Nejdřív ťukni na Zapnout naklápění' : 'Naklápění nejde, hraj šipkami'); return; }
@@ -926,7 +933,7 @@ function renderSettings() {
       </div>
       <div class="field"><div class="flabel">Díry</div>
         ${Object.entries(HOLES).map(([id, v]) => opt('holes:' + id, S.holes === id, v.name, v.desc)).join('')}
-        <div class="fnote">Kulička, která spadne do díry, se vrátí na začátek. Hotová bludiště a nejméně pádů se počítají zvlášť pro každou velikost a díry${st ? ` (tady zatím hotovo ${st.done}${st.best !== null && S.holes !== 'none' ? `, nejméně pádů ${st.best}` : ''})` : ''}.</div>
+        <div class="fnote">Kulička, která spadne do díry, se vrátí na začátek. Hotová bludiště a nejméně pádů se počítají zvlášť pro každou velikost a díry${st ? ` (tady zatím hotovo ${st.done}${st.best !== null && S.holes !== 'none' ? `, nejméně pádů ${st.best}` : ''})` : ''}. Počítají se jen dohraná bludiště bez Poradit.</div>
         ${rulesChanged() && !isFresh() ? `<div class="notice">Po návratu do hry začne <b>nové bludiště</b> s tímto nastavením.${G.status === 'playing' && !isFresh() ? ' Rozehrané bludiště se ztratí.' : ''}</div>` : ''}
       </div>
     </section>
@@ -973,7 +980,7 @@ function renderHelp() {
       <li>Když kulička jede sama, i když telefon držíš v klidu, ťukni na <b>Vyrovnat</b>. Telefon se vyrovná také sám, kdykoli se do hry vrátíš.</li>
       <li>Vyhni se dírám ${hole}. Když do některé kulička spadne, vrátí se na začátek bludiště a počet pádů se zvětší.</li>
       <li>Když telefon naklápění nehlásí, objeví se <b>šipky</b>. Šipky jdou zapnout také v Nastavení. Po ťuknutí na šipku kulička dojede ke stěně nebo k nejbližší odbočce.</li>
-      <li><b>Poradit</b> na chvíli ukáže tečkami cestu do cíle. Se šipkami navíc zarámuje šipku, kudy dál.</li>
+      <li><b>Poradit</b> na chvíli ukáže tečkami cestu do cíle. Se šipkami navíc zarámuje šipku, kudy dál. Do statistik (hotová bludiště, nejméně pádů) se počítají jen dohraná bludiště bez Poradit.</li>
       <li><b>Zpět</b> vrátí kuličku na předchozí odbočku nebo na místo, kde naposledy stála. Dá se ťukat opakovaně.</li>
     </ol></section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;

@@ -325,6 +325,7 @@ function validGame(g) {
     // a broken history only loses Undo; the move count is unknown then, so this game sets no record
     if (!ok) { g.history = []; g.noRecord = true; }
     g.noRecord = !!g.noRecord;
+    g.hinted = g.hinted === true; // Poradit was used: no record (rule: a game with a hint never counts)
     g.status = isWon(g) ? 'won' : 'playing'; // the end is derived from the board (a damaged status is fixed)
     return true;
   } catch (e) { return false; }
@@ -341,7 +342,7 @@ function validBests(b) {
   return out;
 }
 function newGame(msg) {
-  G = { n: S.discs, rods: startRods(S.discs), history: [], status: 'playing' };
+  G = { n: S.discs, rods: startRods(S.discs), history: [], status: 'playing', hinted: false };
   sel = null; hint = null;
   save(); render();
   if (msg) toast(msg);
@@ -468,8 +469,8 @@ function move(f, t) {
   sel = null; hint = null;
   if (isWon(G)) {
     G.status = 'won';
-    const m = G.history.length, prev = G.noRecord ? undefined : bests[G.n];
-    if (!G.noRecord && m >= minMoves(G.n) && (prev === undefined || m < prev)) bests[G.n] = m;
+    const m = G.history.length, prev = G.noRecord || G.hinted ? undefined : bests[G.n];
+    if (!G.noRecord && !G.hinted && m >= minMoves(G.n) && (prev === undefined || m < prev)) bests[G.n] = m;
     // rule: an end dialog only for the game that ended (not over a new game started meanwhile)
     const g0 = G;
     whenFree(g0, 900, () => showWin(prev));
@@ -480,7 +481,7 @@ function move(f, t) {
 function showWin(prev) {
   const n = G.n, m = G.history.length, min = minMoves(n);
   const best = m === min ? 'Rychleji to ani nejde!' : `Nejméně jde ${tahu(min)}.`;
-  const rec = prev === undefined ? '' : m < prev ? 'Nový rekord! 🏆' : `Rekord ${withDiscs(n)}: ${tahu(bests[n])}`;
+  const rec = G.hinted ? 'Hra s radou se do rekordů nepočítá.' : prev === undefined ? '' : m < prev ? 'Nový rekord! 🏆' : `Rekord ${withDiscs(n)}: ${tahu(bests[n])}`;
   const buttons = [];
   if (n < DISCS[DISCS.length - 1]) buttons.push({ text: `Zkusit ${withDiscs(n + 1)}`, fn: () => { S.discs = n + 1; newGame(); } });
   buttons.push({ text: `Znovu ${withDiscs(n)}`, cls: buttons.length ? 'alt' : '', fn: () => { S.discs = n; newGame(); } });
@@ -523,7 +524,10 @@ $('#btnHint').addEventListener('click', () => {
   if (G.status !== 'playing') { newGame(); return; }
   const m = nextMove(G.rods, G.n); if (!m) return;
   sel = m[0]; hint = m;
-  buzz(8); render(true);
+  const first = !G.hinted;
+  G.hinted = true; // rule: a game with a hint sets no record; Undo does not clear it
+  buzz(8); save(); render(true);
+  if (first) toast('S radou se tahle hra nepočítá do rekordů');
 });
 // rule: a new game in the middle of one asks first
 $('#btnNew').addEventListener('click', () => {
@@ -549,6 +553,7 @@ function renderSettings() {
         ${DISCS.map(n => opt('discs:' + n, S.discs === n, discWord(n), `Nejméně ${tahu(minMoves(n))}${DISC_NOTES[n] ? ' – ' + DISC_NOTES[n] : ''}.`)).join('')}
         ${pending}
       </div>
+      <div class="fnote">Hra si pamatuje rekord (nejméně tahů) pro každý počet disků. Počítají se jen dohrané hry bez Poradit.</div>
     </section>
     <section class="card"><h3>Vzhled</h3>
       <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch" data-theme="${t.id}">${mini}</span>${t.name}</button>`).join('')}</div>
@@ -588,6 +593,7 @@ function renderHelp() {
       <li>Bere se vždy jen horní disk a <b>větší disk nesmí ležet na menším</b>. Prostřední tyč slouží k odkládání.</li>
       <li><b>Zpět</b> vrátí poslední tah, klidně i několikrát.</li>
       <li><b>Poradit</b> zvedne disk, se kterým je dobré táhnout, a zvýrazní tyč, kam patří. Pak stačí ťuknout.</li>
+      <li>Hra si pamatuje rekord (nejméně tahů) pro každý počet disků. Počítají se jen dohrané hry bez Poradit.</li>
       <li>Se 3 disky jde věž přenést nejméně za 7 tahů, s každým dalším diskem je potřeba zhruba dvakrát víc tahů. Nikam se nespěchá.</li>
       <li>Počet disků se mění v <b>Nastavení</b> (ozubené kolečko). Začni se třemi.</li>
     </ol></section>

@@ -503,9 +503,12 @@ function validGame(g) {
     g.history = g.history.filter(h => h && okCols(h.cols, r) && Number.isInteger(h.score));
     const ids = new Set(); for (const col of g.cols) for (const t of col) { if (ids.has(t >> 3)) return false; ids.add(t >> 3); }
     delete g.nextK; // not used any more (older saves have it)
-    if (typeof g.bestAtStart !== 'number') g.bestAtStart = 0;
+    delete g.bestAtStart; // not used any more (older saves have it)
     // The end state is derived from the board (a damaged status is fixed)
     g.status = hasMove(g.cols, r.min) ? 'playing' : 'over';
+    // counted: the record already took this game's first end; older saves updated the record during play,
+    // so a game that is already over was counted then
+    if (typeof g.counted !== 'boolean') g.counted = g.status === 'over';
     return true;
   } catch (e) { return false; }
 }
@@ -517,14 +520,25 @@ async function newGame(msg) {
   $('#modal').hidden = true;
   toast('Připravuji pole…', 60000);
   const r = rulesOf(S), { board: b, ok } = await makeBoard(r);
-  G = { rules: r, cols: b.cols, score: 0, history: [], status: 'playing', bestAtStart: 0 };
-  G.bestAtStart = bestOf();
+  G = { rules: r, cols: b.cols, score: 0, history: [], status: 'playing', counted: false };
   busy = false;
   hideToast();
   clearField();
   save(); render();
   if (!ok) toast('Tentokrát se nepodařilo připravit pole, které jde celé vyčistit. Kostky jsou rozházené náhodně.', 5000);
   else if (msg) toast(msg);
+}
+
+// rule: only a finished game counts. The record is taken once, at the first end of the game; Undo after the end
+// does not take it back and a later end of the same game is not counted again (so playing and undoing cannot
+// inflate it). A game left unfinished (Nová hra, closing the app) never touches the record.
+let endCounted = true, endRec = false; // the end just reached: was it counted, and was it a new record
+function recordEnd() {
+  endCounted = !G.counted; endRec = false;
+  if (G.counted) return;
+  G.counted = true;
+  const k = rulesKey(G.rules);
+  if (G.score > (bests[k] || 0)) { bests[k] = G.score; endRec = true; }
 }
 
 /* ---------- Helpers ---------- */
@@ -564,15 +578,13 @@ function remove(g) {
   // where the group was (for the "+points" text)
   const els = g.map(([x, y]) => tileEls.get(G.cols[x][y] >> 3)).filter(Boolean);
   let py; if (els.length) { const rs = els.map(e => e.getBoundingClientRect()); py = Math.min(...rs.map(r => r.top)); }
-  G.history.push({ cols: G.cols, score: G.score, bb: bests[rulesKey(G.rules)] || 0 });
+  G.history.push({ cols: G.cols, score: G.score });
   const goneIds = new Set(g.map(([x, y]) => G.cols[x][y] >> 3));
   G.cols = removeGroup(G.cols, g);
   G.score += gain;
   let cleared = false;
   if (!G.cols.length) { cleared = true; G.score += CLEAR_BONUS; }
-  const key = rulesKey(G.rules);
-  if (G.score > (bests[key] || 0)) bests[key] = G.score;
-  if (!hasMove(G.cols, G.rules.min)) G.status = 'over';
+  if (!hasMove(G.cols, G.rules.min)) { G.status = 'over'; recordEnd(); }
   sel = null;
   save(); render(goneIds);
   const sc = $('#score'); sc.classList.remove('bump'); void sc.offsetWidth; sc.classList.add('bump');
@@ -586,7 +598,6 @@ function undo() {
   if (!G.history.length) { toast('Zatím není co vracet'); return; }
   const h = G.history.pop();
   G.cols = h.cols; G.score = h.score; G.status = hasMove(G.cols, G.rules.min) ? 'playing' : 'over';
-  if (Number.isInteger(h.bb)) { const k = rulesKey(G.rules), b = Math.max(h.bb, G.bestAtStart || 0); if (b > 0) bests[k] = b; else delete bests[k]; }
   sel = null;
   $('#modal').hidden = true;
   buzz(); save(); render();
@@ -720,12 +731,13 @@ function showModal(html, buttons) {
   };
 }
 function showOver() {
-  const best = bestOf(), rec = G.score >= best && G.score > G.bestAtStart && G.score > 0;
+  const best = bestOf();
   const left = countTiles(G.cols);
   const title = left ? 'Už nejde nic odebrat' : 'Vyčištěno! 🎉';
   const sub = left ? `${left === 1 ? 'Zbyla' : left <= 4 ? 'Zbyly' : 'Zbylo'} ${fmt(left)} ${kostek(left)}.` : `Celé pole je prázdné. Bonus +${fmt(CLEAR_BONUS)} bodů.`;
   showModal(
-    `<h2>${title}</h2><p class="pts">${fmt(G.score)}</p><p>${rec ? '<b>Nový rekord!</b>' : `${bodu(G.score)} · rekord ${fmt(best)}`}<br>${sub}</p>`,
+    `<h2>${title}</h2><p class="pts">${fmt(G.score)}</p><p>${endRec ? '<b>Nový rekord!</b>' : `${bodu(G.score)} · rekord ${fmt(best)}`}<br>${sub}</p>`
+      + (endCounted ? '' : '<p>Tahle hra už jednou skončila, do rekordu se znovu nepočítá.</p>'),
     [{ text: 'Nová hra', fn: newGame }, { text: 'Vrátit tah', cls: 'alt', fn: undo }, { text: 'Prohlédnout pole', cls: 'alt' }]
   );
 }
@@ -840,6 +852,7 @@ function renderHelp() {
         <li><b>Čím větší skupina, tím víc bodů:</b> ${G && G.rules.min === 3 ? '3 kostky = 4 body' : '2 kostky = 1 bod, 3 = 4 body'}, 4 = 9, 5 = 16, 10 kostek = 81 bodů. Vyplatí se nejdřív spojit stejné barvy do velkých skupin.</li>
         <li>Když se podaří <b>vyčistit celé pole</b>, je bonus ${fmt(CLEAR_BONUS)} bodů.</li>
         <li>Hra končí, když už žádná skupina nejde odebrat. Nikam se nespěchá. Tlačítko <b>Zpět</b> vrátí poslední tah – i na konci hry.</li>
+        <li>Do rekordu se počítají jen dohrané hry: body se zapíšou, až už nejde nic odebrat. Když hru po konci vrátíš tlačítkem Zpět a dohraješ znovu, rekord se už nezmění.</li>
       </ol>
     </section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;
@@ -883,7 +896,7 @@ if (saved && saved.bests && typeof saved.bests === 'object') {
   // records saved before the board kind was part of the key belong to random boards
   for (const [k, v] of Object.entries(saved.bests)) if (Number.isInteger(v) && v > 0) bests[/^\d+x\d+:\d:\d$/.test(k) ? k + ':random' : k] = v;
 }
-if (saved && saved.game && validGame(saved.game)) { G = saved.game; sel = null; render(); }
+if (saved && saved.game && validGame(saved.game)) { G = saved.game; sel = null; if (G.status === 'over') recordEnd(); render(); }
 else newGame();
 
 window.addEventListener('resize', layout);

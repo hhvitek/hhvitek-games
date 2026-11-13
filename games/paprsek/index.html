@@ -575,7 +575,8 @@ const COLOUR = ['', 'červené', 'modré', 'fialové'];       // light of colour
 
 /* ---------- State ---------- */
 // level = the level to play next (after a win the following one), top = the highest level open to play,
-// bests[level] = the fewest moves that solved it. G = the level being played; LV and SOLS are computed from it.
+// bests[level] = the fewest moves that solved it without Poradit. G = the level being played; LV and SOLS are computed
+// from it. G.hinted: Poradit was used in this game, so its win sets no record (kept by Undo and Od začátku).
 let S, G, level = 1, top = 1, bests = {}, LV = null, SOLS = [], hint = null, openLevel = null;
 const isFresh = () => G.history.length === 0;
 const inProgress = () => G && G.status === 'playing' && !isFresh();
@@ -607,6 +608,7 @@ function validGame(g) {
     if (okHist) { const o = g.start.slice(); g.history.forEach(c => { o[c] ^= 1; }); if (o.some((v, c) => v !== g.ori[c])) g.history = []; }
     else g.history = [];
     g.min = E.distance(L, sols, g.start);
+    g.hinted = g.hinted === true;
     g.status = E.isSolved(L, g.ori) ? 'won' : 'playing';
     LV = L; SOLS = sols;
     return true;
@@ -619,7 +621,7 @@ function normalize(s) {
 // starts level lv from its beginning (the same puzzle every time for the same number)
 function newGame(lv, msg) {
   const r = E.generate(clampLevel(lv));
-  G = { level: clampLevel(lv), n: r.n, board: r.board, start: r.start.slice(), ori: r.start.slice(), history: [], min: r.min, status: 'playing' };
+  G = { level: clampLevel(lv), n: r.n, board: r.board, start: r.start.slice(), ori: r.start.slice(), history: [], min: r.min, status: 'playing', hinted: false };
   LV = E.compile(G.n, G.board); SOLS = r.sols; hint = null;
   level = G.level;
   save(); build(); render();
@@ -811,7 +813,8 @@ function turn(c) {
 function win() {
   G.status = 'won';
   const m = G.history.length, prev = bests[G.level];
-  if (!prev || m < prev) bests[G.level] = m;
+  // rule: a game with Poradit sets no record (the next level still opens)
+  if (!G.hinted && (!prev || m < prev)) bests[G.level] = m;
   top = Math.max(top, clampLevel(G.level + 1));
   level = clampLevel(G.level + 1);
   hideToast(); save(); render();
@@ -823,7 +826,7 @@ function showWin(prev) {
   const m = G.history.length;
   showModal(`<h2>Výborně! 🎉</h2><p>Úroveň ${G.level} je vyřešená za <b>${movesWord(m)}</b>.</p>`
     + (m <= G.min ? '<p>Rychleji to nejde!</p>' : `<p>Nejméně to jde za ${movesWord(G.min)}.</p>`)
-    + (prev && m < prev ? `<p>Nový rekord této úrovně (dřív ${movesWord(prev)}).</p>` : ''),
+    + (G.hinted ? '<p>Hra s radou se do rekordů nepočítá.</p>' : prev && m < prev ? `<p>Nový rekord této úrovně (dřív ${movesWord(prev)}).</p>` : ''),
     [{ text: nextLabel(), fn: () => newGame(level) }, { text: 'Prohlédnout', cls: 'alt' }]);
 }
 function tapCell(c) {
@@ -860,8 +863,11 @@ $('#btnGo').addEventListener('click', () => {
   const c = E.hintCell(LV, SOLS, G.ori);
   if (c < 0) { toast('Poradit se teď nepovedlo, zkus Zpět'); return; }
   hint = c;
-  buzz(8); render();
-  toast(`Otoč zrcadlo v modrém rámečku. Do cíle ještě nejméně ${movesWord(E.distance(LV, SOLS, G.ori))}.`, 3200);
+  const first = !G.hinted;
+  G.hinted = true; // rule: a game with a hint sets no record; Undo and Od začátku keep this
+  buzz(8); save(); render();
+  if (first) toast('S radou se tahle hra nepočítá do rekordů', 3200);
+  else toast(`Otoč zrcadlo v modrém rámečku. Do cíle ještě nejméně ${movesWord(E.distance(LV, SOLS, G.ori))}.`, 3200);
 });
 // rule: a new game in the middle of one asks first. Nová hra = this level again from its start; after a win the next level
 $('#btnNew').addEventListener('click', () => {
@@ -885,7 +891,7 @@ function renderSettings() {
         <div class="sval">Úroveň ${level}</div>
         <button class="sbtn${level < top ? '' : ' dim'}" data-act="inc" aria-label="Vyšší úroveň">+</button>
       </div>
-      <div class="fnote">${b ? `Vyřešeno, nejlépe za ${movesWord(b)}.` : 'Zatím nevyřešeno.'} Vyřešených úrovní: ${solved}. Každá vyřešená úroveň otevře další.</div>
+      <div class="fnote">${b ? `Rekord: vyřešeno za ${movesWord(b)}.` : 'Zatím bez rekordu.'} Úrovní vyřešených bez Poradit: ${solved}. Každá vyřešená úroveň otevře další. Rekordy počítají jen dohrané hry bez Poradit.</div>
       ${openLevel !== null && level !== openLevel ? `<div class="notice">Po návratu do hry začne <b>úroveň ${level}</b>${inProgress() ? ' a rozehraná úroveň se ztratí' : ''}.</div>` : ''}
       </div>
     </section>
@@ -955,6 +961,7 @@ function renderHelp() {
       <li><b>Zpět</b> vrátí poslední otočení, dá se ťukat opakovaně. <b>Poradit</b> ukáže v modrém rámečku zrcadlo, které je potřeba otočit; ťukni na něj.</li>
       <li>Nahoře je vidět, kolika otočeními to jde nejméně. Nikam se nespěchá a každá úroveň jde vyřešit.</li>
       <li>Úrovně jsou postupně těžší. <b>Nová hra</b> začne úroveň znovu od začátku, po vyřešení přejde na další. Vyřešené úrovně si můžeš znovu zahrát v Nastavení.</li>
+      <li>Hra si pamatuje rekord (nejméně otočení) každé úrovně. Počítají se jen dohrané hry bez Poradit.</li>
     </ol></section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;
 }
