@@ -15,6 +15,7 @@
   "enabledPlugins": {
     "playwright@claude-plugins-official": false,
     "code-review@claude-plugins-official": false,
-    "context7@claude-plugins-official": false
+    "context7@claude-plugins-official": false,
+    "security-guidance@claude-plugins-official": false
   }
 }
