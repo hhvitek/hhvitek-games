@@ -42,7 +42,7 @@ once. Any controls are allowed (gestures, long presses, multi-touch, time pressu
 Add an entry for `<id>` to `play` in `tools/shots.js`: a move, the hint (if any), a tap on the hinted piece and on its place.
 
 ## 5. Check
-- `node tools/check.js <id>` must pass.
+- `node tools/check.js <id>` must pass, and `node tools/saves-test.js --ids <id>` (broken saves never crash the game).
 - Start a server in the repo root (`node tools/serve.js`, port 8765; another port when told so, e.g. `node tools/serve.js 8771`,
   then first navigate the Playwright page to `http://localhost:8771/` so the pass uses that server), write `.playwright-mcp/shots.json` = `{"ids": ["<id>"]}`,
   run the Playwright MCP tool `browser_run_code_unsafe` with `filename: tools/shots.js`, delete `shots.json`.

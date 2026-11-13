@@ -588,12 +588,14 @@ for (const m of E.MS) if (m.n === 5) for (let b = 0; b < N; b++) POSSIBLE[b].add
 /* ---------- State ---------- */
 // G: rules {level}; foe; starter; turn 0 = the player, 1 = the opponent; sheets [player, opponent] of 15 entries
 // (null = free); dice (5 values, [] before the first roll of a turn); held (5 booleans: kept for the next roll);
-// roll = rolls done in this turn (0–3); rolls = rolls in the whole game (0 = an untouched game); phase start | pick |
+// roll = rolls done in this turn (0–3); rolls = rolls in the whole game; phase start | pick |
 // chosen (the opponent has decided, plan = { hold } or { box }) | over; selUndo = earlier held choices of this roll
 // (Zpět); undoW = the player's last write, which Zpět takes back while the opponent has not rolled yet;
 // last = { p, b } the box written last; seed = the dice and the opponent's choices
 let S, G, stats = {}, busy = false, rollTimer = 0;
-const isFresh = () => G.rolls === 0;
+// untouched by the player: no box written and no roll in the player's turn (the opponent's turns do not count, so a
+// game the opponent started is not "Rozehráno" and may be replaced without asking, with the same starter)
+const isFresh = () => G.sheets[0].every(x => x === null) && !(G.turn === 0 && G.roll > 0);
 const inProgress = () => G && G.status === 'playing' && !isFresh();
 const foe = (g = G) => g.foe;
 const emptySheet = () => new Array(N).fill(null);
@@ -666,7 +668,7 @@ const rnd = n => { try { const a = new Uint32Array(1); crypto.getRandomValues(a)
 const pick = a => a[rnd(a.length)];
 function newGame(msg) {
   stopRolling();
-  // the player starts the first game, then it alternates; a game nobody rolled in is replaced with the same starter
+  // the player starts the first game, then it alternates; a game the player has not played in keeps its starter
   const starter = !G ? 0 : isFresh() ? G.starter : 1 - G.starter;
   G = { rules: { level: S.level }, foe: O.create(rnd, G && G.foe ? [G.foe.name] : []), starter, turn: starter,
         sheets: [emptySheet(), emptySheet()], dice: [], held: [false, false, false, false, false], roll: 0, rolls: 0,

@@ -741,8 +741,8 @@ function tapBolt(i) {
   if (sel === i) { sel = null; buzz(8); render(true); return; } // put them back
   const err = moveError(G.bolts, cap(), sel, i);
   if (err === 'done') { toast('Tenhle šroub je už hotový'); render(true); return; }
-  if (err === 'full') { toast('Tenhle šroub je plný'); render(true); return; }
-  if (err === 'color') { toast('Nahoře je jiná barva – sem to nejde'); render(true); return; }
+  // a bolt the lifted nuts cannot go to: its own nuts are lifted instead (as players of the genre expect)
+  if (err === 'full' || err === 'color') { sel = i; buzz(8); render(true); return; }
   doMove(sel, i);
 }
 // The lifted nuts fly over the target bolt and slide down onto it; those that do not fit drop back
@@ -920,7 +920,7 @@ function renderHelp() {
     <section class="card help"><ol>
       <li>Na šroubech jsou našroubované barevné matky. Přesouvej je tak, aby na každém šroubu byla <b>jen jedna barva</b>.</li>
       <li>Ťukni na šroub – horní matky jedné barvy se zvednou nad něj. Potom ťukni na šroub, kam je chceš dát. Když si to rozmyslíš, ťukni znovu na stejný šroub nebo vedle a matky se vrátí.</li>
-      <li>Matky jdou jen na <b>prázdný</b> šroub, nebo na matku <b>stejné barvy</b>. Přesunou se najednou všechny stejné matky shora, kolik se jich vejde; zbytek zůstane.</li>
+      <li>Matky jdou jen na <b>prázdný</b> šroub, nebo na matku <b>stejné barvy</b>. Přesunou se najednou všechny stejné matky shora, kolik se jich vejde; zbytek zůstane. Ťukneš-li na šroub, kam nejdou, zvednou se místo nich matky z něj.</li>
       <li>Na šroub se vejdou 4 matky (Lehká a Střední), nebo 5 (Těžká a Mistr).</li>
       <li>Plný šroub jedné barvy dostane navrch kloboučkovou matku. Ten je hotový a už se nemění.</li>
       <li><b>Zpět</b> vrátí poslední tah, klidně i víckrát. <b>Od začátku</b> rozehraje stejnou hru znovu.</li>
