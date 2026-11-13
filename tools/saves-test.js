@@ -125,6 +125,7 @@ const PLAY = {
   'hledani-min': c => { const H = c.HledaniMin, G = H.state.G; H.tap((G.h >> 1) * G.w + (G.w >> 1)); for (let i = 0; i < 20; i++) H.hold(i); },
   'sipky-ven': c => { const S = c.SipkyVen; for (let k = 0; k < 4; k++) { const f = S.freeNow(); if (f.length) S.tapPiece(f[0]); } S.tapPiece(0); },
   vezicky: c => { const V = c.Vezicky; for (let k = 0; k < 6; k++) { const a = V.advise(); if (a) V.place(a.i, a.cell); } },
+  pristani: c => { c.Pristani.outcome('land'); }, // a landing: stars, a best, a ghost
 };
 
 /* ---------- Breaking a save ---------- */

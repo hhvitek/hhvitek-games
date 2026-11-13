@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Nová hra Přistání: přistaň s raketou na plošině v poušti nebo na lodi na moři. Brzdi motorem, nakláněj se a dosedni na obě nohy; 24 misí v 6 kapitolách (poušť, moře, vítr, noc a mlha, omezené zážehy, Měsíc a Mars), výzva dne se sérií, hvězdy, rekordy a průhledná raketa tvého nejlepšího letu.
+
 ## 1.0.21 – 2026-11-13
 
 - Kočka: co se škádlívá, to se rádo mívá. Koxu můžeš poplácat (u kořene ocasu pomalu a pravidelně je to blaho, rychlé bubnování ji naštve), ťuknout jí do nosu nebo ji na zahradě pokropit konví. Když se urazí, usmíříte se pohlazením nebo pamlskem – a někdy ti to později vrátí.

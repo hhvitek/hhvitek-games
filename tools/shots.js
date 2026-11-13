@@ -180,6 +180,13 @@ async (page) => {
       if (a && b) { await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2); await page.mouse.down(); await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 10 }); await page.mouse.up(); await wait(1500); }
       await tap('#btnHint'); await wait(400); await tap('#bsvg .cell.hint'); await wait(1500); await tap('#btnHint'); await wait(400);
     },
+    // the briefing's Start, a real burn on the left half, then the autopilot down to 30 m (the flame, dust and the pad)
+    'pristani': async () => {
+      await tapButton(/^Start/); await wait(300);
+      const b = await page.locator('#stage').boundingBox();
+      if (b) { await page.mouse.move(b.x + b.width * .25, b.y + b.height * .8); await page.mouse.down(); await wait(600); await page.mouse.up(); }
+      await page.evaluate(() => window.Pristani.flyTo(30)); await wait(900);
+    },
     'kostky': async () => { await tap('#btnRoll'); await wait(1200); await tap('#roll .die:not(.dead)'); await wait(400); },
     // a roll, two dice kept, the second roll, the šance box written; then the opponent's first steps
     'general': async () => {

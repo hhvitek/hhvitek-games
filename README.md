@@ -48,6 +48,7 @@ Velká tlačítka, žádné reklamy, žádné odpočítávání času, žádné 
 | Lodě            | `games/lode/`            | Klasické lodě proti počítači: rozmísti své lodě, střílej do moře soupeře a potop celé jeho loďstvo dřív než on tvoje; pět nebo deset lodí, tři soupeři od začátečníka po mistra, Poradit |
 | Mlýn            | `games/mlyn/`            | Klasický mlýn s devíti kameny proti počítači: pokládej, posouvej a skládej mlýny, za každý vezmeš soupeři kámen; se třemi kameny se skáče; soupeř běžný hráč nebo mistr, Poradit a Zpět |
 | Věžičky         | `games/vezicky/`         | Pokládej věžičky z šestiúhelníkových dílků na plástev: stejné barvy u sousedů se sesypou na jednu věžičku a deset dílků jedné barvy zmizí; tři obtížnosti, rekordy, Poradit a Zpět |
+| Přistání        | `games/pristani/`        | Přistaň s raketou na plošině v poušti nebo na lodi na moři: brzdi motorem, nakláněj se a dosedni na obě nohy; 24 misí v 6 kapitolách a výzva dne |
 | Kostky          | `games/kostky/`          | Klasické kostky (jedničky a pětky) se šesti kostkami proti počítači: házej, dokud se nebojíš, a body si zapiš; tři soupeři od začátečníka po mistra, hra do 3 000, 5 000 nebo 10 000 |
 | Solitér         | `games/soliter/`         | Klasický solitér (Klondike)                                                                                               |
 | FreeCell        | `games/freecell/`        | Solitér se čtyřmi volnými políčky                                                                                         |
