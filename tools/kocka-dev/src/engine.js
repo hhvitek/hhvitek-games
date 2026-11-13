@@ -51,6 +51,9 @@
 //                                   reason 'tired' | 'grumpy' | 'notNow'; trickLearned = training an already learned trick
 //   visitor { id, reaction } / visitorLeave { id, reason: 'time'|'shy'|'night'|'rain' } / visitorFed / visitorPurr /
 //   visitorHiss / visitorFriend { id, hearts }   neighbour cats; reaction = Koxa's: 'hiss' | 'play' | 'friends' | 'watch' | 'away'
+//   visitAct { id, kind, with }     the visitor started another act (st.visit.act; watching only, or Koxa left the garden):
+//                                   kind of VISIT_ACTS, with = 'koxa' (together with her) | null (alone); 'arrive' follows 'visitor'
+//   palUp { id, pal }               Koxa's own friendship with a neighbour cat reached another whole heart (pal 1–5)
 //   photo { n } / photoDeleted { n }   the album
 //   gift { n }                      pamlsky from the launcher link
 //   found { id, text }              a new Deníček entry
@@ -196,7 +199,9 @@ function KockaEngine() {
     'feedVisitor', 'strokeVisitor', 'photo', 'deletePhoto']);
   const CMAX = 1e6;  // counters saturate here (inc)
   const COUNTS = ['favFood', 'belly', 'toy', 'quirk'].concat(SPOTS.map(s => 'spot_' + s));
-  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday']);
+  // pal*: Koxa and a neighbour cat (the cat is st.diaryCat[id])
+  const PAL_DIARY = ['palFirst', 'palGroom', 'palSnuggle'];
+  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], PAL_DIARY);
 
   /* --- small helpers --- */
   const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
@@ -298,7 +303,7 @@ function KockaEngine() {
       traits: drawTraits(seed), cnt: {}, diary: { birthday: now }, day: freshDay(now), want: null, wantAt: {}, lap: null,
       yard: null, wet: 0, beds: Array(BEDS).fill(null), pantry: {}, postcards: [], presents: {},
       stock: {}, owned: {}, furniture: {}, records: {}, tricks: {}, earnDay: { key: dkey(now), n: 0 }, train: null,
-      visitors: {}, visit: null, album: [],
+      visitors: {}, visit: null, album: [], diaryCat: {},
     };
     for (const k of COUNTS) st.cnt[k] = 0;
     return st;
@@ -414,6 +419,8 @@ function KockaEngine() {
     const Dy = st.diary && typeof st.diary === 'object' ? st.diary : {};
     st.diary = {}; for (const k of Object.keys(Dy)) if (DIARY_IDS.includes(k) && okT(Dy[k])) st.diary[k] = Math.min(Dy[k], t);   // keeps the order found
     if (!st.diary.birthday) st.diary.birthday = st.born;
+    const DC = obj(st.diaryCat); st.diaryCat = {};   // only for a found pal* entry, in a fixed order
+    for (const k of PAL_DIARY) if (st.diary[k] && has(VISITORS, DC[k])) st.diaryCat[k] = DC[k];
     const d = st.day;
     st.day = d && typeof d === 'object' && isKey(d.key) && d.key <= dkey(t) && typeof d.ms === 'number' && d.ms >= 0 && d.ms <= 26 * HOUR ? {
       key: d.key, ms: num(d.ms, 0, 0, 2 * DAY), food: num(d.food, 0, 0, 200 * DAY), mood: num(d.mood, 0, -200 * DAY, 200 * DAY),
@@ -427,7 +434,7 @@ function KockaEngine() {
     for (const k of Object.keys(st)) if (!STATE_KEYS.includes(k)) delete st[k];
     return st;
   }
-  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album'];
+  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat'];
   // valid(st): repairs st in place and says whether it is usable (false only for null, a non-object or no time at all)
   function valid(st) { return repair(st) !== null; }
 
@@ -446,7 +453,10 @@ function KockaEngine() {
     if (st.off && st.t < st.off.until) m -= 25;
     if (st.scared > st.t) m -= 20;
     if (st.wet > st.t) m -= 15;                       // wet from the rain: grumpy for a while
-    if (st.visit && !st.out) m += VISIT_MOOD[reaction(st, st.visit.id)];   // a neighbour cat in the garden
+    if (st.visit && !st.out) {   // a neighbour cat in the garden: what they do together, else how she takes it
+      const A = st.visit.act;
+      m += A && A.with === 'koxa' && Object.prototype.hasOwnProperty.call(VISIT_ACTS, A.kind) ? VISIT_ACTS[A.kind].mood : VISIT_MOOD[reaction(st, st.visit.id)];
+    }
     if (st.yard && st.yard.tree) m -= 10;             // stuck on the tree
     return Math.round(clamp(m, -100, 100));
   }
@@ -499,16 +509,25 @@ function KockaEngine() {
     if (id === 'weight') return `${name} váží ${st.weight.toFixed(1).replace('.', ',')} kg.`;
     if (id === 'walk') return `Nejdelší toulka trvala ${fmtDur(st.walkMax)}.`;
     if (id === 'birthday') { const [y, m, d] = ymd(st.born); return `${name} k nám přišla ${d}. ${m + 1}. ${y}.`; }
+    if (PAL_DIARY.includes(id)) {
+      const c = st.diaryCat && Object.prototype.hasOwnProperty.call(VISITORS, st.diaryCat[id]) ? VISITORS[st.diaryCat[id]] : null;
+      const f = c && c.fem;   // Koxa is a she: the plural is feminine only with a female cat
+      if (id === 'palFirst') return c ? (f ? `${name} má první kamarádku: ${c.name}.` : `${name} má prvního kamaráda: ${c.name}.`) : `${name} má prvního kočičího kamaráda.`;
+      if (id === 'palGroom') return c ? `${name} a ${c.name} si poprvé navzájem ${f ? 'umyly' : 'umyli'} kožíšky.` : `${name} a kamarád si poprvé navzájem umyli kožíšky.`;
+      return c ? `${name} a ${c.name} si poprvé ${f ? 'zdřímly' : 'zdřímli'} schoulen${f ? 'é' : 'í'} u sebe.` : `${name} si poprvé zdřímla schoulená u kamaráda.`;
+    }
     return '';
   }
   const HINTS = {
     favFood: 'Co nejraději papá? Zkoušej různé dobroty.', belly: 'Nechá si podrbat bříško?',
     toy: 'S čím si nejraději hraje?', fear: 'Čeho se bojí?', quirk: 'Jaký má zvláštní zvyk?',
     weight: 'Kolik váží? Uvidíš zítra.', walk: 'Ještě nebyla venku.', birthday: '',
+    palFirst: 'Najde si kamaráda mezi kočkami od sousedů? Choď s ní na zahradu, když přijde návštěva.',
+    palGroom: 'Budou si s kamarádem navzájem mýt kožíšek?', palSnuggle: 'Zdřímne si někdy schoulená u kamaráda?',
   };
   // Deníček: her two spots only; text = the fact when found, else a question
   function diary(st, name) {
-    const nm = cleanName(name || st.name), ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday']);
+    const nm = cleanName(name || st.name), ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], PAL_DIARY);
     return ids.map(id => {
       const found = st.diary[id] || null;
       return { id, found, text: found ? entryText(st, id, nm) : (id.startsWith('spot_') ? 'Kde se ráda nechá hladit? Hlaď ji po srsti.' : HINTS[id]) };
@@ -620,6 +639,7 @@ function KockaEngine() {
   }
   function leaveYard(st, ev, type) {
     st.yard = null;
+    if (st.visit && st.visit.act && st.visit.act.with) apart(st, st.t, true, ev);   // the visitor goes on alone
     if (type) ev.push({ type });
   }
   // one step in the garden with the player
@@ -742,7 +762,7 @@ function KockaEngine() {
       else if (A.cold >= 30 * MIN) getIll(st, 'cold', t + dt, ev);
     }
     if (st.lap) lapStep(st, t, dt, night, ev);
-    visitStep(st, t, dt, night, ev);
+    visitStep(st, t, dt, night, watching, ev);
     if (st.yard) gardenStep(st, t, dt, night, ev);
     // the cat flap: while the player is away she goes on a walk by herself (0.2 per daytime hour; bond Kamarádka, placed in the předsíň)
     else if (!watching && st.furniture.catFlap && st.lvl >= WALK_BOND && !st.out && !st.asleep && !st.lap && !st.ill && !night &&
@@ -1295,30 +1315,65 @@ function KockaEngine() {
     curious: [0.5, 0.5], shy: [0.25, 0.5], bold: [0.5, 0.5], playful: [0.5, 0.5],
     greedy: [0.25, 1], grumpy: [0.5, 0.5], old: [0.75, 0.5], sleepy: [0.5, 0.5],
   });
-  // Koxa and the visitor: 'hiss' (Bivoj until 3 hearts, Rambo until 2), 'play' (Čiperka), 'friends' (3+ hearts), 'watch'
+  // Koxa and the visitor (her own hearts, pal): 'hiss' (Bivoj until 3 hearts, Rambo until 2), 'play' (Čiperka), 'friends'
+  // (3+ hearts), 'watch'; the mood while the visitor is there and they do nothing together
   const VISIT_MOOD = { hiss: -10, play: 5, friends: 5, watch: 0 };
+  // Phase A, a visit's programme (st.visit.act): what the visitor does alone (joint false) or together with Koxa in the garden.
+  // An act lasts at least `min` minutes, then ends after an exponential time with `rate` per minute: the end is drawn once from
+  // the act's start (actEnd) and the next act is picked from the same start, so how often advance() runs does not matter;
+  // fx = Koxa's needs per hour while they do it together; mood = her mood meanwhile (instead of VISIT_MOOD)
+  const VISIT_ACTS = deep({
+    arrive: { joint: false, min: 5, rate: 1 },          // on the fence
+    wander: { joint: false, min: 5, rate: 0.1 }, drink: { joint: false, min: 3, rate: 0.15 },   // drink: at the pond, not in winter (frozen)
+    bench: { joint: false, min: 5, rate: 0.06 }, tree: { joint: false, min: 5, rate: 0.1 },
+    nap: { joint: false, min: 10, rate: 0.04 }, bowl: { joint: false, min: 3, rate: 0.15 },     // bowl: only with the miska pro návštěvy
+    greet: { joint: true, min: 3, rate: 1, mood: 5, fx: { love: 3 } },                          // nose to nose: the first joint act
+    standoff: { joint: true, min: 3, rate: 0.2, mood: -10, fx: { love: -6, energy: -2 } },     // arched backs, instead of greet when she hisses
+    chase: { joint: true, min: 3, rate: 0.12, mood: 8, fx: { fun: 20, energy: -8 } },
+    wrestle: { joint: true, min: 3, rate: 0.12, mood: 8, fx: { fun: 15, energy: -6 } },
+    groom: { joint: true, min: 5, rate: 0.08, mood: 8, fx: { coat: 8, love: 6 } },
+    snuggle: { joint: true, min: 10, rate: 0.04, mood: 8, fx: { energy: 6, love: 6 } },       // also next to her when she sleeps
+  });
+  const PAL_STEP = 0.25, PAL_VISIT = 0.5;   // Koxa's hearts: +¼ for each joint act (not a standoff), at most +½ a visit
+  const SOLO_W = deep({ wander: 3, drink: 2, bench: 2, tree: 2, nap: 1, bowl: 3 });
+  const SOLO_TRAIT = deep({
+    sleepy: { nap: 4, bench: 3, tree: 0.3 }, old: { nap: 4, bench: 3, tree: 0.3 }, playful: { wander: 2.5, tree: 2.5, nap: 0.5 },
+    curious: { wander: 2.5, tree: 2.5, nap: 0.5 }, greedy: { bowl: 4 }, bold: { tree: 1.5 }, shy: { bench: 1.5, wander: 0.7 },
+  });
   const ALBUM_MAX = 200;
   const PHOTO_ROOMS = ['living', 'kitchen', 'hall', 'garden', 'lap', 'walk'];
+  // Koxa's own hearts for a cat (a record from before Phase A has only the player's: she takes those over)
+  const palOf = R => (!R ? 0 : typeof R.pal === 'number' && Number.isFinite(R.pal) ? R.pal : typeof R.friend === 'number' && Number.isFinite(R.friend) ? R.friend : 0);
   function reaction(st, id) {
-    const h = st.visitors[id] ? st.visitors[id].friend : 0;
+    const h = palOf(st.visitors[id]);
     if (id === 'bivoj' && h < 3) return 'hiss';
     if (id === 'rambo' && h < 2) return 'hiss';
     if (id === 'ciperka') return 'play';
     return h >= 3 ? 'friends' : 'watch';
   }
-  const vrec = (st, id) => st.visitors[id] || (st.visitors[id] = { friend: 0, met: 0, visits: 0, fed: 0 });
+  function vrec(st, id) {
+    const R = st.visitors[id];
+    if (!R) return (st.visitors[id] = { friend: 0, pal: 0, met: 0, visits: 0, fed: 0 });
+    if (typeof R.pal !== 'number') st.visitors[id] = { friend: R.friend, pal: palOf(R), met: R.met, visits: R.visits, fed: R.fed };
+    return st.visitors[id];
+  }
   function endVisit(st, reason, ev) {
     ev.push({ type: 'visitorLeave', id: st.visit.id, reason });
     st.visit = null;
   }
   // one step: a visitor may come (seeded), Koxa reacts, the visit ends after its time (never forever)
-  function visitStep(st, t, dt, night, ev) {
+  function visitStep(st, t, dt, night, watching, ev) {
     const h = dt / HOUR;
     if (st.visit) {
       if (night && st.visit.id !== 'bivoj') endVisit(st, 'night', ev);
-      else if (t + dt >= st.visit.until) endVisit(st, 'time', ev);
       else if (weather(t, st) === 'rain' && st.visit.id !== 'bivoj') endVisit(st, 'rain', ev);
-      else if (st.visit.id === 'ciperka' && !st.out && !st.asleep) st.needs.fun = Math.min(100, st.needs.fun + 10 * h);   // they play
+      else {
+        st.visit = fixVisit(st.visit, t);
+        if (!st.visit) return;
+        const U = st.visit.until;
+        if (U > t) programme(st, t, Math.min(dt, U - t), watching, ev);   // up to the visit's end exactly, whatever the step
+        if (t + dt >= U) endVisit(st, 'time', ev);
+      }
       return;
     }
     if (weather(t, st) === 'rain' && !night) return;
@@ -1327,9 +1382,130 @@ function KockaEngine() {
     if (!(rnd(st) < 1 - Math.exp(-rate * h))) return;
     const id = night ? 'bivoj' : VISITOR_IDS[Math.floor(rnd(st) * VISITOR_IDS.length)];
     const stay = VISIT.stay[0] + Math.floor(rnd(st) * (VISIT.stay[1] - VISIT.stay[0]));
-    st.visit = { id, since: t, until: t + stay * MIN, gain: 0 };
+    st.visit = { id, since: t, until: t + stay * MIN, gain: 0, palGain: 0, greeted: false, ready: null, act: { kind: 'arrive', since: t, with: null } };
     const R = vrec(st, id); R.visits = Math.min(CMAX, R.visits + 1);
     ev.push({ type: 'visitor', id, reaction: st.out ? 'away' : reaction(st, id) });
+    if (watching) ev.push({ type: 'visitAct', id, kind: 'arrive', with: null });
+  }
+  // Koxa can do something with the visitor: in the garden, awake, not up the tree, on the lap or in the arms
+  const palAwake = st => !!(st.yard && !st.out && !st.yard.tree && !st.asleep && !st.lap && !st.held);
+  const palAsleep = st => !!(st.yard && !st.out && !st.yard.tree && st.asleep);
+  const pondFrozen = t => season(t) === 'winter';
+  function pickSolo(st, cur, t, r) {
+    const tr = SOLO_TRAIT[VISITORS[st.visit.id].trait] || {};
+    let ks = Object.keys(SOLO_W).filter(k => (k !== 'bowl' || st.furniture.visitorBowl) && (k !== 'drink' || !pondFrozen(t)));
+    if (ks.length > 1) ks = ks.filter(k => k !== cur);
+    const w = ks.map(k => SOLO_W[k] * (tr[k] || 1)), sum = w.reduce((a, b) => a + b, 0);
+    let x = r * sum;
+    for (let i = 0; i < ks.length; i++) { if (x < w[i]) return ks[i]; x -= w[i]; }
+    return ks[ks.length - 1];
+  }
+  // together (after greeting, not hissing): chase and wrestle with a playful, curious or bold cat from 1 heart (Čiperka at once),
+  // groom and snuggle from 3 hearts (old and sleepy cats prefer to snuggle); null = nothing fits
+  function pickJoint(st, cur, r) {
+    const id = st.visit.id, trait = VISITORS[id].trait, p = palOf(st.visitors[id]);
+    const ks = [], w = [];
+    const add = (k, x) => { if (k !== cur) { ks.push(k); w.push(x); } };
+    if (['playful', 'curious', 'bold'].includes(trait) && (p >= 1 || id === 'ciperka')) { add('chase', trait === 'playful' ? 3 : 2); add('wrestle', trait === 'bold' ? 2.5 : 1.5); }
+    if (p >= 3) { add('groom', 2); add('snuggle', trait === 'old' || trait === 'sleepy' ? 4 : 1); }
+    if (!ks.length) return null;
+    let x = r * w.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < ks.length; i++) { if (x < w[i]) return ks[i]; x -= w[i]; }
+    return ks[ks.length - 1];
+  }
+  function addPal(st, id, t, ev) {
+    const V = st.visit, g = Math.min(PAL_STEP, PAL_VISIT - V.palGain);
+    if (g <= 0) return;
+    V.palGain += g;
+    const R = vrec(st, id), before = Math.floor(R.pal);
+    R.pal = Math.round(clamp(R.pal + g, 0, 5) * 4) / 4;
+    if (Math.floor(R.pal) > before) ev.push({ type: 'palUp', id, pal: Math.floor(R.pal) });
+    if (R.pal >= 3) palFound(st, 'palFirst', id, t, ev);
+  }
+  // a pal* diary entry and its cat (st.diaryCat keeps the fixed order of PAL_DIARY, as repair does)
+  function palFound(st, dk, id, t, ev) {
+    if (st.diary[dk]) return;
+    const o = {}, C = st.diaryCat || {};
+    for (const k of PAL_DIARY) if (k === dk) o[k] = id; else if (Object.prototype.hasOwnProperty.call(C, k)) o[k] = C[k];
+    st.diaryCat = o;
+    find(st, dk, t, ev);
+  }
+  function setAct(st, kind, t, watching, ev) {
+    const V = st.visit, joint = VISIT_ACTS[kind].joint;
+    V.act = { kind, since: t, with: joint ? 'koxa' : null };
+    if (joint) V.greeted = true;
+    if (watching) ev.push({ type: 'visitAct', id: V.id, kind, with: V.act.with });
+    if (!joint || kind === 'standoff') return;
+    // a save from before Phase A may already have 3+ hearts: the first friend comes before grooming or snuggling
+    if (palOf(st.visitors[V.id]) >= 3) palFound(st, 'palFirst', V.id, t, ev);
+    addPal(st, V.id, t, ev);
+    const dk = kind === 'groom' ? 'palGroom' : kind === 'snuggle' ? 'palSnuggle' : null;
+    if (dk) palFound(st, dk, V.id, t, ev);
+  }
+  // the moment an act ends by itself: `min` minutes, then an exponential time with its rate, drawn once from its start
+  const actEnd = (seed, A) => { const K = VISIT_ACTS[A.kind];
+    return A.since + K.min * MIN + (-Math.log(1 - rndSeed(seed, Math.floor(A.since / 1000), 21)) / K.rate) * MIN; };
+  // she comes to say hello about 3 min (rate 0.3 per minute) after she could first (V.ready) or after the visitor's last act began
+  const greetAt = (seed, from) => from + (-Math.log(1 - rndSeed(seed, Math.floor(from / 1000), 26)) / 0.3) * MIN;
+  // a joint act ends: the visitor goes on alone (after a standoff one of them walked away: Koxa is a little upset)
+  function apart(st, t, watching, ev) {
+    const A = st.visit.act;
+    if (A.kind === 'standoff') st.needs.love = Math.max(0, st.needs.love - 2);
+    setAct(st, pickSolo(st, A.kind, t, rndSeed(st.seed, Math.floor(A.since / 1000), 25)), t, watching, ev);
+  }
+  // Koxa's needs from a joint act for ms milliseconds
+  function actFx(st, A, ms) {
+    const fx = A.with && VISIT_ACTS[A.kind].fx;
+    if (!fx || ms <= 0) return;
+    const N = st.needs;
+    for (const n of Object.keys(fx)) N[n] = clamp(N[n] + fx[n] * ms / HOUR, 0, 100);
+  }
+  // one step of a visit: every act that ends within [t, t + dt) is followed by the next one at its exact moment, and the
+  // effects are split at those moments, so 10-minute steps and many short ones give the same acts
+  function programme(st, t, dt, watching, ev) {
+    const V = st.visit, end = t + dt;
+    const awake = palAwake(st), asleep = palAsleep(st), hiss = reaction(st, V.id) === 'hiss';
+    if (V.act.with && !(awake || (asleep && V.act.kind === 'snuggle'))) apart(st, t, watching, ev);   // she went in, fell asleep, …
+    V.ready = awake && !V.greeted ? (V.ready === null ? t : V.ready) : null;
+    let cur = t;
+    for (let guard = 0; guard < 100; guard++) {
+      const A = V.act, greeting = !A.with && awake && !V.greeted;
+      let at;
+      if ((A.kind === 'bowl' && !st.furniture.visitorBowl) || (A.kind === 'drink' && pondFrozen(cur))) at = cur;
+      else if (greeting) at = greetAt(st.seed, Math.max(V.ready, A.since));
+      else at = actEnd(st.seed, A);
+      if (at >= end) break;
+      at = Math.max(at, cur);
+      actFx(st, A, at - cur); cur = at;
+      if (A.kind === 'standoff') { apart(st, at, watching, ev); continue; }
+      const r = salt => rndSeed(st.seed, Math.floor(A.since / 1000), salt);   // one act always leads to the same next one
+      let next = null;
+      if (greeting) next = r(22) < 0.9 ? (hiss ? 'standoff' : 'greet') : null;
+      else if (awake && !hiss && r(22) < 0.5) next = pickJoint(st, A.kind, r(23));
+      else if (asleep && !hiss && palOf(st.visitors[V.id]) >= 3 && A.kind !== 'snuggle' && r(22) < 0.4) next = 'snuggle';
+      if (!next) next = pickSolo(st, A.kind, at, r(24));
+      setAct(st, next, at, watching, ev);
+    }
+    actFx(st, V.act, end - cur);
+    if (V.greeted) V.ready = null;
+  }
+  // a canonical visit or null (repair and states made by hand); an unknown act or one that does not fit = 'wander' alone
+  function fixVisit(S, t) {
+    const okT = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
+    const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
+    if (!(S && typeof S === 'object' && own(VISITORS, S.id) && okT(S.since) && S.since <= t && okT(S.until) && S.until > S.since &&
+      S.until <= S.since + (VISIT.stay[1] + 2 * VISIT.fedStay) * MIN)) return null;
+    const fin = v => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+    const A = S.act && typeof S.act === 'object' ? S.act : {};
+    const okA = own(VISIT_ACTS, A.kind) && (VISIT_ACTS[A.kind].joint ? A.with === 'koxa' : A.with === null);
+    const act = okA ? { kind: A.kind, since: okT(A.since) && A.since >= S.since && A.since <= t ? A.since : S.since, with: A.with }
+      : { kind: 'wander', since: S.since, with: null };
+    const greeted = S.greeted === true || act.with === 'koxa';
+    return {
+      id: S.id, since: S.since, until: S.until, gain: clamp(fin(S.gain), 0, VISIT.perVisit),
+      palGain: Math.round(clamp(fin(S.palGain), 0, PAL_VISIT) * 4) / 4, greeted,
+      ready: !greeted && okT(S.ready) && S.ready >= S.since && S.ready <= t ? S.ready : null, act,
+    };
   }
   function addFriend(st, id, d, ev) {
     const R = vrec(st, id), before = Math.floor(R.friend);
@@ -1361,6 +1537,7 @@ function KockaEngine() {
       ev.push({ type: 'photoDeleted', n: st.album.length });
       return null;
     }
+    if (st.visit) st.visit = fixVisit(st.visit, t);
     const id = typeof a.id === 'string' && Object.prototype.hasOwnProperty.call(VISITORS, a.id) ? a.id : null;
     if (!id) return 'Takovou kočku neznáme.';
     const V = VISITORS[id];
@@ -1375,6 +1552,7 @@ function KockaEngine() {
       if (V.trait === 'greedy' || V.trait === 'sleepy') st.visit.until += VISIT.fedStay * MIN;   // stays longer
       ev.push({ type: 'visitorFed', id });
       addFriend(st, id, foodGain, ev);
+      if (palAwake(st)) addPal(st, id, t, ev);   // Koxa sees you are friends with it
       return null;
     }
     // strokeVisitor: shy ones may run off, grumpy ones may swipe while they do not know you
@@ -1383,6 +1561,7 @@ function KockaEngine() {
     ev.push({ type: 'visitorPurr', id });
     const g = Math.min(strokeGain, VISIT.perVisit - st.visit.gain);
     if (g > 0) { st.visit.gain += g; addFriend(st, id, g, ev); }
+    if (palAwake(st)) addPal(st, id, t, ev);
     return null;
   }
   function repairSocial(st, t) {
@@ -1393,17 +1572,15 @@ function KockaEngine() {
     for (const k of Object.keys(V)) {
       const r = V[k];
       if (!own(VISITORS, k) || !r || typeof r !== 'object') continue;
+      const friend = typeof r.friend === 'number' && Number.isFinite(r.friend) ? Math.round(clamp(r.friend, 0, 5) * 4) / 4 : 0;
       st.visitors[k] = {
-        friend: typeof r.friend === 'number' && Number.isFinite(r.friend) ? Math.round(clamp(r.friend, 0, 5) * 4) / 4 : 0,
+        friend, pal: typeof r.pal === 'number' && Number.isFinite(r.pal) ? Math.round(clamp(r.pal, 0, 5) * 4) / 4 : friend,   // an older save: Koxa's = the player's
         met: okT(r.met) ? Math.min(r.met, t) : 0,
         visits: Number.isInteger(r.visits) ? clamp(r.visits, 0, CMAX) : 0,
         fed: isKey(r.fed) && r.fed <= dkey(t) ? r.fed : 0,
       };
     }
-    const S = st.visit;
-    st.visit = S && typeof S === 'object' && own(VISITORS, S.id) && okT(S.since) && S.since <= t && okT(S.until) && S.until > S.since &&
-      S.until <= S.since + (VISIT.stay[1] + 2 * VISIT.fedStay) * MIN
-      ? { id: S.id, since: S.since, until: S.until, gain: typeof S.gain === 'number' && Number.isFinite(S.gain) ? clamp(S.gain, 0, VISIT.perVisit) : 0 } : null;
+    st.visit = fixVisit(st.visit, t);
     const A = Array.isArray(st.album) ? st.album : [];
     st.album = [];
     for (const p of A) {
@@ -1422,7 +1599,11 @@ function KockaEngine() {
   function shiftSocial(st, d, now) {
     const today = dkey(now);
     for (const k of Object.keys(st.visitors)) { const r = st.visitors[k]; if (r.met > now) r.met = now; if (r.fed > today) r.fed = today; }
-    if (st.visit) st.visit = { id: st.visit.id, since: st.visit.since + d, until: st.visit.until + d, gain: st.visit.gain };
+    if (st.visit) {
+      const V = st.visit, A = V.act && typeof V.act === 'object' ? V.act : {};
+      st.visit = fixVisit(Object.assign({}, V, { since: V.since + d, until: V.until + d, ready: typeof V.ready === 'number' ? V.ready + d : null,
+        act: Object.assign({}, A, { since: A.since + d }) }), now);
+    }
     for (const p of st.album) if (p.t > now) p.t = now;
   }
   // the Album screen: photos (newest first), postcards, the neighbour cats met, presents
@@ -1431,7 +1612,7 @@ function KockaEngine() {
       photos: st.album.slice().reverse(), max: ALBUM_MAX,
       postcards: st.postcards.slice(),
       visitors: VISITOR_IDS.filter(id => st.visitors[id] && st.visitors[id].met).map(id => ({
-        id, name: VISITORS[id].name, trait: VISITORS[id].trait, hearts: Math.floor(st.visitors[id].friend), met: st.visitors[id].met, visits: st.visitors[id].visits,
+        id, name: VISITORS[id].name, trait: VISITORS[id].trait, hearts: Math.floor(st.visitors[id].friend), pal: Math.floor(palOf(st.visitors[id])), met: st.visitors[id].met, visits: st.visitors[id].visits,
       })),
       presents: Object.assign({}, st.presents),
     };
@@ -1447,7 +1628,7 @@ function KockaEngine() {
 
   return {
     NEEDS, FOODS, TOYS, REGIONS, FEARS, QUIRKS, ILLS, LEVELS, HOLIDAYS, ACTIONS, CROPS, PRESENTS, WEATHERS, POSTCARDS, BEDS,
-    SHOP, GAMES, TRICKS, ROOMS, EARN_CAP, VISITORS, ALBUM_MAX, album,
+    SHOP, GAMES, TRICKS, ROOMS, EARN_CAP, VISITORS, VISIT_ACTS, ALBUM_MAX, album,
     create, valid, repair, rename, advance, act, consumeTreats, minigameResult, shop, tricks,
     mood, moodValue, wants, needs, health, bondLevel, diary,
     dayPhase, season, holiday, easter, weather, postcardAt, bedCount,

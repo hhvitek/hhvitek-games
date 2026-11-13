@@ -151,6 +151,9 @@ async (page) => {
       const pts = await page.evaluate(() => window.Kocka.strokePath('back'));
       if (pts) { await page.mouse.move(pts[0].x, pts[0].y); await page.mouse.down(); for (const p of pts.slice(1)) { await page.mouse.move(p.x, p.y); await wait(8); } await page.mouse.up(); }
       await wait(600);
+      // out into the garden: a neighbour cat visits and they wash each other (a joint scene of the visit)
+      await page.evaluate(() => { const K = window.Kocka; K.state.G.st.asleep = false; K.go('hall'); K.settle(); K.go('garden'); K.settle(); K.state.G.st.visit = null; K.forceVisit('liza', 'groom'); });
+      await wait(4500);
     },
     // the hint (dotted way, the next arrow framed), a tap on the framed arrow, the hint again
     'kulicka': async () => { await tap('#btnHint'); await wait(400); await tap('.arrow.hint'); await wait(1200); await tap('#btnHint'); await wait(500); },

@@ -176,6 +176,35 @@ Pointer Events on the scene; mouse and pen behave like one finger.
 - **Room:** furniture by drag (škrabadlo, pelíšek, parapet s polštářem, kočičí strom, krabice, koberec, lampa),
   unlocked by bond + bought with pamlsky; positions saved; the window shows season and day phase.
 
+## 8b. Návštěvy 2 (Phase A, user's decision 2026-11-13)
+Visitors live in the garden and do things together with Koxa; Koxa has her own friendship with every cat. Planned
+next: player interactions with a visitor and kittens visiting (no adoption).
+- **Programme (engine):** `st.visit.act = { kind, since, with }` (`E.VISIT_ACTS`). Alone (`with: null`): `arrive` (on
+  the fence, first minutes), `wander`, `drink` (the pond; never in winter), `bench`, `tree`, `nap`, `bowl` (only with
+  the miska pro návštěvy). Together (`with: 'koxa'`, only while she is in the garden, awake, not up the tree, on the lap
+  or held): `greet` (always the first one), `standoff` (instead of greet while Bivoj has under 3 of her hearts, Rambo
+  under 2; it ends by one of them walking away and then only solo acts follow for that visit), `chase`, `wrestle`
+  (playful, curious, bold cats from 1 heart, Čiperka at once), `groom`, `snuggle` (from 3 hearts; snuggle also next to
+  her when she sleeps in the garden). An act lasts `min` minutes plus an exponential time (`rate` per minute), drawn
+  once from its start (`st.seed` and `since`), and the next act is picked from the same start: the programme gives the
+  same acts at the same moments whether `advance()` runs every 10 minutes or every 200 ms while she is stroked, and it
+  never draws from `st.n`. The greeting comes about 3 minutes after she could first greet (`st.visit.ready`). Joint
+  acts change her mood and needs (`fx`, split at the moments the acts change). Leaving the garden ends a joint act at
+  once; the visit ends exactly at `until`.
+- **Her hearts (`st.visitors[id].pal`, 0–5 in quarters):** +¼ for each joint act except a standoff, at most +½ a visit;
+  `reaction()` uses them. The player's hearts stay `friend`. Feeding or stroking a visitor while she is awake in the
+  garden raises hers too.
+- **Events:** `visitAct { id, kind, with }` (watching only; always when she leaves the garden), `palUp { id, pal }`,
+  `found` for the diary entries palFirst, palGroom, palSnuggle (palFirst whenever she has 3+ hearts at a joint act, so
+  an older save with the player's hearts finds it before grooming or snuggling).
+- **UI:** the visitor is a mover like Koxa (`#visitors`, one box per cat, the same size; walks, trots and runs with the
+  leg cycle matched to the speed, jumps on and off the fence, the bench and the tree; goes round the pond). Each act is a
+  small looping scene; joint scenes drive Koxa through a long `visit` act (`K.act`), so carrying, care, the lap or petting
+  interrupt them cleanly and the visitor waits for her. Distances from the art's "Pózy pro dva": sniff 172, arch 190,
+  lickOther 80 (loaf) / 90 (sideLie) / 100 (sit), sideLie 152, swipe 116 / 150, run 184 (art units). The one with the
+  lower feet is drawn in front (the licker when they are level). A toast names joint acts; palUp says "Koxa a Líza:
+  ♥♥♥ – jsou kamarádky". Deníček and the visitor's menu show both: "Ty ♥♥♡♡♡" and "S Koxou ♥♥♥♡♡".
+
 ## 9. Holidays (date → props, texts)
 Advent 1.–23.12 (věnec), Mikuláš 5.12 (punčocha), Vánoce 24.12–6.1 (stromeček; she knocks ornaments down),
 Silvestr 31.12 evening (ohňostroj: she hides if `fear` = ohňostroj), Masopust (Easter − 47 days: maska),

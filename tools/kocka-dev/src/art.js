@@ -13,7 +13,13 @@
 //                            the CSS variable --kx-step on any ancestor: walk .8s, trot .42s by default), walk1..walk4
 //                            (still frames a quarter step apart), crouch → jumpUp → jumpDown (up to and down from the
 //                            sill, chair, counter, lap), climb (on the trunk), onBranch, stalk, shakePaw, and the bigger
-//                            lap poses lapLoaf, lapCurl (dozing), lapBelly.
+//                            lap poses lapLoaf, lapCurl (dozing), lapBelly. Two cats together (the other one in its own
+//                            box, flipped to face this one): sniff (standing, the head low and forward: nose to nose),
+//                            arch (standoff: arched back, fur on end, puffed tail, ears back; openMouth = hissing with
+//                            fangs), lickOther (sitting, the head forward and down, tongue out: licks a loaf / sideLie /
+//                            sit in front of it), sideLie (lying on the side, legs to the front; asleep breathes, Zzz),
+//                            swipe (play-fight: on the haunches, one paw raised high; pairs with belly or swipe), run (a
+//                            gallop by CSS, step --kx-step .34 s by default). All of them stand on (100, 186).
 //   poses                    the list of pose names.
 //   anchors                  { pose: [x, y] } for poses that do not stand on (100, 186): put that point on the spot.
 //   regions(pose, opts)      [{ id, path, fur: [dx, dy] }] in the cat's 0..200 viewBox, ids from
@@ -47,7 +53,7 @@
 //   mouseHole(), mousePeek(phase 0..1), fish(kind) (fishes: goldfish, carp, perch), marker(done)  minigame pieces.
 //   shop(), shopSpots       Obchůdek (400×600 slice) and where goods go on the counter.
 //   postcardFrame(caption), postcardHole (viewBox 300×200), photoFrame(), photoHole (200×236)  frames over a photo.
-//   neighbour(id, pose, opts), neighbours = { id: { name } }  the visitors (mourek, liza, bivoj, ciperka, pacicka,
+//   neighbour(id, pose, opts), neighbours = { id: { name, size } }  the visitors (mourek, liza, bivoj, ciperka, pacicka,
 //                            rambo, sedivka, fousek) in any pose; usually sit, walk, loaf, onFence (rooms.garden.spots.fence).
 function KockaArt() {
   'use strict';
@@ -168,7 +174,7 @@ function KockaArt() {
   function tail(R, p, w = 13, cls = '') {
     R.tailRoot = [p[0], p[1]];
     R.open('', 'kx-tail' + (cls ? ' ' + cls : ''), p[0], p[1]);
-    R.limb(p, w, { edge: true, bands: [[30, 11, 0]] });
+    R.limb(p, w, { edge: true, bands: COAT.pattern === 'none' ? [] : [[30, 11, 0]] });   // no ginger band on a plain coat
     R.close();
     R.region('tail', ribbon(p, w + 6), unit(p[p.length - 2] - p[0], p[p.length - 1] - p[1]));
   }
@@ -217,9 +223,10 @@ function KockaArt() {
     if (h.eyes === 'sad') s += `<path d="M-19 8q2.6 4.4 0 6.4q-2.6-2 0-6.4z" fill="#a9d8f2"/>`;
     if (h.blush) s += `<g fill="${C.blush}" opacity=".38"><ellipse cx="-26" cy="12" rx="5.5" ry="3"/><ellipse cx="26" cy="12" rx="5.5" ry="3"/></g>`;
     s += `<path d="M-4.5 9Q0 7.6 4.5 9L0.9 13.4Q0 14.2 -0.9 13.4Z" fill="${h.ill === 'cold' ? '#d8645a' : C.nose}"/>`;
-    if (h.mouth === 'meow' || h.mouth === 'open') s += `<g transform="translate(0 16) scale(${h.mouth === 'open' ? 1.45 : 1}) translate(0 -16)"><path d="M-6.5 16Q0 29 6.5 16Q0 18.5 -6.5 16Z" fill="#4a1a17" stroke="${C.lid}" stroke-width="1.3" stroke-linejoin="round"/><path d="M-3.4 22.4Q0 26.4 3.4 22.4Q0 20.6 -3.4 22.4Z" fill="${C.tongue}"/></g>`;
+    if (h.mouth === 'meow' || h.mouth === 'open') s += `<g transform="translate(0 16) scale(${h.mouth === 'open' ? 1.45 : 1}) translate(0 -16)"><path d="M-6.5 16Q0 29 6.5 16Q0 18.5 -6.5 16Z" fill="#4a1a17" stroke="${C.lid}" stroke-width="1.3" stroke-linejoin="round"/><path d="M-3.4 22.4Q0 26.4 3.4 22.4Q0 20.6 -3.4 22.4Z" fill="${C.tongue}"/>${h.fangs ? '<path d="M-5.2 16.3L-3.9 20.2L-2.6 16.8ZM5.2 16.3L3.9 20.2L2.6 16.8Z" fill="#fff"/>' : ''}</g>`;
     else s += `<path d="M0 13.6V16.5${MOUTH[h.mouth] || MOUTH.cat}" fill="none" stroke="${C.lid}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>`;
-    if (h.tongue) s += `<path d="M-2.8 18Q0 25 2.8 18Z" fill="${C.tongue}"/>`;
+    if (h.tongue === 2) s += `<path d="M-4.2 16.4C-4.8 24 -2.6 29 0 29C2.6 29 4.8 24 4.2 16.4Z" fill="${C.tongue}" stroke="#a8504a" stroke-width="1"/><path d="M0 18.5V25" stroke="#c8605a" stroke-width="1.1" stroke-linecap="round"/>`;   // licking: the tongue out
+    else if (h.tongue) s += `<path d="M-2.8 18Q0 25 2.8 18Z" fill="${C.tongue}"/>`;
     s += `<path d="M-17 12L-50 6M-17 15L-51 15.5M-16 18L-47 25M17 12L50 6M17 15L51 15.5M16 18L47 25"${COAT.whisk ? ` transform="scale(${COAT.whisk} 1)"` : ''} stroke="${C.lid}" stroke-width="1.2" stroke-linecap="round" opacity=".75"/>`;
     if (h.ill === 'cold') s += '<path d="M2.6 14.6q2.8 4.6 0 6.6q-2.8-2 0-6.6z" fill="#a9d8f2"/>';
     if (h.ill === 'tummy') s += `<path d="M35 -27q4.5 6.5 0 9.4q-4.5-2.9 0-9.4z" fill="#a9d8f2" stroke="${C.ol}" stroke-width=".8"/>`;
@@ -465,6 +472,13 @@ function KockaArt() {
     },
     carried(R, o, e) { hang(R, o, e, false); },
     wriggle(R, o, e) { hang(R, o, e, true); },
+    // two cats together (see "two-cat poses")
+    sniff(R, o, e) { sniff(R, o, e); },
+    arch(R, o, e) { arch(R, o, e); },
+    lickOther(R, o, e) { lickOther(R, o, e); },
+    sideLie(R, o, e) { sideLie(R, o, e); },
+    swipe(R, o, e) { swipe(R, o, e); },
+    run(R, o, e) { run(R, o, e); },
   };
   /* ---------- gait: walk, trot, jumps (side view, facing left; flip the box with scaleX(-1) to go right) ---------- */
   // One leg: the upper part swings at the shoulder / hip (px, py), the lower part bends at the knee. Animated legs get
@@ -633,6 +647,122 @@ function KockaArt() {
     R.mid = [100, 120];
   }
 
+  /* ---------- two-cat poses (side views facing left; the other cat is a second box, flipped by the UI) ---------- */
+  const wide = (o, e) => (o.asleep || o.ill ? e.eyes : 'wide');
+  // standing still on four straight legs (sniff); the body, haunch and tail between the far and the near legs
+  function stand(R, o, tl) {
+    R.shadow = [116, 186, 58, 5];
+    leg(R, 106, 132, 25, 28, 12, { far: true });
+    leg(R, 149, 132, 23, 30, 13, { far: true });
+    R.open(btfY(o, 130));
+    R.part(ell(126, 130, 46, 20), { patches: spots([[124, 122, 13, 1], [152, 134, 9, 0], [102, 138, 8, 0]]) });
+    R.close();
+    R.part(ell(154, 132, 17, 19), { edge: true, patches: spots([[158, 140, 8, 0]]) });
+    tail(R, tl);
+    leg(R, 154, 136, 22, 30, 13, {});
+    leg(R, 100, 136, 24, 27, 12, {});
+    R.region('back', ellPoly(126, 130, 46, 20), [1, 0]);
+    R.mid = [126, 130];
+  }
+  // nose-to-nose greeting: standing, the neck stretched forward and a little down, the tail up
+  function sniff(R, o, e) {
+    stand(R, o, [170, 122, 184, 110, 186, 88, 194, 74]);
+    R.limb([98, 124, 84, 126, 70, 132, 58, 140], 25, {});
+    head(R, 42, 146, 0.8, -14, H(e, { eyes: o.asleep || o.ill || e.eyes === 'grumpy' ? e.eyes : 'open', ears: o.ears || 'up', mouth: 'cat', blush: false }));
+  }
+  // a standoff: the back arched high, legs straight, the fur on end (spiky outline), the tail puffed up, ears back;
+  // openMouth = hissing (fangs and hiss marks)
+  function arch(R, o, e) {
+    R.shadow = [116, 186, 56, 5];
+    R.fluff = 6;
+    const BODY = 'M64 132C60 90 88 62 120 62C152 62 174 90 170 130C169 140 158 142 154 132C150 112 138 100 120 100C102 100 90 112 82 134C79 142 66 142 64 132Z';
+    R.limb(line(88, 120, 90, 182), 12, { fill: C.fur2, paw: [8, 4.5] });
+    R.limb(line(148, 120, 150, 182), 13, { fill: C.fur2, paw: [8.5, 4.5] });
+    R.open(btfX(o, 118));
+    R.part(BODY, { patches: spots([[118, 74, 14, 1], [148, 92, 10, 0], [88, 92, 9, 0], [160, 120, 6, 1]]) });
+    R.part(ell(156, 124, 15, 19), { edge: true, patches: spots([[160, 130, 7, 0]]) });
+    R.close();
+    tail(R, [166, 104, 186, 92, 190, 66, 182, 42], 22);
+    R.limb(line(162, 126, 164, 182), 14, { edge: true, paw: [9, 4.5], toes: true });
+    R.limb(line(74, 126, 72, 182), 13, { edge: true, paw: [9, 4.5], toes: true });
+    const hiss = o.openMouth && !o.asleep;
+    head(R, 56, 112, 0.88, -6, H(e, { eyes: o.asleep || o.ill ? e.eyes : e.eyes === 'grumpy' ? 'grumpy' : 'wide', ears: o.ears || 'back', fangs: hiss, blush: false }));
+    if (hiss) R.top.push(outlined('M22 120l-9 -3M20 129h-10M22 138l-9 3', 2));
+    R.region('back', BODY, [1, 0]);
+    R.mid = [118, 96];
+  }
+  // sitting seen from the side (lickOther, swipe): an upright chest, the haunch behind, the tail round the front paws
+  function sitSide(R, o) {
+    const BODY = 'M70 124C66 100 82 86 102 90C130 96 156 124 160 156C163 178 156 186 138 186L92 186C78 186 72 178 72 160Z';
+    R.open(btfX(o, 116));
+    R.part(BODY, { patches: spots([[110, 106, 12, 1], [134, 140, 13, 0], [92, 150, 8, 0], [150, 168, 7, 1]]) });
+    R.part(ell(136, 162, 26, 22), { edge: true, patches: spots([[140, 156, 9, 0]]) });
+    R.close();
+    R.region('back', BODY, unit(1, 1.2));
+    R.mid = [116, 140];
+  }
+  // licking the other cat's head: sitting, the head stretched forward and a little down, eyes half closed, tongue out
+  function lickOther(R, o, e) {
+    R.shadow = [112, 186, 54, 5];
+    R.limb(line(96, 128, 98, 180), 13, { fill: C.fur2, paw: [9, 4.5] });
+    sitSide(R, o);
+    R.limb(line(82, 124, 80, 180), 14, { edge: true, paw: [9.5, 5], toes: true });
+    tail(R, [156, 180, 150, 194, 112, 195, 92, 188]);
+    R.limb([92, 104, 82, 96, 70, 90, 60, 86], 26, {});
+    head(R, 48, 82, 0.88, -18, H(e, { eyes: o.asleep ? 'closed' : o.mood === 'happy' ? 'happy' : 'tired', mouth: 'cat', tongue: 2, ears: o.ears || 'turned' }));
+  }
+  // play-fight: crouched on the haunches, one front paw raised high for a swipe, ears forward
+  function swipe(R, o, e) {
+    R.shadow = [112, 186, 54, 5];
+    R.limb(line(94, 128, 96, 180), 13, { fill: C.fur2, paw: [9, 4.5] });
+    sitSide(R, o);
+    tail(R, [158, 170, 176, 164, 186, 150, 196, 146], 13, 'kx-tw');
+    head(R, 84, 78, 0.88, 6, H(e, { eyes: o.asleep || o.ill ? e.eyes : e.eyes === 'grumpy' ? 'grumpy' : 'wide', ears: o.ears || 'up' }));
+    R.limb([80, 118, 54, 114, 34, 94, 28, 56], 13, { edge: true, paw: [9, 8.5], beans: true });
+    R.mid = [116, 140];
+  }
+  // lying on the side, relaxed: the back away from us, all four legs stretched to the front, the tail round them;
+  // with asleep it breathes and the Zzz rise above the head
+  function sideLie(R, o, e) {
+    R.wrap = { cls: 'kx-breathe', ox: 100, oy: 186 };
+    R.shadow = [112, 186, 74, 5];
+    const BODY = 'M48 168C46 146 82 134 120 134C158 134 186 146 186 166C186 180 170 186 140 186L76 186C58 186 48 182 48 168Z';
+    R.limb([94, 172, 84, 178, 72, 182, 60, 184], 11, { fill: C.fur2, paw: [8, 4.5] });
+    R.limb([156, 172, 146, 180, 134, 184, 122, 186], 12, { fill: C.fur2, paw: [8.5, 4.5] });
+    R.open(btfY(o, 186));
+    R.part(BODY, { patches: spots([[120, 146, 15, 1], [154, 156, 10, 0], [92, 152, 9, 0], [170, 172, 6, 1]]) });
+    R.part(ell(156, 164, 24, 19), { edge: true, patches: spots([[160, 158, 8, 0]]) });
+    R.close();
+    tail(R, [184, 170, 196, 182, 184, 194, 150, 193]);
+    R.limb([150, 176, 140, 184, 126, 189, 112, 190], 13, { edge: true, paw: [9, 5], toes: true });
+    R.limb([86, 174, 76, 182, 62, 187, 48, 188], 12, { edge: true, paw: [8.5, 5], toes: true });
+    head(R, 50, 154, 0.84, -24, H(e, { ears: o.ears || (o.asleep ? 'turned' : 'up'), blush: o.asleep ? false : e.blush }));
+    R.region('belly', ellPoly(118, 174, 46, 10), [1, 0]);
+    R.region('back', BODY, [1, 0]);
+    R.mid = [120, 160];
+    R.zz = [58, 102];
+  }
+  // a gallop (animated by CSS like walk and trot, step time --kx-step, .34 s by default): the front and the hind legs
+  // swing in pairs, the body rocks, the tail streams behind, ears turned back
+  function run(R, o, e) {
+    R.cls = 'kx-gait kx-run';
+    R.shadow = [116, 186, 62, 5];
+    leg(R, 92, 126, 25, 29, 12, { far: true, ph: 'kx-phC' });
+    leg(R, 146, 124, 24, 31, 13, { far: true, ph: 'kx-phE' });
+    R.open('', 'kx-rocker', 118, 124);
+    R.open(btfY(o, 122));
+    R.part(ell(118, 120, 58, 17), { patches: spots([[118, 112, 13, 1], [148, 124, 9, 0], [90, 126, 8, 0]]) });
+    R.close();
+    R.part(ell(152, 124, 17, 18), { edge: true, patches: spots([[156, 130, 8, 0]]) });
+    tail(R, [170, 114, 184, 110, 194, 104, 199, 92]);
+    R.close();
+    leg(R, 154, 128, 23, 31, 13, { ph: 'kx-phD' });
+    leg(R, 86, 128, 25, 29, 12, { ph: 'kx-phA' });
+    head(R, 54, 108, 0.84, 2, H(e, { eyes: wide(o, e), ears: o.ears || 'turned', blush: false }));
+    R.region('back', ellPoly(118, 120, 58, 17), [1, 0]);
+    R.mid = [118, 120];
+  }
+
   /* ---------- the cat ---------- */
   function opts(x) {
     const o = typeof x === 'string' ? { mood: x } : Object.assign({}, x);
@@ -656,7 +786,7 @@ function KockaArt() {
   function cat(pose, x) {
     const o = opts(x), { R, pose: p } = build(pose, o);
     if (o.asleep) {
-      const [mx] = R.mid || [100, 140], curl = p === 'sleep' || p === 'lapCurl', zx = curl ? 92 : mx - 6, zy = curl ? 112 : 40;
+      const [mx] = R.mid || [100, 140], curl = p === 'sleep' || p === 'lapCurl', [zx, zy] = R.zz || (curl ? [92, 112] : [mx - 6, 40]);
       R.top.push([[0, 0, 1, 0], [10, -12, 1.25, 1], [22, -26, 1.5, 2]].map(([dx, dy, k, d]) =>
         `<g class="kx-z" style="animation-delay:${d}s">${outlined(`M${zx + dx} ${zy + dy}h${7 * k}l${-7 * k} ${8 * k}h${7 * k}`, 2.2)}</g>`).join(''));
     }
@@ -674,9 +804,10 @@ function KockaArt() {
       olF = ` filter="url(#${f})"`; fiF = ` filter="url(#${g})"`;
       R.top.push(`<g class="kx-drip">${[[-30, 24, 0], [6, 30, 0.6], [34, 22, 1.1]].map(([dx, dy, d]) => `<path d="M${mx + dx} ${my + dy}q2.6 4.4 0 6.4q-2.6-2 0-6.4z" fill="#a9d8f2" stroke="#2e2118" stroke-width=".8" style="animation-delay:${d}s"/>`).join('')}</g>`);
     }
-    if (COAT.fluff && !o.wet) {
+    const fluff = Math.max(COAT.fluff || 0, R.fluff || 0);   // a shaggy coat, or the fur on end (arch)
+    if (fluff && !o.wet) {
       const f = nid();
-      R.defs.push(`<filter id="${f}" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="1" seed="7"/><feDisplacementMap in="SourceGraphic" scale="${COAT.fluff}" xChannelSelector="R" yChannelSelector="G"/></filter>`);
+      R.defs.push(`<filter id="${f}" x="-10%" y="-10%" width="120%" height="120%"><feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="1" seed="7"/><feDisplacementMap in="SourceGraphic" scale="${fluff}" xChannelSelector="R" yChannelSelector="G"/></filter>`);
       olF = ` filter="url(#${f})"`;
     }
     let inner = `<g${olF}>${R.ol.join('')}</g><g${fiF}>${R.fi.join('')}</g>${R.top.join('')}`;
@@ -1320,7 +1451,7 @@ function KockaArt() {
     return withCoat(nb, () => cat(pose, x)).replace('class="koxa ', `class="koxa kx-nb kx-nb-${NEIGHBOURS[id] ? id : 'mourek'} `);
   }
   const neighbours = {};
-  for (const k of Object.keys(NEIGHBOURS)) neighbours[k] = { name: NEIGHBOURS[k].name };
+  for (const k of Object.keys(NEIGHBOURS)) neighbours[k] = { name: NEIGHBOURS[k].name, size: NEIGHBOURS[k].size || 1 };
 
   /* ---------- motion ---------- */
   const css = `
@@ -1346,6 +1477,12 @@ function KockaArt() {
 .kx-trot .kx-knee{animation:kx-bend2 var(--kx-step,.42s) linear infinite}
 .kx-trot .kx-phB{animation-delay:calc(var(--kx-step,.42s) * -.5)}
 .kx-trot .kx-bobber{animation:kx-bob2 calc(var(--kx-step,.42s) / 2) ease-in-out infinite alternate}
+.kx-run .kx-leg{animation:kx-stride3 var(--kx-step,.34s) linear infinite}
+.kx-run .kx-knee{animation:kx-bend3 var(--kx-step,.34s) linear infinite}
+.kx-run .kx-phC{animation-delay:calc(var(--kx-step,.34s) * -.1)}
+.kx-run .kx-phD{animation-delay:calc(var(--kx-step,.34s) * -.5)}
+.kx-run .kx-phE{animation-delay:calc(var(--kx-step,.34s) * -.6)}
+.kx-run .kx-rocker{animation:kx-rock var(--kx-step,.34s) ease-in-out infinite}
 .koxa .kx-tail.kx-tw{animation:kx-tw .32s ease-in-out infinite}
 .kx-shakep{animation:kx-shakep .28s ease-in-out infinite}
 .kx-flick{animation:kx-flick .5s steps(2) infinite}
@@ -1376,6 +1513,9 @@ function KockaArt() {
 @keyframes kx-bend{0%,58%{transform:rotate(0deg)}75%{transform:rotate(-50deg)}95%,100%{transform:rotate(0deg)}}
 @keyframes kx-stride2{0%{transform:rotate(28deg)}50%{transform:rotate(-28deg)}70%{transform:rotate(0deg)}100%{transform:rotate(28deg)}}
 @keyframes kx-bend2{0%,48%{transform:rotate(0deg)}65%{transform:rotate(-70deg)}95%,100%{transform:rotate(0deg)}}
+@keyframes kx-stride3{0%{transform:rotate(42deg)}45%{transform:rotate(-36deg)}65%{transform:rotate(0deg)}100%{transform:rotate(42deg)}}
+@keyframes kx-bend3{0%,42%{transform:rotate(0deg)}60%{transform:rotate(-85deg)}90%,100%{transform:rotate(0deg)}}
+@keyframes kx-rock{0%,100%{transform:rotate(3deg)}50%{transform:rotate(-3deg) translate(0,-3px)}}
 @keyframes kx-spin{0%,100%{transform:scaleX(1)}25%{transform:scaleX(.12)}50%{transform:scaleX(-1)}75%{transform:scaleX(.12)}}
 @keyframes kx-tw{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(4deg)}}
 @keyframes kx-shakep{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(10deg)}}

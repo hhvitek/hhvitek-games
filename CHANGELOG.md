@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Kočka: kočky od sousedů na zahradě ožily – chodí, pijí z jezírka, spí na lavičce a lezou na strom. Když je Koxa venku, očichají se s ní, honí se, hravě se pošťuchují, myjí si kožíšky nebo spolu podřimují; Koxa si s nimi buduje vlastní kamarádství (v Deníčku má každá kočka srdíčka tvoje i její).
+
 ## 1.0.17 – 2026-11-13
 
 - Výběr her: u Paprsku, Šipek ven, Cesty ven a Malovaných křížovek je vidět, kde jsi (např. „Úroveň 12“ nebo „Vyřešeno 8 z 36“).

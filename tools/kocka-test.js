@@ -63,6 +63,9 @@ function randomRun(seed, days) {
   const pick = a => a[Math.floor(r() * a.length)];
   const t0 = at(2026, 1 + Math.floor(r() * 12), 1 + Math.floor(r() * 28), Math.floor(r() * 24));
   const st = E.create(seed, t0, 'Koxa');
+  // neighbour cats she already knows (Koxa's own hearts: a friend, a hissing Bivoj) and the visitors' bowl: more visits, joint acts
+  st.visitors = { sedivka: { friend: 2, pal: 3, met: t0, visits: 2, fed: 0 }, bivoj: { friend: 4, pal: 0, met: t0, visits: 1, fed: 0 }, ciperka: { friend: 0, pal: 1, met: 0, visits: 1, fed: 0 } };
+  st.owned.visitorBowl = true; st.furniture.visitorBowl = { room: 'garden', x: 0.5, y: 0.8 };
   let t = t0, events = [];
   const ARGS = {
     feed: () => pick(['kibble', 'pouch', 'chicken', 'tuna', null, 'stone', 42]),
@@ -71,6 +74,8 @@ function randomRun(seed, days) {
     play: () => pick(Object.keys(E.TOYS).concat('stone', null)),
     vetCure: () => ({ won: r() < 0.5 }),
     putDown: () => pick(['window', 'bed', null, 'x'.repeat(50)]),
+    feedVisitor: () => ({ id: st.visit && r() < 0.7 ? st.visit.id : pick(['mourek', 'bivoj', 'sedivka', 'tom', null]) }),
+    strokeVisitor: () => ({ id: st.visit && r() < 0.7 ? st.visit.id : pick(['mourek', 'bivoj', 'sedivka', 'tom', null]) }),
   };
   const acts = E.ACTIONS.concat(['bogus', '', null]);
   let lvl = 0;
@@ -342,7 +347,7 @@ function discover(seed) {
     if (fresh) continue;
     const st = discover(seed); tested++;
     const list = E.diary(st);
-    const missing = list.filter(e => !e.found).map(e => e.id);
+    const missing = list.filter(e => !e.found && !e.id.startsWith('pal')).map(e => e.id);   // pal*: neighbour cats, see 'Visitors 2'
     ok(missing.length === 0, `seed ${seed} (${T.favFood}, ${T.spots}, ${T.fear}, ${T.quirk}, ${T.toy}): all found, missing ${missing.join(', ')}`);
     ok(list.every(e => typeof e.text === 'string' && e.text.length > 3 && !/undefined|NaN/.test(e.text)), `seed ${seed}: entry texts`);
     if (!missing.length) { seen.favFood.add(T.favFood); seen.fear.add(T.fear); seen.quirk.add(T.quirk); seen.toy.add(T.toy); T.spots.forEach(s => seen.spot.add(s)); }
@@ -351,7 +356,7 @@ function discover(seed) {
   ok(full(), `every trait value reached (${tested} cats)`);
   const st = E.create(1, at(2026, 11, 12, 15), 'Koxa');
   const d = E.diary(st, 'Micka');
-  ok(d.length === 10 && d.find(e => e.id === 'birthday').found && d.find(e => e.id === 'birthday').text === 'Micka k nám přišla 12. 11. 2026.', 'the list: 10 entries, the name from the argument, the birthday found at once');
+  ok(d.length === 13 && d.find(e => e.id === 'birthday').found && d.find(e => e.id === 'birthday').text === 'Micka k nám přišla 12. 11. 2026.', 'the list: 13 entries, the name from the argument, the birthday found at once');
   ok(E.diary(st).find(e => e.id === 'birthday').text.startsWith('Koxa'), 'the stored name without an argument');
 }
 
@@ -1224,8 +1229,15 @@ section('Visitors');
   const base = E.moodValue(E.create(62, t0, 'Koxa'));
   ok(E.moodValue(with_('bivoj')) === base - 10 && E.moodValue(with_('bivoj', 3)) === base + 5, 'Bivoj: she hisses (mood −10) until 3 hearts, then they are friends (+5)');
   ok(E.moodValue(with_('rambo', 1)) === base - 10 && E.moodValue(with_('rambo', 2)) === base, 'Rambo: hissing until 2 hearts');
-  const ci = with_('ciperka'); ci.needs.fun = 20; E.advance(ci, t0 + 30 * MIN);
-  ok(ci.needs.fun > 20 && E.moodValue(with_('ciperka')) === base + 5, 'Čiperka: they play (fun rises, mood +5)');
+  // Phase A: they play only together in the garden (chase, wrestle), no longer through the window
+  let more = 0, less = 0;
+  for (let s = 1; s <= 20; s++) {
+    const mk = vis => { const x = E.create(s, t0, 'Koxa'); x.needs.fun = 20; x.yard = { since: t0, snow: false, tree: null }; if (vis) x.visit = { id: 'ciperka', since: t0, until: t0 + 2 * H, gain: 0 }; return x; };
+    const a = mk(true), b = mk(false);
+    for (let k = 1; k <= 9; k++) { E.advance(a, t0 + k * 10 * MIN); E.advance(b, t0 + k * 10 * MIN); }
+    if (a.needs.fun > b.needs.fun + 1e-9) more++; else if (a.needs.fun < b.needs.fun - 1e-9) less++;
+  }
+  ok(more >= 14 && less === 0 && E.moodValue(with_('ciperka')) === base + 5, `Čiperka: they play in the garden (more fun in ${more}/20, less in ${less}), mood +5 while she only watches`);
   ok(E.moodValue(with_('mourek')) === base, 'Mourek: she just watches');
   // feeding and stroking
   const p = with_('pacicka');
@@ -1268,12 +1280,231 @@ section('Album');
   ok(E.act(st, 'deletePhoto', { t: 1 }, st.t).events[0].type === 'refused', 'deleting a photo that is not there: refused');
   const o = friend(E.create(71, t0, 'Koxa')); E.act(o, 'letOut', null, t0);
   ok(E.act(o, 'photo', {}, t0).events[0].type === 'refused', 'no photo while she is out');
-  st.postcards = [{ id: E.postcardAt(st.seed, 0), t: t0 }]; st.visitors = { liza: { friend: 2.5, met: t0, visits: 3, fed: 0 }, rambo: { friend: 0, met: 0, visits: 1, fed: 0 } };
+  st.postcards = [{ id: E.postcardAt(st.seed, 0), t: t0 }]; st.visitors = { liza: { friend: 2.5, pal: 1, met: t0, visits: 3, fed: 0 }, rambo: { friend: 0, pal: 0, met: 0, visits: 1, fed: 0 } };
   const al = E.album(st);
-  ok(al.photos.length === 200 && al.photos[0].t > al.photos[199].t && al.postcards.length === 1 && al.visitors.length === 1 && al.visitors[0].name === 'Líza' && al.visitors[0].hearts === 2, 'album(st): photos newest first, postcards, only the cats met');
+  ok(al.photos.length === 200 && al.photos[0].t > al.photos[199].t && al.postcards.length === 1 && al.visitors.length === 1 && al.visitors[0].name === 'Líza' && al.visitors[0].hearts === 2 && al.visitors[0].pal === 1, 'album(st): photos newest first, postcards, only the cats met');
   const g = clone(st); g.album = [null, { t: 'x' }, { t: t0, room: 'moon', mood: 'ecstatic', pose: 5 }].concat(Array(300).fill({ t: t0 }));
   E.repair(g); ok(g.album.length === 200 && g.album[0].room === 'living' && g.album[0].mood === 'calm' && g.album[0].pose === 'sit', 'repair: broken photos fixed or dropped, at most 200');
   const c = clone(st); E.repair(c); ok(JSON.stringify(c) === JSON.stringify(st), 'an album state is canonical');
+}
+
+/* ---------- 21. Phase A: Koxa and the visiting cat do things together ---------- */
+section('Visitors 2');
+{
+  const ACTS = Object.keys(E.VISIT_ACTS), JOINT = ACTS.filter(k => E.VISIT_ACTS[k].joint);
+  const rec = (friend, pal) => ({ friend, pal, met: 0, visits: 1, fed: 0 });
+  // a visit forced at 10:00 with Koxa in the garden, watched in 10-minute steps; a rainy day is moved on (rain ends visits)
+  function gardenVisit(st, id, t, minutes, each) {
+    while (E.weather(t, st) === 'rain') t += D;
+    E.advance(st, t); basicCare(st, t); st.needs.energy = 90;
+    st.yard = { since: t, snow: false, tree: null };
+    st.visit = { id, since: t, until: t + minutes * MIN, gain: 0, palGain: 0, greeted: false, act: { kind: 'arrive', since: t, with: null } };
+    const acts = [], events = [], pal0 = st.visitors[id] ? st.visitors[id].pal : 0, love0 = st.needs.love;
+    for (let k = 1; k * 10 < minutes && st.visit; k++) {
+      const ev = E.advance(st, t + k * 10 * MIN).events;
+      for (const e of ev) { events.push(e); if (e.type === 'visitAct') acts.push(e); }
+      if (each) each(st, t + k * 10 * MIN);
+    }
+    if (st.yard) E.act(st, 'goHouse', null, st.t);
+    return { acts, events, pal0, love0, t };
+  }
+  // the programme is seeded: a save and reload in the middle of a visit changes nothing, and another seed gives other acts
+  const run = (seed, reloadAfter) => {
+    const st = E.create(seed, at(2026, 6, 10, 9), 'Koxa'); st.visitors.ciperka = rec(1, 1);
+    let k = 0;
+    const r = gardenVisit(st, 'ciperka', at(2026, 6, 10, 10), 90, s => {
+      if (++k !== reloadAfter) return;
+      const c = clone(s); E.repair(c); Object.keys(s).forEach(key => delete s[key]); Object.assign(s, c);   // the saved state, read again
+    });
+    return JSON.stringify([st, r.acts]);
+  };
+  ok(run(80) === run(80, 3) && run(80) === run(80, 5), 'a save and reload in the middle of a visit: the same acts and the same state');
+  ok([81, 82, 83, 84].some(s => JSON.parse(run(s))[1].map(a => a.kind).join() !== JSON.parse(run(80))[1].map(a => a.kind).join()), 'another seed: other acts');
+  ok(JSON.parse(run(80))[1].length >= 3, 'a visit in the garden has a programme of several acts');
+  { // the programme draws nothing from st.n and changes no needs while Koxa is not with the visitor (indoors)
+    const indoor = (id, kind, pal) => {
+      const t = at(2026, 6, 10, 10), st = E.create(81, t - H, 'Koxa'); E.advance(st, t); basicCare(st, t); st.visitors[id] = rec(pal, pal);
+      const n0 = st.n;
+      st.visit = { id, since: t, until: t + 80 * MIN, gain: 0, palGain: 0, greeted: false, act: { kind, since: t, with: null } };
+      const acts = [];
+      for (let k = 1; k <= 6; k++) E.advance(st, t + k * 10 * MIN).events.forEach(e => { if (e.type === 'visitAct') acts.push(e.kind); });
+      return { n: st.n - n0, needs: JSON.stringify(st.needs), acts: acts.join() };
+    };
+    const a = indoor('mourek', 'arrive', 0), b = indoor('fousek', 'nap', 3);
+    ok(a.acts !== b.acts && a.n === b.n && a.needs === b.needs, `indoors: other acts (${a.acts} / ${b.acts}), the same random draws (${a.n}) and needs`);
+    // in the garden: the joint acts change her needs, never the random sequence
+    const garden = (id, pal) => { const st = E.create(81, at(2026, 6, 10, 9), 'Koxa'); st.visitors[id] = rec(pal, pal); const n0 = st.n; const r = gardenVisit(st, id, at(2026, 6, 10, 10), 60); return { n: st.n - n0, acts: r.acts.map(a => a.kind).join() }; };
+    const g = garden('ciperka', 1), h = garden('mourek', 0);
+    ok(g.acts !== h.acts && g.n === h.n, `in the garden: other acts (${g.acts} / ${h.acts}), the same random draws (${g.n})`);
+  }
+  // the step does not matter: 10-minute steps, 30 s steps and stroking her every 200 ms give the same acts
+  function stepped(seed, id, pal, ms, stroke) {
+    const st = E.create(seed, at(2026, 6, 10, 9), 'Koxa'); st.visitors[id] = rec(pal, pal);
+    let t = at(2026, 6, 10, 10); while (E.weather(t, st) === 'rain') t += D;
+    E.advance(st, t); basicCare(st, t); st.needs.energy = 90; st.yard = { since: t, snow: false, tree: null };
+    st.visit = { id, since: t, until: t + 60 * MIN, gain: 0, palGain: 0, greeted: false, act: { kind: 'arrive', since: t, with: null } };
+    const acts = [], when = [];
+    let tree = false;
+    for (let x = t + ms; st.visit; x += ms) {
+      const ev = stroke ? E.act(st, 'stroke', { region: 'back', speed: 500 }, x).events : E.advance(st, x).events;
+      for (const e of ev) { if (e.type === 'visitAct') { acts.push(e.kind + (e.with ? '+' : '')); when.push(x); } if (e.type === 'climbStuck') tree = true; }
+    }
+    return { acts, when, tree };
+  }
+  let same = 0, cmp = 0, gapBad = 0, perSec = 0;
+  for (const [seed, id, pal] of [[1, 'ciperka', 1], [2, 'sedivka', 3], [3, 'mourek', 3], [4, 'bivoj', 0], [5, 'fousek', 4], [6, 'ciperka', 3], [7, 'rambo', 1], [8, 'liza', 3], [9, 'pacicka', 3], [10, 'bivoj', 4], [11, 'ciperka', 0], [12, 'sedivka', 4], [13, 'mourek', 1], [14, 'fousek', 3]]) {
+    const a = stepped(seed, id, pal, 10 * MIN), b = stepped(seed, id, pal, 30000), c = stepped(seed, id, pal, 200, true);
+    if (a.tree || b.tree || c.tree) continue;   // up the tree at another moment: the garden's own randomness, not the programme
+    cmp++;
+    if (a.acts.join() === b.acts.join() && b.acts.join() === c.acts.join()) same++;
+    else console.log(`    ${seed} ${id}: ${a.acts.join()} | ${b.acts.join()} | ${c.acts.join()}`);
+    // stroking every 200 ms: never two acts in a second, and after the greeting every act lasts at least its minimum
+    for (let i = 1; i < c.when.length; i++) {
+      if (c.when[i] - c.when[i - 1] < 1000) perSec++;
+      const prev = c.acts[i - 1].replace('+', '');
+      if (c.acts.slice(0, i).some(k => k.endsWith('+')) && c.when[i] - c.when[i - 1] < E.VISIT_ACTS[prev].min * MIN - 200) gapBad++;
+    }
+  }
+  ok(cmp >= 8 && same === cmp, `10 min, 30 s and 200 ms steps give the same acts (${same}/${cmp})`);
+  ok(perSec === 0 && gapBad === 0, `stroking every 200 ms: never two acts in a second (${perSec}), every act lasts its minimum (${gapBad} shorter)`);
+  { // a visit that comes by itself, watched: 'visitor' then visitAct 'arrive' on the fence; visitAct only while watching
+    const st = E.create(94, at(2026, 6, 1, 9), 'Koxa'); let arrivals = 0, arriveOk = 0, actsAway = 0;
+    for (let t = st.t + 30 * MIN; t <= at(2026, 6, 15, 9); t += 30 * MIN) {
+      const ev = E.advance(st, t).events;
+      ev.forEach((e, i) => { if (e.type === 'visitor') { arrivals++; const n = ev[i + 1]; if (n && n.type === 'visitAct' && n.kind === 'arrive' && n.with === null && n.id === e.id) arriveOk++; } });
+      if (new Date(t).getHours() === 20 && new Date(t).getMinutes() === 0) basicCare(st, t);
+    }
+    const away = E.create(94, at(2026, 6, 1, 9), 'Koxa');
+    for (let t = away.t + 5 * H; t <= at(2026, 6, 15, 9); t += 5 * H) actsAway += E.advance(away, t).events.filter(e => e.type === 'visitAct').length;
+    ok(arrivals > 5 && arriveOk === arrivals && actsAway === 0, `arrival: visitor + visitAct arrive (${arriveOk}/${arrivals}); none while nobody watches (${actsAway})`);
+  }
+  // the first joint act is greet, or standoff for a hissing pair; standoff only Bivoj < 3 hearts and Rambo < 2;
+  // groom and snuggle only from 3 hearts; at most +½ heart a visit
+  let firstOk = 0, firstN = 0, badStand = 0, badGroom = 0, badGain = 0, stand = 0, groom = 0, snug = 0, chase = 0, seen = new Set();
+  for (let s = 1; s <= 12; s++) for (const id of Object.keys(E.VISITORS)) for (const p of [0, 1, 2, 3, 4.5]) {
+    const st = E.create(s, at(2026, 6, 1 + s, 9), 'Koxa'); st.visitors[id] = rec(p, p);
+    const r = gardenVisit(st, id, at(2026, 6, 1 + s, 10), 90);
+    const joint = r.acts.filter(a => a.with === 'koxa');
+    r.acts.forEach(a => seen.add(a.kind));
+    const hissing = (id === 'bivoj' && p < 3) || (id === 'rambo' && p < 2);
+    if (joint.length) { firstN++; if (joint[0].kind === (hissing ? 'standoff' : 'greet')) firstOk++; }
+    for (const a of joint) {
+      if (a.kind === 'standoff') { stand++; if (!hissing) badStand++; }
+      if (a.kind === 'groom' || a.kind === 'snuggle') { a.kind === 'groom' ? groom++ : snug++; if (p < 3) badGroom++; }
+      if (a.kind === 'chase' || a.kind === 'wrestle') chase++;
+      if (a.id !== id || !E.VISIT_ACTS[a.kind].joint) badStand++;
+    }
+    if (hissing && joint.length > 1) badStand++;   // after a standoff they keep apart for the rest of the visit
+    if (st.visitors[id].pal - r.pal0 > 0.5 + 1e-9 || st.visitors[id].pal < r.pal0) badGain++;
+  }
+  console.log(`  ${firstN} visits with joint acts: ${stand} standoffs, ${chase} chases/wrestles, ${groom} groomings, ${snug} snuggles`);
+  ok(firstN > 300 && firstOk === firstN, `the first joint act is greet (standoff for a hissing pair): ${firstOk}/${firstN}`);
+  ok(badStand === 0 && stand > 10, 'standoff only Bivoj < 3 hearts and Rambo < 2, once a visit, then they keep apart');
+  ok(badGroom === 0 && groom > 10 && snug > 10 && chase > 20, 'groom and snuggle only from 3 hearts');
+  ok(badGain === 0, 'Koxa gains at most ½ heart a visit and never loses one');
+  ok(ACTS.every(k => seen.has(k) || k === 'bowl' || k === 'arrive'), `every act occurs (missing: ${ACTS.filter(k => !seen.has(k)).join(', ')})`);
+  const bw = E.create(82, at(2026, 6, 10, 9), 'Koxa'); bw.owned.visitorBowl = true; bw.furniture.visitorBowl = { room: 'garden', x: 0.5, y: 0.8 };
+  let bowl = 0; for (let d = 0; d < 6; d++) bowl += gardenVisit(bw, 'pacicka', at(2026, 6, 10 + d, 10), 90).acts.filter(a => a.kind === 'bowl').length;
+  ok(bowl > 0, `greedy Pacička goes to the miska pro návštěvy (${bowl}×)`);
+  const wi = E.create(83, at(2027, 1, 10, 9), 'Koxa'); let drinkW = 0;
+  for (let d = 0; d < 8; d++) drinkW += gardenVisit(wi, 'mourek', at(2027, 1, 10 + d, 10), 90).acts.filter(a => a.kind === 'drink').length;
+  ok(drinkW === 0, 'no drinking from the frozen pond in winter');
+  // Šedivka (old, she) every day: Koxa's hearts grow to 3+, the diary entries appear with her name
+  const fr = E.create(84, at(2026, 6, 1, 9), 'Koxa'); const ups = [];
+  let day = at(2026, 6, 1, 10);
+  for (let d = 0; d < 40 && !(fr.diary.palGroom && fr.diary.palSnuggle); d++) {
+    const r = gardenVisit(fr, 'sedivka', day, 90); day = r.t + D;
+    r.events.forEach(e => { if (e.type === 'palUp') ups.push(e.pal); });
+    invariants(fr, `Šedivka day ${d}`);
+  }
+  ok(fr.visitors.sedivka.pal >= 3 && ups.join() === '1,2,3' + (fr.visitors.sedivka.pal >= 4 ? ',4' : '') + (fr.visitors.sedivka.pal >= 5 ? ',5' : ''), `pal grows over the visits (${fr.visitors.sedivka.pal}, palUp ${ups.join(',')})`);
+  ok(fr.visitors.sedivka.friend === 0, "Koxa's hearts are her own: the player's stay 0");
+  const dl = E.diary(fr), txt = id => dl.find(e => e.id === id).text;
+  ok(fr.diaryCat.palFirst === 'sedivka' && txt('palFirst') === 'Koxa má první kamarádku: Šedivka.', `palFirst: "${txt('palFirst')}"`);
+  ok(txt('palGroom') === 'Koxa a Šedivka si poprvé navzájem umyly kožíšky.' && txt('palSnuggle') === 'Koxa a Šedivka si poprvé zdřímly schoulené u sebe.', `palGroom / palSnuggle: "${txt('palGroom')}" / "${txt('palSnuggle')}"`);
+  const mo = clone(fr); mo.diaryCat = { palFirst: 'mourek', palGroom: 'bivoj', palSnuggle: 'fousek' }; E.repair(mo);
+  ok(E.diary(mo, 'Micka').find(e => e.id === 'palFirst').text === 'Micka má prvního kamaráda: Mourek.' && E.diary(mo).find(e => e.id === 'palSnuggle').text === 'Koxa a Fousek si poprvé zdřímli schoulení u sebe.' && E.diary(mo).find(e => e.id === 'palGroom').text === 'Koxa a Bivoj si poprvé navzájem umyli kožíšky.', 'he: kamaráda, zdřímli schoulení, umyli');
+  const fresh = E.diary(E.create(85, at(2026, 6, 1), 'Koxa')).filter(e => e.id.startsWith('pal'));
+  ok(fresh.length === 3 && fresh.every(e => !e.found && e.text.length > 10), 'not found yet: a hint');
+  // Bivoj: Koxa hisses, but when the player befriends him in the garden she gets used to him
+  const bv = E.create(86, at(2026, 6, 1, 9), 'Koxa'); let bday = at(2026, 6, 1, 10), standoffs = 0, greets = 0;
+  for (let d = 0; d < 12; d++) {
+    const r = gardenVisit(bv, 'bivoj', bday, 60, (s, t) => { if (s.visit) E.act(s, 'strokeVisitor', { id: 'bivoj' }, t); }); bday = r.t + D;
+    standoffs += r.acts.filter(a => a.kind === 'standoff').length; greets += r.acts.filter(a => a.kind === 'greet').length;
+  }
+  ok(standoffs > 0 && bv.visitors.bivoj.pal >= 3 && greets > 0, `Bivoj: standoffs (${standoffs}) until Koxa has 3 hearts (${bv.visitors.bivoj.pal}), then greetings (${greets})`);
+  // a standoff is mild: a little love and mood, nothing more
+  const so = E.create(87, at(2026, 6, 10, 9), 'Koxa'); let low = 100, mvLow = 100;
+  const sr = gardenVisit(so, 'rambo', at(2026, 6, 10, 10), 60, s => { low = Math.min(low, s.needs.love); mvLow = Math.min(mvLow, E.moodValue(s)); });
+  const love0 = sr.love0;   // before the visit, so the first 10 minutes count too
+  ok(sr.acts.some(a => a.kind === 'standoff') && love0 - low <= 6 && mvLow > 30, `a standoff with Rambo: love −${Math.round((love0 - low) * 10) / 10} at most, mood ${mvLow} at worst`);
+  // an old save: Koxa takes over the player's hearts; the reaction is Koxa's own now
+  const old = E.create(88, at(2026, 6, 10, 10), 'Koxa'); old.visitors = { bivoj: { friend: 3.5, met: old.t, visits: 4, fed: 0 }, rambo: { friend: 1, met: old.t, visits: 2, fed: 0 } };
+  old.visit = { id: 'bivoj', since: old.t, until: old.t + H, gain: 0.5 };
+  E.repair(old);
+  ok(old.visitors.bivoj.pal === 3.5 && old.visitors.rambo.pal === 1 && old.visit.act.kind === 'wander' && old.visit.act.with === null && old.visit.palGain === 0 && old.visit.greeted === false, 'a save without pal: pal = friend, the visit gets a solo act');
+  { // an old save with the player's 5 hearts (= Koxa's): the first friend is found, and before grooming or snuggling
+    let found = 0, order = 0, n = 0;
+    for (let seed = 1; seed <= 8; seed++) {
+      const os = E.create(seed, at(2026, 6, 10, 9), 'Koxa'); os.visitors = { sedivka: { friend: 5, met: os.t, visits: 6, fed: 0 } }; E.repair(os);
+      gardenVisit(os, 'sedivka', at(2026, 6, 10, 10), 90);
+      if (!Object.keys(os.diary).some(k => k.startsWith('pal'))) continue;
+      n++; if (os.diary.palFirst && os.diaryCat.palFirst === 'sedivka') found++;
+      if (['palGroom', 'palSnuggle'].every(k => !os.diary[k] || os.diary[k] >= os.diary.palFirst)) order++;
+    }
+    ok(n >= 4 && found === n && order === n, `old save, 5 hearts: palFirst found (${found}/${n}), never after palGroom / palSnuggle (${order}/${n})`);
+  }
+  const vb = E.create(89, at(2026, 6, 10, 10), 'Koxa'); vb.visitors.bivoj = rec(5, 0); vb.visit = { id: 'bivoj', since: vb.t, until: vb.t + H, gain: 0, palGain: 0, greeted: false, act: { kind: 'arrive', since: vb.t, with: null } };
+  const base = E.moodValue(E.create(89, at(2026, 6, 10, 10), 'Koxa'));
+  ok(E.moodValue(vb) === base - 10, "Bivoj, the player's best friend: Koxa still hisses (pal 0)");
+  vb.visit.act = { kind: 'greet', since: vb.t, with: 'koxa' }; vb.visitors.mourek = rec(0, 3);
+  ok(E.moodValue(vb) === base + 5, 'mood from the joint act (greet +5) instead of the reaction');
+  const al = E.album(Object.assign(clone(vb), { visitors: { liza: { friend: 1.5, pal: 3.75, met: vb.t, visits: 2, fed: 0 } } }));
+  ok(al.visitors[0].hearts === 1 && al.visitors[0].pal === 3, 'album: hearts (player) and pal (Koxa), whole hearts');
+  // garbage: repaired, canonical
+  const g = clone(fr); g.visitors.sedivka.pal = 'x'; g.visitors.mourek = { friend: 2, pal: 9 }; g.visitors.liza = { friend: 1, pal: 1.3 };
+  g.visit = { id: 'mourek', since: g.t - 10 * MIN, until: g.t + H, gain: 0, palGain: 7, greeted: 'yes', act: { kind: 'dance', since: 'y', with: 'x' } };
+  E.repair(g);
+  ok(g.visitors.sedivka.pal === g.visitors.sedivka.friend && g.visitors.mourek.pal === 5 && g.visitors.liza.pal === 1.25, 'pal: a number 0–5 in quarters, else the player\'s hearts');
+  ok(g.visit.palGain === 0.5 && g.visit.greeted === false && g.visit.act.kind === 'wander' && g.visit.act.with === null && g.visit.act.since === g.visit.since, 'a broken act: wander alone from the start of the visit');
+  invariants(g, 'garbage visit');
+  for (const bad of [{ kind: 'chase', with: null }, { kind: 'nap', with: 'koxa' }, { kind: 'greet', with: 'koxa', since: g.t + H }, null, 'greet', { kind: '__proto__', with: null }]) {
+    const b = clone(g); b.visit.act = bad; E.repair(b); const A = b.visit.act;
+    ok((A.with === 'koxa') === E.VISIT_ACTS[A.kind].joint && A.since >= b.visit.since && A.since <= b.t && (A.kind === 'wander' || (bad && bad.kind === A.kind)), `act ${JSON.stringify(bad)} repaired to ${JSON.stringify(A)}`);
+    invariants(b, `act ${JSON.stringify(bad)}`);
+  }
+  const dc = clone(fr); dc.diaryCat = { palSnuggle: 'tom', palFirst: 'liza', extra: 'mourek', palGroom: 'sedivka' }; delete dc.diary.palGroom; E.repair(dc);
+  ok(JSON.stringify(dc.diaryCat) === '{"palFirst":"liza","palSnuggle":"sedivka"}' || JSON.stringify(dc.diaryCat) === '{"palFirst":"liza"}', `diaryCat: known cats of found entries only (${JSON.stringify(dc.diaryCat)})`);
+  invariants(dc, 'diaryCat garbage');
+  // the clock moved back in the middle of a visit: every time moves along
+  const cb = E.create(90, at(2026, 6, 10, 10), 'Koxa'); cb.yard = { since: cb.t, snow: false, tree: null };
+  cb.visit = { id: 'ciperka', since: cb.t, until: cb.t + 90 * MIN, gain: 0, palGain: 0, greeted: false, act: { kind: 'arrive', since: cb.t, with: null } };
+  for (let k = 1; k <= 3; k++) E.advance(cb, cb.t + 10 * MIN);
+  const ab = cb.visit.act.since - cb.visit.since; E.advance(cb, cb.t - 2 * H);
+  ok(cb.visit && cb.visit.act.since - cb.visit.since === ab && cb.visit.act.since <= cb.t, 'clock back: the act moves with the visit');
+  invariants(cb, 'clock back in a visit');
+  // 30 days with the garden twice a day: joint acts only while Koxa is in the garden (never indoors, out or up the tree)
+  let bad = 0, joint = 0, checks = 0;
+  for (const seed of [91, 92, 93]) {
+    const st = E.create(seed, at(2026, 5, 1, 7), 'Koxa'); st.owned.visitorBowl = true; st.furniture.visitorBowl = { room: 'garden', x: 0.5, y: 0.8 };
+    st.visitors = { ciperka: rec(1, 1), sedivka: rec(3, 3), mourek: rec(0, 0) };
+    for (let t = st.t + 10 * MIN; t <= at(2026, 5, 31, 7); t += 10 * MIN) {
+      const hr = new Date(t).getHours(), mi = new Date(t).getMinutes();
+      E.advance(st, t);
+      if ([8, 20].includes(hr) && mi === 0) basicCare(st, t);
+      if ((hr === 10 || hr === 16) && mi === 0) E.act(st, 'goGarden', null, t);
+      if ((hr === 12 || hr === 18) && mi === 0 && st.yard) { if (st.yard.tree) E.act(st, 'fetchDown', null, t); E.act(st, 'goHouse', null, t); }
+      if (hr === 11 && mi === 0 && st.visit) E.act(st, 'strokeVisitor', { id: st.visit.id }, t);
+      if (st.visit) {
+        checks++;
+        const A = st.visit.act;
+        if (A.with === 'koxa') { joint++; if (!st.yard || st.out || st.yard.tree) bad++; }
+        if ((A.with === 'koxa') !== E.VISIT_ACTS[A.kind].joint) bad++;
+      }
+      if (mi === 0 && hr % 6 === 0) invariants(st, `garden days seed ${seed}`);
+    }
+  }
+  ok(bad === 0 && joint > 20, `joint acts only in the garden (${joint} of ${checks} visit steps together, ${bad} wrong)`);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
