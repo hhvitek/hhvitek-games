@@ -538,7 +538,7 @@ Also the CSS class **`kx-flick`** on any ancestor: her right ear twitches once (
 | `at` | ms ≤ t | 0 | the last pat, boop or splash; `heat` was brought up to date then |
 | `warnAt` | ms ≤ t | 0 | the warning of the current run (0 = none) |
 | `boops` | `[ms]`, ascending, ≤ 2 in a saved state | `[]` | nose taps of the last 60 s (the third makes the swat and empties it) |
-| `gain` | 0…8 | 0 | love from pats in the current window |
+| `gain` | 0…12 | 0 | love from pats in the current window (up to 8); 12 = the flop's +4 was given too, the window is full |
 | `gainAt` | ms ≤ t | 0 | start of that 10-minute window (0 = none) |
 | `pay` | `null \| { kind: 'shelf' \| 'ambush', at: ms }` | `null` | a planned payback: due from `at`, lapses at `at + 120 min` |
 | `payDay` | day key or 0 | 0 | the local day of the last payback (one a day) |
@@ -552,7 +552,7 @@ Also the CSS class **`kx-flick`** on any ancestor: her right ear twitches once (
 `kind` stays only when it is `'sulk'`/`'cross'`, `until` is a valid time with `t < until ≤ t + 3 min` (sulk) or
 `t + 20 min` (cross), and no long offence is running (`!(st.off && t < st.off.until)`); else `kind: null, until: 0`.
 `heat` = number clamped 0…10 (else 0); `at` = a moment ≤ t (else 0); `at` 0 → `heat` 0. `warnAt` = a moment ≤ `at`
-(else 0). `boops` = the valid times in `(t − 60 s, t]`, sorted, the last 2. `gain` clamped 0…8, `gainAt` a moment ≤ t;
+(else 0). `boops` = the valid times in `(t − 60 s, t]`, sorted, the last 2. `gain` clamped 0…12, `gainAt` a moment ≤ t;
 `gainAt` 0 or `t − gainAt ≥ 10 min` → both 0. `pay` = `{ kind, at }` only with a known kind, a valid `at` in
 `(t − 120 min, t + 45 min]` and no long offence; else `null`. `payDay`, `bondDay` = a day key ≤ `dkey(t)`, else 0.
 `splash` = a valid time `> t` that equals `st.wet`, else 0. Unknown keys dropped. An older save without `tease` gets
@@ -585,7 +585,7 @@ const TEASE = deep({
   fav: [400, 650],     // her favourite tempo (ms): patTempo(st)
   like: 1, bliss: 1, blissClose: 0.5,   // love per pat: like +1, bliss +1 + 0.5 × close
   gainMax: 8, gainWin: 10,              // love from pats: at most +8 per 10-minute window
-  flopLove: 4, bond: 1,                 // the flop: love +4 (once a window), bond +1 (once a day, shared with reconcile)
+  flopLove: 4, bond: 1,                 // the flop: love +4 over the cap (once a window: gain = 12), bond +1 (once a day, shared with reconcile)
   heatMax: 10, cool: 10,                // heat 0..10, −1 per 10 minutes
   heat: { blowUp: 2, eat: 1, loveBite: 1, trap: 1, boop: 1, splash: 2 },
   crossAt: 5,                           // heat >= 5 after adding = cross, else sulk
@@ -652,8 +652,10 @@ adds):
   - tolerate: `pat { stage: 'tolerate' }`, no love;
   - like: love +1 within the window, `pat { stage: 'like' }`;
   - bliss: love `1 + 0.5 × close` within the window, `pat { stage: 'bliss', close, rear: n ≥ 3 }`; at **n === 8 with close ≥
-    0.4** also `flop { lap }`: if `gain < 8` → love +4 and `gain = 8` (the window is used up), bond +1 when `bondDay !==
-    today` (then `bondDay = today`), Deníček `bliss`.
+    0.4** also `flop { lap }`: if `gain ≤ 8` → love +4 and `gain = 12` (the window is used up), bond +1 when `bondDay !==
+    today` (then `bondDay = today`), Deníček `bliss`. **Decided:** the climax bypasses the per-window cap, because taps 1–7
+    already fill the +8 and a flop limited by it would almost never give anything: a run of 8 steady pats in her tempo gives
+    about +8 +4, and the full window (`gain = 12`) gives no more love to later pats or flops until it ends.
   - like and bliss also `soothe()` the jealousy and, on the lap, set `st.lap.pet = t`.
 - *the love window*: `!gainAt || t − gainAt ≥ 10 min` → `gainAt = t, gain = 0`; then `add = min(amount, 8 − gain)`,
   `gain += add`, love += add.

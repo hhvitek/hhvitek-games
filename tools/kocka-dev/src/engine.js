@@ -254,7 +254,7 @@ function KockaEngine() {
     fav: [400, 650],     // her favourite tempo (ms): patTempo(st)
     like: 1, bliss: 1, blissClose: 0.5,   // love per pat: like +1, bliss +1 + 0.5 × close
     gainMax: 8, gainWin: 10,              // love from pats: at most +8 per 10-minute window
-    flopLove: 4, bond: 1,                 // the flop: love +4 (once a window), bond +1 (once a day, shared with reconcile)
+    flopLove: 4, bond: 1,                 // the flop: love +4 over the cap (once a window: gain = 12), bond +1 (once a day, shared with reconcile)
     heatMax: 10, cool: 10,                // heat 0..10, −1 per 10 minutes
     heat: { blowUp: 2, eat: 1, loveBite: 1, trap: 1, boop: 1, splash: 2 },
     crossAt: 5,                           // heat >= 5 after adding = cross, else sulk
@@ -534,7 +534,7 @@ function KockaEngine() {
     const at = past(T.at), heat = at ? num(T.heat, 0, TEASE.heatMax) : 0;
     const warnAt = okT(T.warnAt) && T.warnAt <= at ? T.warnAt : 0;
     const boops = (Array.isArray(T.boops) ? T.boops : []).filter(b => okT(b) && b > t - TEASE.boopWin && b <= t).sort((a, b) => a - b).slice(-(TEASE.boopN - 1));
-    let gainAt = past(T.gainAt), gain = num(T.gain, 0, TEASE.gainMax);
+    let gainAt = past(T.gainAt), gain = num(T.gain, 0, TEASE.gainMax + TEASE.flopLove);
     if (!gainAt || t - gainAt >= TEASE.gainWin * MIN) { gainAt = 0; gain = 0; }
     const P = T.pay && typeof T.pay === 'object' ? T.pay : {};
     const pay = (P.kind === 'shelf' || P.kind === 'ambush') && okT(P.at) && P.at > t - TEASE.pay.lapse * MIN && P.at <= t + 45 * MIN && !off ? { kind: P.kind, at: P.at } : null;
@@ -1521,7 +1521,7 @@ function KockaEngine() {
       if (st.lap) leaveLap(st, t, 'annoyed', ev);
       ev.push({ type: 'loveBite', lap });
     };
-    // love from pats: at most +8 in a 10-minute window
+    // love from pats: at most +8 in a 10-minute window (gain above 8 = the flop's +4 was given, the window is full)
     const gain = amount => {
       if (!T.gainAt || t - T.gainAt >= TEASE.gainWin * MIN) { T.gainAt = t; T.gain = 0; }
       const add = Math.min(amount, TEASE.gainMax - T.gain);
@@ -1539,7 +1539,7 @@ function KockaEngine() {
         pat('bliss', { close, rear: n >= TEASE.rearN });
         if (n === TEASE.flopN && close >= TEASE.flopClose) {   // she flops on her side with bliss
           ev.push({ type: 'flop', lap });
-          if (T.gain < TEASE.gainMax) { love(TEASE.flopLove); T.gain = TEASE.gainMax; }
+          if (T.gain <= TEASE.gainMax) { love(TEASE.flopLove); T.gain = TEASE.gainMax + TEASE.flopLove; }   // the climax bypasses the cap, once a window
           if (T.bondDay !== today) { T.bondDay = today; addBond(st, TEASE.bond, ev); }
           find(st, 'bliss', t, ev);
         }

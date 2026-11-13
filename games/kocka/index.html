@@ -398,11 +398,27 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 //
 // API of KockaArt():
 //   css                      keyframes and classes (blink, ear twitch, tail sway by mood, sleep breathing, purr shiver,
-//                            sneeze, wriggle, Zzz, fleas, gait, weather); prefers-reduced-motion turns it off. Inject once.
+//                            sneeze, wriggle, Zzz, fleas, gait, weather, Škádlení); prefers-reduced-motion turns it off.
+//                            Inject once. The class kx-flick on any ancestor of a cat (or on the svg): her right ear twitches
+//                            once (~.4 s; for a tap on a sleeping cat: add it, remove it after ~450 ms).
 //   cat(pose, opts)          <svg class="koxa"> viewBox 0 0 200 200, the cat stands on y≈186 (centre x 100; see anchors).
 //                            opts = { mood: 'happy'|'calm'|'grumpy'|'sad', thin, chubby, ill: null|'fleas'|'tummy'|'cold',
 //                            ears: 'up'|'back'|'turned', purring, asleep, meow, openMouth, wet, noProp } (a mood string
-//                            works as opts too). Poses (side views face left: flip the box with scaleX(-1)):
+//                            works as opts too). Škádlení options (applied after the pose chose its face, so no pose
+//                            overrides them; the face ones are ignored when she faces away):
+//                              eyes: 'cross' (cross-eyed, both pupils turned to the nose) | 'squint' (pinched tight "><",
+//                                contented-annoyed);
+//                              achoo: a one-time sneeze: the head jerks forward and down once (kx-achoo .5 s), eyes squint
+//                                unless opts.eyes, mouth open (not the cold's looping kx-sneeze; put fx('puff') on
+//                                headPoint().nose);
+//                              shakeHead: the head shakes left–right twice (kx-shakeHead .6 s, once);
+//                              warn: the tail tip lashes fast (kx-warn .35 s), ears 'turned' unless opts.ears, the skin on
+//                                the back twitches (kx-twitch .9 s: a ginger ripple with ticks above it); a pose without a
+//                                tail only turns the ears;
+//                              grab (belly, lapBelly): the front paws hug the hand just above the belly (round about
+//                                (118, 114); lapBelly zoomed), the hind legs bunny-kick (kx-kick .4 s), wide eyes, the mouth
+//                                open; soft paws with beans, never claws.
+//                            Poses (side views face left: flip the box with scaleX(-1)):
 //                            sit, loaf, sleep, stretch, pounce (toys only), eat, drink, groom, sulk (back turned), belly,
 //                            carried, wriggle, window (from behind), walk and trot (legs swing by CSS; the step time is
 //                            the CSS variable --kx-step on any ancestor: walk .8s, trot .42s by default), walk1..walk4
@@ -416,18 +432,27 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 //                            swipe (play-fight: on the haunches, one paw raised high; pairs with belly or swipe), run (a
 //                            gallop by CSS, step --kx-step .34 s by default), rub (standing, leaning forward, the cheek
 //                            pushed against whatever is in front: a leg, a hand, another cat; eyes shut, tail straight up
-//                            with a hooked tip; sways by CSS). All of them stand on (100, 186).
+//                            with a hooked tip; sways by CSS). Škádlení: rearUp ("zadeček jako výtah": the chest and the
+//                            front paws low on the floor treading in turn by CSS (kx-tread .6 s), the rear up on straight
+//                            hind legs, the tail straight up, a happy face; its tailBase lies on the haunch within 15 units
+//                            of loaf's, so a pat run there goes on when she lifts it) and shake (standing, shaking herself
+//                            off: kx-shake .4 s × 3 then still, fur on end, ears flat, eyes squeezed, motion lines; with
+//                            opts.wet the drops fly off once, kx-drops). All of them stand on (100, 186).
 //   poses                    the list of pose names.
 //   anchors                  { pose: [x, y] } for poses that do not stand on (100, 186): put that point on the spot.
 //   regions(pose, opts)      [{ id, path, fur: [dx, dy] }] in the cat's 0..200 viewBox, ids from
-//                            'chin'|'tail'|'paws'|'head'|'ears'|'tailBase'|'belly'|'back' (tailBase = kořen ocasu,
+//                            'nose'|'chin'|'tail'|'paws'|'head'|'ears'|'tailBase'|'belly'|'back' (nose = about 26 × 18
+//                            head units round the nose, only when the face is visible, neighbours and kittens too; tailBase = kořen ocasu,
 //                            the back just in front of the tail root, in every pose that has 'back'). The list is in
-//                            hit-test order: the first region whose path contains the point wins (chin before head, head
+//                            hit-test order: the first region whose path contains the point wins (nose before chin, chin before head, head
 //                            before ears, so 'ears' is only the visible ear above the head plus a small margin). Paths
 //                            may hold several subpaths (both ears, every paw): use the nonzero rule. `fur` is the unit
 //                            vector of stroking along the fur (head → tail; on the head from the forehead over the top,
 //                            on the chin and throat downwards). Pass the same opts as cat() (the tail follows the mood).
 //   mouth(pose, opts)        {x, y} of her mouth in the cat's viewBox, or null when she faces away.
+//   headPoint(pose, opts)    { x, y, nose, back } in the cat's viewBox (kitten and lap zoom applied as in mouth()): x, y =
+//                            the middle of the head, nose = {x, y} of the nose tip or null when she faces away (back: true);
+//                            null for an unknown pose. For fx('puff') on the nose and fx('splash') on her.
 //   room(o) / room(phase, season)  <svg> viewBox 0 0 400 600, preserveAspectRatio xMidYMid slice.
 //                            o = { id: 'living'|'kitchen'|'hall'|'garden', phase: 'morning'|'day'|'evening'|'night',
 //                            season: 'spring'|'summer'|'autumn'|'winter', sunX: 0..1, holiday: null | id | [ids],
@@ -447,7 +472,10 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 //   crop(name, stage 0..3)   a plant in a bed (viewBox 0 0 100 100, standing on y≈90); crops = names (plant, radish,
 //                            carrot, strawberry, tomato, catnip); cropSlot = where a produce drawing can sit on 'plant'.
 //   item(name), itemHeld(name)  <svg class="kx-item"> viewBox 0 0 100 100, standing on y≈90; items = the names.
-//   icon(name), fx(name), face(mood), vet(), vetSpots  UI icons (24×24, currentColor), effects, the small head, the vet.
+//   icon(name), fx(name), face(mood), vet(), vetSpots  UI icons (24×24, currentColor), effects (40 × 40: heart, zzz,
+//                            bang, note, splash = water from the can with drops, puff = a sneeze cloud with two droplets,
+//                            sparkle), the small head, the vet. item('mug') = the enamel mug (cream, blue rim and handle, a
+//                            chip; itemSize 26), one picture: the UI turns it while it falls.
 //   Tricks and more poses: trickSit, trickPaw (dej pac), trickSpin (turns round by CSS), trickBeg (panáček), inBox, onFence.
 //   itemSize[name] = { w, h }  the item's 100 × 100 box in room units; itemPoints: rod / wand tip, cat-tree platforms.
 //   mouseHole(), mousePeek(phase 0..1), fish(kind) (fishes: goldfish, carp, perch), marker(done)  minigame pieces.
@@ -586,7 +614,18 @@ function KockaArt() {
     if (KIT) { p = p.map((v, i) => r1(p[i & 1] + (v - p[i & 1]) * KIT.tl)); w = r1(w * KIT.tw); }   // a kitten: short and thin
     R.tailRoot = [p[0], p[1]];
     R.open('', 'kx-tail' + (cls ? ' ' + cls : ''), p[0], p[1]);
-    R.limb(p, w, { edge: true, bands: COAT.pattern === 'none' ? [] : [[30, 11, 0]] });   // no ginger band on a plain coat
+    const bands = COAT.pattern === 'none' ? [] : [[30, 11, 0]];   // no ginger band on a plain coat
+    if (R.o && R.o.warn) {
+      // a warning: the tip (the second half of the last curve) is its own group and lashes fast (kx-warn)
+      const n = p.length, a = p.slice(n - 8), m = (u, v) => [(u[0] + v[0]) / 2, (u[1] + v[1]) / 2];
+      const P0 = [a[0], a[1]], P1 = [a[2], a[3]], P2 = [a[4], a[5]], P3 = [a[6], a[7]];
+      const q1 = m(P0, P1), q2 = m(P1, P2), q3 = m(P2, P3), s1 = m(q1, q2), s2 = m(q2, q3), mid = m(s1, s2).map(r1);
+      R.limb(p.slice(0, n - 6).concat(q1.map(r1), s1.map(r1), mid), w, { edge: true, bands });
+      R.open('', 'kx-warn', mid[0], mid[1]);
+      R.limb(mid.concat(s2.map(r1), q3.map(r1), P3), w, { edge: true });
+      R.close();
+      R.warnTip = P3;
+    } else R.limb(p, w, { edge: true, bands });
     R.close();
     R.region('tail', ribbon(p, w + 6), unit(p[p.length - 2] - p[0], p[p.length - 1] - p[1]));
   }
@@ -621,6 +660,12 @@ function KockaArt() {
     const cx = sd * 15, cy = -1;
     if (kind === 'happy') return `<path d="M${cx - 8} ${cy + 2.5}Q${cx} ${cy - 7} ${cx + 8} ${cy + 2.5}" fill="none" stroke="${C.eye}" stroke-width="3.2" stroke-linecap="round"/>`;
     if (kind === 'closed') return `<path d="M${cx - 8} ${cy}Q${cx} ${cy + 5.5} ${cx + 8} ${cy}" fill="none" stroke="${C.lid}" stroke-width="2.4" stroke-linecap="round"/>`;
+    // squint: pinched tight, a ">" / "<" pointing at the nose, with a small crease above it
+    if (kind === 'squint') {
+      const o = cx + sd * 8.5, n = cx - sd * 6.5, ky = KIT ? cy + 2 * KIT.k : cy;
+      return `<path d="M${o} ${ky - 4.8}L${n} ${ky + 0.6}L${o} ${ky + 5}" fill="none" stroke="${C.lid}" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>` +
+        `<path d="M${cx + sd * 2} ${ky - 9.5}Q${cx - sd * 3} ${ky - 8} ${cx - sd * 6} ${ky - 5}" fill="none" stroke="${C.lid}" stroke-width="1.4" stroke-linecap="round" opacity=".6"/>`;
+    }
     const big = kind === 'sad' || kind === 'wide' || !!KIT;
     const pr = ({ grumpy: [1.7, 6.6], sad: [5.2, 6.6], wide: [5.8, 7.2], tired: [2.6, 6] }[kind] || [3.3, 7.3]).slice();
     let tf = `translate(${cx} ${cy}) rotate(${-sd * 10})`;
@@ -628,14 +673,18 @@ function KockaArt() {
       tf = `translate(${r1(cx * (1 + 0.06 * KIT.k))} ${r1(cy + 2.5 * KIT.k)}) rotate(${-sd * 10}) scale(${KIT.ek})`;
       if (kind !== 'grumpy') pr[0] = r1(pr[0] + (6 - pr[0]) * 0.6 * KIT.k);
     }
-    let s = `<g transform="${tf}"><ellipse rx="10" ry="${big ? 9.8 : 9}" fill="${C.eye}"/><ellipse cx="${sd * -0.6}" cy="${kind === 'sad' ? 1.5 : 0}" rx="${pr[0]}" ry="${pr[1]}" fill="${C.pupil}"/><circle cx="2.8" cy="-3.6" r="2.2" fill="#fff"/>`;
-    if (big) s += '<circle cx="-3" cy="3" r="1.2" fill="#fff"/>';
+    // cross: both pupils, round and big, pushed into the inner corners towards the nose (and a little down)
+    const cross = kind === 'cross';
+    let s = cross
+      ? `<g transform="${tf}"><ellipse rx="10" ry="9.8" fill="${C.eye}"/><ellipse cx="${-sd * 5.4}" cy="2.6" rx="4.4" ry="5.2" fill="${C.pupil}"/><circle cx="${r1(-sd * 5.4 + 1.6)}" cy="0.4" r="1.5" fill="#fff"/>`
+      : `<g transform="${tf}"><ellipse rx="10" ry="${big ? 9.8 : 9}" fill="${C.eye}"/><ellipse cx="${sd * -0.6}" cy="${kind === 'sad' ? 1.5 : 0}" rx="${pr[0]}" ry="${pr[1]}" fill="${C.pupil}"/><circle cx="2.8" cy="-3.6" r="2.2" fill="#fff"/>`;
+    if (big && !cross) s += '<circle cx="-3" cy="3" r="1.2" fill="#fff"/>';
     const lid = { grumpy: [-5.5, 0.5], sad: [1.5, -8.5], tired: [-1.5, -1.5] }[kind]; // [outer y, inner y]; inner = towards the nose
     if (lid) s += `<path d="M${sd * 12} -12L${-sd * 11} -12L${-sd * 11} ${lid[1]}L${sd * 12} ${lid[0]}Z" fill="${C.fur}"/><path d="M${sd * 10.5} ${lid[0] + 0.3}L${-sd * 10} ${lid[1] + 0.3}" stroke="${C.edge}" stroke-width="1.2"/>`;
     return s + '</g>';
   }
   function faceDetails(h) {
-    const open = !['happy', 'closed'].includes(h.eyes);
+    const open = !['happy', 'closed', 'squint'].includes(h.eyes);
     let s = open ? `<g class="kx-eyes" style="transform-origin:0px -1px">${eye(-1, h.eyes)}${eye(1, h.eyes)}</g>` : eye(-1, h.eyes) + eye(1, h.eyes);
     if (h.eyes === 'sad') s += `<path d="M-19 8q2.6 4.4 0 6.4q-2.6-2 0-6.4z" fill="#a9d8f2"/>`;
     if (h.blush) s += `<g fill="${C.blush}" opacity=".38"><ellipse cx="-26" cy="12" rx="5.5" ry="3"/><ellipse cx="26" cy="12" rx="5.5" ry="3"/></g>`;
@@ -649,12 +698,25 @@ function KockaArt() {
     if (h.ill === 'tummy') s += `<path d="M35 -27q4.5 6.5 0 9.4q-4.5-2.9 0-9.4z" fill="#a9d8f2" stroke="${C.ol}" stroke-width=".8"/>`;
     return s;
   }
+  // the options that change the face after the pose chose it (Škádlení): o.eyes 'cross'|'squint', o.achoo (squint,
+  // mouth open), o.warn (ears turned); none of them when she faces away
+  function faceOpts(o, h) {
+    if (h.back) return o.warn && !o.ears ? H(h, { ears: 'turned' }) : h;
+    const q = {};
+    if (o.achoo) { q.eyes = 'squint'; q.mouth = 'open'; q.blush = false; }
+    if (o.eyes === 'cross' || o.eyes === 'squint') q.eyes = o.eyes;
+    if (o.warn && !o.ears) q.ears = 'turned';
+    return H(h, q);
+  }
   // head at (x, y), scale s, rotation rot; h from expr() plus { back, tongue, edge }; also adds the head regions
   function head(R, x, y, s, rot, h) {
+    h = faceOpts(R.o || {}, h);
     // a kitten: the whole drawing is squashed by (KIT.sx, KIT.sy) around the feet (cat()); the head undoes that, so it
     // stays round, and is KIT.hk times bigger
-    const K = KIT, hs = K ? r2(s * K.hk) : s, ek = K ? K.ear : 1;
-    R.open(K ? `translate(${x} ${y}) scale(${r2(1 / K.sx)} ${r2(1 / K.sy)}) rotate(${rot}) scale(${hs})` : `translate(${x} ${y}) rotate(${rot}) scale(${s})`, h.sneeze ? 'kx-sneeze' : '', 0, 30);
+    const K = KIT, hs = K ? r2(s * K.hk) : s, ek = K ? K.ear : 1, o = R.o || {};
+    // one class on the head group: a one-time sneeze (boop), a head shake, else the cold's sneeze loop
+    const hcls = o.achoo && !h.back ? 'kx-achoo' : o.shakeHead ? 'kx-shakeHead' : h.sneeze ? 'kx-sneeze' : '';
+    R.open(K ? `translate(${x} ${y}) scale(${r2(1 / K.sx)} ${r2(1 / K.sy)}) rotate(${rot}) scale(${hs})` : `translate(${x} ${y}) rotate(${rot}) scale(${s})`, hcls, 0, 30);
     const ea = EAR_ROT[h.ears] != null ? EAR_ROT[h.ears] : 12, dy = h.ears === 'droop' ? 5 : h.ears === 'back' ? 3 : 0;
     for (const sd of [-1, 1]) {
       R.open(`translate(${sd * 21} ${-22 + dy}) rotate(${sd * ea})${K ? ` scale(${ek})` : ''}`, sd > 0 ? 'kx-ear kx-earR' : 'kx-ear', 0, 0);
@@ -678,7 +740,11 @@ function KockaArt() {
       return [sd * 21 + ex * Math.cos(b) - ey * Math.sin(b), -22 + dy + ex * Math.sin(b) + ey * Math.cos(b)];
     });
     R.region('ears', P(earPts(-1)) + P(earPts(1)), v(0, -1));
+    R.headPt = m(0, 0).map(r1);
     if (!h.back) R.mouthPt = m(0, h.mouth === 'open' ? 21 : h.mouth === 'meow' ? 20 : 17).map(r1);
+    if (!h.back) R.nosePt = m(0, 11).map(r1);
+    // the nose (a tap on it is a boop): about 26 × 18 head units round the nose, before the chin and the head
+    if (!h.back) R.region('nose', P(Array.from({ length: 14 }, (_, i) => { const t = i / 14 * 2 * Math.PI; return [13 * Math.cos(t), 11 + 9 * Math.sin(t)]; })), v(0, -1));
     if (!h.back) R.region('chin', P([[-20, 22], [20, 22], [24, 27], [23, 40], [15, 50], [0, 53], [-15, 50], [-23, 40], [-24, 27]]), v(0, 1));
     R.region('head', P(HEAD_PTS), h.back ? v(0, 1) : v(0, -1));
   }
@@ -702,6 +768,7 @@ function KockaArt() {
     R.close();
     R.region('back', BODY, [0, 1]);
     R.mid = [100, 140];
+    R.skin = back ? [112, 118] : [126, 118];   // where the skin twitches (o.warn)
   }
   const LEG = { paw: [10, 6.5], toes: true };
   function frontLegs(R, both) {
@@ -749,6 +816,7 @@ function KockaArt() {
       head(R, 72, 130, 0.95, -4, e);
       R.region('back', BODY, [1, 0]);
       R.mid = [125, 150];
+      R.skin = [140, 128];
     },
     sleep(R, o, e) {
       R.wrap = { cls: 'kx-breathe', ox: 100, oy: 186 };
@@ -823,12 +891,26 @@ function KockaArt() {
       R.open(btfY(o, 186));
       R.part(BODY, { patches: spots([[110, 154, 20, 1], [138, 162, 12, 0], [86, 162, 10, 1], [150, 148, 7, 1]]) });
       R.close();
-      R.limb([84, 148, 80, 140, 79, 132, 82, 124], 12, { edge: true, paw: [8, 7] });
-      R.limb([102, 144, 101, 136, 102, 128, 107, 121], 12, { edge: true, paw: [8, 7] });
-      R.limb([138, 148, 140, 128, 148, 118, 157, 118], 13, { edge: true, paw: [9, 8], beans: true });
-      R.limb([158, 152, 166, 136, 176, 128, 185, 132], 13, { edge: true, paw: [9, 8], beans: true });
+      if (o.grab) {
+        // the trap: the front legs hug the hand just above the belly (round GRAB), the hind legs bunny-kick it (kx-kick);
+        // soft round paws, never claws
+        R.open('', 'kx-kick kx-kickB', 150, 150);   // the far hind leg
+        R.limb([150, 150, 152, 132, 146, 112, 136, 104], 13, { fill: C.fur2, paw: [8.5, 7.5], beans: true });
+        R.close();
+        R.limb([84, 150, 78, 122, 88, 98, 106, 96], 12, { edge: true, paw: [8.5, 7.5], beans: true });   // over the hand
+        R.open('', 'kx-kick', 162, 152);
+        R.limb([162, 152, 166, 134, 154, 120, 140, 124], 13, { edge: true, paw: [9, 8], beans: true });  // the near hind leg
+        R.close();
+        R.limb([102, 148, 98, 140, 98, 132, 102, 128], 12, { edge: true, paw: [8.5, 7.5], beans: true });   // under it
+        R.raw(outlined('M100 84l-4 -7M116 81v-8M132 84l4 -7', 1.6));
+      } else {
+        R.limb([84, 148, 80, 140, 79, 132, 82, 124], 12, { edge: true, paw: [8, 7] });
+        R.limb([102, 144, 101, 136, 102, 128, 107, 121], 12, { edge: true, paw: [8, 7] });
+        R.limb([138, 148, 140, 128, 148, 118, 157, 118], 13, { edge: true, paw: [9, 8], beans: true });
+        R.limb([158, 152, 166, 136, 176, 128, 185, 132], 13, { edge: true, paw: [9, 8], beans: true });
+      }
       tail(R, [176, 176, 186, 180, 192, 186, 199, 181]);
-      head(R, 54, 152, 0.82, -62, e);
+      head(R, 54, 152, 0.82, -62, o.grab ? H(e, { eyes: o.asleep || o.ill ? e.eyes : 'wide', ears: o.ears || 'turned', mouth: o.meow || o.openMouth ? e.mouth : 'open', blush: false }) : e);
       R.region('belly', ellPoly(118, 160, 50, 20), [1, 0]);
       R.region('back', BODY, [1, 0]);
       R.mid = [118, 160];
@@ -902,6 +984,9 @@ function KockaArt() {
     swipe(R, o, e) { swipe(R, o, e); },
     run(R, o, e) { run(R, o, e); },
     rub(R, o, e) { rub(R, o, e); },
+    // Škádlení
+    rearUp(R, o, e) { rearUp(R, o, e); },
+    shake(R, o, e) { shake(R, o, e); },
     // kitten play (any cat can, meant for kittens: opts.kit)
     tumble(R, o, e) { tumble(R, o, e); },
     tailCatch(R, o, e) { tailCatch(R, o, e); },
@@ -949,6 +1034,7 @@ function KockaArt() {
     head(R, trot ? 62 : 66, trot ? 112 : 110, 0.88, trot ? -2 : -6, trot ? H(e, { eyes: o.asleep || o.ill ? e.eyes : 'wide', ears: o.ears || 'up' }) : e);
     R.region('back', trot ? ellPoly(120, 124, 52, 19) : ellPoly(120, 128, 48, 21), [1, 0]);
     R.mid = [120, 126];
+    R.skin = [128, trot ? 109 : 111];
   }
   // a crouch before a jump, looking up
   function crouch(R, o, e) {
@@ -1036,6 +1122,7 @@ function KockaArt() {
     head(R, 54, 158, 0.84, -4, H(e, { eyes: o.asleep || o.ill ? e.eyes : 'wide', ears: o.ears || 'up', mouth: 'flat', blush: false }));
     R.region('back', BODY, [1, 0]);
     R.mid = [126, 166];
+    R.skin = [126, 152];
   }
   // sitting, one front paw lifted and shaken (snow or rain on it)
   function shakePaw(R, o, e) {
@@ -1047,7 +1134,7 @@ function KockaArt() {
     R.close();
     head(R, 100, 70, 1, 6, H(e, { ears: o.ears || 'back', eyes: e.eyes === 'happy' ? 'open' : e.eyes }));
     const drop = (x, y) => o.wet ? `<path d="M${x} ${y}q2.4 4 0 5.8q-2.4-1.8 0-5.8z" fill="#a9d8f2" stroke="#2e2118" stroke-width=".8"/>` : `<circle cx="${x}" cy="${y}" r="2.6" fill="#fff" stroke="#2e2118" stroke-width=".8"/>`;
-    R.top.push(`<g class="kx-flick">${drop(146, 130) + drop(152, 144) + drop(142, 152) + drop(156, 126)}</g>`);
+    R.top.push(`<g class="kx-flash">${drop(146, 130) + drop(152, 144) + drop(142, 152) + drop(156, 126)}</g>`);
     R.mid = [100, 140];
   }
   // held under the front legs (carried) or twisting to get down (wriggle)
@@ -1089,6 +1176,7 @@ function KockaArt() {
     leg(R, 100, 136, 24, 27, 12, {});
     R.region('back', ellPoly(126, 130, 46, 20), [1, 0]);
     R.mid = [126, 130];
+    R.skin = [134, 114];
   }
   // nose-to-nose greeting: standing, the neck stretched forward and a little down, the tail up
   function sniff(R, o, e) {
@@ -1116,6 +1204,7 @@ function KockaArt() {
     if (hiss) R.top.push(outlined('M22 120l-9 -3M20 129h-10M22 138l-9 3', 2));
     R.region('back', BODY, [1, 0]);
     R.mid = [118, 96];
+    R.skin = [120, 70];
   }
   // sitting seen from the side (lickOther, swipe): an upright chest, the haunch behind, the tail round the front paws
   function sitSide(R, o) {
@@ -1126,6 +1215,7 @@ function KockaArt() {
     R.close();
     R.region('back', BODY, unit(1, 1.2));
     R.mid = [116, 140];
+    R.skin = [136, 117];
   }
   // licking the other cat's head: sitting, the head stretched forward and a little down, eyes half closed, tongue out
   function lickOther(R, o, e) {
@@ -1166,6 +1256,7 @@ function KockaArt() {
     R.region('belly', ellPoly(118, 174, 46, 10), [1, 0]);
     R.region('back', BODY, [1, 0]);
     R.mid = [120, 160];
+    R.skin = [124, 139];
     R.zz = [58, 102];
   }
   // a gallop (animated by CSS like walk and trot, step time --kx-step, .34 s by default): the front and the hind legs
@@ -1212,6 +1303,49 @@ function KockaArt() {
     R.close();
     R.region('back', ellPoly(126, 132, 46, 20, -9), unit(1, -0.16));
     R.mid = [126, 132];
+  }
+
+  /* ---------- Škádlení: the rear up, the shake-off ---------- */
+  // "zadeček jako výtah": patted just right at the tail root she lifts her rear on straight hind legs, the chest and the
+  // front paws low on the floor treading in turn (kx-tread), the tail straight up with a hooked tip, a happy face. The
+  // kořen ocasu (tailBase) lies on the haunch, within 15 units of where it is in loaf, so a tap run there goes on.
+  function rearUp(R, o, e) {
+    R.shadow = [112, 186, 64, 5];
+    const BODY = 'M58 172C56 152 72 142 94 138C116 132 134 102 156 94C176 88 190 102 186 122C182 140 168 148 154 150C132 154 106 176 88 184C70 189 59 184 58 172Z';
+    R.limb(line(154, 136, 149, 183), 12, { fill: C.fur2, paw: [8.5, 4.5] });          // the far hind leg, straight
+    R.open('', 'kx-tread kx-treadB', 90, 180);                                          // the far front paw
+    R.limb([90, 180, 80, 182, 70, 183, 60, 183], 11, { fill: C.fur2, paw: [9.5, 4.5] });
+    R.close();
+    R.open(btfY(o, 160));
+    R.part(BODY, { patches: spots([[150, 110, 13, 1], [120, 140, 11, 0], [86, 160, 9, 0], [174, 114, 6, 0]]) });
+    R.part(ell(163, 126, 18, 26), { edge: true, patches: spots([[168, 120, 8, 0]]) });
+    R.close();
+    tail(R, [178, 104, 184, 82, 176, 58, 180, 38, 182, 26, 176, 18, 168, 21]);
+    R.limb(line(166, 140, 168, 183), 13, { edge: true, paw: [9, 4.5], toes: true });   // the near hind leg, straight
+    R.open('', 'kx-tread', 100, 182);                                                   // the near front paw
+    R.limb([100, 182, 92, 184, 84, 185, 76, 185], 12, { edge: true, paw: [10, 4.8], toes: true });
+    R.close();
+    head(R, 60, 140, 0.9, -8, H(e, { eyes: o.asleep || o.ill ? e.eyes : e.eyes === 'grumpy' ? 'grumpy' : 'happy', blush: !o.ill, ears: o.ears || 'turned' }));
+    R.region('back', BODY, unit(1, -0.7));
+    R.tailBaseAt = [157, 156, 23, 22, -20, unit(1, -0.8)];
+    R.mid = [120, 146];
+    R.skin = [124, 120];
+  }
+  // shaking herself off (after the can or the rain): standing, the whole body wobbles from side to side three times
+  // (kx-shake on the body group, then still), fur on end, ears flat, eyes squeezed shut, motion lines at the sides;
+  // with o.wet drops fly off once (kx-drops)
+  function shake(R, o, e) {
+    R.wrap = { cls: 'kx-shake', ox: 120, oy: 176 };
+    R.fluff = 5;
+    stand(R, o, [170, 122, 186, 112, 188, 90, 196, 80]);
+    R.limb([98, 124, 88, 120, 80, 116, 74, 112], 26, {});
+    head(R, 64, 104, 0.88, -4, H(e, { eyes: o.asleep ? 'closed' : 'squint', ears: o.ears || 'back', blush: false }));
+    R.top.push(outlined('M22 96q-8 13 0 26M12 90q-11 19 0 38M186 132q8 12 0 24M196 126q10 18 0 36', 2.4));
+    if (o.wet) {
+      const drop = (x, y, dx, dy) => `<path d="M${x} ${y}q4 6.6 0 9.6q-4-3.1 0-9.6z" fill="#a9d8f2" stroke="#2e2118" stroke-width=".8" style="--dx:${dx}px;--dy:${dy}px"/>`;
+      R.top.push(`<g class="kx-drops">${[[34, 70, -14, -12], [16, 140, -16, 4], [42, 160, -10, 8], [100, 80, -2, -16], [136, 88, 4, -16], [170, 60, 10, -12], [198, 108, 14, -4], [192, 168, 14, 8], [120, 104, 0, -10]].map(d => drop(...d)).join('')}</g>`);
+    }
+    R.skin = [132, 112];
   }
 
   /* ---------- kitten play ---------- */
@@ -1313,6 +1447,11 @@ function KockaArt() {
         `<circle cx="${mx + dx}" cy="${my + dy}" r="2.3" fill="#7a2e12" stroke="${C.ol}" stroke-width="1" style="animation-delay:${d}s"/>`).join('')}</g>` +
         `<g class="kx-scr">${outlined(`M${mx + 30} ${my - 30}l5 -5l2 6l5 -5`, 1.8)}</g>`);
     }
+    if (o.warn && R.tailRoot) {   // a warning: the skin on the back twitches (a ginger ripple and two ticks above it)
+      const M = R.mid || [100, 140], [sx, sy] = R.skin || [r1(M[0] + (R.tailRoot[0] - M[0]) * 0.45), r1(M[1] + (R.tailRoot[1] - M[1]) * 0.45 - 16)];
+      R.top.push(`<g class="kx-twitch" style="transform-origin:${sx}px ${sy}px"><path d="M${sx - 16} ${sy}q4 -5 8 0t8 0t8 0t8 0" fill="none" stroke="${C.patch2}" stroke-width="3" stroke-linecap="round"/>` +
+        outlined(`M${sx - 9} ${sy - 8}l-3 -7.5M${sx} ${sy - 9.5}v-8M${sx + 9} ${sy - 8}l3 -7.5`, 2) + '</g>');
+    }
     let olF = '', fiF = '';
     if (o.wet) {   // wet: the outline turns spiky, the coat darker, drops fall off her
       const f = nid(), g = nid(), [mx, my] = R.mid || [100, 140];
@@ -1348,11 +1487,12 @@ function KockaArt() {
   }
   // poses that do not stand on (100, 186): the point of her box to put on the spot
   const ANCHORS = { onBranch: [100, 150], climb: [100, 112], carried: [100, 60], wriggle: [100, 60] };
-  const ORDER = ['chin', 'tail', 'paws', 'head', 'ears', 'tailBase', 'belly', 'back'];
+  const ORDER = ['nose', 'chin', 'tail', 'paws', 'head', 'ears', 'tailBase', 'belly', 'back'];
   function regions(pose, x) {
     const { R } = build(pose, opts(x)), by = {};
     // tailBase (kořen ocasu): an oval on the body just in front of the tail root, fur from the body's middle to the root
-    if (R.tailRoot && R.mid && R.reg.some(g => g.id === 'back')) {
+    if (R.tailBaseAt) { const [cx, cy, rx, ry, rot, fur] = R.tailBaseAt; R.region('tailBase', ellPoly(cx, cy, rx, ry, rot), fur); }
+    else if (R.tailRoot && R.mid && R.reg.some(g => g.id === 'back')) {
       const [tx, ty] = R.tailRoot, [dx, dy] = unit(tx - R.mid[0], ty - R.mid[1]);
       R.region('tailBase', ellPoly(tx - dx * 22, ty - dy * 22, 25, 15, Math.atan2(dy, dx) * 180 / Math.PI), [dx, dy]);
     }
@@ -1376,6 +1516,16 @@ function KockaArt() {
     if (!R.mouthPt) return null;
     const [x0, y0] = R.kit ? kitMap(R)(R.mouthPt[0], R.mouthPt[1]) : R.zoom ? zoomPt(R.zoom, R.mouthPt[0], R.mouthPt[1]) : R.mouthPt;
     return { x: x0, y: y0 };
+  }
+  // the middle of her head and the tip of her nose (null when she faces away) in the cat's viewBox; null for an unknown
+  // pose. For the sneeze puff (fx('puff')) on the nose and the splash (fx('splash')) on her head.
+  function headPoint(pose, x) {
+    if (!POSES[pose]) return null;
+    const { R } = build(pose, opts(x));
+    if (!R.headPt) return null;
+    const f = R.kit ? kitMap(R) : R.zoom ? (u, v) => zoomPt(R.zoom, u, v) : (u, v) => [u, v];
+    const [hx, hy] = f(R.headPt[0], R.headPt[1]), n = R.nosePt ? f(R.nosePt[0], R.nosePt[1]) : null;
+    return { x: hx, y: hy, nose: n ? { x: n[0], y: n[1] } : null, back: !n };
   }
   function face(mood) {
     const o = opts(mood), R = Rig(o);
@@ -1479,6 +1629,12 @@ function KockaArt() {
       `<path d="M70 10Q92 24 86 58" fill="none" stroke="#555" stroke-width="1.4"/>${FEATHERS(86, 58, 0.7)}`,
     featherWand: () => `<path d="M10 94L60 14" stroke="${IO}" stroke-width="6" stroke-linecap="round"/><path d="M10 94L60 14" stroke="#c8574a" stroke-width="3" stroke-linecap="round"/><path d="M60 14Q96 10 88 60" fill="none" stroke="#555" stroke-width="1.4"/>${FEATHERS(88, 60, 0.8)}`,
     featherBunch: () => FEATHERS(50, 20, 1.3),
+    // the enamel mug (smaltovaný plecháček): cream white, blue rim, handle and base line, a small chip by the rim
+    mug: () => groundShadow(30) + `<path d="M64 38Q88 36 88 56Q88 76 64 76" fill="none"${st(11)}/><path d="M64 38Q88 36 88 56Q88 76 64 76" fill="none" stroke="#2f5fa8" stroke-width="6"/>` +
+      `<path d="M14 26H68L66 86Q41 93 16 86Z" fill="#f4efe2"${st()}/><path d="M16.5 80Q41 87 65.5 80" stroke="#2f5fa8" stroke-width="4" fill="none"/>` +
+      `<path d="M24 36V74" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".85"/><path d="M58 34V78" stroke="#ddd3bd" stroke-width="5" stroke-linecap="round" opacity=".7"/>` +
+      `<ellipse cx="41" cy="26" rx="27" ry="7" fill="#2f5fa8"${st()}/><ellipse cx="41" cy="27" rx="21.5" ry="4.2" fill="#e9e1cf"/>` +
+      `<path d="M50 33.5l3 1.5 2.5 -1 1 3.5 -2.5 3 -3.5 -.5 -1.5 -3z" fill="#2b2b33" stroke="#7a8a9a" stroke-width="1"/>`,
     pill: () => `<g transform="rotate(-30 50 55)"><path d="M50 45H30A10 10 0 0 0 30 65H50Z" fill="#fff"/><path d="M50 45H70A10 10 0 0 1 70 65H50Z" fill="#e0727a"/><rect x="20" y="45" width="60" height="20" rx="10" fill="none"${st()}/><path d="M50 45V65" stroke="${IO}" stroke-width="2"/><path d="M28 50H44" stroke="#fff" stroke-opacity=".8" stroke-width="2.4" stroke-linecap="round"/></g>`,
   };
   function item(name) {
@@ -1530,6 +1686,13 @@ function KockaArt() {
     zzz: () => outlined('M6 26h8l-8 9h8M17 14h10l-10 11h10M27 3h8l-8 8h8', 2.4),
     bang: () => `<path d="${poly(Array.from({ length: 16 }, (_, i) => { const a = i / 16 * 2 * Math.PI - Math.PI / 2, r = i % 2 ? 11 : 18; return [20 + Math.cos(a) * r, 20 + Math.sin(a) * r]; }))}" fill="#ffd04a"${st(2.5)}/><path d="M20 11.5v10" stroke="${IO}" stroke-width="4.5" stroke-linecap="round"/><circle cx="20" cy="28" r="2.6" fill="${IO}"/>`,
     note: () => outlined('M15 29V10l15-4v17', 2.6) + `<g fill="${C.ol}"${st(2.2)}><ellipse cx="11.5" cy="29.5" rx="4.6" ry="3.6" transform="rotate(-20 11.5 29.5)"/><ellipse cx="26.5" cy="23.5" rx="4.6" ry="3.6" transform="rotate(-20 26.5 23.5)"/></g>`,
+    // the watering can on her: a splash with drops flying up
+    splash: () => `<path d="M3 34Q8 25 13 29Q12 17 17 11Q22 17 21 27Q25 19 29 15Q33 22 28 30Q33 27 37 34Q30 39 20 38Q10 39 3 34Z" fill="#8fcdf0"${st(2.2)}/>` +
+      `<path d="M10 33Q20 29 31 33" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".8"/><path d="M17 15Q18 21 18 25" stroke="#fff" stroke-width="1.6" fill="none" stroke-linecap="round" opacity=".8"/>` +
+      [[6, 14, 1], [33, 6, 1.1], [24, 2, 0.8], [38, 20, 0.8], [2, 24, 0.7]].map(([x, y, k]) => `<path d="M${x} ${y}q${r1(2.6 * k)} ${r1(4.4 * k)} 0 ${r1(6.4 * k)}q${r1(-2.6 * k)} ${r1(-2 * k)} 0 ${r1(-6.4 * k)}z" fill="#8fcdf0"${st(1.4)}/>`).join(''),
+    // a sneeze: a small white cloud with two droplets
+    puff: () => `<path d="M9 30A6 6 0 0 1 8 18.5A7.5 7.5 0 0 1 20 11A7 7 0 0 1 32.5 16A6.5 6.5 0 0 1 31 30Z" fill="#fff"${st(2.2)}/><path d="M13 22q3-3 6-1" stroke="#c9d7e0" stroke-width="1.8" fill="none" stroke-linecap="round"/>` +
+      [[8, 33, 1], [17, 35, 0.8]].map(([x, y, k]) => `<path d="M${x} ${y}q${r1(2.2 * k)} ${r1(3.6 * k)} 0 ${r1(5.2 * k)}q${r1(-2.2 * k)} ${r1(-1.6 * k)} 0 ${r1(-5.2 * k)}z" fill="#a9d8f2"${st(1.2)}/>`).join(''),
     sparkle: () => `<path d="M17 3Q19 15 31 17Q19 19 17 31Q15 19 3 17Q15 15 17 3Z" fill="#ffe27a"${st(2)}/><path d="M31 26Q32 31 37 32Q32 33 31 38Q30 33 25 32Q30 31 31 26Z" fill="#ffe27a"${st(1.6)}/>`,
   };
   function fx(name) {
@@ -1891,7 +2054,7 @@ function KockaArt() {
   for (const [k, v] of Object.entries({ bowl: 58, bowlEmpty: 58, bowlFull: 58, waterBowl: 52, waterBowlEmpty: 52, litter: 104, litterDirty: 104, bed: 150, mouse: 34, catnipMouse: 34,
     feather: 70, yarn: 40, laserDot: 30, treat: 30, foodBag: 60, jug: 56, brush: 50, scoop: 50, pouch: 40, chicken: 56, tuna: 44, vacuum: 140, seedPacket: 40, wateringCan: 70, trowel: 44,
     pill: 24, pouchPack: 70, chickenPack: 70, tunaPack: 64, treatBag: 50, ballBell: 34, box: 120, tunnel: 190, scratcher: 130, catTree: 240, sillCushion: 140, bedDeluxe: 160,
-    rugRound: 280, lamp: 170, birdFeeder: 150, catFlap: 60, fishingRod: 120, featherWand: 120, featherBunch: 40 })) itemSize[k] = { w: v, h: v };
+    rugRound: 280, lamp: 170, birdFeeder: 150, catFlap: 60, fishingRod: 120, featherWand: 120, featherBunch: 40, mug: 26 })) itemSize[k] = { w: v, h: v };
   // in the item's own 100 × 100 box: the rod / wand tip (where the UI hangs its own string), the cat tree's platforms
   const itemPoints = { fishingRod: { tip: { x: 70, y: 10 } }, featherWand: { tip: { x: 60, y: 14 } }, catTree: { platforms: [{ x: 32, y: 58 }, { x: 71, y: 36 }, { x: 47, y: 8 }] } };
 
@@ -2034,7 +2197,7 @@ function KockaArt() {
 .kx-rub{animation:kx-rub 2.4s ease-in-out infinite}
 .kx-nuzzle{animation:kx-nuzzle 2.4s ease-in-out infinite}
 .kx-shakep{animation:kx-shakep .28s ease-in-out infinite}
-.kx-flick{animation:kx-flick .5s steps(2) infinite}
+.kx-flash{animation:kx-blinkon .5s steps(2) infinite}
 .kx-drip path{animation:kx-drip 1.6s ease-in infinite}
 .kx-rain{animation:kx-rain .5s linear infinite}
 .kx-snow{animation:kx-snow 4s linear infinite}
@@ -2045,11 +2208,22 @@ function KockaArt() {
 .kx-card{display:block;width:100%;height:auto}
 .kx-z{opacity:0;animation:kx-z 3s linear infinite}
 .kx-fleas circle{animation:kx-hop 1.3s ease-in-out infinite}
-.kx-scr{animation:kx-flick 1.1s steps(2) infinite}
+.kx-scr{animation:kx-blinkon 1.1s steps(2) infinite}
 .kx-laser{animation:kx-glow 1s ease-in-out infinite}
 .kx-icon{display:inline-block;width:24px;height:24px;vertical-align:middle;flex:none}
 .kx-fx{display:block;width:100%;height:100%;overflow:visible}
 .kx-fx-float{animation:kx-float 1.6s ease-out forwards}
+.koxa .kx-warn{animation:kx-warn .35s ease-in-out infinite}
+.koxa .kx-twitch{animation:kx-ripple .9s ease-in-out infinite}
+.koxa .kx-tread{animation:kx-tread .6s ease-in-out infinite}
+.koxa .kx-treadB{animation-delay:-.3s}
+.koxa .kx-kick{animation:kx-kick .4s ease-in-out infinite}
+.koxa .kx-kickB{animation-delay:-.2s}
+.kx-shake{animation:kx-shake .4s ease-in-out 3}
+.kx-drops path{transform-box:fill-box;transform-origin:50% 50%;animation:kx-drops .9s ease-out 1 both}
+.koxa .kx-achoo{animation:kx-achoo .5s ease-out 1}
+.koxa .kx-shakeHead{animation:kx-shakeHead .6s ease-in-out 1}
+.kx-flick .koxa .kx-earR,.koxa.kx-flick .kx-earR{animation:kx-earflick .4s ease-out 1}
 @keyframes kx-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
 @keyframes kx-twitch{0%,86%,100%{transform:rotate(0)}89%{transform:rotate(16deg)}92%{transform:rotate(-4deg)}95%{transform:rotate(8deg)}}
 @keyframes kx-sway{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
@@ -2082,13 +2256,22 @@ function KockaArt() {
 @keyframes kx-swing{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
 @keyframes kx-z{0%{opacity:0;transform:translate(0,0)}15%{opacity:1}100%{opacity:0;transform:translate(10px,-26px)}}
 @keyframes kx-hop{0%,100%{transform:translate(0,0)}30%{transform:translate(3px,-9px)}60%{transform:translate(-2px,-3px)}}
-@keyframes kx-flick{0%{opacity:1}100%{opacity:0}}
+@keyframes kx-blinkon{0%{opacity:1}100%{opacity:0}}
+@keyframes kx-warn{0%,100%{transform:rotate(-28deg)}50%{transform:rotate(28deg)}}
+@keyframes kx-ripple{0%,100%{transform:none}20%{transform:translate(2px,-1px) scaleY(1.5)}40%{transform:translate(-2px,0) scaleY(.6)}60%{transform:translate(1px,-1px) scaleY(1.2)}}
+@keyframes kx-tread{0%,100%{transform:none}50%{transform:rotate(11deg)}}
+@keyframes kx-kick{0%,100%{transform:rotate(0)}50%{transform:rotate(-20deg)}}
+@keyframes kx-shake{0%,100%{transform:none}20%{transform:rotate(-5deg) skewX(7deg)}45%{transform:rotate(5deg) skewX(-7deg)}70%{transform:rotate(-3deg) skewX(4deg)}}
+@keyframes kx-drops{0%{opacity:0;transform:translate(calc(var(--dx,0px) * -2),calc(var(--dy,0px) * -2)) scale(.5)}20%{opacity:1}70%{opacity:1;transform:none}100%{opacity:0;transform:translate(var(--dx,0px),var(--dy,0px))}}
+@keyframes kx-achoo{0%{transform:none}25%{transform:translate(1px,-3px) rotate(6deg) scale(1.04)}45%{transform:translate(-4px,7px) rotate(-8deg) scale(.96,1.04)}70%{transform:translate(-1px,2px) rotate(-2deg)}100%{transform:none}}
+@keyframes kx-shakeHead{0%,100%{transform:none}15%{transform:rotate(-14deg)}35%{transform:rotate(13deg)}55%{transform:rotate(-11deg)}75%{transform:rotate(8deg)}90%{transform:rotate(-3deg)}}
+@keyframes kx-earflick{0%,100%{transform:none}25%{transform:rotate(24deg)}50%{transform:rotate(-6deg)}75%{transform:rotate(10deg)}}
 @keyframes kx-glow{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
 @media (prefers-reduced-motion:reduce){.koxa,.koxa *,.kx-item *,.kx-room *,.kx-fx-float{animation:none!important}.koxa .kx-z{opacity:.9}}
 `;
 
   return { css, cat, poses: Object.keys(POSES), regions, kitScale, kitAnchor, room, bedSpots, spots: spotsAt, item, items: Object.keys(ITEMS), face,
-    mouth, itemHeld, sunPatch, rooms, lap, lapSpot, crop, crops: CROPS, cropSlot, anchors: ANCHORS, itemSize, itemPoints, mouseHole, mousePeek, fish, fishes: Object.keys(FISH), marker,
+    mouth, headPoint, itemHeld, sunPatch, rooms, lap, lapSpot, crop, crops: CROPS, cropSlot, anchors: ANCHORS, itemSize, itemPoints, mouseHole, mousePeek, fish, fishes: Object.keys(FISH), marker,
     shop, shopSpots, postcardFrame, postcardHole, photoFrame, photoHole, neighbour, neighbours, icon, icons: Object.keys(ICONS), fx, fxs: Object.keys(FX), vet, vetSpots };
 }
 /* ---------- Cat art end ---------- */
@@ -2117,7 +2300,17 @@ function KockaArt() {
 //   opts.strokeStep       number or getter: overrides that step (px)
 //   opts.time(e)          → ms of a pointer event (default e.timeStamp; tests may pass their own clock)
 //   opts.on(ev)           receives { type, ... }:
-//     tap        { x, y, item, region, cat }       released before LONG_MS, moved < SLOP px and did not rub
+//     tap        { x, y, item, region, cat, t, pat }   released before LONG_MS, moved < SLOP px and did not rub;
+//                t = ms of the release (opts.time); pat only in 'care' (the key is absent in other modes): the run of
+//                taps on a cat this tap belongs to (Škádlení, SPEC §13.1), { n, ms, cv, region } when the tap is on a cat
+//                (cat, a region hit, no item), else null. n = taps in the run including this one; ms, cv = rhythm() of
+//                the run's last PAT_WINDOW tap times; region = the hit region's id. A pat continues the run when it
+//                comes ≤ PAT_GAP ms after the previous one and hits the same region id, or the same cat (Koxa: no
+//                'v:' prefix; a visitor: the same 'v:<id>:' prefix) ≤ PAT_NEAR px from the previous tap; otherwise a
+//                new run starts (n = 1). The run is cleared by a tap with pat null, every other emitted event, every
+//                pointer released (or taken by the browser) without a tap (fingers that were only ignored, a resting
+//                thumb or a third finger, do not count), setMode(), cancel() and detach(). Two fingers that overlap in
+//                time on Koxa are a scratch (no taps) as before; taps that do not overlap form a run like any taps.
 //     longpress  { x, y }                          LONG_MS still, not on Koxa and not on an item
 //     pickup     { x, y }                          LONG_MS still on Koxa (rubbing over HOLD_PATH px or turning back
 //                                                  HOLD_REVERSALS times is not still); then:
@@ -2162,17 +2355,21 @@ function KockaArt() {
 //   every MIC_POLL_MS; onCall() when the level stays ≥ threshold for MIC_CALL_MS (then MIC_COOLDOWN_MS pause).
 //   States 'off'|'ask'|'ok'|'denied'|'none'. The tracks are released on stop(), on maxMs and when the page hides.
 // Sound:  I.sound.meow(mood) → variant, say(kind) → kind|null, purr(on, intensity 0…1), nom(), hiss(), chirp(),
-//   setEnabled(bool), unlock(), KINDS, last(). meow() picks a variant fitting the mood ('happy'|'calm'|'grumpy'|'sad'|
+//   fx(name) → name|null, FX, setEnabled(bool), unlock(), KINDS, last(). meow() picks a variant fitting the mood ('happy'|'calm'|'grumpy'|'sad'|
 //   'want'|'offended'), never the same twice in a row; kinds: mew, meow, demand, plaintive, chirp, trill, question,
 //   yowl, hiss, purr, nom, lap; every call is randomized (pitch ±15 %, length, contour, loudness). purr(true, x) while
-//   purring only changes the intensity. WebAudio, no files: formant synthesis (SPEC §12a). The AudioContext is created on the first user gesture (attach() calls unlock() on taps;
+//   purring only changes the intensity. WebAudio, no files: formant synthesis (SPEC §12a). fx(name): one Škádlení
+//   effect (SPEC §13.1), FX = ['sneeze', 'splash', 'shake', 'clink'], randomized a little every time; they are not meow
+//   kinds (never in KINDS); null when the name is unknown or the sound is silent (the same gates as say). The AudioContext is created on the first user gesture (attach() calls unlock() on taps;
 //   call it from your own buttons too). Silent when disabled, before any gesture and while the page is hidden.
 // Vibration:  I.vibrate(pattern) (ms, an array or a name from I.BUZZ), I.setVibrate(bool)
 // Pure helpers (tests): classifyStroke(fur, dx, dy, dt, path?), reversals(samples), isScratch(samples),
 //   flickVelocity(samples) → { vx, vy, speed }, follow(p, target, dtMs, lagMs?), stepToy(b, dtS, w, h),
 //   strokeStepFor(catWidth), holdMoved(samples), majorityRegion([region|null]), isRub(samples), isCircle(samples),
 //   isDoubleSwipe([{ dir, t }]), classifyCue(samples, t0?) → { type: 'circle'|'swipe'|'miss', dir?, reason?, dx, dy },
-//   voiceParams(kind, rnd?) (one randomized call), pickKind(mood, last, rnd?)
+//   voiceParams(kind, rnd?) (one randomized call), pickKind(mood, last, rnd?),
+//   rhythm(times) → { n, ms, cv } (ascending tap times in ms: n = count, ms = the mean interval rounded, cv = its
+//   population standard deviation / mean rounded to 0.01; fewer than 2 times → ms 0, cv 0)
 //   samples = [{ x, y, t }] with t in ms. I.T = all thresholds.
 function KockaInput() {
   'use strict';
@@ -2191,6 +2388,7 @@ function KockaInput() {
     TOY_FRICTION: 1.2, TOY_BOUNCE: 0.6,
     TILT_DEAD: 0.025, TILT_WAIT_MS: 1000, TILT_LEVEL_MS: 300, TILT_SMOOTH: 0.4,
     MIC_CALL_LEVEL: 0.6, MIC_CALL_MS: 250, MIC_COOLDOWN_MS: 1500, MIC_POLL_MS: 50, MIC_FLOOR_DB: -60,
+    PAT_GAP: 900, PAT_NEAR: 24, PAT_WINDOW: 6,
   };
   const BUZZ = { tap: 10, purr: [6, 60, 6, 60, 6, 60, 6], bite: 70, call: [20, 80, 20] };
   const IGNORE = 'button,a,input,select,textarea,label,[data-no-gesture]';
@@ -2370,6 +2568,19 @@ function KockaInput() {
     if (Math.hypot(b.vx, b.vy) < 5) b.vx = b.vy = 0;
     return hit;
   }
+  // the tempo of a run of taps: times = ascending ms → { n, ms (mean interval), cv (its population standard
+  // deviation / mean, to 0.01) }; fewer than 2 times → ms 0, cv 0
+  function rhythm(times) {
+    const list = Array.isArray(times) ? times : [], n = list.length;
+    if (n < 2) return { n, ms: 0, cv: 0 };
+    let sum = 0;
+    for (let i = 1; i < n; i++) sum += list[i] - list[i - 1];
+    const mean = sum / (n - 1);
+    let sq = 0;
+    for (let i = 1; i < n; i++) { const d = list[i] - list[i - 1] - mean; sq += d * d; }
+    const cv = mean ? Math.sqrt(sq / (n - 1)) / mean : 0;
+    return { n, ms: Math.round(mean), cv: Math.round(cv * 100) / 100 };
+  }
 
   /* ---------- Gestures ---------- */
   // stroke step for a cat drawn w px wide: short enough for the chin and the ears, at most SPEC's 40 px
@@ -2401,7 +2612,8 @@ function KockaInput() {
     const on = typeof opts.on === 'function' ? opts.on : () => {};
     const time = typeof opts.time === 'function' ? opts.time : (e => e.timeStamp || performance.now());
     const ignore = opts.ignore === undefined ? IGNORE : opts.ignore;
-    const emit = (type, d) => on(Object.assign({ type }, d));
+    let run = null;           // the pat run ('care'): { n, times, id, who, x, y, t } of its last tap (SPEC §13.1)
+    const emit = (type, d) => { if (type !== 'tap') run = null; on(Object.assign({ type }, d)); };
     const region = (x, y) => (opts.hitRegion && opts.hitRegion(x, y)) || null;
     const onCat = (x, y) => (opts.hitCat ? !!opts.hitCat(x, y) : !!region(x, y));
     const itemAt = (x, y) => (opts.hitItem && opts.hitItem(x, y)) || null;
@@ -2613,10 +2825,13 @@ function KockaInput() {
       try { el.releasePointerCapture(e.pointerId); } catch (err) {}
       sound.unlock();
       endRub(P);
+      // any press that did not move, did not rub and was not a long press is a tap; every other release ends a pat run
+      // (a finger that was only ignored does not)
+      const isTap = P.kind === 'pending' && !P.moved && !P.rubbed && !P.noTap && t - P.t0 < T.LONG_MS;
+      if (!isTap && P.kind !== 'idle') run = null;
       if (P.kind === 'laser') emit('laser', { x, y, on: false });
       else if (P.kind === 'pending') {
-        // any press that did not move, did not rub and was not a long press is a tap
-        if (!P.moved && !P.rubbed && !P.noTap && t - P.t0 < T.LONG_MS) emit('tap', { x, y, item: P.item, region: mode === 'care' || mode === 'train' ? region(x, y) : null, cat: P.cat });
+        if (isTap) tapped(P, x, y, t);
       } else if (P.kind === 'stroke') {
         if (P.seg.path >= T.STROKE_TAIL) strokeEnd(P, x, y, t);  // the rest of the stroke counts too
         // tricks: a quick straight move that did not start on Koxa and did not stroke her
@@ -2638,6 +2853,28 @@ function KockaInput() {
       } else if (P.kind === 'carry') emit('drop', { x, y, target: target(x, y, 'cat') });
       else if (P.kind === 'scratch') endScratch(t);
     }
+    function tapped(P, x, y, t) {
+      const reg = mode === 'care' || mode === 'train' ? region(x, y) : null;
+      const ev = { x, y, item: P.item, region: reg, cat: P.cat, t };
+      if (mode === 'care') ev.pat = patOf(P, reg, x, y, t);   // set before the event: a cancel() in the handler wins
+      emit('tap', ev);
+    }
+    // which cat a region id belongs to: '' = Koxa, 'v:<id>:' = a visitor
+    const whoOf = id => { const m = /^v:[^:]*:/.exec(id); return m ? m[0] : ''; };
+    // the pat of a tap: continues the run or starts a new one; null (and no run) off the cat or on an item
+    function patOf(P, reg, x, y, t) {
+      if (!P.cat || P.item || !reg || reg.id == null) { run = null; return null; }
+      const id = String(reg.id), who = whoOf(id), dt = run ? t - run.t : -1;
+      const goOn = run && dt >= 0 && dt <= T.PAT_GAP &&
+        (id === run.id || (who === run.who && Math.hypot(x - run.x, y - run.y) <= T.PAT_NEAR));
+      if (!goOn) run = { n: 0, times: [] };
+      run.n++;
+      run.times.push(t);
+      if (run.times.length > T.PAT_WINDOW) run.times.shift();
+      Object.assign(run, { id, who, x, y, t });
+      const r = rhythm(run.times);
+      return { n: run.n, ms: r.ms, cv: r.cv, region: reg.id };
+    }
     function swiped(dir, dx, dy, x, y, t, t0) {
       emit('swipe', { dir, dx, dy, x, y });
       swipes = swipes.concat([{ dir, t, t0 }]).slice(-2);
@@ -2647,6 +2884,7 @@ function KockaInput() {
     // the browser took the pointer (a system gesture, a scroll) or the mode changed: nothing is applied
     function drop(P) {
       ptrs.delete(P.id);
+      if (P.kind !== 'idle') run = null;                      // taken without a tap: the pat run ends
       if (P.kind === 'raw') { emit('pup', { id: P.id, x: P.x, y: P.y, t: P.t, cancel: true }); return; }
       clearTimeout(P.timer);
       endRub(P);
@@ -2656,7 +2894,7 @@ function KockaInput() {
       else if (P.kind === 'scratch') endScratch(P.t);
     }
     function cancelEv(e) { const P = ptrs.get(e.pointerId); if (P) drop(P); }
-    function cancelAll() { for (const P of [...ptrs.values()]) drop(P); ptrs.clear(); scr = null; }
+    function cancelAll() { for (const P of [...ptrs.values()]) drop(P); ptrs.clear(); scr = null; run = null; }
     const noMenu = e => e.preventDefault();                  // Android shows a menu after a long press
     el.addEventListener('pointerdown', down);
     el.addEventListener('pointermove', move);
@@ -2674,9 +2912,9 @@ function KockaInput() {
       el.removeEventListener('contextmenu', noMenu);
     }
     detach.detach = detach;
-    detach.setMode = m => { if (m !== mode) { cancelAll(); mode = m; } };
+    detach.setMode = m => { if (m !== mode) { cancelAll(); mode = m; } run = null; };
     detach.mode = () => mode;
-    detach.cancel = cancelAll;
+    detach.cancel = cancelAll;                              // also ends the pat run (the next pat is n = 1)
     detach.active = () => ptrs.size > 0;                    // a finger is down (a gesture may be under way)
     detach.strokeStep = stepLen;
     return detach;
@@ -2969,6 +3207,100 @@ function KockaInput() {
         t += r(0.14, 0.24);
       }
     }
+    /* Škádlení effects (SPEC §13.1): short, not loud, a little different every time */
+    // a falling exponential envelope on a gain: silent → peak after `attack` s → silent after `decay` more s
+    function ping(g, t, peak, attack, decay) {
+      g.setValueAtTime(0.0001, t);
+      g.exponentialRampToValueAtTime(peak, t + attack);
+      g.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+    }
+    // "hapčí" (~0.35 s): a soft breath in, a tiny voiced "a", then a sharp noise burst with a high formant
+    function sneezeAt(c, t, dest = master) {
+      const inhale = r(0.09, 0.13), tb = t + inhale + r(0.02, 0.04);
+      const n1 = noise(c), b1 = c.createBiquadFilter(), g1 = c.createGain();
+      b1.type = 'bandpass'; b1.Q.value = 1.2;
+      b1.frequency.setValueAtTime(r(900, 1300), t); b1.frequency.linearRampToValueAtTime(r(1600, 2200), t + inhale);
+      g1.gain.setValueAtTime(0, t); g1.gain.linearRampToValueAtTime(r(0.05, 0.08), t + inhale); g1.gain.linearRampToValueAtTime(0, t + inhale + 0.03);
+      n1.connect(b1); b1.connect(g1); g1.connect(dest); n1.start(t); n1.stop(t + inhale + 0.05);
+      const f = r(560, 720), o = c.createOscillator(), vb = c.createBiquadFilter(), og = c.createGain();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f * 1.1, tb - 0.05); o.frequency.exponentialRampToValueAtTime(f * 0.85, tb + 0.01);
+      vb.type = 'bandpass'; vb.frequency.value = r(1000, 1250); vb.Q.value = 4;
+      og.gain.setValueAtTime(0, tb - 0.05); og.gain.linearRampToValueAtTime(r(0.12, 0.18), tb - 0.035); og.gain.linearRampToValueAtTime(0, tb + 0.005);
+      o.connect(vb); vb.connect(og); og.connect(dest); o.start(tb - 0.05); o.stop(tb + 0.02);
+      const n2 = noise(c), hp = c.createBiquadFilter(), pk = c.createBiquadFilter(), g2 = c.createGain(), d = r(0.16, 0.22);
+      hp.type = 'highpass'; hp.frequency.value = r(1800, 2400);
+      pk.type = 'peaking'; pk.frequency.value = r(3800, 5200); pk.Q.value = 2; pk.gain.value = 10;
+      ping(g2.gain, tb, r(0.2, 0.28), 0.006, d);
+      n2.connect(hp); hp.connect(pk); pk.connect(g2); g2.connect(dest); n2.start(tb); n2.stop(tb + d + 0.03);
+    }
+    // water poured on fur (~0.5 s): a noise burst getting duller as it decays, a bubbly flutter, droplet ticks
+    function splashAt(c, t, dest = master) {
+      const d = r(0.4, 0.55), nz = noise(c), lp = c.createBiquadFilter(), am = c.createGain(), g = c.createGain();
+      lp.type = 'lowpass'; lp.Q.value = 0.8;
+      lp.frequency.setValueAtTime(r(3500, 4500), t); lp.frequency.exponentialRampToValueAtTime(r(700, 1000), t + d);
+      const l = c.createOscillator(), lg = c.createGain();
+      am.gain.value = 0.75; l.type = 'triangle'; l.frequency.value = r(18, 26); lg.gain.value = 0.25;
+      l.connect(lg); lg.connect(am.gain);
+      ping(g.gain, t, r(0.22, 0.3), 0.012, d);
+      nz.connect(lp); lp.connect(am); am.connect(g); g.connect(dest);
+      nz.start(t); nz.stop(t + d + 0.05); l.start(t); l.stop(t + d + 0.05);
+      const drops = 5 + Math.floor(Math.random() * 5);
+      for (let i = 0; i < drops; i++) {
+        const tt = t + r(0.04, d), f = r(700, 1600), o = c.createOscillator(), og = c.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(f, tt); o.frequency.exponentialRampToValueAtTime(f * r(1.6, 2.3), tt + r(0.02, 0.04));
+        ping(og.gain, tt, r(0.04, 0.09), 0.003, 0.05);
+        o.connect(og); og.connect(dest); o.start(tt); o.stop(tt + 0.07);
+      }
+    }
+    // a quick whole-body shake (~0.6 s): fluttering fur noise, amplitude modulated ~12 Hz and slowing a little, a low flap
+    function shakeAt(c, t, dest = master) {
+      const d = r(0.5, 0.65), rate = r(11, 13), peak = r(0.18, 0.25);
+      const nz = noise(c), bp = c.createBiquadFilter(), low = c.createBiquadFilter(), lowG = c.createGain();
+      bp.type = 'bandpass'; bp.frequency.value = r(900, 1500); bp.Q.value = 0.7;
+      low.type = 'lowpass'; low.frequency.value = r(250, 350); lowG.gain.value = 1.2;
+      const am = c.createGain(), l = c.createOscillator(), lg = c.createGain();
+      am.gain.value = 0.5; l.type = 'triangle'; lg.gain.value = 0.5;
+      l.frequency.setValueAtTime(rate, t); l.frequency.linearRampToValueAtTime(rate * 0.8, t + d);
+      l.connect(lg); lg.connect(am.gain);
+      const g = c.createGain();
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + 0.06);
+      g.gain.setValueAtTime(peak, t + d * 0.6); g.gain.linearRampToValueAtTime(0, t + d);
+      nz.connect(bp); bp.connect(am); nz.connect(low); low.connect(lowG); lowG.connect(am); am.connect(g); g.connect(dest);
+      nz.start(t); nz.stop(t + d + 0.05); l.start(t); l.stop(t + d + 0.05);
+    }
+    // an enamel mug hitting tiles: a few inharmonic partials (1.2–3.5 kHz) with a fast decay and a click, then a
+    // smaller clink ~120 ms later (it bounces)
+    function clinkAt(c, t, dest = master) {
+      const base = r(1200, 1260);
+      const ding = (tt, a, f0) => {
+        const out = c.createGain(); out.gain.value = 1; out.connect(dest);
+        const parts = [[1, 1, 0.18], [1.47, 0.6, 0.12], [2.09, 0.45, 0.09], [2.76, 0.3, 0.06]];
+        for (const [ratio, w, dk] of parts) {
+          const o = c.createOscillator(), og = c.createGain(), dec = dk * r(0.8, 1.2);
+          o.type = 'sine'; o.frequency.value = Math.min(3500, f0 * ratio * r(0.98, 1.02));
+          ping(og.gain, tt, a * w / 2.35, 0.002, dec);
+          o.connect(og); og.connect(out); o.start(tt); o.stop(tt + dec + 0.03);
+        }
+        const nz = noise(c), hp = c.createBiquadFilter(), ng = c.createGain();
+        hp.type = 'highpass'; hp.frequency.value = 3000;
+        ping(ng.gain, tt, a * 0.4, 0.001, 0.008);
+        nz.connect(hp); hp.connect(ng); ng.connect(out); nz.start(tt); nz.stop(tt + 0.02);
+      };
+      const a = r(0.18, 0.24);
+      ding(t, a, base);
+      ding(t + r(0.1, 0.14), a * r(0.4, 0.55), base * r(0.97, 1.03));
+    }
+    const FX_AT = { sneeze: sneezeAt, splash: splashAt, shake: shakeAt, clink: clinkAt };
+    const FX = Object.keys(FX_AT);
+    // fx(name): one Škádlení effect; returns the name, or null when unknown or silent (off, before a gesture, hidden)
+    function fx(name) {
+      if (!FX.includes(name)) return null;
+      const c = ready(); if (!c) return null;
+      FX_AT[name](c, c.currentTime + 0.02);
+      return name;
+    }
     // say(kind): one sound of that variant, randomized every time; returns the kind (or null when silent)
     function say(kind, o = {}) {
       if (!KINDS.includes(kind)) kind = 'meow';
@@ -3051,12 +3383,13 @@ function KockaInput() {
         nodes.timer = setTimeout(() => cycle(next), Math.max(0, (next - c.currentTime - 0.3) * 1000));
       })(t0 + 0.05);
     }
-    // tests and tuning: renders one call of a kind offline → Promise({ data: Float32Array, rate, params })
+    // tests and tuning: renders one call of a kind (or an fx name) offline → Promise({ data: Float32Array, rate, params })
     function render(kind, rate = 22050) {
       const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
       if (!OAC) return Promise.reject(new Error('no OfflineAudioContext'));
       const p = voiceParams(kind), oc = new OAC(1, Math.ceil(rate * ((p.d || 1) + 1.3)), rate);
-      if (kind === 'hiss') hissAt(oc, 0.01, oc.destination);
+      if (FX.includes(kind)) FX_AT[kind](oc, 0.01, oc.destination);
+      else if (kind === 'hiss') hissAt(oc, 0.01, oc.destination);
       else if (kind === 'nom') nomAt(oc, 0.01, oc.destination);
       else voice(oc, p, 0.01, oc.destination);
       return oc.startRendering().then(b => ({ data: b.getChannelData(0), rate, params: p }));
@@ -3064,7 +3397,7 @@ function KockaInput() {
     const nom = () => say('nom'), hiss = () => say('hiss'), chirp = () => say('chirp');
     function setEnabled(b) { enabled = !!b; if (!enabled) purr(false); }
     function unlock() { if (enabled) getCtx(); }
-    return { meow, say, purr, nom, hiss, chirp, setEnabled, unlock, render, KINDS,
+    return { meow, say, purr, nom, hiss, chirp, fx, FX, setEnabled, unlock, render, KINDS,
       enabled: () => enabled, purring: () => !!purrNodes, last: () => lastSaid };
   })();
 
@@ -3154,7 +3487,7 @@ function KockaInput() {
 
   return { attach, tilt, mic, sound, vibrate, setVibrate, BUZZ, T,
     classifyStroke, reversals, isScratch, flickVelocity, follow, stepToy, strokeStepFor, holdMoved, majorityRegion, isRub, isCircle, isDoubleSwipe, classifyCue,
-    voiceParams, pickKind, VOWEL, VARIANT };
+    rhythm, voiceParams, pickKind, VOWEL, VARIANT };
 }
 /* ---------- Input end ---------- */
 </script>
@@ -3247,6 +3580,23 @@ function KockaInput() {
 //   treatVisitor { id }, playVisitor { id, caught: 'koxa' | 'visitor' }, invite { id }; photo also takes
 //   { vpose, vx, vflip, nokoxa } (where the visitor stood; nokoxa: Koxa is not in the picture)
 // Phase C action: nameKitten { id, name }
+//   Škádlení (teasing out of love, SPEC §13; st.tease):
+//   pat { region, stage: 'like'|'bliss'|'tolerate'|'warn', close?, rear?, sleeping?, eating? }   a pat that did nothing
+//                                   bigger (region after the alias; close and rear with bliss; sleeping: true asleep or
+//                                   dozing on the lap, nothing changes; eating: true while she eats)
+//   flop { lap }                    after the bliss pat at tap 8: she flops on her side
+//   blowUp { why: 'fast'|'grumpy'|'tail'|'eat', lap }   the warned run went on 1.8 s ('eat' is the mild one: she leaves the bowl)
+//   loveBite { lap }                over-patting went on 1.8 s after its warning (no sulk)
+//   trap                            a pat on the belly: she grabs the hand (no claws)
+//   boop { swat? }                  a nose tap (swat: true on the 3rd within 60 s)
+//   swat { why: 'pat'|'boop'|'stroke'|'scratch' }   touched while cross (no claws)
+//   splash                          the watering can on her
+//   sulk { until } / cross { until } a sulk starts or is prolonged / a cross starts or is renewed
+//   sulkEnd / crossEnd              the time ran out
+//   reconcile { by: 'stroke'|'scratch'|'treat', bond }   made up after a sulk (bond: whether bond +1 was given today)
+//   payback { kind: 'shelf'|'ambush' }   her revenge, at most once a day (watching only, when she is free)
+//   Order inside one action: lapLeave → the cause (blowUp/loveBite/boop/splash) → sulk/cross → found
+// Teasing actions: pat { region, n, ms, cv, eating }, boop, splash
 function KockaEngine() {
   const MIN = 60000, HOUR = 60 * MIN, DAY = 24 * HOUR, STEP = 10 * MIN;
   const AWAY = 72 * HOUR;          // longer absence: paní Nováková took her (§4); the rest is not simulated
@@ -3364,7 +3714,7 @@ function KockaEngine() {
     belly: { name: 'bříško', loc: 'na bříšku' },
     tail: { name: 'ocas', loc: 'na ocase' }, paws: { name: 'tlapky', loc: 'na tlapkách' },
   });
-  const REGION_ALIAS = deep({ paw: 'paws', side: 'back' });   // older or other spellings of the same region
+  const REGION_ALIAS = deep({ paw: 'paws', side: 'back', nose: 'head' });   // older or other spellings of the same region (the nose is the head)
   const regionOf = (r, def) => typeof r !== 'string' ? def : Object.prototype.hasOwnProperty.call(REGIONS, r) ? r : Object.prototype.hasOwnProperty.call(REGION_ALIAS, r) ? REGION_ALIAS[r] : def;
   const SPOTS = deep(Object.keys(REGIONS).filter(k => REGIONS[k].spot));
   const FEARS = deep({ vacuum: { name: 'vysavač', gen: 'vysavače' }, storm: { name: 'bouřka', gen: 'bouřky' }, fireworks: { name: 'ohňostroj', gen: 'ohňostroje' } });
@@ -3385,14 +3735,39 @@ function KockaEngine() {
   });
   const ACTIONS = deep(['feed', 'water', 'stroke', 'scratch', 'pickUp', 'putDown', 'play', 'brush', 'cleanLitter', 'letOut', 'letIn', 'treat', 'vetCure', 'pill', 'call', 'vacuum', 'lapOn', 'lapOff',
     'goGarden', 'goHouse', 'fetchDown', 'sow', 'waterBeds', 'harvest', 'catnip', 'buy', 'place', 'sell', 'train', 'showTrick',
-    'feedVisitor', 'strokeVisitor', 'photo', 'deletePhoto', 'treatVisitor', 'playVisitor', 'invite', 'nameKitten']);
+    'feedVisitor', 'strokeVisitor', 'photo', 'deletePhoto', 'treatVisitor', 'playVisitor', 'invite', 'nameKitten', 'pat', 'boop', 'splash']);
+  // Škádlení (SPEC §13.3): patting, the nose tap, the watering can, the sulk / cross, making up and her payback
+  const TEASE = deep({
+    fast: 260,           // ms: a mean interval under this is drumming ("fast")
+    regular: 0.3,        // cv under this is regular
+    warnN: 3,            // irritation paths warn from this tap of the run
+    overN: 14,           // every other path warns (over-patting) from this tap
+    warnMs: 1800,        // blowUp / loveBite only when the run goes on at least this long after the warning
+    runGap: 1500,        // ms: a pat later than this after tease.at belongs to a new run (the engine's own check)
+    rearN: 3, flopN: 8, flopClose: 0.4,   // bliss: the rear up from tap 3; the flop exactly at tap 8 when close >= 0.4
+    closeSpan: 300,      // close = clamp(1 - |ms - fav| / 300, 0, 1)
+    fav: [400, 650],     // her favourite tempo (ms): patTempo(st)
+    like: 1, bliss: 1, blissClose: 0.5,   // love per pat: like +1, bliss +1 + 0.5 × close
+    gainMax: 8, gainWin: 10,              // love from pats: at most +8 per 10-minute window
+    flopLove: 4, bond: 1,                 // the flop: love +4 over the cap (once a window: gain = 12), bond +1 (once a day, shared with reconcile)
+    heatMax: 10, cool: 10,                // heat 0..10, −1 per 10 minutes
+    heat: { blowUp: 2, eat: 1, loveBite: 1, trap: 1, boop: 1, splash: 2 },
+    crossAt: 5,                           // heat >= 5 after adding = cross, else sulk
+    sulkMin: 3, crossMin: 20,
+    love: { blowUp: -2, eat: -1, loveBite: -1, splash: -3, reconcile: 3 },
+    boopN: 3, boopWin: 60000,             // the 3rd nose tap within 60 s = a swat
+    wetMin: 30,                           // splash: wet until max(st.wet, t + 30 min)
+    pay: { p: 0.5, min: 5, max: 25, lapse: 120, ext: 5 },   // payback: chance for a sulk, delay after the end, lapse, see below
+    mood: { sulk: -10, cross: -20 },
+  });
+  const TEASE_DIARY = ['bliss', 'boop', 'reconcile', 'splash', 'payback'];
   const CMAX = 1e6;  // counters saturate here (inc)
   const COUNTS = ['favFood', 'belly', 'toy', 'quirk'].concat(SPOTS.map(s => 'spot_' + s));
   // pal*: Koxa and a neighbour cat (the cat is st.diaryCat[id])
   const PAL_DIARY = ['palFirst', 'palGroom', 'palSnuggle'];
   // the entries that name a neighbour cat (st.diaryCat), in this order; kittens: the mother, kitGrown: the kitten
   const CAT_DIARY = PAL_DIARY.concat(['sleepover', 'kittens', 'kitGrown']);
-  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], CAT_DIARY);
+  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY);
 
   /* --- small helpers --- */
   const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
@@ -3406,6 +3781,15 @@ function KockaEngine() {
   const rnd = st => { st.n = (st.n + 1) >>> 0; return hash32(st.seed, st.n, 1) / 4294967296; };
   const rndDay = (st, dayNo, salt) => hash32(st.seed, dayNo, salt) / 4294967296;
   const rndSeed = (seed, a, salt) => hash32(seed, a, salt) / 4294967296;
+  // teasing (SPEC §13.3): her favourite pat tempo 400–650 ms from the seed (not stored; k = 8 is free in drawTraits)
+  const patTempo = st => TEASE.fav[0] + Math.floor(hash32(st.seed, 0x7A17, 8) / 4294967296 * (TEASE.fav[1] - TEASE.fav[0] + 1));
+  const freshTease = () => ({ kind: null, until: 0, heat: 0, at: 0, warnAt: 0, boops: [], gain: 0, gainAt: 0, pay: null, payDay: 0, bondDay: 0, splash: 0 });
+  // a sulk or a cross runs at t (default: st.t)
+  const teasing = (st, t) => { const T = st.tease, x = t === undefined ? st.t : t; return !!(T && T.kind && x < T.until); };
+  const teaseKind = (st, t) => (teasing(st, t) ? st.tease.kind : null);
+  const longOff = (st, t) => !!(st.off && t < st.off.until);
+  // heat cools analytically (−1 per 10 min from the value at tease.at), so the step length never matters
+  const heatNow = (T, t) => Math.max(0, T.heat - (t - T.at) / (TEASE.cool * MIN));
   const ymd = ms => { const d = new Date(ms); return [d.getFullYear(), d.getMonth(), d.getDate(), d.getHours()]; };
   const dkey = ms => { const [y, m, d] = ymd(ms); return y * 10000 + (m + 1) * 100 + d; };   // local day, 20261112
   // the next local day's key (t + 24 h is not enough on the day the clocks go back)
@@ -3497,7 +3881,7 @@ function KockaEngine() {
       yard: null, wet: 0, beds: Array(BEDS).fill(null), pantry: {}, postcards: [], presents: {},
       stock: {}, owned: {}, furniture: {}, records: {}, tricks: {}, earnDay: { key: dkey(now), n: 0 }, train: null,
       visitors: {}, visit: null, album: [], diaryCat: {}, guest: null, invDay: 0, jealous: null, jealousAt: 0,
-      kits: [], litter: null,
+      kits: [], litter: null, tease: freshTease(),
     };
     for (const k of COUNTS) st.cnt[k] = 0;
     return st;
@@ -3599,6 +3983,7 @@ function KockaEngine() {
     st.acc = { fleas: num(A.fleas, 0, 0, 10 * DAY), tummy: num(A.tummy, 0, 0, 10 * DAY), cold: num(A.cold, 0, 0, 10 * DAY) };
     st.off = st.off && typeof st.off === 'object' && soon(st.off.until, DAY) ? { until: st.off.until, turned: st.off.turned === true } : null;
     st.scared = soon(st.scared, 2 * HOUR);
+    st.tease = repairTease(st.tease, st, t);
     st.litterAt = okT(st.litterAt) && st.litterAt >= t - 2 * DAY && st.litterAt <= t + 9 * HOUR ? st.litterAt : t + 8 * HOUR;
     st.walkMax = num(st.walkMax, 0, 0, 100 * DAY);
     const year = new Date(t).getFullYear();
@@ -3631,7 +4016,35 @@ function KockaEngine() {
     for (const k of Object.keys(st)) if (!STATE_KEYS.includes(k)) delete st[k];
     return st;
   }
-  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat', 'guest', 'invDay', 'jealous', 'jealousAt', 'kits', 'litter'];
+  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat', 'guest', 'invDay', 'jealous', 'jealousAt', 'kits', 'litter', 'tease'];
+  // the canonical st.tease (SPEC §13.3), after st.wet and st.off were repaired; st.off is never changed here
+  function repairTease(Z, st, t) {
+    const okT = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
+    const num = (v, lo, hi) => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, lo, hi) : 0);
+    const past = v => (okT(v) && v <= t ? v : 0);
+    const day = v => (isKey(v) && v <= dkey(t) ? v : 0);
+    const T = Z && typeof Z === 'object' && !Array.isArray(Z) ? Z : {}, off = longOff(st, t);
+    const kind = (T.kind === 'sulk' || T.kind === 'cross') && okT(T.until) && T.until > t &&
+      T.until <= t + (T.kind === 'sulk' ? TEASE.sulkMin : TEASE.crossMin) * MIN && !off ? T.kind : null;
+    const at = past(T.at), heat = at ? num(T.heat, 0, TEASE.heatMax) : 0;
+    const warnAt = okT(T.warnAt) && T.warnAt <= at ? T.warnAt : 0;
+    const boops = (Array.isArray(T.boops) ? T.boops : []).filter(b => okT(b) && b > t - TEASE.boopWin && b <= t).sort((a, b) => a - b).slice(-(TEASE.boopN - 1));
+    let gainAt = past(T.gainAt), gain = num(T.gain, 0, TEASE.gainMax + TEASE.flopLove);
+    if (!gainAt || t - gainAt >= TEASE.gainWin * MIN) { gainAt = 0; gain = 0; }
+    const P = T.pay && typeof T.pay === 'object' ? T.pay : {};
+    const pay = (P.kind === 'shelf' || P.kind === 'ambush') && okT(P.at) && P.at > t - TEASE.pay.lapse * MIN && P.at <= t + 45 * MIN && !off ? { kind: P.kind, at: P.at } : null;
+    return {
+      kind, until: kind ? T.until : 0, heat, at, warnAt, boops, gain, gainAt, pay, payDay: day(T.payDay), bondDay: day(T.bondDay),
+      splash: okT(T.splash) && T.splash > t && T.splash === st.wet ? T.splash : 0,
+    };
+  }
+  // after an advance or an act: the nose taps of the last 60 s, the love window, "wet from the can" (canonical as repair)
+  function teaseTidy(st) {
+    const T = st.tease, t = st.t;
+    if (T.boops.length && T.boops[0] <= t - TEASE.boopWin) T.boops = T.boops.filter(b => b > t - TEASE.boopWin);
+    if (T.gainAt && t - T.gainAt >= TEASE.gainWin * MIN) { T.gain = 0; T.gainAt = 0; }
+    if (T.splash && !(T.splash > t && T.splash === st.wet)) T.splash = 0;
+  }
   // valid(st): repairs st in place and says whether it is usable (false only for null, a non-object or no time at all)
   function valid(st) { return repair(st) !== null; }
 
@@ -3649,7 +4062,9 @@ function KockaEngine() {
     if (st.ill) m -= 30;
     if (st.off && st.t < st.off.until) m -= 25;
     if (st.scared > st.t) m -= 20;
-    if (st.wet > st.t) m -= 15;                       // wet from the rain: grumpy for a while
+    if (st.wet > st.t) m -= 15;                       // wet from the rain (or the can): grumpy for a while
+    const tk = teaseKind(st);                         // teasing: a sulk −10, a cross −20
+    if (tk) m += TEASE.mood[tk];
     if (st.visit && !st.out) {   // a neighbour cat in the garden: what they do together, else how she takes it
       const A = st.visit.act;
       m += A && A.with === 'koxa' && Object.prototype.hasOwnProperty.call(VISIT_ACTS, A.kind) ? VISIT_ACTS[A.kind].mood : VISIT_MOOD[reaction(st, st.visit.id)];
@@ -3683,6 +4098,8 @@ function KockaEngine() {
       garden: !!st.yard, wet: st.wet > t, tree: !!(st.yard && st.yard.tree), walk: !!(st.out && st.out.walk),
       pill: st.pill ? (dkey(t) >= st.pill ? 'today' : 'tomorrow') : null,
       guest: st.guest ? st.guest.id : null, jealous: !!st.jealous,
+      sulk: teaseKind(st) === 'sulk', cross: teaseKind(st) === 'cross', splashed: !!(st.tease && st.wet > t && st.wet === st.tease.splash),
+      teaseUntil: teasing(st) ? st.tease.until : 0,
     };
   }
 
@@ -3709,6 +4126,11 @@ function KockaEngine() {
     if (id === 'weight') return `${name} váží ${st.weight.toFixed(1).replace('.', ',')} kg.`;
     if (id === 'walk') return `Nejdelší toulka trvala ${fmtDur(st.walkMax)}.`;
     if (id === 'birthday') { const [y, m, d] = ymd(st.born); return `${name} k nám přišla ${d}. ${m + 1}. ${y}.`; }
+    if (id === 'bliss') return `${name} má ráda, když ji poplácáváš u kořene ocasu – ${patTempo(st) <= 520 ? 'svižně' : 'pomalu a pravidelně'}. Zvedne zadeček jako výtah a přešlapuje.`;
+    if (id === 'boop') return `Když jí ťukneš do nosu, ${name} zašilhá a kýchne.`;
+    if (id === 'reconcile') return `${name} se po škádlení usmířila: otřela se ti o ruku.`;
+    if (id === 'splash') return `${name} dostala sprchu z konve. Otřepala se a hodnou chvíli se zlobila.`;
+    if (id === 'payback') return `${name} ti to vrátila. Co se škádlívá, to se rádo mívá!`;
     if (CAT_DIARY.includes(id)) {
       const c = st.diaryCat ? visitor(st, st.diaryCat[id]) : null;
       const f = c && c.fem;   // Koxa is a she: the plural is feminine only with a female cat
@@ -3732,6 +4154,8 @@ function KockaEngine() {
     favFood: 'Co nejraději papá? Zkoušej různé dobroty.', belly: 'Nechá si podrbat bříško?',
     toy: 'S čím si nejraději hraje?', fear: 'Čeho se bojí?', quirk: 'Jaký má zvláštní zvyk?',
     weight: 'Kolik váží? Uvidíš zítra.', walk: 'Ještě nebyla venku.', birthday: '',
+    bliss: 'Co jí udělá radost u kořene ocasu?', boop: 'Co udělá, když jí ťukneš do nosu?', reconcile: 'Jak se usmíříte, když ji naštveš?',
+    splash: 'Možná se jednou dozvíš…', payback: 'Kdo ví, co ji jednou napadne…',
     palFirst: 'Najde si kamaráda mezi kočkami od sousedů? Choď s ní na zahradu, když přijde návštěva.',
     palGroom: 'Budou si s kamarádem navzájem mýt kožíšek?', palSnuggle: 'Zdřímne si někdy schoulená u kamaráda?',
     sleepover: 'Přespí u nás někdy kočka od sousedů? Když se s vámi oběma moc skamarádí, můžeš ji večer pozvat dovnitř.',
@@ -3740,7 +4164,7 @@ function KockaEngine() {
   };
   // Deníček: her two spots only; text = the fact when found, else a question
   function diary(st, name) {
-    const nm = cleanName(name || st.name), ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], CAT_DIARY);
+    const nm = cleanName(name || st.name), ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY);
     return ids.map(id => {
       const found = st.diary[id] || null;
       return { id, found, text: found ? entryText(st, id, nm) : (id.startsWith('spot_') ? 'Kde se ráda nechá hladit? Hlaď ji po srsti.' : HINTS[id]) };
@@ -3864,7 +4288,8 @@ function KockaEngine() {
       return;
     }
     if (w === 'rain') {
-      if (!(st.wet > t)) { N.coat = Math.max(0, N.coat - 10); ev.push({ type: 'wet' }); }
+      // the rain soaks her also when she is wet from the can (that was only a little water)
+      if (!(st.wet > t) || st.wet === st.tease.splash) { N.coat = Math.max(0, N.coat - 10); ev.push({ type: 'wet' }); }
       st.wet = t + GARDEN.wetFor * MIN;
       N.coat = Math.max(0, N.coat - GARDEN.rainCoat * h);
       if (st.lap) leaveLap(st, t, 'rain', ev);
@@ -3998,11 +4423,27 @@ function KockaEngine() {
     const s = scareAt(st, t, dt);
     if (s && !st.out) { meet(st, s, t, ev); if (st.yard && s === 'storm' && !st.yard.tree) leaveYard(st, ev, 'house'); }
     if (st.out && (t + dt >= st.out.until || N.energy < 25 || (!st.out.byPlayer && night && season(t) === 'winter'))) comeBack(st, t + dt, ev);
+    teaseStep(st, t + dt, watching, ev);
     if (st.off && t >= st.off.until) st.off = null;
     // the day's averages (weight, bond)
     const D = st.day;
     D.ms += dt; D.food += N.food * dt; D.mood += moodValue(st) * dt; D.minE = Math.min(D.minE, N.energy);
     for (const n of Object.keys(N)) N[n] = Math.round(N[n] * 1e6) / 1e6;    // tidy JSON; fine enough for frequent acts
+  }
+  // teasing at the end of a step (te): the sulk or cross ends at its exact moment; then her payback when it is due, the
+  // advance is watching and she is free (else it waits until it lapses)
+  function teaseStep(st, te, watching, ev) {
+    const T = st.tease;
+    if (T.kind && te >= T.until) { ev.push({ type: T.kind === 'sulk' ? 'sulkEnd' : 'crossEnd' }); T.kind = null; T.until = 0; }
+    const P = T.pay;
+    if (!P) return;
+    if (te >= P.at + TEASE.pay.lapse * MIN || T.payDay === dkey(te)) { T.pay = null; return; }
+    const free = !st.asleep && !st.out && !st.lap && !st.held && !(st.yard && st.yard.tree) && !(st.scared > te) &&
+      !(st.visit && st.visit.act && st.visit.act.with) && !st.jealous && !teasing(st, te) && !longOff(st, te);
+    if (te < P.at || !watching || !free) return;
+    T.payDay = dkey(te); T.pay = null;
+    ev.push({ type: 'payback', kind: st.yard ? 'ambush' : P.kind });   // no kitchen counter in the garden
+    find(st, 'payback', te, ev);
   }
   // the clock moved back by now - st.t: every stored moment moves with it, so waiting times stay as long as they were
   function shiftTimes(st, now) {
@@ -4037,6 +4478,12 @@ function KockaEngine() {
     }
     st.bday = Math.min(st.bday, new Date(now).getFullYear());
     if (st.pill > tomorrow(now)) st.pill = tomorrow(now);
+    const T = st.tease;   // teasing: every moment moves (st.wet too, so splash === st.wet still holds); the days are clamped
+    if (T.kind) T.until += d;
+    T.at = mv(T.at); T.warnAt = mv(T.warnAt); T.gainAt = mv(T.gainAt); T.splash = mv(T.splash);
+    T.boops = T.boops.map(b => b + d);
+    if (T.pay) T.pay = { kind: T.pay.kind, at: T.pay.at + d };
+    T.payDay = Math.min(T.payDay, today); T.bondDay = Math.min(T.bondDay, today);
   }
   function advance(st, now) {
     const ev = [];
@@ -4079,11 +4526,13 @@ function KockaEngine() {
       st.litterAt = now + 4 * HOUR;
       if (st.ill && now - st.ill.since >= 4 * DAY) cure(st, 'time', ev);
       st.off = { until: now + DAY, turned: false };
+      st.tease.kind = null; st.tease.until = 0; st.tease.pay = null;   // the heat cools by itself
       addBond(st, -20, ev);
       ev.push({ type: 'offended', days: Math.floor(days) });
       const y = new Date(now).getFullYear();
       if (st.bday < y && birthdayAge(st.born, now)) { st.bday = y; addBond(st, 10, ev); ev.push({ type: 'birthday', age: birthdayAge(st.born, now) }); }
     }
+    teaseTidy(st);
     const w = wants(st);
     if (w && w !== st.want && watching) ev.push({ type: 'meow', want: w });
     st.want = w;
@@ -4107,8 +4556,9 @@ function KockaEngine() {
     const TREE_OK = ['call', 'fetchDown', 'vetCure', 'goHouse', 'sow', 'waterBeds', 'harvest', 'buy', 'sell', 'place', 'photo', 'feedVisitor', 'strokeVisitor', 'deletePhoto',
       'treatVisitor', 'playVisitor'];   // not invite: she would stay stuck up there (canInvite says so)
     if (st.yard && st.yard.tree && !TREE_OK.includes(action)) return no(`${name} je na stromě.`);
-    // on the lap: stroking, scratching, a treat from the hand, calling and a photo keep her there; anything else = standing up
-    if (st.lap && !['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff', 'photo'].includes(action)) {
+    // on the lap: stroking, scratching, a treat from the hand, calling, a photo, patting and a nose tap keep her there;
+    // anything else = standing up
+    if (st.lap && !['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff', 'photo', 'pat', 'boop'].includes(action)) {
       ev.push({ type: 'lapOff', dozing: st.lap.doze }); st.lap = null;
     }
     const onLap = !!st.lap, lapK = onLap ? 1.5 : 1;
@@ -4120,6 +4570,21 @@ function KockaEngine() {
     if (st.out && !home.includes(action)) return no(`${name} je venku.`);
     const wakeUp = () => { if (st.asleep) { st.asleep = false; st.wokeAt = t; ev.push({ type: 'wake', early: false }); } };
     const sleeping = () => { if (st.asleep) { seenQuirk(st, 'box', t, ev); no(`${name} spí, nebuď ji.`); return true; } return false; };
+    // teasing (SPEC §13.3): while she is cross a touch gets a swat (no claws); a sulk is made up by a stroke along the fur,
+    // a scratch or a treat while she is awake
+    const cross = () => teaseKind(st, t) === 'cross';
+    const swat = why => ev.push({ type: 'swat', why });
+    const awake0 = !st.asleep;
+    const reconcile = by => {
+      const T = st.tease;
+      if (!awake0 || teaseKind(st, t) !== 'sulk') return;
+      T.kind = null; T.until = 0;
+      N.love = Math.min(100, N.love + TEASE.love.reconcile);
+      const bond = T.bondDay !== dkey(t);
+      ev.push({ type: 'reconcile', by, bond });
+      if (bond) { T.bondDay = dkey(t); addBond(st, TEASE.bond, ev); }
+      find(st, 'reconcile', t, ev);
+    };
     const hr = new Date(t).getHours();
     if (hr >= 5 && hr < 10 && !st.day.acted && !st.out && !st.asleep) {   // the first thing in the morning: she woke them
       st.day.acted = true;
@@ -4177,6 +4642,7 @@ function KockaEngine() {
         const dir = a.along === false || a.along === 'against' ? 'against' : a.along === 'sideways' ? 'sideways' : 'along';
         const sp = typeof a.speed === 'number' ? (a.speed < 120 ? 'slow' : a.speed > 900 ? 'fast' : 'good') : ['slow', 'fast'].includes(a.speed) ? a.speed : 'good';
         if (sp === 'slow') break;                // too slow: she does not notice
+        if (!st.asleep && cross()) { swat('stroke'); break; }
         const half = sad ? 0.5 : 1;
         if (region === 'belly') { belly(); break; }
         if (st.asleep) { N.love = Math.min(100, N.love + 1); ev.push({ type: 'purr', region, sleeping: true }); seenQuirk(st, 'box', t, ev); break; }
@@ -4191,11 +4657,13 @@ function KockaEngine() {
         else if (nm === 'calm' || rnd(st) < 0.3) ev.push({ type: 'content', region });
         else ev.push({ type: 'tolerate', region });
         if (REGIONS[region].spot) { const c = 'spot_' + region; if (inc(st, c) >= 10 && spot) find(st, c, t, ev); }
+        reconcile('stroke');                     // along the fur at a good speed: made up after a sulk
         break;
       }
       case 'scratch': {
         const region = regionOf(a.region, 'head');
         const sec = typeof a.seconds === 'number' && Number.isFinite(a.seconds) ? clamp(a.seconds, 0, 5) : 1;
+        if (!st.asleep && cross()) { swat('scratch'); break; }
         if (region === 'belly') { belly(); break; }
         const per = REGIONS[region].scratch ? 4 : 1, half = sad || st.asleep ? 0.5 : 1;
         if (!st.asleep) soothe();
@@ -4207,10 +4675,12 @@ function KockaEngine() {
           const c = 'spot_' + region; st.cnt[c] = Math.min(CMAX, st.cnt[c] + Math.round(sec));
           if (st.cnt[c] >= 10) find(st, c, t, ev);
         }
+        reconcile('scratch');
         break;
       }
       case 'pickUp': {
         if (sleeping()) return { st, events: ev };
+        if (cross()) { ev.push({ type: 'wriggle' }); break; }
         if (st.held) break;
         if (moodValue(st) >= 10 && N.energy >= 20 && !(st.off && t < st.off.until && !st.off.turned) && st.scared <= t) {
           st.held = true; st.heldAt = t;
@@ -4227,6 +4697,7 @@ function KockaEngine() {
       }
       case 'play': {
         if (sleeping()) return { st, events: ev };
+        if (cross()) { ev.push({ type: 'ignore', reason: `${name} si s tebou teď hrát nechce. Zlobí se.` }); break; }
         const toy = typeof arg === 'string' && Object.prototype.hasOwnProperty.call(TOYS, arg) ? arg : 'mouse';
         if (TOYS[toy].shop && !st.owned[toy]) return no('Tuhle hračku nemáš. Je v obchůdku.');
         if (N.energy < 10) { ev.push({ type: 'ignore', reason: `${name} je moc unavená.` }); break; }
@@ -4330,6 +4801,7 @@ function KockaEngine() {
       case 'lapOn': {
         if (st.lap) break;
         if (sleeping()) return { st, events: ev };
+        if (cross()) { st.held = false; ev.push({ type: 'wriggle' }); break; }
         const off = st.off && t < st.off.until, tummy = st.ill && st.ill.kind === 'tummy';
         if (off || tummy || st.scared > t || N.food < 15 || N.water < 15 || moodValue(st) < -30) { st.held = false; ev.push({ type: 'wriggle' }); break; }
         st.held = false;
@@ -4354,6 +4826,7 @@ function KockaEngine() {
         if (stick ? !(st.stock.stick > 0) : st.pamlsky < 1) return no(stick ? 'Nemáš žádné tyčinky.' : 'Nemáš žádné pamlsky.');
         giveTreat(stick, !!st.train && t - st.train.at <= TREAT_WINDOW && t >= st.train.at);
         if (st.train) rewardTrick(st, t, ev);       // the treat right after a trick: a training success
+        reconcile('treat');                          // a sulk is made up (a cross is not: she eats it and stays cross)
         break;
       }
       case 'buy': {
@@ -4466,6 +4939,7 @@ function KockaEngine() {
           else ev.push({ type: 'ignore', reason: `${name} se bojí slézt. Zkus to znovu.` });
           break;
         }
+        if (cross()) { ev.push({ type: 'ignore', reason: `${name} tě teď schválně neposlouchá.` }); break; }
         if (st.off && t < st.off.until && !st.off.turned) { st.off.turned = true; ev.push({ type: 'turnBack' }); break; }
         ev.push({ type: 'come' });
         break;
@@ -4476,11 +4950,143 @@ function KockaEngine() {
         meet(st, 'vacuum', t, ev);
         break;
       }
+      case 'pat': case 'boop': case 'splash': {
+        const why = teaseAct(st, action, a, t, nm, ev);
+        if (why) return no(why);
+        break;
+      }
     }
     // a satisfied want: bond +1, at most once an hour for each need
     if (before && needs(st)[before] >= 40 && !(t - (st.wantAt[before] || 0) < HOUR)) { st.wantAt[before] = t; addBond(st, 1, ev); }
     st.want = wants(st);
+    teaseTidy(st);
     return { st, events: ev };
+  }
+
+  /* --- Škádlení: teasing out of love (SPEC §13.3) --- */
+  // pat / boop / splash; returns a Czech refusal or null. No rnd(st): the payback draws are keyed on the moment (salts 53–55)
+  function teaseAct(st, action, a, t, nm, ev) {
+    const T = st.tease, N = st.needs, today = dkey(t), lap = !!st.lap;
+    const touch = () => { T.heat = Math.round(heatNow(T, t) * 1e6) / 1e6; T.at = t; };   // heat brought up to date at t
+    const addHeat = k => { T.heat = Math.min(TEASE.heatMax, T.heat + k); };
+    const love = d => { N.love = clamp(N.love + d, 0, 100); };
+    if (action === 'boop') {
+      if (st.asleep || (st.lap && st.lap.doze)) return `${st.name} spí, nebuď ji.`;
+      if (teaseKind(st, t) === 'cross') { ev.push({ type: 'swat', why: 'boop' }); return null; }
+      T.boops = T.boops.filter(b => b > t - TEASE.boopWin);
+      T.boops.push(t); touch();
+      if (T.boops.length >= TEASE.boopN) { T.boops = []; addHeat(TEASE.heat.boop); offence(st, t, { type: 'boop', swat: true }, true, ev); }
+      else { ev.push({ type: 'boop' }); find(st, 'boop', t, ev); }   // she squints, sneezes, shakes her head
+      return null;
+    }
+    if (action === 'splash') {
+      if (!st.yard) return 'Konví se zalévá na zahradě.';
+      if (season(t) === 'winter') return 'V zimě ne – byla by jí zima.';
+      if (st.asleep) return `${st.name} spí. Nech ji spát.`;
+      st.held = false;
+      const w = t + TEASE.wetMin * MIN;
+      if (w > (st.wet > t ? st.wet : 0)) { st.wet = w; T.splash = w; }   // else she is wetter from the rain already
+      love(TEASE.love.splash); touch(); addHeat(TEASE.heat.splash);
+      offence(st, t, { type: 'splash' }, true, ev);
+      find(st, 'splash', t, ev);
+      return null;
+    }
+    // pat: { region, n, ms, cv, eating }
+    const region = regionOf(a.region, 'head');
+    const n = Number.isInteger(a.n) ? clamp(a.n, 1, 999) : 1;
+    const ms = typeof a.ms === 'number' && Number.isFinite(a.ms) ? clamp(a.ms, 0, 5000) : 0;
+    const cv = typeof a.cv === 'number' && Number.isFinite(a.cv) ? clamp(a.cv, 0, 3) : 0;
+    const eating = a.eating === true;
+    const pat = (stage, x) => { ev.push(Object.assign({ type: 'pat', region, stage }, x || {}, eating ? { eating: true } : {})); };
+    // asleep (or dozing on the lap): nothing changes, she never blows up (the UI only flicks an ear)
+    if (st.asleep || (st.lap && st.lap.doze)) { pat('tolerate', { sleeping: true }); return null; }
+    if (n <= 2 || t - T.at > TEASE.runGap) T.warnAt = 0;   // a fresh run
+    touch();
+    // a path at its warning tap: warn; the outcome only when the run goes on 1.8 s after the warning
+    const warn = outcome => {
+      if (!T.warnAt) { T.warnAt = t; pat('warn'); } else if (t - T.warnAt >= TEASE.warnMs) outcome(); else pat('warn');
+    };
+    const blowUp = why => {
+      const eat = why === 'eat';
+      love(eat ? TEASE.love.eat : TEASE.love.blowUp); addHeat(eat ? TEASE.heat.eat : TEASE.heat.blowUp); T.warnAt = 0;
+      offence(st, t, { type: 'blowUp', why, lap }, !eat, ev);   // the meal one plans no payback
+    };
+    const loveBite = () => {
+      love(TEASE.love.loveBite); addHeat(TEASE.heat.loveBite); T.warnAt = 0;
+      if (st.lap) leaveLap(st, t, 'annoyed', ev);
+      ev.push({ type: 'loveBite', lap });
+    };
+    // love from pats: at most +8 in a 10-minute window (gain above 8 = the flop's +4 was given, the window is full)
+    const gain = amount => {
+      if (!T.gainAt || t - T.gainAt >= TEASE.gainWin * MIN) { T.gainAt = t; T.gain = 0; }
+      const add = Math.min(amount, TEASE.gainMax - T.gain);
+      if (add > 0) { T.gain = Math.min(TEASE.gainMax, Math.round((T.gain + add) * 1e6) / 1e6); love(add); }
+    };
+    const irritate = why => { if (n < TEASE.warnN) { T.warnAt = 0; pat('tolerate'); } else warn(() => blowUp(why)); };
+    const gentle = path => {
+      if (n >= TEASE.overN) { warn(loveBite); return; }   // over-patting
+      T.warnAt = 0;
+      if (path === 'tolerate') { pat('tolerate'); return; }
+      if (path === 'like') { gain(TEASE.like); pat('like'); }
+      else {
+        const close = ms > 0 ? r2(clamp(1 - Math.abs(ms - patTempo(st)) / TEASE.closeSpan, 0, 1)) : 0;
+        gain(TEASE.bliss + TEASE.blissClose * close);
+        pat('bliss', { close, rear: n >= TEASE.rearN });
+        if (n === TEASE.flopN && close >= TEASE.flopClose) {   // she flops on her side with bliss
+          ev.push({ type: 'flop', lap });
+          if (T.gain <= TEASE.gainMax) { love(TEASE.flopLove); T.gain = TEASE.gainMax + TEASE.flopLove; }   // the climax bypasses the cap, once a window
+          if (T.bondDay !== today) { T.bondDay = today; addBond(st, TEASE.bond, ev); }
+          find(st, 'bliss', t, ev);
+        }
+      }
+      if (st.jealous) { N.love = Math.min(100, N.love + JEALOUS.love); ev.push({ type: 'jealousOk', id: st.jealous.id }); st.jealous = null; }
+      if (st.lap) st.lap.pet = t;
+    };
+    if (teaseKind(st, t) === 'cross') { T.warnAt = 0; ev.push({ type: 'swat', why: 'pat' }); return null; }
+    if (eating) {   // at the bowl: warned from the 2nd tap, then she leaves it (mild)
+      if (n >= 2) warn(() => blowUp('eat')); else { T.warnAt = 0; pat('tolerate'); }
+      return null;
+    }
+    if (region === 'belly') {   // a trap: she grabs the hand and kicks (no claws); no love, no sulk
+      addHeat(TEASE.heat.trap); T.warnAt = 0;
+      if (st.lap) st.lap.annoy = Math.min(10, st.lap.annoy + 2);
+      ev.push({ type: 'trap' });
+      return null;
+    }
+    if (region === 'head' || region === 'chin' || region === 'ears' || region === 'paws') gentle('tolerate');
+    else if (region === 'tail') irritate('tail');
+    else if (ms > 0 && ms < TEASE.fast) irritate('fast');                 // back / tailBase from here on
+    else if (nm === 'sad') gentle('tolerate');
+    else if (nm === 'grumpy' || teaseKind(st, t) === 'sulk' || longOff(st, t)) irritate('grumpy');
+    else if (region === 'back' || cv >= TEASE.regular) gentle('like');
+    else gentle('bliss');                                                 // tailBase, regular, calm or happy
+    return null;
+  }
+  // start or prolong a sulk / renew a cross (heat already added); the cause is pushed after lapLeave, before sulk/cross.
+  // While the long offence (st.off) runs: only the cause, nothing starts and no payback is planned
+  function offence(st, t, cause, plan, ev) {
+    const T = st.tease;
+    if (longOff(st, t)) { ev.push(cause); return; }
+    if (st.lap) leaveLap(st, t, 'annoyed', ev);
+    st.held = false;
+    ev.push(cause);
+    const k = teaseKind(st, t);
+    if (k === 'cross' || heatNow(T, t) >= TEASE.crossAt) {
+      T.kind = 'cross'; T.until = t + TEASE.crossMin * MIN;
+      ev.push({ type: 'cross', until: T.until });
+    } else {
+      T.until = Math.max(k === 'sulk' ? T.until : 0, t + TEASE.sulkMin * MIN); T.kind = 'sulk';
+      ev.push({ type: 'sulk', until: T.until });
+    }
+    if (plan) planPay(st, t);
+  }
+  // her payback: a cross always, a sulk with chance 0.5 (salt 53); due 5–25 min after the end (salt 54), 'shelf' or
+  // 'ambush' (salt 55), one a day; an existing plan only waits until 5 min after the new end
+  function planPay(st, t) {
+    const T = st.tease, P = TEASE.pay, k = Math.floor(t / 1000);
+    if (T.pay) { T.pay = { kind: T.pay.kind, at: Math.max(T.pay.at, T.until + P.ext * MIN) }; return; }
+    if (T.payDay === dkey(t) || !(T.kind === 'cross' || rndSeed(st.seed, k, 53) < P.p)) return;
+    T.pay = { kind: rndSeed(st.seed, k, 55) < 0.5 ? 'shelf' : 'ambush', at: T.until + (P.min + Math.floor(rndSeed(st.seed, k, 54) * (P.max - P.min + 1))) * MIN };
   }
 
   const ROOM_TO = { living: 'do obýváku', kitchen: 'do kuchyně', hall: 'do předsíně', garden: 'na zahradu' };
@@ -4792,7 +5398,8 @@ function KockaEngine() {
     return ids[ids.length - 1];
   }
   // Koxa can do something with the visitor: in the garden, awake, not up the tree, on the lap or in the arms
-  const palAwake = st => !!(st.yard && !st.out && !st.yard.tree && !st.asleep && !st.lap && !st.held);
+  // (not while she sulks or is cross: a joint act ends at the next step, none starts, no jealousy; SPEC §13.3)
+  const palAwake = st => !!(st.yard && !st.out && !st.yard.tree && !st.asleep && !st.lap && !st.held && !teasing(st));
   const palAsleep = st => !!(st.yard && !st.out && !st.yard.tree && st.asleep);
   const pondFrozen = t => season(t) === 'winter';
   function pickSolo(st, cur, t, r) {
@@ -5292,7 +5899,7 @@ function KockaEngine() {
   return {
     NEEDS, FOODS, TOYS, REGIONS, FEARS, QUIRKS, ILLS, LEVELS, HOLIDAYS, ACTIONS, CROPS, PRESENTS, WEATHERS, POSTCARDS, BEDS,
     SHOP, GAMES, TRICKS, ROOMS, EARN_CAP, VISITORS, VISIT_ACTS, VISITOR_LIKES, ALBUM_MAX, album, canInvite, visitorLikes,
-    KIT, KIT_NAMES, visitor, visitorIds, kitsNew,
+    KIT, KIT_NAMES, visitor, visitorIds, kitsNew, TEASE, patTempo,
     create, valid, repair, rename, advance, act, consumeTreats, minigameResult, shop, tricks,
     mood, moodValue, wants, needs, health, bondLevel, diary,
     dayPhase, season, holiday, easter, weather, postcardAt, bedCount,
@@ -5584,6 +6191,7 @@ function placeItems() {
     }
     el.classList.toggle('ripe', stage === 3);
   });
+  if (G) placeMug();
 }
 function drawItems() {
   const n = G.st.needs, eating = K.act && K.act.kind === 'eat' && K.act.until, drinking = K.act && K.act.kind === 'drink' && K.act.until;
@@ -5698,11 +6306,16 @@ $('#navR').addEventListener('click', () => { I.sound.unlock(); const n = neighbo
 // K is only the picture: the engine state G.st says how she is; K says where she is drawn and what she is busy with.
 // G.her = the place she is in (saved), G.view = the place the player looks at (saved).
 const K = { bx: 105, by: 340, sc: 1, pose: '', key: '', flip: false, walking: false, goal: null, act: null, idle: null, place: null,
-  carry: null, earsUntil: 0, purrUntil: 0, meowUntil: 0, contentUntil: 0, regs: null, gone: false, chase: false, lapView: false, greet: true };
+  carry: null, earsUntil: 0, purrUntil: 0, meowUntil: 0, contentUntil: 0, regs: null, gone: false, chase: false, lapView: false, greet: true,
+  // Škádlení (SPEC §13.4): taps ignored until teaseLock; a nose boop plays until boopUntil; squint / open mouth / warning
+  // until; face = { o, until } a few cat options for a moment (cross eyes, achoo, shakeHead, grab); sulkPlace = { p, until }
+  // where she sulks (p null: the player put her somewhere); welcomeAt = when the page opened or came back
+  teaseLock: 0, boopUntil: 0, squintUntil: 0, openUntil: 0, warnUntil: 0, face: null, sulkPlace: null, welcomeAt: 0, patN: 0 };
 const HEAD = { sit: [100, 64], loaf: [72, 126], sleep: [64, 146], eat: [66, 146], drink: [58, 154], groom: [100, 64], sulk: [100, 72],
   window: [100, 64], belly: [54, 150], stretch: [50, 134], pounce: [56, 80], walk: [66, 106], trot: [62, 104], carried: [100, 52], wriggle: [100, 52],
   lapLoaf: [72, 126], lapCurl: [64, 146], lapBelly: [54, 150], stalk: [50, 140], onBranch: [72, 120], climb: [100, 60],
-  sniff: [42, 140], arch: [56, 106], lickOther: [48, 76], sideLie: [50, 148], swipe: [84, 72], run: [54, 102], rub: [49, 142], tumble: [70, 156], tailCatch: [104, 66] };
+  sniff: [42, 140], arch: [56, 106], lickOther: [48, 76], sideLie: [50, 148], swipe: [84, 72], run: [54, 102], rub: [49, 142], tumble: [70, 156], tailCatch: [104, 66],
+  rearUp: [60, 140], shake: [64, 104] };
 // a kitten's head in its play poses, box units: [at kit 0, at kit 1] (tools/kocka-dev/art.html, Koťata)
 const KIT_HEAD = { tumble: [[70, 156], [84, 173]], tailCatch: [[104, 66], [108, 140]] };
 const RAISED_Y = 400;                                      // feet above this line: the sill, the counter, the chair, a branch
@@ -5716,7 +6329,12 @@ function baseOpts(extra) {
   if (K.purrUntil > t) o.purring = true;
   if (K.meowUntil > t) o.meow = true;
   if (K.contentUntil > t && !o.meow) o.content = true;
-  return Object.assign(o, extra || {});
+  if (K.squintUntil > t) o.eyes = 'squint';
+  if (K.openUntil > t) o.openMouth = true;
+  if (K.warnUntil > t) o.warn = true;
+  Object.assign(o, extra || {});
+  if (K.face && K.face.until > t) Object.assign(o, K.face.o);   // a moment of teasing (cross eyes, the sneeze, the grab) wins
+  return o;
 }
 // floor spots of a place, for wandering
 const floorAt = (p, x, y) => ({ room: p, pose: 'sit', fx: x, fy: y });
@@ -5746,6 +6364,11 @@ function decide() {
   }
   const here = h.garden ? 'garden' : G.her === 'garden' ? 'hall' : G.her;
   if (h.scared) { const bd = spot(bedRoom, 'bed') || { x: 316, y: 562 }; return { room: bedRoom, pose: 'loaf', fx: bd.x - 54, fy: bd.y - 92, ax: 115, o: { ears: 'back' } }; }
+  // teased: she sulks with her back to the player at the other end of the room (made again after a reload)
+  if (h.sulk || h.cross) {
+    if (!K.sulkPlace) K.sulkPlace = sulkSpot(true);
+    if (K.sulkPlace.p) return K.sulkPlace.p;
+  } else K.sulkPlace = null;
   if (K.place && K.place.until > t) return K.place.p;
   const w = E.wants(st), n = E.needs(st), urgent = (w === 'food' && n.food < 15) || (w === 'water' && n.water < 15);
   if (h.offended) return { room: here, pose: 'sulk', fx: 200, fy: 545 };
@@ -5893,7 +6516,7 @@ function walkTo(d, then, fast) {
 }
 // she got there: an act starts its clock now
 function arrived(d) {
-  if (K.act && K.act.p === d && !K.act.until) { K.act.until = perf() + K.act.ms; setTimeout(update, K.act.ms + 60); }
+  if (K.act && K.act.p === d && !K.act.until) { K.act.until = perf() + K.act.ms; setTimeout(update, K.act.ms + 60); if (d.onArrive) d.onArrive(); }
   if (d.stalk && !K.stalkT) K.stalkT = setTimeout(() => { K.stalkT = 0; if (G.her === 'garden' && K.idle && K.idle.p === d) { scareBirds(); say('chirp'); const p = Object.assign({}, d, { pose: 'pounce', fx: d.fx - 40, stalk: false }); busy('stalkPounce', p, 900); } }, 5500);
   if (d.counter && G.view === G.her) tip('counter', `${nm()} vyskočila na linku. ${nm().replace(/a$/, 'o')}, dolů!`, 60000);
 }
@@ -6069,7 +6692,7 @@ const ITEMS = {
     get to() { return treatKind === 'stick' ? ['cat'] : ['cat', 'visitor']; } },   // the tyčinka is only for Koxa
   pill: { art: () => 'pill', label: () => 'Pilulka', to: ['cat'] },
   seeds: { art: () => artOr('seedPacket', 'treat'), label: () => 'Semínka', to: ['beds'] },
-  can: { art: () => artOr('wateringCan', 'jug'), label: () => 'Konev', to: ['beds'] },
+  can: { art: () => artOr('wateringCan', 'jug'), label: () => 'Konev', to: ['beds', 'cat'] },   // on Koxa: a splash (in the garden)
   mouse: { art: () => TOY_ART[toyNow('mouse')], label: () => TOY_LABEL[toyNow('mouse')], name: () => toyName(toyNow('mouse')), toy: true },
   feather: { art: () => TOY_ART[toyNow('feather')], label: () => TOY_LABEL[toyNow('feather')], name: () => toyName(toyNow('feather')), toy: true },
   yarn: { art: () => TOY_ART[toyNow('yarn')], label: () => TOY_LABEL[toyNow('yarn')], name: () => toyName(toyNow('yarn')), toy: true },
@@ -6241,6 +6864,7 @@ const ILL_TEXT = { fleas: 'má blechy: škrábe se a srst nemá lesk.', tummy: '
 function handle(events) {
   const n = nm();
   let newRoom = false;   // the room's picture changes (more beds, the cat flap): redrawn at once, not at the next tick
+  for (const ev of events) { EVLOG.push(ev); if (EVLOG.length > 100) EVLOG.shift(); }
   for (const ev of events) {
     switch (ev.type) {
       case 'refused': toast(ev.reason); break;
@@ -6340,7 +6964,8 @@ function handle(events) {
       case 'birthday': notify(`${n} slaví výročí – je u nás už ${ev.age} ${plural(ev.age, 'rok', 'roky', 'let')}!`, 4200, true); break;
       case 'offended': notify(`${n} byla ${ev.days} ${plural(ev.days, 'den', 'dny', 'dní')} u paní Novákové. Je uražená, chvíli to potrvá.`, 5200, true); break;
       case 'gift': notify(`Za hry z výběru: +${ev.n} ${plural(ev.n, 'pamlsek', 'pamlsky', 'pamlsků')}.`); break;
-      case 'found': G.unread = (G.unread || 0) + 1; notify(`Deníček: ${ev.text}`, 4400, true); drawDiaryPill(); break;
+      case 'found': if (PB.q && PB.q.found === ev) break;   // the payback's entry: shown after her scene
+        G.unread = (G.unread || 0) + 1; notify(`Deníček: ${ev.text}`, 4400, true); drawDiaryPill(); break;
       case 'tolerate': stay(); break;
       case 'bought': {
         const it = (E.SHOP || []).find(x => x.id === ev.id) || { name: 'to' };
@@ -6404,6 +7029,8 @@ function handle(events) {
       case 'lapOff': exitLap(); G.seat = null; break;
       case 'lapLeave': {
         exitLap();
+        // she leaves because of teasing: the blowUp, the love bite or the swat says it, and she sulks where it says
+        if (events.some(e => ((e.type === 'blowUp' || e.type === 'loveBite') && e.lap) || (e.type === 'boop' && e.swat))) { update(); break; }
         const k = fleeTo[ev.reason], p = k && placeOf(k), sp = p && spot(p, k);
         const dest = sp ? { room: p, pose: 'sit', fx: clamp(sp.x + 70, 40, 360), fy: clamp(sp.y + 30, 440, 590), fast: true }
           : { room: G.her, pose: 'sit', fx: 90 + Math.random() * 220, fy: 560, fast: true };
@@ -6430,12 +7057,285 @@ function handle(events) {
         if (ev.crop === 'catnip' && !events.some(e => e.type === 'catnip')) toast(`Sklizeno: šanta kočičí. Je v Deníčku v Pokladech – až bude ${n} vzhůru a doma, dáš jí ji odtamtud.`, 3400);
         else toast(`Sklizeno: ${E.CROPS[ev.crop].name}.`, 1800);
         break;
+      // Škádlení (SPEC §13.4)
+      case 'pat': teasePat(ev); break;
+      case 'flop': case 'blowUp': case 'loveBite': case 'trap': case 'boop': case 'swat': case 'splash':
+      case 'sulk': case 'cross': case 'sulkEnd': case 'crossEnd': case 'reconcile': teaseEvent(ev, events); break;
+      case 'payback': queuePayback(ev, events); break;
       case 'catnip': purr(3000, 1); popFx('sparkle'); popFx('heart', 20); notify(`Šanta kočičí! ${n} úplně šílí.`); busy('zoom', { room: G.her, pose: pose('trot', 'walk'), fx: 60 + Math.random() * 280, fy: 560, fast: true }, 400); break;
     }
   }
   if (newRoom) { roomKey = ''; drawRoom(); placeItems(); }
 }
 function drawDiaryPill() { $('#btnDiary').classList.toggle('new', G.unread > 0); }
+
+/* ---------- Škádlení (SPEC §13.4): pats, the nose, the watering can, sulking, making up, her payback ---------- */
+const EVLOG = [];   // tests: the last 100 events handle() got, oldest first
+let sulkT = 0;
+// the sulk or cross ends at an exact moment: a tick then (the engine says sulkEnd / crossEnd)
+function sulkTimer() {
+  clearTimeout(sulkT);
+  const u = E.health(G.st).teaseUntil;
+  if (u) sulkT = setTimeout(tick, Math.max(0, u - now()) + 50);
+}
+const teaseLock = ms => { K.teaseLock = Math.max(K.teaseLock, perf() + ms); };
+// a few cat options for a moment (cross eyes, the sneeze, shaking the head, the grab)
+function faceFor(o, ms) { K.face = { o, until: perf() + ms }; redraw(); setTimeout(redraw, ms + 40); }
+// a short act right where she is now (also mid-walk: she stops), in another pose, for ms; then end()
+function actHere(kind, ps, o, ms, end) {
+  const k = kPos(), t = perf();
+  K.act = { kind, p: { room: G.her, pose: pose(ps, 'sit'), fx: k.x, fy: k.y, flip: K.flip, o }, ms, until: t + ms, started: t, end };
+  if (!K.lapView && !K.carry) update(true);
+  setTimeout(update, ms + 60);
+}
+// where she sulks: at the other end of the room, her back to the player
+function sulkSpot(fast) {
+  const h = E.health(G.st), k = kPos(), room = h.garden ? 'garden' : G.her === 'garden' ? 'hall' : G.her, garden = room === 'garden';
+  const vl = toRoom(0, 0).x, vr = toRoom(V.W, 0).x;   // on a short screen the room's sides are cut: she stays in sight
+  const fx = clamp(k.x < 200 ? 330 : 70, Math.min(200, vl + 62), Math.max(200, vr - 62));
+  let fy = garden ? clamp(k.y, 470, 590) : 560;
+  if (garden && fx > POND.l - 20 && fx < POND.r + 20 && fy < POND.b + 12) fy = POND.b + 12;   // never in the pond
+  return { p: { room, pose: 'sulk', fx, fy, fast, o: { mood: 'grumpy', ears: 'back' } }, until: perf() + Math.max(0, h.teaseUntil - now()) };
+}
+// a point of her drawing (0…200 units) in scene px
+function catPx(u, v) {
+  const c = catEl.getBoundingClientRect(), s = sceneEl.getBoundingClientRect();
+  return { x: c.left - s.left + (K.flip ? 200 - u : u) / 200 * c.width, y: c.top - s.top + v / 200 * c.height };
+}
+function headAt() { try { return typeof A.headPoint === 'function' ? A.headPoint(K.pose, K.opts || {}) : null; } catch (e) { return null; } }
+function sneezePuff() {
+  if (K.gone) return;
+  const h = headAt(), p = h && (h.nose || h);
+  if (p) popAt(catPx(p.x, p.y), 'puff');
+}
+// the middle of a region of a pose (art units, unflipped; sampled on a grid, remembered per pose)
+const midMemo = {};
+function regionMid(ps, o, id) {
+  const key = ps + ':' + id;
+  if (key in midMemo) return midMemo[key];
+  let r = null;
+  try {
+    const g = (A.regions(ps, o || {}) || []).find(x => x.id === id);
+    if (g) {
+      const P = new Path2D(g.path); let sx = 0, sy = 0, c = 0;
+      for (let v = 0; v < 200; v += 3) for (let u = 0; u < 200; u += 3) if (hctx.isPointInPath(P, u, v, 'nonzero')) { sx += u; sy += v; c++; }
+      if (c) r = { x: sx / c, y: sy / c };
+    }
+  } catch (e) {}
+  return (midMemo[key] = r);
+}
+function flickEar() {
+  artEl.classList.remove('kx-flick'); void artEl.offsetWidth; artEl.classList.add('kx-flick');
+  clearTimeout(K.flickT); K.flickT = setTimeout(() => artEl.classList.remove('kx-flick'), 450);
+}
+// a tap run on her (from the 2nd tap): the engine decides; an outcome ends the run
+function patTap(pat) {
+  stay(); K.patN = pat.n;
+  const evs = doAct('pat', { region: pat.region, n: pat.n, ms: pat.ms, cv: pat.cv, eating: !!(K.act && K.act.kind === 'eat') });
+  if (evs.some(e => ['blowUp', 'loveBite', 'trap', 'swat', 'flop'].includes(e.type) || (e.type === 'boop' && e.swat))) gest.cancel();
+}
+// a tap on her nose: she squints at it, sneezes and shakes her head
+let boopGen = 0;
+function boopShow() {
+  const g = ++boopGen, alive = () => g === boopGen && !K.gone;
+  K.boopUntil = perf() + 1600;
+  faceFor({ eyes: 'cross' }, 600);
+  setTimeout(() => {
+    if (!alive()) return;
+    faceFor({ achoo: true }, 500);
+    sneezePuff(); I.sound.fx('sneeze'); bubble('Hapčí!', 500);
+    setTimeout(() => { if (alive()) faceFor({ shakeHead: true }, 600); }, 500);
+  }, 600);
+}
+function swatShow(loud) {
+  K.place = null; teaseLock(1000);
+  if (!K.lapView) actHere('swat', 'swipe', { ears: 'back' }, 900);
+  if (loud) { buzz('bite'); notify(`Plác! ${nm()} tě varovně plácla tlapkou. Bez drápků.`); }
+  else tip('swat', `Plác! ${nm()} se pořád zlobí – nech ji chvíli být.`, 4000);
+}
+function teasePat(ev) {
+  if (ev.sleeping) return;
+  const t = perf();
+  if (ev.stage === 'like') { stay(); purr(1200, 0.6); }
+  else if (ev.stage === 'bliss') {
+    stay(); purr(1500, Math.min(1, 0.5 + 0.08 * (K.patN || 1)));   // the purr grows with every pat
+    if (ev.rear && !K.lapView && hasPose('rearUp')) {   // the rear up like a lift (renewed by every pat)
+      if (K.act && K.act.kind === 'rearUp') { if (K.act.until) { K.act.until = t + 1600; setTimeout(update, 1660); } }
+      else {
+        // her rear goes up right under the finger: the rearUp's tailBase where the tailBase of her pose was
+        const k = kPos(), a = regionMid(K.pose, K.opts, 'tailBase'), b = regionMid('rearUp', { mood: 'happy' }, 'tailBase');
+        const dx = a && b ? (a.x - b.x) * KC * curBox().sc * (K.flip ? -1 : 1) : 0;
+        K.act = { kind: 'rearUp', p: { room: G.her, pose: 'rearUp', fx: k.x + dx, fy: k.y, flip: K.flip, o: { mood: 'happy', purring: true } }, ms: 1600, until: 0, started: t };
+        if (!K.walking && G.her === G.view) update(true); else update();   // at once: no step that would take her rear from under the finger
+      }
+    }
+  } else if (ev.stage === 'tolerate') { moodFor('squintUntil', 900); moodFor('earsUntil', 900); }
+  else if (ev.stage === 'warn') {
+    moodFor('warnUntil', 1800);
+    if (t - (tipAt.warnMeow || 0) > 1500) { tipAt.warnMeow = t; I.sound.meow('grumpy'); }
+    tip('warn', 'Pozor! Švihá ocasem a dává uši do stran. Radši přestaň.', 5000);
+  }
+}
+function teaseEvent(ev, events) {
+  const n = nm();
+  switch (ev.type) {
+    case 'flop': {
+      teaseLock(1500); stay(); purr(2000, 1);
+      if (K.lapView) {
+        K.lapPose = pose('lapBelly', 'lapLoaf'); placeLapCat();
+        const g = K.flopGen = (K.flopGen || 0) + 1;
+        setTimeout(() => { if (K.flopGen === g && K.lapView && K.lapPose === 'lapBelly') { K.lapPose = 'lapLoaf'; placeLapCat(); } }, 8000);
+      } else actHere('flop', 'sideLie', { mood: 'happy' }, 8000);
+      tip('flop', `${n} se blahem svalila na bok.`, 60000);
+      break;
+    }
+    case 'blowUp':
+      K.place = null; teaseLock(2500);
+      if (ev.why === 'eat') {   // the mild one: ears back, she leaves the bowl (no arch, no hiss)
+        if (K.act && K.act.kind === 'eat') K.act = null;
+        moodFor('earsUntil', 1500);
+        notify(`${n} odešla od misky. Při jídle ji nech.`);
+        break;
+      }
+      say('hiss'); popFx('bang');
+      if (!K.lapView) actHere('blowUp', 'arch', { openMouth: true, ears: 'back' }, 900);
+      notify(`${n} vyletěla, naježila se a utekla. ${{ fast: 'Takové bubnování nemá ráda.', grumpy: 'Dnes na poplácávání nemá náladu.', tail: 'Na ocas jí nesahej.' }[ev.why] || ''}`.trim());
+      break;
+    case 'loveBite':
+      teaseLock(1200); buzz('bite'); moodFor('openUntil', 700); moodFor('earsUntil', 700);
+      notify(ev.lap ? `Kous! ${n} tě jemně kousla a seskočila z klína. Tolik poplácávání už je moc.` : `Kous! ${n} tě jemně kousla. Tolik poplácávání už je moc.`);
+      break;
+    case 'trap':
+      teaseLock(2200); buzz('bite');
+      if (K.lapView) {
+        const was = K.lapPose; K.lapPose = pose('lapBelly', 'lapLoaf'); faceFor({ grab: true }, 2200); placeLapCat();
+        setTimeout(() => { if (K.lapView && K.lapPose === 'lapBelly' && was !== 'lapBelly') { K.lapPose = was || 'lapLoaf'; placeLapCat(); } }, 2200);
+      } else actHere('trap', 'belly', { grab: true }, 2200);
+      notify('Past! Chytila tě za ruku a kope zadníma. Drápky ale nechala schované.');
+      break;
+    case 'boop': if (ev.swat) swatShow(true); else boopShow(); break;
+    case 'swat': swatShow(ev.why === 'boop'); break;
+    case 'splash': {   // the can: a splash on her head, a jump, a shake-off, then she sulks
+      K.place = null; teaseLock(2500);
+      I.sound.fx('splash');
+      if (!K.lapView) {
+        actHere('splash', 'arch', { ears: 'back' }, 1700);   // the jump, then the shake-off in the same act
+        const a = K.act;
+        setTimeout(() => { if (K.act !== a) return; I.sound.fx('shake'); a.p = Object.assign({}, a.p, { pose: pose('shake', 'sit'), o: { wet: true, ears: 'back' } }); update(true); }, 500);
+      }
+      { const hp = headAt(); if (!K.gone) popAt(hp ? catPx(hp.x, hp.y) : headPx(), 'splash'); }   // on her head (in the jump)
+      notify(`Šplouch! ${n} vyskočila, otřepala se a je celá mokrá. Teď se zlobí.`);
+      break;
+    }
+    case 'sulk': case 'cross': {
+      K.place = null;
+      // she runs off after a blowUp, the can or the swat; walks away from the bowl after the mild one
+      const fast = events.some(e => (e.type === 'blowUp' && e.why !== 'eat') || e.type === 'splash' || (e.type === 'boop' && e.swat)) ? 'run'
+        : events.some(e => e.type === 'blowUp') ? false : true;
+      if (!K.sulkPlace || !K.sulkPlace.p) K.sulkPlace = sulkSpot(fast);
+      K.sulkPlace.until = perf() + Math.max(0, ev.until - now());
+      sulkTimer();
+      if (ev.type === 'cross') { moodFor('earsUntil', 1500); notify(`${n} se opravdu zlobí. Tohle škádlení už bylo moc – nech ji chvíli být.`); }
+      update();
+      break;
+    }
+    case 'sulkEnd': K.sulkPlace = null; break;
+    case 'crossEnd': K.sulkPlace = null; tip('crossEnd', `${n} už se nezlobí.`, 10000); break;
+    case 'reconcile':
+      K.sulkPlace = null; K.place = null;
+      say('trill'); popFx('heart', -12); popFx('heart', 12);
+      if (!K.lapView) busy('reconcile', { room: G.her, pose: pose('rub', 'sit'), fx: 200, fy: 575, fast: true, o: { mood: 'happy' } }, 2200);
+      notify(`${n} se otočila a otřela se ti o ruku. Usmířeno!`);
+      break;
+  }
+}
+
+/* her payback: held until the player looks at her room and she is free (SPEC §13.4) */
+const PB = { q: null };
+const MUG = { el: null, on: false, seen: false, x: 0, y: 0, rot: 0, key: '' };
+function queuePayback(ev, events) {
+  PB.q = { kind: ev.kind === 'ambush' ? 'ambush' : 'shelf', found: events.find(e => e.type === 'found' && e.id === 'payback') || null, force: false, vis: 0, last: perf() };
+  setTimeout(paybackCheck, 60);
+}
+function paybackFree() {
+  const h = E.health(G.st);
+  return nothingOpen() && !busyMode() && !K.carry && !K.lapView && !G.seat && !drag && !(gest && gest.active()) && !document.hidden &&
+    !K.act && !K.gone && !h.asleep && !h.out && !h.tree && !h.lap && !h.held && !h.sulk && !h.cross && G.view === G.her;
+}
+function paybackCheck() {
+  const q = PB.q; if (!q) return;
+  const t = perf();
+  if (q.playing) { if (t - q.playing > 20000) paybackDone(q); return; }   // the scene was cut short
+  if (!document.hidden) q.vis += Math.min(4000, t - q.last);
+  q.last = t;
+  if ((q.force || t - K.welcomeAt >= 5000) && paybackFree()) { q.playing = t; if (q.kind === 'ambush') ambushScene(q); else shelfScene(q); return; }
+  if (q.vis >= 180000) {   // not in 3 minutes of looking: only the text
+    if (q.kind === 'shelf') { shelfAway(); notify(`Z kuchyně se ozvalo cink… ${nm()} shodila z linky plecháček.`); }
+    else notify(`${nm()} na tebe chvíli číhala za rohem a pak to vzdala.`);
+    paybackDone(q);
+  }
+}
+function paybackDone(q) {
+  if (PB.q === q) PB.q = null;
+  if (q.done) return;
+  q.done = true;
+  if (q.found) { G.unread = (G.unread || 0) + 1; notify(`Deníček: ${q.found.text}`, 4400, true); drawDiaryPill(); save(); }
+}
+// ambush: she stalks low at the side of the room, then pounces at the player's ankle (the bottom edge) and runs off
+function ambushScene(q) {
+  const room = G.her, left = kPos().x < 200, sx = left ? 96 : 304;
+  busy('ambush', { room, pose: pose('stalk', 'loaf'), fx: sx, fy: 556, flip: left, o: { warn: true } }, 2500, () => {
+    busy('ambushPounce', { room, pose: 'pounce', fx: 200, fy: 598, flip: left, fast: 'run', onArrive: () => {
+      buzz('bite'); notify(`Útok ze zálohy! ${nm()} ti skočila po kotníku. Drápky nechala schované.`);
+    } }, 600, () => {
+      busy('ambushOff', { room, pose: 'sit', fx: left ? 320 : 80, fy: 548, flip: !left, fast: 'run' }, 400);
+      paybackDone(q);
+    });
+  });
+}
+// shelf: on the kitchen counter she looks at the player, pushes the mug off with a paw (cink!), jumps down and walks off;
+// from another room the player only hears it
+function shelfScene(q) {
+  const ctr = spot('kitchen', 'counter');
+  if (!ctr || G.her !== 'kitchen') {
+    if (ctr) K.place = { p: { room: 'kitchen', pose: 'sit', fx: ctr.x, fy: ctr.y, raised: true }, until: perf() + 30000 };
+    update();
+    setTimeout(() => { I.sound.fx('clink'); shelfAway(); notify(`Z kuchyně se ozvalo cink… ${nm()} shodila z linky plecháček.`); paybackDone(q); }, 3000);
+    return;
+  }
+  const side = ctr.x > 200 ? 1 : -1, mx = ctr.x + side * 58;
+  const at = { room: 'kitchen', pose: 'sit', fx: ctr.x, fy: ctr.y, raised: true, flip: side > 0 };
+  busy('shelf', Object.assign({}, at, { onArrive: () => { Object.assign(MUG, { on: true, seen: false, x: mx, y: ctr.y, rot: 0, key: '' }); placeMug(); } }), 1500, () => {
+    busy('shelfPaw', Object.assign({}, at, { pose: pose('trickPaw', 'sit'), onArrive: () => setTimeout(() => {
+      Object.assign(MUG, { x: mx + side * 16, y: Math.max(ctr.y + 170, 492), rot: side * 150 }); placeMug(0.55);
+      setTimeout(() => { I.sound.fx('clink'); notify(`${nm()} shodila z linky plecháček. Cink! A celou dobu se na tebe dívala.`); }, 520);
+    }, 250) }), 1000, () => {
+      busy('shelfDown', { room: 'kitchen', pose: 'sit', fx: clamp(ctr.x - side * 90, 70, 330), fy: 556, flip: side < 0 }, 600);
+      K.idle = null; paybackDone(q);
+    });
+  });
+}
+function shelfAway() {   // she did it while the player was elsewhere: she is in the kitchen, the mug on its floor
+  const ctr = spot('kitchen', 'counter') || { x: 282, y: 322 };
+  if (G.her !== 'kitchen' && places().includes('kitchen')) { G.her = 'kitchen'; K.idle = null; update(); }
+  Object.assign(MUG, { on: true, seen: false, x: ctr.x + 62, y: Math.max(ctr.y + 170, 492), rot: 150, key: '' });
+  placeMug();
+}
+// the mug: on the counter, falling, then on the floor until the player leaves the kitchen (not saved)
+function placeMug(dur) {
+  if (MUG.on && G.view !== 'kitchen' && MUG.seen) MUG.on = false;
+  const show = MUG.on && G.view === 'kitchen' && !K.lapView && A.items && A.items.includes('mug');
+  if (!show) { if (MUG.el) MUG.el.hidden = true; MUG.key = ''; return; }
+  MUG.seen = true;
+  if (!MUG.el) { const d = document.createElement('div'); d.className = 'toy'; d.innerHTML = A.item('mug'); $('#toys').appendChild(d); MUG.el = d; }
+  const sz = ((A.itemSize && A.itemSize.mug && A.itemSize.mug.w) || 26) * V.s, p = toPx(MUG.x, MUG.y);
+  const key = [MUG.x, MUG.y, MUG.rot, V.s].join();
+  MUG.el.hidden = false;
+  if (key === MUG.key) return;
+  MUG.key = key;
+  Object.assign(MUG.el.style, { width: sz + 'px', height: sz + 'px', zIndex: 21, transition: dur ? `transform ${dur}s cubic-bezier(.5,0,1,1)` : 'none',
+    transform: `translate(${(p.x - sz / 2).toFixed(1)}px,${(p.y - sz * .9).toFixed(1)}px) rotate(${MUG.rot}deg)` });
+}
 // she comes by herself (called while the player sits, or happy): to the seat, jump up, and the lap
 function comeToLap() {
   const seat = G.seat, sp = seat && spot(G.view, seat);
@@ -6481,6 +7381,8 @@ function hintText() {
   if (G.seat) return `Sedíš ${G.seat === 'bench' ? 'na lavičce' : 'v křesle'}.`;
   if (h.scared) return `${n} se bojí – nech ji chvíli být.`;
   if (h.asleep) return `${n} spí, nebuď ji.`;
+  if (h.cross) return `${n} se zlobí – nech ji chvíli být.`;
+  if (h.sulk) return `${n} se urazila – pohlaď ji po srsti nebo jí dej pamlsek.`;
   if (h.offended) return `${n} je uražená. Buď na ni hodná.`;
   if (w === 'food') return `${n} má hlad – nasyp granule do misky.`;
   if (w === 'water') return `${n} chce pít – nalij vodu do misky.`;
@@ -6488,7 +7390,7 @@ function hintText() {
   if (w === 'coat') return 'Učeš ji – přejeď kartáčem po srsti.';
   if (w === 'love') return `${n} se chce mazlit – pohlaď ${acc(n)} po srsti.`;
   if (w === 'fun') return `${n} se nudí – vezmi hračku.`;
-  if (h.garden && h.wet) return `${n} zmokla a je mrzutá.`;
+  if (h.garden && h.wet) return h.splashed ? `${n} je mokrá od konve a mrzutá.` : `${n} zmokla a je mrzutá.`;
   { const v = visitorNow(); if (v && G.view !== 'garden' && !h.out) return `Na zahradě je na návštěvě ${v.name}.`; if (v && G.view === 'garden') return visitHint(v); }
   if (G.st.guest && E.visitor && E.visitor(G.st, G.st.guest.id)) { const V = VIS(G.st.guest.id); return G.view === 'living' ? `${V.name} u nás spí na noc – můžeš ${V.fem ? 'ji' : 'ho'} pohladit.` : `${V.name} je na noc v obýváku.`; }
   if (K.idle && K.idle.p.dusk && G.her === 'hall') return `${n} sedí u dveří – chtěla by ven.`;
@@ -6602,6 +7504,7 @@ function placeCarry(w) {
 }
 function dropCat(target, w) {
   K.carry = null; targets([], null);
+  { const h = E.health(G.st); if (h.sulk || h.cross) K.sulkPlace = { p: null, until: perf() + Math.max(0, h.teaseUntil - now()) }; }   // she sulks where she is put
   if ((target === 'chair' || target === 'bench') && can('lapOn')) {
     if (G.seat !== target) G.seat = target;
     doAct('putDown', target);
@@ -6647,14 +7550,25 @@ function onTap(ev) {
     toast(T[ev.item] || '', 2200); return;
   }
   if (ev.cat || regionAtClient(w.cx, w.cy)) {
-    if (h.asleep && !h.lapDoze) { tip('sleepTap', `${n} spí, nebuď ji.`, 2500); popFx('zzz'); return; }
+    // asleep she only flicks an ear (never a pat or a boop); up the tree as before (SPEC §13.4)
+    if (h.asleep && !h.lapDoze) { tip('sleepTap', `${n} spí, nebuď ji.`, 2500); popFx('zzz'); flickEar(); return; }
     if (h.lapDoze) { popFx('zzz'); return; }
     if (h.tree) { say('plaintive'); tip('tree', `Podrž na ní prst a sundáš ji.`, 4000); return; }
+    if (K.gone || K.carry || K.teaseLock > perf()) return;      // right after a blowUp, a trap, a swat …: the tap is ignored
+    const pat = ev.pat && !/^v:/.test(ev.pat.region) ? ev.pat : null;   // a run of taps on Koxa
+    if (h.cross) {
+      if (pat && pat.n >= 2) patTap(pat);
+      else tip('cross', `${n} dělá, že tě nevidí.`, 4000);
+      return;
+    }
+    if (pat && pat.n >= 2) { patTap(pat); return; }
     stay();
     const md = E.mood(G.st);
     say(md === 'sad' ? 'plaintive' : md === 'grumpy' ? 'meow' : 'question'); moodFor('meowUntil', 900);
     const want = E.wants(G.st);
     bubble(want ? (icon(want) || 'Mňau!') : md === 'happy' ? 'Mrrr!' : 'Mňau?');
+    const rid = pat ? pat.region : ev.region && ev.region.id;
+    if (rid === 'nose' && K.boopUntil <= perf()) doAct('boop');   // she squints and sneezes (a second one waits for the first)
     return;
   }
   if (!w.inScene || K.lapView) return;
@@ -6775,7 +7689,7 @@ function dropItem(ev) {
   else if (item === 'treat') { stay(); doAct('treat', treatKind === 'stick' ? 'stick' : undefined); }
   else if (item === 'pill') doAct('pill');
   else if (item === 'brush' && !brushed) { stay(); doAct('brush'); }
-  else if (item === 'can') doAct('waterBeds');
+  else if (item === 'can') doAct(tg === 'cat' ? 'splash' : 'waterBeds');
   else if (item === 'seeds') pickSeed(+tg.slice(3));
 }
 // which seeds: a small dialog with the crops
@@ -6804,6 +7718,11 @@ function hitTarget(x, y, item) {
   }
   const it = ITEMS[item];
   if (!it || !it.to) return null;
+  if (item === 'can') {   // the exact regions, the cat in front wins; a visitor in front is never splashed
+    if (w.inScene && G.view === 'garden' && G.her === 'garden' && !K.gone) { const hc = catHit(w.cx, w.cy); if (hc && !hc.m) return 'cat'; }
+    const i = w.inScene ? bedAt(w.p) : -1;
+    return i >= 0 ? 'bed' + i : null;
+  }
   if (it.to.includes('visitor') && w.inScene) { const h = catHit(w.cx, w.cy); if (h) return h.m ? 'visitor' : 'cat'; }   // the one in front
   for (const k of it.to) {
     if (k === 'cat') { if (catLoose(w.cx, w.cy)) return 'cat'; continue; }
@@ -6881,6 +7800,7 @@ function tick() {
 }
 // now and then: a happy cat comes to the seat by herself
 function lifeTick() {
+  paybackCheck();
   if (typeof busyMode === 'function' && busyMode()) { if (!K.lapView && !K.walking && !K.carry) update(); return; }   // never to the lap mid-game
   if (!G || document.hidden || K.walking || K.carry) return;
   const h = E.health(G.st);
@@ -8859,6 +9779,10 @@ function renderHelp() {
       ${hrow(A.cat('sit', 'happy') + ov(finger(80, 46) + finger(120, 46)), 'Drbání', 'Jedním nebo dvěma prsty ji drbej za ušima, na hlavě nebo na bradě. Prsty pohybuj sem a tam na jednom místě.')}
       ${hrow(cat('belly', 'happy', 'loaf'), 'Bříško', 'Bříško si nechá podrbat jen někdy, jindy tě hravě kousne. Když je mrzutá, kousne pokaždé.')}
       ${hrow(A.cat('sit', 'calm') + ov(tap(100, 120)), 'Ťuknutí', 'Ťukni na ni a podívá se na tebe. Když něco chce, ukáže ti to v bublině.')}
+      ${hrow(cat('rearUp', 'happy', 'loaf') + ov(tap(150, 150)), 'Poplácání', 'Ťukej na ni lehce prstem pořád dokola. Na zádech má ráda klidné, pravidelné poplácávání a na jednom místě úplně nejradši – zkus ho najít, i správné tempo. Hlavu, bradu a tlapky snese. Ocas nech být a bříško je past: chytí tě za ruku a kope.')}
+      ${hrow(A.cat('sit', { mood: 'grumpy', warn: true }), 'Než se naštve', `Když švihá špičkou ocasu, dává uši do stran a cuká jí kůže na zádech, má toho dost. Přestaň – když ťukáš dál, naježí se, uteče a urazí se. Rychlé bubnování nemá ráda nikdy, a když je mrzutá, ani pomalé. Při jídle ji nech. Spící ${n} jen cukne uchem.`)}
+      ${hrow(A.cat('sit', { mood: 'calm', eyes: 'cross' }), 'Ťuknutí do nosu', 'Ťukni jí jednou do nosu: zašilhá, kýchne a zatřepe hlavou. Třikrát za minutu je ale moc – plácne tě tlapkou (drápky nechá schované) a urazí se.')}
+      ${hrow(cat('rub', 'happy'), 'Usmíření', 'Uražená sedí zády k tobě na druhém konci pokoje. Pohlaď ji po srsti, podrbej ji nebo jí dej pamlsek a usmíříte se – otře se ti o ruku. Za pár minut ji to přejde i samo. Když to se škádlením přeženeš, opravdu se zlobí: 20 minut tě neposlouchá, nehraje si a na pohlazení plácne tlapkou. Pak ji nech být. A někdy ti to vrátí…')}
       ${hrow(A.cat('carried', 'happy'), 'Nošení', 'Podrž na ní prst a zvedneš ji. Přenes ji do pelíšku, na okno nebo do křesla. Doneseš-li ji ke dveřím v předsíni, půjdete spolu na zahradu. Když nemá náladu, vykroutí se.')}
       ${hrow(A.face('happy'), 'Zavolat', 'Tlačítko Zavolat ji přivolá i z jiné místnosti. Se zapnutým mikrofonem (Nastavení) ji zavoláš nahlas.')}
       ${hrow(cat('lapLoaf', 'happy', 'loaf'), 'Na klíně', `Ťukni na křeslo v obýváku nebo na lavičku na zahradě a sedneš si. Pak ji zavolej, nebo ji na křeslo přenes – lehne si ti na klín. Z jiné místnosti na zavolání jen přijde, pak ji zavolej znovu. Na klíně má hlazení nejradši a často usne, ale jako každá kočka někdy seskočí a odběhne. Když je spokojená, přijde si na klín sama. Tlačítko Vstát tě zvedne.`)}
@@ -8919,6 +9843,7 @@ function renderHelp() {
       ${hrow(cat('stalk', 'happy'), 'Ven', `Na zahradu vedou dveře z předsíně. ${n} jde s tebou. Doma zůstane, jen když spí nebo má rýmu. Plíží se k ptáčkům a nosí ti dárky: pírko, lísteček nebo šišku. Déšť nesnáší: zmokne a je mrzutá. Domů jde zase s tebou, jen ze stromu musí nejdřív slézt.`)}
       ${hrow(cat('onBranch', 'calm'), 'Strom', 'Ráda leze na strom a někdy neumí dolů. Zavolej ji, nebo na ni podrž prst a sundáš ji. Nejpozději za půl hodiny sleze sama.')}
       ${hrow({ two: true, s: A.item(artOr('seedPacket', 'treat')) + A.item(artOr('wateringCan', 'jug')) }, 'Záhony', 'Přetáhni semínka na prázdný záhon a vyber, co zaseješ. Jednou za den záhony zalij konví (když prší, zalije je déšť). Každý zalitý den rostlina povyroste: ředkvička je zralá za 2 dny, rajče za 6. Zralou úrodu sklidíš ťuknutím. Od prosince do února záhony spí. Od přátelství Parťačka máš 6 záhonů.')}
+      ${hrow({ two: true, s: A.item(artOr('wateringCan', 'jug')) + cat('shake', { wet: true }) }, 'Konev', `Konví zaléváš záhony. Když zaliješ i ${esc(acc(raw))}, vyskočí, otřepe se a je mokrá a uražená. Návštěvy konví nepokropíš. V zimě a když spí, to nejde.`)}
       ${typeof A.crop === 'function' ? hrow(A.crop('catnip', 3), 'Šanta kočičí', `Je jen pro kočku, nikdo ji nekoupí. Sklidíš-li ji, když ${n} nespí a je doma, dostane ji hned a radostí úplně šílí. Jinak šanta počká v Deníčku v Pokladech: tlačítkem Dát jí ji dostane později.`) : ''}
       ${hrow(cat('walk', 'happy'), 'Toulky', 'Od přátelství Kamarádka ji můžeš pustit na toulky: na zahradě ťukni na Pustit ven. Vrátí se sama za 2 až 8 hodin, často s pohlednicí nebo dárkem. Pohlednice sbíráš v Deníčku.')}
     </section>
@@ -9037,15 +9962,16 @@ function takeTreats() {
 takeTreats();
 tick();
 update(true);
+K.welcomeAt = perf(); sulkTimer();
 try { if (sessionStorage.getItem(RESTARTED)) { sessionStorage.removeItem(RESTARTED); toast(`Všechno začíná znovu. ${G.st.name} je u tebe doma.`, 3200); } } catch (e) {}
 setInterval(() => { if (!document.hidden && nothingOpen()) tick(); }, 30000);
 setInterval(lifeTick, 3000);   // she moves on by herself now and then
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) { takeTreats(); tick(); if (hiddenAt && Date.now() - hiddenAt > 60000 && !K.gone && !E.health(G.st).asleep) { say('trill'); bubble('Mrrp!'); } }
+  if (!document.hidden) { K.welcomeAt = perf(); takeTreats(); tick(); if (hiddenAt && Date.now() - hiddenAt > 60000 && !K.gone && !E.health(G.st).asleep) { say('trill'); bubble('Mrrp!'); } }
   else { hiddenAt = Date.now(); saveKept(); I.sound.purr(false); }
 });
-addEventListener('pageshow', () => { takeTreats(); tick(); });
+addEventListener('pageshow', () => { K.welcomeAt = perf(); takeTreats(); tick(); });
 addEventListener('pagehide', saveKept);
 
 window.addEventListener('resize', layout);
@@ -9163,6 +10089,11 @@ window.Kocka = {
   setNow(ms) { window.__kockaNow = ms; tick(); },
   advance(hours) { window.__kockaNow = now() + hours * 3600000; tick(); },
   act(name, arg) { return doAct(name, arg); },
+  // Škádlení: the last 100 events handle() got; the teasing state with health()'s view of it; a payback now (only the
+  // 5 s welcome wait is skipped, the other holding rules apply; true when queued)
+  get events() { return EVLOG.slice(); },
+  get tease() { const h = E.health(G.st); return Object.assign(JSON.parse(JSON.stringify(G.st.tease || {})), { sulk: h.sulk, cross: h.cross, splashed: h.splashed, teaseUntil: h.teaseUntil }); },
+  forcePayback(kind) { handle([{ type: 'payback', kind }]); if (!PB.q) return false; PB.q.force = true; paybackCheck(); return true; },
   settle, catPoint, strokePath, itemPoint, spotPoint,
   regionAt: (x, y) => { const g = regionAtClient(x, y); return g ? g.id : null; },
   openVet, openDiary, go, places, get view() { return G.view; }, get her() { return G.her; },
