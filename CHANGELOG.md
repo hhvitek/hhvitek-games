@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.19 – 2026-11-13
+
 - Dáma: nový nejslabší soupeř Začátečník ★☆☆ pro ty, kdo se dámu teprve učí: táhne hlavně vpřed, nepromýšlí, co uděláš ty, a často ti daruje kámen.
 
 ## 1.0.18 – 2026-11-13
