@@ -64,7 +64,7 @@ function randomRun(seed, days) {
   const t0 = at(2026, 1 + Math.floor(r() * 12), 1 + Math.floor(r() * 28), Math.floor(r() * 24));
   const st = E.create(seed, t0, 'Koxa');
   // neighbour cats she already knows (Koxa's own hearts: a friend, a hissing Bivoj) and the visitors' bowl: more visits, joint acts
-  st.visitors = { sedivka: { friend: 2, pal: 3, met: t0, visits: 2, fed: 0 }, bivoj: { friend: 4, pal: 0, met: t0, visits: 1, fed: 0 }, ciperka: { friend: 0, pal: 1, met: 0, visits: 1, fed: 0 } };
+  st.visitors = { sedivka: { friend: 5, pal: 3.5, met: t0, visits: 2, fed: 0 }, bivoj: { friend: 4, pal: 0, met: t0, visits: 1, fed: 0 }, ciperka: { friend: 0, pal: 1, met: 0, visits: 1, fed: 0 } };
   st.owned.visitorBowl = true; st.furniture.visitorBowl = { room: 'garden', x: 0.5, y: 0.8 };
   let t = t0, events = [];
   const ARGS = {
@@ -75,16 +75,24 @@ function randomRun(seed, days) {
     vetCure: () => ({ won: r() < 0.5 }),
     putDown: () => pick(['window', 'bed', null, 'x'.repeat(50)]),
     feedVisitor: () => ({ id: st.visit && r() < 0.7 ? st.visit.id : pick(['mourek', 'bivoj', 'sedivka', 'tom', null]) }),
-    strokeVisitor: () => ({ id: st.visit && r() < 0.7 ? st.visit.id : pick(['mourek', 'bivoj', 'sedivka', 'tom', null]) }),
+    strokeVisitor: () => Object.assign({ id: st.visit && r() < 0.7 ? st.visit.id : pick(['mourek', 'bivoj', 'sedivka', 'tom', null]) },
+      r() < 0.6 ? { region: pick(Object.keys(E.REGIONS).concat('nose', null)), along: pick([true, false, 'sideways', 'x']), speed: pick([50, 300, 700, 1200, 'good', 'fast', NaN]) } : {}),
+    treatVisitor: () => ({ id: st.visit && r() < 0.7 ? st.visit.id : pick(['mourek', 'sedivka', 'tom', null]) }),
+    playVisitor: () => ({ id: st.visit && r() < 0.7 ? st.visit.id : pick(['mourek', 'sedivka', 'tom', null]), caught: pick(['koxa', 'visitor', 'x', null]) }),
+    invite: () => ({ id: st.visit && r() < 0.7 ? st.visit.id : pick(['sedivka', 'bivoj', 'tom', null]) }),
+    photo: () => pick([null, {}, { room: pick(['garden', 'living', 'lap', 'moon']), pose: 'sit', vpose: pick(['sit', '', 'x'.repeat(30), 5]), vx: pick([0, 123.4, 999, -5, NaN, 'x']), vflip: pick([true, false, 'yes']), nokoxa: pick([true, false, 1]) }]),
   };
   const acts = E.ACTIONS.concat(['bogus', '', null]);
   let lvl = 0;
   while (t < t0 + days * D) {
     const k = r();
-    t += k < 0.6 ? Math.floor(r() * 30 * MIN) : k < 0.97 ? Math.floor(r() * 20 * H) : Math.floor(r() * 5 * D);
+    t += (st.visit || st.guest) && k < 0.5 ? Math.floor(r() * 3 * MIN) : k < 0.6 ? Math.floor(r() * 30 * MIN) : k < 0.97 ? Math.floor(r() * 20 * H) : Math.floor(r() * 5 * D);   // with a visitor: often minutes
     if (r() < 0.02) t -= Math.floor(r() * 3 * H);            // the clock moved back
     let res;
-    if (r() < 0.15) res = E.advance(st, t);
+    // now and then a neighbour cat comes over (made by hand, then repaired), so the visitor actions meet a visitor
+    if (r() < 0.08 && !st.visit && !st.guest) { st.visit = { id: pick(['sedivka', 'sedivka', 'mourek', 'liza', 'rambo', 'ciperka']), since: st.t, until: st.t + 60 * MIN, gain: 0 }; E.repair(st); }
+    if (st.visit && r() < 0.3) { const a = pick(['strokeVisitor', 'strokeVisitor', 'treatVisitor', 'playVisitor', 'invite', 'photo', 'feedVisitor']); res = E.act(st, a, ARGS[a](), t); }
+    else if (r() < 0.15) res = E.advance(st, t);
     else if (r() < 0.02) res = E.consumeTreats(st, pick([1, 5, -3, NaN, 1e9]), t);
     else { const a = pick(acts); res = E.act(st, a, ARGS[a] ? ARGS[a]() : null, t); }
     ok(res.st === st && Array.isArray(res.events), `seed ${seed}: result shape`);
@@ -347,7 +355,7 @@ function discover(seed) {
     if (fresh) continue;
     const st = discover(seed); tested++;
     const list = E.diary(st);
-    const missing = list.filter(e => !e.found && !e.id.startsWith('pal')).map(e => e.id);   // pal*: neighbour cats, see 'Visitors 2'
+    const missing = list.filter(e => !e.found && !e.id.startsWith('pal') && e.id !== 'sleepover').map(e => e.id);   // pal*, sleepover: neighbour cats, see 'Visitors 2' and 'Visitors 3'
     ok(missing.length === 0, `seed ${seed} (${T.favFood}, ${T.spots}, ${T.fear}, ${T.quirk}, ${T.toy}): all found, missing ${missing.join(', ')}`);
     ok(list.every(e => typeof e.text === 'string' && e.text.length > 3 && !/undefined|NaN/.test(e.text)), `seed ${seed}: entry texts`);
     if (!missing.length) { seen.favFood.add(T.favFood); seen.fear.add(T.fear); seen.quirk.add(T.quirk); seen.toy.add(T.toy); T.spots.forEach(s => seen.spot.add(s)); }
@@ -356,7 +364,7 @@ function discover(seed) {
   ok(full(), `every trait value reached (${tested} cats)`);
   const st = E.create(1, at(2026, 11, 12, 15), 'Koxa');
   const d = E.diary(st, 'Micka');
-  ok(d.length === 13 && d.find(e => e.id === 'birthday').found && d.find(e => e.id === 'birthday').text === 'Micka k nám přišla 12. 11. 2026.', 'the list: 13 entries, the name from the argument, the birthday found at once');
+  ok(d.length === 14 && d.find(e => e.id === 'birthday').found && d.find(e => e.id === 'birthday').text === 'Micka k nám přišla 12. 11. 2026.', 'the list: 14 entries, the name from the argument, the birthday found at once');
   ok(E.diary(st).find(e => e.id === 'birthday').text.startsWith('Koxa'), 'the stored name without an argument');
 }
 
@@ -1244,7 +1252,7 @@ section('Visitors');
   ok(E.act(p, 'feedVisitor', { id: 'liza' }, t0).events[0].reason === 'Líza tu teď není.', 'an absent visitor: refused');
   ok(E.act(p, 'feedVisitor', { id: 'pacicka' }, t0).events.some(e => e.type === 'visitorFed') && p.visitors.pacicka.friend === 1 && p.visit.until === t0 + H + 30 * MIN, 'Pacička (greedy): food = a heart and a longer visit');
   ok(E.act(p, 'feedVisitor', { id: 'pacicka' }, t0).events[0].reason === 'Pacička už dnes dostala.', 'fed once a day');
-  for (let i = 0; i < 20; i++) E.act(p, 'strokeVisitor', { id: 'pacicka' }, t0);
+  for (let i = 0; i < 20; i++) E.act(p, 'strokeVisitor', { id: 'pacicka' }, t0 + i * MIN);   // one stroke a minute counts (Phase B)
   ok(p.visitors.pacicka.friend === 2, `strokes: at most +1 heart a visit (${p.visitors.pacicka.friend})`);
   let fled = 0, hissed = 0;
   for (let s = 1; s <= 30; s++) {
@@ -1505,6 +1513,426 @@ section('Visitors 2');
     }
   }
   ok(bad === 0 && joint > 20, `joint acts only in the garden (${joint} of ${checks} visit steps together, ${bad} wrong)`);
+}
+
+/* ---------- 22. Phase B: the player and the visitor ---------- */
+section('Visitors 3');
+{
+  const rec = (friend, pal) => ({ friend, pal, met: 0, visits: 1, fed: 0 });
+  const types = ev => ev.map(e => e.type);
+  // a cat visiting at time t (moved to a dry day), Koxa cared for and awake; garden: she is in the garden with the player
+  function visiting(seed, id, friend, pal, t, garden) {
+    const probe = E.create(seed, t, 'Koxa');
+    while (E.weather(t, probe) === 'rain') t += D;
+    const st = E.create(seed, t - H, 'Koxa');
+    E.advance(st, t); basicCare(st, t); st.needs.energy = 90;
+    st.visitors[id] = rec(friend, pal);
+    st.visit = { id, since: t, until: t + 2 * H, gain: 0, palGain: 0, greeted: false, act: { kind: 'arrive', since: t, with: null } };
+    if (garden) st.yard = { since: t, snow: false, tree: null };
+    return { st, t };
+  }
+  const T0 = at(2026, 6, 10, 10);
+  // liked, neutral and disliked spots
+  {
+    const { st, t } = visiting(100, 'sedivka', 0, 0, T0);
+    let ev = E.act(st, 'strokeVisitor', { id: 'sedivka', region: 'back', along: true, speed: 300 }, t).events;
+    ok(ev.some(e => e.type === 'visitorPurr' && e.region === 'back' && e.liked === true) && st.visitors.sedivka.friend === 1, `Šedivka loves the back: +¾ +¼ (${st.visitors.sedivka.friend})`);
+    ev = E.act(st, 'strokeVisitor', { id: 'sedivka', region: 'paws', along: true, speed: 300 }, t + MIN).events;
+    ok(ev.some(e => e.type === 'visitorDislike' && e.region === 'paws' && e.why === 'region' && e.away === false) && st.visitors.sedivka.friend === 1, 'Šedivka: paws disliked, no friendship');
+    ev = E.act(st, 'strokeVisitor', { id: 'sedivka', region: 'back', along: false, speed: 300 }, t + 2 * MIN).events;
+    ok(ev.some(e => e.type === 'visitorDislike' && e.why === 'against'), 'against the fur: disliked');
+    ev = E.act(st, 'strokeVisitor', { id: 'sedivka', region: 'back', speed: 1500 }, t + 3 * MIN).events;
+    ok(ev.some(e => e.type === 'visitorDislike' && e.why === 'fast'), 'too fast: disliked');
+    ev = E.act(st, 'strokeVisitor', { id: 'sedivka', region: 'back', speed: 60 }, t + 4 * MIN).events;
+    ok(!ev.some(e => /^visitor/.test(e.type)) && st.visitors.sedivka.friend === 1, 'too slow: it does not notice');
+    ev = E.act(st, 'strokeVisitor', { id: 'sedivka', region: 'head', along: 'sideways', speed: 300 }, t + 5 * MIN).events;
+    ok(ev.some(e => e.type === 'visitorPurr' && e.liked === false) && st.visitors.sedivka.friend === 1, 'neutral (sideways): purrs, but neutral strokes stop at +1 a visit');
+    for (let k = 6; k < 20; k++) E.act(st, 'strokeVisitor', { id: 'sedivka', region: 'back', speed: 300 }, t + k * MIN);
+    ok(st.visitors.sedivka.friend === 1.5 && st.visit.gain === 1.5, `liked strokes: at most +1½ a visit (${st.visitors.sedivka.friend})`);
+    invariants(st, 'liked strokes');
+    const n = visiting(100, 'mourek', 0, 0, T0).st;
+    for (let k = 0; k < 10; k++) E.act(n, 'strokeVisitor', { id: 'mourek', region: 'back', speed: 300 }, n.t + k * MIN);
+    ok(n.visitors.mourek.friend === 1, 'neutral strokes only: at most +1 a visit (as before)');
+    const u = visiting(100, 'mourek', 0, 0, T0).st;
+    ok(E.act(u, 'strokeVisitor', { id: 'mourek', region: 'nose', speed: 300 }, u.t).events.some(e => e.type === 'visitorPurr' && !('region' in e)) && u.visitors.mourek.friend === 0.5, 'an unknown region: like the menu\'s Pohladit');
+  }
+  // the likes table
+  {
+    const all = Object.keys(E.REGIONS);
+    let bad = 0;
+    for (const id of Object.keys(E.VISITORS)) {
+      const L = E.visitorLikes(id);
+      if (!L || !L.likes.length || L.likes.some(r => !all.includes(r) || L.dislikes.includes(r)) || L.dislikes.some(r => !all.includes(r)) || !(L.text.length > 20 && L.text.includes(E.VISITORS[id].name))) bad++;
+    }
+    ok(bad === 0 && E.visitorLikes('liza').gentle && !E.visitorLikes('bivoj').gentle && E.visitorLikes('tom') === null, 'visitorLikes: known regions, a Czech help line with the name, Líza only gently');
+    ok(E.visitorLikes('ciperka').dislikes.join() === 'tail' && E.visitorLikes('rambo').dislikes.includes('belly') && E.visitorLikes('pacicka').likes.includes('chin') && E.visitorLikes('mourek').likes.includes('head'), 'Čiperka anything but the tail, Rambo hates the belly, Pacička the chin, Mourek the head');
+  }
+  // shy Líza: head and chin, gently; fast or elsewhere she runs off under 2 hearts, else she moves away a bit
+  {
+    let r = visiting(101, 'liza', 0, 0, T0);
+    let ev = E.act(r.st, 'strokeVisitor', { id: 'liza', region: 'head', speed: 300 }, r.t).events;
+    ok(ev.some(e => e.type === 'visitorPurr' && e.liked) && r.st.visit, 'Líza: a gentle stroke on the head is liked');
+    ev = E.act(r.st, 'strokeVisitor', { id: 'liza', region: 'head', speed: 700 }, r.t + MIN).events;
+    ok(ev.some(e => e.type === 'visitorLeave' && e.reason === 'shy') && !r.st.visit, 'Líza: a quick stroke (700 px/s) makes her run off');
+    r = visiting(101, 'liza', 1.75, 0, T0);
+    ev = E.act(r.st, 'strokeVisitor', { id: 'liza', region: 'back', speed: 300 }, r.t).events;
+    ok(ev.some(e => e.type === 'visitorLeave' && e.reason === 'shy'), 'Líza under 2 hearts: the back makes her run off');
+    r = visiting(101, 'liza', 2, 0, T0);
+    ev = E.act(r.st, 'strokeVisitor', { id: 'liza', region: 'back', speed: 300 }, r.t).events;
+    ok(ev.some(e => e.type === 'visitorDislike' && e.away === true) && r.st.visit && r.st.visitors.liza.friend === 2, 'Líza with 2 hearts: she just moves away a bit');
+    invariants(r.st, 'Líza');
+  }
+  // grumpy Rambo: the belly makes him swipe under 3 hearts (a quarter heart once a visit), later he just dislikes it
+  {
+    let r = visiting(102, 'rambo', 2.5, 0, T0), hiss = 0;
+    for (let k = 0; k < 5; k++) hiss += E.act(r.st, 'strokeVisitor', { id: 'rambo', region: 'belly', speed: 300 }, r.t + k * 1000).events.filter(e => e.type === 'visitorHiss' && e.region === 'belly').length;
+    ok(hiss === 5 && r.st.visitors.rambo.friend === 2.25, `Rambo: swipes at every belly stroke (${hiss}), −¼ heart once a visit (${r.st.visitors.rambo.friend})`);
+    r = visiting(102, 'rambo', 3, 0, T0);
+    ok(E.act(r.st, 'strokeVisitor', { id: 'rambo', region: 'belly', speed: 300 }, r.t).events.some(e => e.type === 'visitorDislike') && r.st.visitors.rambo.friend === 3, 'Rambo with 3 hearts: no swipe, he just does not like it');
+    // a neutral spot under 2 hearts: half the minutes he swipes, the same answer within a minute
+    let mixed = 0, swipes = 0, n = 0;
+    for (let s = 1; s <= 30; s++) {
+      const q = visiting(s, 'rambo', 1, 0, T0), out = [];
+      for (let k = 0; k < 6; k++) out.push(E.act(q.st, 'strokeVisitor', { id: 'rambo', region: 'head', speed: 300 }, q.t + 10 * MIN + k * 5000).events.some(e => e.type === 'visitorHiss'));
+      if (out.some(x => x !== out[0])) mixed++;
+      n++; if (out[0]) swipes++;
+    }
+    ok(mixed === 0 && swipes > 5 && swipes < 25, `Rambo at a neutral spot: ${swipes}/${n} minutes he swipes, never mixed within a minute (${mixed})`);
+  }
+  // stroke farming: any number of strokes within a minute counts once
+  {
+    const a = visiting(103, 'mourek', 0, 0, T0).st, a0 = a.t;
+    for (let x = 0; x < 60000; x += 200) E.act(a, 'strokeVisitor', { id: 'mourek', region: 'back', speed: 400 }, a0 + x);
+    ok(a.visitors.mourek.friend === 0.5, `300 strokes within a minute: +½ only (${a.visitors.mourek.friend})`);
+    const c = visiting(103, 'mourek', 0, 0, T0), d = visiting(103, 'mourek', 0, 0, T0);
+    for (let x = 0; x < 3 * MIN; x += 200) E.act(c.st, 'strokeVisitor', { id: 'mourek', region: 'head', speed: 400 }, c.t + x);
+    for (let k = 0; k < 3; k++) E.act(d.st, 'strokeVisitor', { id: 'mourek', region: 'head', speed: 400 }, d.t + k * MIN);
+    ok(c.st.visitors.mourek.friend === d.st.visitors.mourek.friend && c.st.visitors.mourek.friend === 1.5, `strokes every 200 ms for 3 min = one a minute (${c.st.visitors.mourek.friend} / ${d.st.visitors.mourek.friend})`);
+  }
+  // a treat from the hand
+  {
+    const { st, t } = visiting(104, 'pacicka', 0, 0, T0);
+    const p0 = st.pamlsky;
+    let ev = E.act(st, 'treatVisitor', { id: 'pacicka' }, t).events;
+    ok(ev.some(e => e.type === 'visitorTreat' && e.id === 'pacicka') && st.pamlsky === p0 - 1 && st.visitors.pacicka.friend === 1, 'treatVisitor: a pamlsek, greedy Pacička +1 heart');
+    ok(E.act(st, 'treatVisitor', { id: 'pacicka' }, t + MIN).events[0].reason === 'Pacička už pamlsek dostala.' && st.pamlsky === p0 - 1, 'once a visit');
+    ok(E.act(st, 'feedVisitor', { id: 'pacicka' }, t + MIN).events[0].reason === 'Pacička už dnes dostala.', 'a treat counts as fed today');
+    const m = visiting(104, 'mourek', 0, 0, T0); m.st.pamlsky = 0;
+    ok(E.act(m.st, 'treatVisitor', { id: 'mourek' }, m.t).events[0].reason === 'Nemáš žádné pamlsky.' && m.st.visitors.mourek.friend === 0 && m.st.pamlsky === 0, 'no pamlsky: refused');
+    m.st.pamlsky = 3;
+    ok(E.act(m.st, 'treatVisitor', { id: 'mourek' }, m.t).events.some(e => e.type === 'visitorTreat') && m.st.visitors.mourek.friend === 0.5 && E.act(m.st, 'treatVisitor', { id: 'mourek' }, m.t).events[0].reason === 'Mourek už pamlsek dostal.', 'Mourek +½, "už pamlsek dostal"');
+    ok(E.act(m.st, 'treatVisitor', { id: 'liza' }, m.t).events[0].reason === 'Líza tu teď není.', 'an absent cat: refused');
+    invariants(m.st, 'treat');
+  }
+  // the feather for two
+  {
+    const { st, t } = visiting(105, 'ciperka', 0, 0, T0, true);
+    st.needs.fun = 50; const fun0 = st.needs.fun;
+    let ev = E.act(st, 'playVisitor', { id: 'ciperka', caught: 'koxa' }, t).events;
+    ok(ev.some(e => e.type === 'visitorPlay' && e.caught === 'koxa' && e.koxa === true) && st.visitors.ciperka.friend === 0.25 && st.visitors.ciperka.pal === 0.25 && st.needs.fun > fun0, 'playVisitor: +¼ heart, Koxa plays along (+¼ of hers, fun)');
+    ev = E.act(st, 'playVisitor', { id: 'ciperka', caught: 'visitor' }, t + 30000).events;
+    ok(ev[0].type === 'refused' && ev[0].reason === 'Čiperka si chvilku oddechne.' && st.visitors.ciperka.friend === 0.25, 'one game a minute');
+    for (let k = 1; k <= 5; k++) E.act(st, 'playVisitor', { id: 'ciperka', caught: 'visitor' }, t + k * MIN);
+    ok(st.visitors.ciperka.friend === 0.5 && st.visit.playGain === 0.5 && st.visitors.ciperka.pal <= 0.5, `at most +½ a visit from games (${st.visitors.ciperka.friend}, Koxa ${st.visitors.ciperka.pal})`);
+    const i = visiting(105, 'ciperka', 0, 0, T0), f0 = i.st.needs.fun;
+    ev = E.act(i.st, 'playVisitor', { id: 'ciperka', caught: 'koxa' }, i.t).events;
+    ok(ev.some(e => e.type === 'visitorPlay' && e.caught === 'visitor' && e.koxa === false) && i.st.visitors.ciperka.pal === 0 && i.st.needs.fun <= f0, 'Koxa indoors: only the visitor plays (caught = visitor)');
+    invariants(st, 'feather');
+  }
+  // jealousy
+  {
+    const jcat = (seed, lvl, garden = true, pal = 1.5) => { const r = visiting(seed, 'mourek', 0, pal, T0, garden); r.st.bond = [0, 100, 300][lvl]; r.st.lvl = lvl; return r; };
+    // the twin is the same cat at the same moment, only further in the random stream (st.n), as other advance steps
+    // would leave it: the answer must come from the moment, never from rnd(st)
+    let jealous = 0, again = 0, drew = 0;
+    for (let s = 1; s <= 200; s++) {
+      const a = jcat(s, 1), b = clone(a.st); b.n = (b.n + 7919) >>> 0;
+      const n0 = a.st.n;
+      const ja = E.act(a.st, 'strokeVisitor', { id: 'mourek', region: 'head', speed: 300 }, a.t).events.some(e => e.type === 'jealous');
+      const jb = E.act(b, 'strokeVisitor', { id: 'mourek', region: 'head', speed: 300 }, a.t).events.some(e => e.type === 'jealous');
+      if (ja) jealous++; if (ja === jb) again++; if (a.st.n !== n0) drew++;
+    }
+    ok(jealous > 35 && jealous < 90 && again === 200 && drew === 0, `jealous after a stroke in ${jealous}/200 (about 30 %), the same whatever the random stream (${again}/200, drew ${drew})`);
+    // the same moment reached in 5-second steps or in one jump: the same answer
+    let stepSame = 0;
+    for (let s = 1; s <= 12; s++) {
+      const a = jcat(s, 1), b = clone(a.st), c = clone(a.st), t1 = a.t + 3 * MIN;
+      E.advance(b, t1); for (let x = a.t + 5000; x <= t1; x += 5000) E.advance(c, x);
+      const jb = E.act(b, 'strokeVisitor', { id: 'mourek', region: 'head', speed: 300 }, t1).events.some(e => e.type === 'jealous');
+      const jc = E.act(c, 'strokeVisitor', { id: 'mourek', region: 'head', speed: 300 }, t1).events.some(e => e.type === 'jealous');
+      if (jb === jc) stepSame++;
+    }
+    ok(stepSame === 12, `5-second steps or one jump to the same moment: the same jealousy (${stepSame}/12)`);
+    let low = 0, indoor = 0;
+    for (let s = 1; s <= 60; s++) {
+      const a = jcat(s, 0); if (E.act(a.st, 'strokeVisitor', { id: 'mourek', region: 'head', speed: 300 }, a.t).events.some(e => e.type === 'jealous')) low++;
+      const b = jcat(s, 2, false); if (E.act(b.st, 'treatVisitor', { id: 'mourek' }, b.t).events.some(e => e.type === 'jealous')) indoor++;
+    }
+    ok(low === 0 && indoor === 0, 'never below Známá, never when she does not see it (indoors)');
+    // a stroke once a minute for an hour: jealous at most every 20 min; strokes on Koxa within 2 min make it right
+    let tooOften = 0, starts = 0, oks = 0, ends = 0, okBad = 0;
+    for (let s = 1; s <= 15; s++) {
+      const r = jcat(s, 2, true, 0.5); r.st.needs.energy = 28; r.st.needs.love = 60;   // no tree climbing, no chasing: awake for the hour
+      let last = -1e15, open = null;
+      for (let k = 0; k < 60; k++) {
+        const t = r.t + k * MIN, ev = E.act(r.st, 'strokeVisitor', { id: 'mourek', region: 'head', speed: 300 }, t).events;
+        for (const e of ev) {
+          if (e.type === 'jealous') { starts++; if (t - last < 20 * MIN) tooOften++; last = t; open = t; }
+          if (e.type === 'jealousEnd') ends++;
+        }
+        if (open !== null && s % 2 === 0 && t - open === MIN) {   // even seeds: stroke Koxa a minute later
+          const love = r.st.needs.love, e2 = E.act(r.st, 'stroke', { region: 'back', along: true, speed: 300 }, t + 1000).events;
+          if (e2.some(e => e.type === 'jealousOk')) oks++; else okBad++;
+          if (r.st.jealous || !(r.st.needs.love > love)) okBad++;
+          open = null;
+        }
+        if (!r.st.visit) break;
+      }
+      invariants(r.st, `jealousy seed ${s}`);
+    }
+    ok(starts > 3 && tooOften === 0, `jealous ${starts}× in 15 hours of strokes, never twice within 20 min`);
+    ok(oks > 0 && okBad === 0 && ends > 0, `stroking her makes it right (${oks}×), else it ends by itself (${ends}×)`);
+    // the end without stroking: a mild dip (love −4), the same whatever the step
+    let seed = 1, r0;
+    for (; seed < 200; seed++) { r0 = jcat(seed, 1); r0.st.needs.energy = 28; if (E.act(r0.st, 'strokeVisitor', { id: 'mourek', region: 'head', speed: 300 }, r0.t).events.some(e => e.type === 'jealous')) break; }
+    const twin = clone(r0.st); twin.jealous = null;
+    const big = clone(r0.st), small = clone(r0.st), t1 = r0.t + 5 * MIN;
+    const endsBig = E.advance(big, t1).events.filter(e => e.type === 'jealousEnd').length;
+    let endsSmall = 0; for (let x = r0.t + 5000; x <= t1; x += 5000) endsSmall += E.advance(small, x).events.filter(e => e.type === 'jealousEnd').length;
+    E.advance(twin, t1);
+    const dip = twin.needs.love - big.needs.love;
+    ok(endsBig === 1 && endsSmall === 1 && !big.jealous && Math.abs(big.needs.love - small.needs.love) < 1e-3 && Math.abs(dip - 4) < 1e-3 && E.mood(big) !== 'sad', `jealousEnd once whatever the step, love −${Math.round(dip * 100) / 100} (mild)`);
+    // stroking Koxa after the 2 minutes is too late
+    const late = clone(r0.st);
+    ok(!E.act(late, 'stroke', { region: 'back', along: true, speed: 300 }, r0.t + 2 * MIN).events.some(e => e.type === 'jealousOk') && !late.jealous, 'after 2 minutes: too late, it ended');
+    // asleep, let out, back in the house or up the tree she cannot be stroked for it: it passes, no event, no dip
+    {
+      const J = ev => ev.filter(e => /^jealous/.test(e.type)).length, t5 = r0.t + 5 * MIN;
+      const calm = clone(r0.st); calm.jealous = null; calm.needs.energy = 24;
+      const sl = clone(r0.st); sl.needs.energy = 24;   // too tired: she falls asleep at once
+      const jS = J(E.advance(sl, t5).events); E.advance(calm, t5);
+      ok(sl.asleep && sl.yard && !sl.jealous && jS === 0 && Math.abs(sl.needs.love - calm.needs.love) < 1e-6 && !E.health(sl).jealous, `jealous, then asleep: it passes without the dip (love ${Math.round(sl.needs.love * 100) / 100} = ${Math.round(calm.needs.love * 100) / 100})`);
+      const sl5 = clone(r0.st); sl5.needs.energy = 24; let j5 = 0;
+      for (let x = r0.t + 5000; x <= t5; x += 5000) j5 += J(E.advance(sl5, x).events);
+      ok(j5 === 0 && !sl5.jealous && Math.abs(sl5.needs.love - sl.needs.love) < 1e-3, 'asleep: the same in 5-second steps');
+      const lo = friend(clone(r0.st)), jl = J(E.act(lo, 'letOut', null, r0.t + 30000).events) + J(E.advance(lo, t5).events);
+      const loT = friend(clone(r0.st)); loT.jealous = null; E.act(loT, 'letOut', null, r0.t + 30000); E.advance(loT, t5);
+      ok(lo.out && !lo.jealous && jl === 0 && Math.abs(lo.needs.love - loT.needs.love) < 1e-6, 'jealous, then let out: it passes without the dip');
+      const gh = clone(r0.st), jh = J(E.act(gh, 'goHouse', null, r0.t + 30000).events) + J(E.advance(gh, t5).events);
+      const ghT = clone(r0.st); ghT.jealous = null; E.act(ghT, 'goHouse', null, r0.t + 30000); E.advance(ghT, t5);
+      ok(!gh.yard && !gh.jealous && jh === 0 && Math.abs(gh.needs.love - ghT.needs.love) < 1e-6, 'jealous, then back in the house: it passes without the dip');
+      const tr = clone(r0.st); tr.yard.tree = { since: r0.t, calls: 0 };
+      ok(J(E.advance(tr, t5).events) === 0 && !tr.jealous, 'jealous, then up the tree: it passes without the dip');
+      invariants(sl, 'jealous asleep'); invariants(lo, 'jealous let out');
+    }
+    // repair, clock back
+    const g = clone(r0.st); g.jealous = { since: g.t + H, id: 'mourek' }; E.repair(g); ok(g.jealous === null, 'repair: jealousy in the future dropped');
+    const g2 = clone(r0.st); g2.jealous = { since: g2.t - 10 * MIN, id: 'mourek' }; E.repair(g2); ok(g2.jealous === null, 'repair: stale jealousy dropped');
+    const g3 = clone(r0.st); g3.jealous = { since: g3.t, id: 'tom' }; g3.jealousAt = 'x'; E.repair(g3); ok(g3.jealous === null && g3.jealousAt === 0, 'repair: an unknown cat, a broken time');
+    const cb = clone(r0.st); E.advance(cb, cb.t - H);
+    ok(cb.jealous && cb.jealous.since === cb.t && cb.jealousAt === cb.t, 'clock back: jealousy moves with it');
+    invariants(cb, 'jealousy clock back');
+    invariants(r0.st, 'jealous');
+  }
+  // invite in for the night
+  {
+    const EVE = at(2026, 6, 10, 19);
+    const inv = (seed, id, friend, pal, t = EVE, garden = false) => visiting(seed, id, friend, pal, t, garden);
+    const why = (r, id) => E.canInvite(r.st, id, r.t).reason;
+    let r = inv(110, 'sedivka', 5, 3);
+    ok(E.canInvite(r.st, 'sedivka', r.t).ok === true && E.canInvite(r.st, 'sedivka', r.t).reason === null, 'canInvite: ok');
+    ok(why(inv(110, 'sedivka', 4.75, 3), 'sedivka') === 'Šedivka ještě není tak velká kamarádka.', 'friend < 5: "není tak velká kamarádka"');
+    ok(why(inv(110, 'mourek', 4, 3), 'mourek') === 'Mourek ještě není tak velký kamarád.', 'he: "není tak velký kamarád"');
+    ok(why(inv(110, 'sedivka', 5, 2.75), 'sedivka') === 'Koxa a Šedivka ještě nejsou kamarádky.' && why(inv(110, 'mourek', 5, 2), 'mourek') === 'Koxa a Mourek ještě nejsou kamarádi.', 'pal < 3: "nejsou kamarádky / kamarádi"');
+    ok(why(inv(110, 'sedivka', 5, 3, at(2026, 6, 10, 15)), 'sedivka') === 'Pozvat na noc jde jen večer (od 18 do 22 h).', 'only in the evening');
+    ok(why(r, 'mourek') === 'Mourek tu teď není.' && why(r, 'tom') === 'Takovou kočku neznáme.', 'only the cat visiting now');
+    const o = inv(110, 'sedivka', 5, 3); friend(o.st); E.act(o.st, 'letOut', null, o.t);
+    ok(why(o, 'sedivka') === 'Koxa je venku.' && E.act(o.st, 'invite', { id: 'sedivka' }, o.t).events[0].reason === 'Koxa je venku.', 'Koxa out: refused');
+    const tr = inv(110, 'sedivka', 5, 3, EVE, true); tr.st.yard.tree = { since: tr.t, calls: 0 };
+    ok(why(tr, 'sedivka') === 'Koxa je na stromě.' && E.act(tr.st, 'invite', { id: 'sedivka' }, tr.t).events[0].reason === 'Koxa je na stromě.', 'Koxa up the tree: refused');
+    const before = JSON.stringify(r.st); E.canInvite(r.st, 'sedivka', r.t + 5 * MIN); ok(JSON.stringify(r.st) === before, 'canInvite changes nothing');
+    // the invitation
+    let ev = E.act(r.st, 'invite', { id: 'sedivka' }, r.t).events;
+    const d0 = new Date(r.t), key0 = d0.getFullYear() * 10000 + (d0.getMonth() + 1) * 100 + d0.getDate();
+    const until = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate() + 1, 7).getTime(), MORNING = until + H;
+    ok(ev.some(e => e.type === 'visitorLeave' && e.reason === 'inside' && e.id === 'sedivka') && ev.some(e => e.type === 'guestIn' && e.id === 'sedivka') && !r.st.visit &&
+      r.st.guest && r.st.guest.id === 'sedivka' && r.st.guest.until === until && r.st.invDay === key0, 'invite: the visit ends ("inside"), the guest stays until 7:00');
+    const found = ev.find(e => e.type === 'found' && e.id === 'sleepover');
+    ok(found && found.text === 'Koxa měla poprvé návštěvu na noc: Šedivka.' && r.st.diaryCat.sleepover === 'sedivka' && E.diary(r.st).find(e => e.id === 'sleepover').text === found.text, `diary: "${found && found.text}"`);
+    ok(why(r, 'sedivka') === 'Šedivka už u nás na noc je.', 'already a guest');
+    ok(E.act(r.st, 'treatVisitor', { id: 'sedivka' }, r.t).events[0].reason === 'Šedivka je u nás na noc. To počká do rána.' && E.act(r.st, 'strokeVisitor', { id: 'sedivka', region: 'back', speed: 300 }, r.t).events.some(e => e.type === 'visitorPurr') && r.st.visitors.sedivka.friend === 5, 'the guest: strokes only, no hearts');
+    // below the clamp (friend 4, Koxa's 3½): liked strokes, the menu's Pohladit and a disliked spot change neither
+    {
+      const gs = clone(r.st); gs.visitors.sedivka.friend = 4; gs.visitors.sedivka.pal = 3.5;
+      const evG = [];
+      for (let k = 0; k < 4; k++) evG.push(...E.act(gs, 'strokeVisitor', { id: 'sedivka', region: 'back', along: true, speed: 300 }, r.t + k * MIN).events);
+      evG.push(...E.act(gs, 'strokeVisitor', { id: 'sedivka' }, r.t + 5 * MIN).events, ...E.act(gs, 'strokeVisitor', { id: 'sedivka', region: 'paws', speed: 300 }, r.t + 6 * MIN).events);
+      ok(evG.some(e => e.type === 'visitorPurr' && e.liked) && evG.some(e => e.type === 'visitorDislike') && !evG.some(e => e.type === 'jealous' || e.type === 'visitorFriend') &&
+        gs.visitors.sedivka.friend === 4 && gs.visitors.sedivka.pal === 3.5, `the guest with 4 hearts: strokes change no hearts (${gs.visitors.sedivka.friend}, Koxa ${gs.visitors.sedivka.pal})`);
+      const evO = E.advance(gs, until + H).events;
+      ok(evO.some(e => e.type === 'guestOut') && gs.visitors.sedivka.friend === 4.25 && gs.visitors.sedivka.pal === 3.75, `a good night from below 5: +¼ from the cat and +¼ of Koxa's (${gs.visitors.sedivka.friend}, ${gs.visitors.sedivka.pal})`);
+    }
+    invariants(r.st, 'guest in');
+    // the night in 10-minute steps: no other visitors, she sleeps, no sleeping together with 3 hearts, home at 7:00
+    const night = (st, from, step) => {
+      const out = []; let visitors = 0;
+      for (let x = from + step; x <= MORNING; x += step) for (const e of E.advance(st, x).events) { out.push(e); if (e.type === 'visitor') visitors++; }
+      return { out, visitors };
+    };
+    const r3 = clone(r.st), n3 = night(r3, r.t, 10 * MIN);
+    const go = n3.out.find(e => e.type === 'guestOut');
+    ok(n3.visitors === 0 || n3.out.findIndex(e => e.type === 'visitor') > n3.out.findIndex(e => e.type === 'guestOut'), 'no visitor while the guest is in');
+    ok(go && go.slept === false && !n3.out.some(e => e.type === 'guestSleep') && !r3.guest && r3.visitors.sedivka.pal === 3.25 && r3.visitors.sedivka.friend === 5, 'pal 3: they do not sleep together; at 7:00 home with +¼ of Koxa\'s hearts');
+    invariants(r3, 'guest out');
+    // pal 4: they sleep together (once an event), a little more love than a twin with 3¾
+    const p4 = clone(r.st); p4.visitors.sedivka.pal = 4;
+    const p3 = clone(r.st); p3.visitors.sedivka.pal = 3.75;
+    let love4 = 0, love3 = 0;
+    const n4 = night(p4, r.t, 10 * MIN); night(p3, r.t, 10 * MIN);
+    const p4b = clone(r.st); p4b.visitors.sedivka.pal = 4; const p3b = clone(r.st); p3b.visitors.sedivka.pal = 3.75;
+    E.advance(p4b, until - 10 * MIN); E.advance(p3b, until - 10 * MIN); love4 = p4b.needs.love; love3 = p3b.needs.love;
+    ok(n4.out.filter(e => e.type === 'guestSleep').length === 1 && n4.out.find(e => e.type === 'guestOut').slept === true && love4 > love3 && love4 - love3 < 40, `pal 4: they sleep together, love ${Math.round(love4)} vs ${Math.round(love3)}`);
+    // invited from the garden: Koxa comes in with the guest, and they sleep together in the house
+    {
+      const gy = inv(110, 'sedivka', 5, 4, EVE, true);
+      const evY = E.act(gy.st, 'invite', { id: 'sedivka' }, gy.t).events;
+      ok(evY.some(e => e.type === 'house') && !gy.st.yard && gy.st.guest && gy.st.guest.id === 'sedivka', 'invited from the garden: Koxa comes in too ("house")');
+      const ny = night(gy.st, gy.t, 10 * MIN);
+      ok(ny.out.filter(e => e.type === 'guestSleep').length === 1 && ny.out.find(e => e.type === 'guestOut').slept === true, 'then they sleep together in the house');
+      // Koxa asleep in the garden (kept there): no sleeping together, no bonus, no mood from the guest
+      const yd = clone(r.st); yd.visitors.sedivka.pal = 4; yd.yard = { since: yd.t, snow: false, tree: null };
+      const ydNo = clone(yd); ydNo.guest = null;
+      ok(E.moodValue(yd) === E.moodValue(ydNo), `Koxa in the garden: the guest inside does not lift her mood (${E.moodValue(yd)} / ${E.moodValue(ydNo)})`);
+      let sleptOut = false; const outY = [];
+      for (let x = yd.t + 10 * MIN; x <= MORNING; x += 10 * MIN) { outY.push(...E.advance(yd, x).events); if (yd.asleep && yd.yard) sleptOut = true; }
+      ok(sleptOut && !outY.some(e => e.type === 'guestSleep') && outY.find(e => e.type === 'guestOut').slept === false, 'Koxa asleep in the garden: no "spí spolu"');
+    }
+    // the step does not matter: 10-minute steps or one jump give the same guest's end and hearts
+    const one = clone(r.st); one.visitors.sedivka.pal = 4; const evOne = E.advance(one, MORNING).events;
+    ok(evOne.filter(e => e.type === 'guestOut').length === 1 && one.visitors.sedivka.pal === p4.visitors.sedivka.pal && one.visitors.sedivka.friend === p4.visitors.sedivka.friend && !one.guest, 'one jump to the morning: the same end');
+    // once a day: the same evening no other sleepover (the guest gone by a repair of a broken guest)
+    const od = clone(r.st); od.guest = null; od.visit = { id: 'mourek', since: od.t, until: od.t + H, gain: 0 }; od.visitors.mourek = rec(5, 5);
+    ok(why({ st: od, t: od.t + MIN }, 'mourek') === 'Dnes už u nás jedna návštěva spala.', 'at most one sleepover a day');
+    const nx = clone(r3); E.advance(nx, until + 12 * H); nx.visit = { id: 'mourek', since: nx.t, until: nx.t + H, gain: 0 }; nx.visitors.mourek = rec(5, 5); nx.out = null; nx.yard = null;
+    ok(E.canInvite(nx, 'mourek', nx.t).ok, `the next evening another one may come (${E.canInvite(nx, 'mourek', nx.t).reason})`);
+    // a long absence, the clock moved back, repair
+    const la = clone(r.st); const evLa = E.advance(la, r.t + 5 * D).events;
+    ok(!la.guest && evLa.filter(e => e.type === 'guestOut').length === 1, 'a long absence: the guest went home in the morning');
+    invariants(la, 'guest long absence');
+    const ck = clone(r.st); E.advance(ck, r.t + 2 * H); const left = ck.guest.until - ck.t; E.advance(ck, ck.t - 3 * H);
+    ok(ck.guest && ck.guest.until - ck.t === left && ck.guest.until - ck.guest.since <= 14 * H, 'clock back: the guest\'s night moves with it, never longer');
+    invariants(ck, 'guest clock back');
+    const rp = clone(r.st); rp.guest = { id: 'sedivka', since: rp.t, until: rp.t + 3 * D, slept: 'x' }; E.repair(rp); ok(rp.guest === null, 'repair: a guest for more than a night dropped');
+    const rp2 = clone(r.st); rp2.guest = { id: 'tom', since: rp2.t, until: rp2.t + H }; rp2.invDay = 99999999; E.repair(rp2); ok(rp2.guest === null && rp2.invDay === 0, 'repair: an unknown guest, a broken day');
+    const rp3 = clone(r.st); rp3.guest.slept = 1; rp3.visit = { id: 'sedivka', since: rp3.t, until: rp3.t + H, gain: 0 }; E.repair(rp3);
+    ok(rp3.guest && rp3.guest.slept === false && rp3.visit === null, 'repair: the guest is not in the garden at the same time');
+    invariants(rp3, 'guest repair');
+  }
+  // photos: the visitor's place, Koxa not in the picture
+  {
+    const { st, t } = visiting(120, 'mourek', 1, 1, T0, true);
+    E.act(st, 'photo', { room: 'garden', pose: 'sit', vpose: ' loaf ', vx: 123.6, vflip: true }, t);
+    let p = st.album[st.album.length - 1];
+    ok(p.visitor === 'mourek' && p.vpose === 'loaf' && p.vx === 124 && p.vflip === true && !('nokoxa' in p), 'a photo with the visitor: vpose, vx, vflip');
+    E.act(st, 'photo', { room: 'garden', vpose: 'x'.repeat(30), vx: 999, vflip: 'yes', nokoxa: true }, t + 1000);
+    p = st.album[st.album.length - 1];
+    ok(p.vpose.length === 20 && p.vx === 400 && !('vflip' in p) && p.nokoxa === true, 'vpose ≤ 20, vx ≤ 400, vflip only true; nokoxa');
+    E.act(st, 'photo', { room: 'kitchen', vpose: 'sit', vx: 10, nokoxa: false }, t + 2000);
+    p = st.album[st.album.length - 1];
+    ok(p.visitor === null && !('vpose' in p) && !('vx' in p), 'indoors the visitor is not in the picture');
+    ok(E.act(st, 'photo', { room: 'kitchen', nokoxa: true }, t + 3000).events[0].reason === 'Na fotce nikdo není.', 'nobody in the picture: refused');
+    const o = visiting(120, 'mourek', 1, 1, T0); friend(o.st); E.act(o.st, 'letOut', null, o.t);
+    const evO = E.act(o.st, 'photo', { room: 'garden', vpose: 'sit', vx: 200 }, o.t + 1000).events;
+    p = o.st.album[0];
+    ok(evO.some(e => e.type === 'photo') && p.nokoxa === true && p.visitor === 'mourek', 'Koxa out: a photo of the visitor alone');
+    ok(E.act(o.st, 'photo', { room: 'living' }, o.t + 2000).events[0].reason === 'Koxa je venku.', 'Koxa out, nobody else: refused');
+    const gq = visiting(121, 'sedivka', 5, 3, at(2026, 6, 10, 19)); E.act(gq.st, 'invite', { id: 'sedivka' }, gq.t);
+    E.act(gq.st, 'photo', { room: 'living', vpose: 'loaf', vx: 300 }, gq.t + 1000);
+    p = gq.st.album[0];
+    ok(p.visitor === 'sedivka' && p.vpose === 'loaf' && !('nokoxa' in p), 'the guest in the living room is in the photo');
+    // on the lap: a photo keeps her there; indoors the guest is never in it, on the garden bench the visitor is
+    const lp = visiting(121, 'sedivka', 5, 3, at(2026, 6, 10, 19)); E.act(lp.st, 'invite', { id: 'sedivka' }, lp.t);
+    E.act(lp.st, 'lapOn', null, lp.t + 1000);
+    const evL = E.act(lp.st, 'photo', { room: 'lap', pose: 'lapLoaf' }, lp.t + 2000).events;
+    p = lp.st.album[0];
+    ok(lp.st.lap && !evL.some(e => e.type === 'lapOff') && p.room === 'lap' && p.visitor === null && !('vx' in p), 'a lap photo indoors: she stays on the lap, the guest is not in it');
+    const lb = visiting(122, 'mourek', 1, 1, T0, true); E.act(lb.st, 'lapOn', null, lb.t + 1000);
+    const evB = E.act(lb.st, 'photo', { room: 'lap', pose: 'lapLoaf' }, lb.t + 2000).events;
+    ok(lb.st.lap && !evB.some(e => e.type === 'lapOff') && lb.st.album[0].visitor === 'mourek', 'a lap photo on the garden bench: the visitor is in it');
+    invariants(lp.st, 'lap photo'); invariants(lb.st, 'bench photo');
+    invariants(st, 'photos'); invariants(o.st, 'photo out'); invariants(gq.st, 'photo guest');
+    // an older photo stays as it was; broken new fields are dropped
+    const old = { t: t - D, pose: 'sit', room: 'garden', mood: 'calm', phase: 'day', season: 'summer', note: '', visitor: 'mourek' };
+    const h = clone(st); h.album = [clone(old), Object.assign(clone(old), { t: t - D + 1, vx: 'x', vflip: 'yes', nokoxa: 1, vpose: 7 }), Object.assign(clone(old), { t: t - D + 2, visitor: null, vpose: 'sit', vx: 5, nokoxa: true })];
+    E.repair(h);
+    ok(JSON.stringify(h.album[0]) === JSON.stringify(old) && JSON.stringify(h.album[1]) === JSON.stringify(Object.assign(clone(old), { t: t - D + 1 })) && !('vpose' in h.album[2]) && !('nokoxa' in h.album[2]), 'repair: an old photo unchanged, broken fields dropped');
+    invariants(h, 'old photos');
+  }
+  // a month with the garden, treats, games, strokes and evening invitations: canonical every day, guests never stay long
+  {
+    let guests = 0, longGuest = 0, jealous = 0;
+    for (const seed of [130, 131]) {
+      const st = E.create(seed, at(2026, 5, 1, 7), 'Koxa'); st.owned.visitorBowl = true; st.furniture.visitorBowl = { room: 'garden', x: 0.5, y: 0.8 };
+      st.bond = 300; st.lvl = 2; st.pamlsky = 500;
+      for (const id of Object.keys(E.VISITORS)) st.visitors[id] = rec(4.5, 3.5);
+      for (let t = st.t + 10 * MIN; t <= at(2026, 5, 31, 7); t += 10 * MIN) {
+        const hr = new Date(t).getHours(), mi = new Date(t).getMinutes();
+        for (const e of E.advance(st, t).events) if (e.type === 'jealous') jealous++;
+        if ([8, 20].includes(hr) && mi === 0) basicCare(st, t);
+        if ((hr === 10 || hr === 18) && mi === 0) E.act(st, 'goGarden', null, t);
+        if ((hr === 12 || hr === 21) && mi === 30 && st.yard) { if (st.yard.tree) E.act(st, 'fetchDown', null, t); E.act(st, 'goHouse', null, t); }
+        if (st.visit && st.yard) {
+          const id = st.visit.id, L = E.visitorLikes(id);
+          for (const e of E.act(st, 'strokeVisitor', { id, region: L.likes[0], speed: 300 }, t + 1000).events) if (e.type === 'jealous') jealous++;
+          if (st.visit) E.act(st, 'treatVisitor', { id }, t + 2000);
+          if (st.visit) E.act(st, 'playVisitor', { id, caught: 'koxa' }, t + 3000);
+          if (st.visit && E.canInvite(st, id, t + 4000).ok) E.act(st, 'invite', { id }, t + 4000);
+        }
+        if (st.guest) { guests += mi === 0 && hr === 23 ? 1 : 0; if (t - st.guest.since > 14 * H) longGuest++; }
+        if (mi === 0 && hr % 6 === 0) invariants(st, `month seed ${seed}`);
+      }
+    }
+    console.log(`  a month × 2: ${guests} nights with a guest, ${jealous} jealous moments`);
+    ok(guests > 3 && longGuest === 0 && jealous > 3, 'sleepovers happen, never longer than a night; jealousy happens');
+  }
+  // a visitor fuzz: the Phase B actions with good and garbage arguments, minutes apart, sometimes hours or back in time
+  {
+    const seen = {};
+    for (const seed of [140, 141, 142, 143, 144, 145]) {
+      let x = seed;
+      const r = () => { x = (Math.imul(x ^ (x >>> 15), 0x2C1B3C6D) + 0x6D2B79F5) >>> 0; x ^= x >>> 12; return (x >>> 0) / 4294967296; };
+      const pick = a => a[Math.floor(r() * a.length)];
+      const st = E.create(seed, at(2026, 6, 1, 16), 'Koxa'); st.bond = 300; st.lvl = 2; st.pamlsky = 40;
+      for (const id of Object.keys(E.VISITORS)) st.visitors[id] = rec(pick([0, 1.5, 4.75, 5]), pick([0, 2.5, 3, 4]));
+      let t = st.t;
+      const ids = Object.keys(E.VISITORS).concat('tom', null);
+      const ARG = {
+        strokeVisitor: id => ({ id, region: pick(Object.keys(E.REGIONS).concat(null, 'nose')), along: pick([true, false, 'sideways']), speed: pick([60, 300, 700, 1500, 'fast', NaN]) }),
+        playVisitor: id => ({ id, caught: pick(['koxa', 'visitor', 7]) }),
+        photo: () => ({ room: pick(['garden', 'living', 'lap', 'kitchen']), vpose: pick(['sit', '', 9]), vx: pick([0, 250.5, 1e9, NaN]), vflip: pick([true, 'x']), nokoxa: pick([true, false]) }),
+        stroke: () => ({ region: 'back', along: true, speed: 300 }), scratch: () => ({ region: 'head', seconds: 1 }),
+      };
+      for (let i = 0; i < 1500; i++) {
+        const k = r();
+        t += k < 0.8 ? Math.floor(r() * 3 * MIN) : k < 0.97 ? Math.floor(r() * 6 * H) : -Math.floor(r() * 2 * H);
+        if (!st.visit && !st.guest && r() < 0.3) { st.visit = { id: pick(Object.keys(E.VISITORS)), since: st.t, until: st.t + 90 * MIN, gain: 0 }; E.repair(st); }
+        const id = st.visit && r() < 0.8 ? st.visit.id : st.guest && r() < 0.5 ? st.guest.id : pick(ids);
+        const a = pick(['strokeVisitor', 'strokeVisitor', 'strokeVisitor', 'treatVisitor', 'playVisitor', 'invite', 'photo', 'feedVisitor', 'stroke', 'scratch', 'goGarden', 'goGarden', 'goHouse', 'advance', 'fetchDown', 'basic']);
+        let res;
+        if (a === 'advance') res = E.advance(st, t);
+        else if (a === 'basic') { basicCare(st, t); res = { st, events: [] }; }
+        else res = E.act(st, a, ARG[a] ? ARG[a](id) : { id }, t);
+        for (const e of res.events) seen[e.type] = (seen[e.type] || 0) + 1;
+        if (st.guest && st.guest.until - st.guest.since > 14 * H) ok(false, `visitor fuzz ${seed}: a guest for more than a night`);
+        if (st.guest && st.visit && st.guest.id === st.visit.id) ok(false, `visitor fuzz ${seed}: the guest also in the garden`);
+        invariants(st, `visitor fuzz ${seed} step ${i}`);
+        if (failed > 20) break;
+      }
+    }
+    const need = ['visitorPurr', 'visitorDislike', 'visitorHiss', 'visitorTreat', 'visitorPlay', 'jealous', 'jealousOk', 'jealousEnd', 'guestIn', 'guestOut', 'photo'];
+    console.log(`  visitor fuzz: ${need.map(k => `${k} ${seen[k] || 0}`).join(', ')}`);
+    ok(need.every(k => seen[k] > 0), `the visitor fuzz meets every new event (missing: ${need.filter(k => !seen[k]).join(', ')})`);
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -325,6 +325,19 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 .pc > svg{position:relative;display:block;width:100%;height:auto;aspect-ratio:300/200}
 .pc-in{position:absolute;left:4%;top:6%;width:92%;height:79%;background:center/cover no-repeat}
 .pc figcaption{font-size:14px;color:var(--psoft);margin-top:4px}
+.mcard{max-height:100%;overflow-y:auto}
+.mcard.vmenu .big{height:54px;margin-top:10px;font-size:21px}
+.mcard.vmenu h2{margin-bottom:4px}
+.mcard .vlike{font-size:17px;line-height:1.35;color:var(--psoft);margin:6px 0 4px}
+.mcard .hearts{margin-bottom:2px}
+.big.off{background:transparent;color:var(--psoft);box-shadow:none;outline:2px dashed var(--psoft);outline-offset:-2px}
+.mcard .bnote{font-size:15px;line-height:1.3;color:var(--psoft);margin:6px 4px 0}
+.ph-v2{position:absolute;bottom:2%;width:64%;aspect-ratio:1}
+.ph-v2 > div{width:100%;height:100%}
+.ph-v2 > .flip{transform:scaleX(-1)}
+.ph-v2 svg{width:100%;height:100%}
+.vlikes{margin:0 0 12px 22px;font-size:17px;line-height:1.4;color:var(--pink)}
+.vlikes li{margin:4px 0}
 </style>
 </head>
 <body>
@@ -385,7 +398,9 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 //                            fangs), lickOther (sitting, the head forward and down, tongue out: licks a loaf / sideLie /
 //                            sit in front of it), sideLie (lying on the side, legs to the front; asleep breathes, Zzz),
 //                            swipe (play-fight: on the haunches, one paw raised high; pairs with belly or swipe), run (a
-//                            gallop by CSS, step --kx-step .34 s by default). All of them stand on (100, 186).
+//                            gallop by CSS, step --kx-step .34 s by default), rub (standing, leaning forward, the cheek
+//                            pushed against whatever is in front: a leg, a hand, another cat; eyes shut, tail straight up
+//                            with a hooked tip; sways by CSS). All of them stand on (100, 186).
 //   poses                    the list of pose names.
 //   anchors                  { pose: [x, y] } for poses that do not stand on (100, 186): put that point on the spot.
 //   regions(pose, opts)      [{ id, path, fur: [dx, dy] }] in the cat's 0..200 viewBox, ids from
@@ -845,6 +860,7 @@ function KockaArt() {
     sideLie(R, o, e) { sideLie(R, o, e); },
     swipe(R, o, e) { swipe(R, o, e); },
     run(R, o, e) { run(R, o, e); },
+    rub(R, o, e) { rub(R, o, e); },
   };
   /* ---------- gait: walk, trot, jumps (side view, facing left; flip the box with scaleX(-1) to go right) ---------- */
   // One leg: the upper part swings at the shoulder / hip (px, py), the lower part bends at the knee. Animated legs get
@@ -1127,6 +1143,31 @@ function KockaArt() {
     head(R, 54, 108, 0.84, 2, H(e, { eyes: wide(o, e), ears: o.ears || 'turned', blush: false }));
     R.region('back', ellPoly(118, 120, 58, 17), [1, 0]);
     R.mid = [118, 120];
+  }
+
+  // rubbing the cheek and side against something in front of her (a leg, a hand, another cat): standing, leaning
+  // forward with the paws a little behind, the head low and tilted so the cheek leads, eyes shut (happy: smiling,
+  // grumpy: half closed and jealous), ears turned, the tail straight up with a hooked tip; the body rocks forward and
+  // the head nuzzles by CSS (kx-rub, kx-nuzzle)
+  function rub(R, o, e) {
+    R.shadow = [118, 186, 58, 5];
+    R.wrap = { cls: 'kx-rub', ox: 124, oy: 186 };
+    leg(R, 104, 134, 25, 28, 12, { far: true, swing: -6 });
+    leg(R, 149, 132, 24, 31, 13, { far: true, swing: -10 });
+    R.open(btfY(o, 132)); R.open('rotate(-9 126 132)');
+    R.part(ell(126, 132, 46, 20), { patches: spots([[124, 122, 13, 1], [152, 132, 9, 0], [100, 138, 8, 0]]) });
+    R.close(); R.close();
+    R.part(ell(155, 127, 17, 19), { edge: true, patches: spots([[158, 135, 8, 0]]) });
+    tail(R, [168, 120, 176, 96, 170, 68, 173, 50, 175, 38, 170, 28, 159, 32]);
+    leg(R, 155, 135, 22, 31, 13, { swing: -10 });
+    leg(R, 98, 138, 24, 26, 12, { swing: -6 });
+    R.limb([98, 128, 88, 132, 78, 138, 70, 146], 25, {});
+    const eyes = o.asleep ? 'closed' : o.mood === 'grumpy' ? 'grumpy' : o.mood === 'sad' || o.ill ? 'tired' : o.mood === 'happy' ? 'happy' : 'closed';
+    R.open('', 'kx-nuzzle', 78, 138);
+    head(R, 52, 146, 0.84, -34, H(e, { eyes, ears: o.ears || 'turned' }));
+    R.close();
+    R.region('back', ellPoly(126, 132, 46, 20, -9), unit(1, -0.16));
+    R.mid = [126, 132];
   }
 
   /* ---------- the cat ---------- */
@@ -1850,6 +1891,8 @@ function KockaArt() {
 .kx-run .kx-phE{animation-delay:calc(var(--kx-step,.34s) * -.6)}
 .kx-run .kx-rocker{animation:kx-rock var(--kx-step,.34s) ease-in-out infinite}
 .koxa .kx-tail.kx-tw{animation:kx-tw .32s ease-in-out infinite}
+.kx-rub{animation:kx-rub 2.4s ease-in-out infinite}
+.kx-nuzzle{animation:kx-nuzzle 2.4s ease-in-out infinite}
 .kx-shakep{animation:kx-shakep .28s ease-in-out infinite}
 .kx-flick{animation:kx-flick .5s steps(2) infinite}
 .kx-drip path{animation:kx-drip 1.6s ease-in infinite}
@@ -1883,6 +1926,8 @@ function KockaArt() {
 @keyframes kx-bend3{0%,42%{transform:rotate(0deg)}60%{transform:rotate(-85deg)}90%,100%{transform:rotate(0deg)}}
 @keyframes kx-rock{0%,100%{transform:rotate(3deg)}50%{transform:rotate(-3deg) translate(0,-3px)}}
 @keyframes kx-spin{0%,100%{transform:scaleX(1)}25%{transform:scaleX(.12)}50%{transform:scaleX(-1)}75%{transform:scaleX(.12)}}
+@keyframes kx-rub{0%,100%{transform:rotate(0)}50%{transform:rotate(-2deg)}}
+@keyframes kx-nuzzle{0%,100%{transform:rotate(3deg)}50%{transform:rotate(-5deg)}}
 @keyframes kx-tw{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(4deg)}}
 @keyframes kx-shakep{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(10deg)}}
 @keyframes kx-drip{0%{opacity:0;transform:translate(0,0)}20%{opacity:1}100%{opacity:0;transform:translate(0,18px)}}
@@ -3026,11 +3071,28 @@ function KockaInput() {
 //   visitAct { id, kind, with }     the visitor started another act (st.visit.act; watching only, or Koxa left the garden):
 //                                   kind of VISIT_ACTS, with = 'koxa' (together with her) | null (alone); 'arrive' follows 'visitor'
 //   palUp { id, pal }               Koxa's own friendship with a neighbour cat reached another whole heart (pal 1–5)
+//   Phase B (the player and the visitor, SPEC §8b):
+//   visitorPurr { id, region?, liked? }   a stroke it enjoys (region and liked only for a finger stroke with a region)
+//   visitorDislike { id, region, why: 'region'|'fast'|'against', away }   a stroke it does not like (no friendship);
+//                                   away: shy Líza (2+ hearts) moves away a bit; under 2 hearts she runs off instead
+//                                   (visitorLeave 'shy'), Rambo under 3 hearts swipes (visitorHiss { id, region })
+//   visitorTreat { id }             a pamlsek from the hand (treatVisitor)
+//   visitorPlay { id, caught, koxa } the feather for two (playVisitor); caught 'koxa' | 'visitor'; koxa: she played too
+//   jealous { id } / jealousOk { id } / jealousEnd { id }   Koxa saw you with a visitor (st.jealous); stroked or
+//                                   scratched within 2 min: all right again (love +4); else at the end love −4;
+//                                   asleep, out, up the tree or back in the house it just passes (no event, no dip)
+//   guestIn { id } / guestSleep { id } / guestOut { id, slept }   a sleepover (invite): the guest in the living room until
+//                                   7:00 (invited from the garden, Koxa comes in too: 'house'); guestSleep: Koxa and the
+//                                   guest sleep together in the house (pal 4+), once a night
+//   (visitorLeave gets reason 'inside' when the visitor was invited in)
 //   photo { n } / photoDeleted { n }   the album
 //   gift { n }                      pamlsky from the launcher link
 //   found { id, text }              a new Deníček entry
 //   quirk { id }                    her quirk was seen
 //   refused { reason }              the action is not possible now (Czech reason)
+// Phase B actions (act): strokeVisitor { id, region?, along?, speed? } (without region: the menu's Pohladit),
+//   treatVisitor { id }, playVisitor { id, caught: 'koxa' | 'visitor' }, invite { id }; photo also takes
+//   { vpose, vx, vflip, nokoxa } (where the visitor stood; nokoxa: Koxa is not in the picture)
 function KockaEngine() {
   const MIN = 60000, HOUR = 60 * MIN, DAY = 24 * HOUR, STEP = 10 * MIN;
   const AWAY = 72 * HOUR;          // longer absence: paní Nováková took her (§4); the rest is not simulated
@@ -3168,12 +3230,13 @@ function KockaEngine() {
   });
   const ACTIONS = deep(['feed', 'water', 'stroke', 'scratch', 'pickUp', 'putDown', 'play', 'brush', 'cleanLitter', 'letOut', 'letIn', 'treat', 'vetCure', 'pill', 'call', 'vacuum', 'lapOn', 'lapOff',
     'goGarden', 'goHouse', 'fetchDown', 'sow', 'waterBeds', 'harvest', 'catnip', 'buy', 'place', 'sell', 'train', 'showTrick',
-    'feedVisitor', 'strokeVisitor', 'photo', 'deletePhoto']);
+    'feedVisitor', 'strokeVisitor', 'photo', 'deletePhoto', 'treatVisitor', 'playVisitor', 'invite']);
   const CMAX = 1e6;  // counters saturate here (inc)
   const COUNTS = ['favFood', 'belly', 'toy', 'quirk'].concat(SPOTS.map(s => 'spot_' + s));
   // pal*: Koxa and a neighbour cat (the cat is st.diaryCat[id])
   const PAL_DIARY = ['palFirst', 'palGroom', 'palSnuggle'];
-  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], PAL_DIARY);
+  const CAT_DIARY = PAL_DIARY.concat(['sleepover']);   // the entries that name a neighbour cat (st.diaryCat), in this order
+  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], CAT_DIARY);
 
   /* --- small helpers --- */
   const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
@@ -3275,7 +3338,7 @@ function KockaEngine() {
       traits: drawTraits(seed), cnt: {}, diary: { birthday: now }, day: freshDay(now), want: null, wantAt: {}, lap: null,
       yard: null, wet: 0, beds: Array(BEDS).fill(null), pantry: {}, postcards: [], presents: {},
       stock: {}, owned: {}, furniture: {}, records: {}, tricks: {}, earnDay: { key: dkey(now), n: 0 }, train: null,
-      visitors: {}, visit: null, album: [], diaryCat: {},
+      visitors: {}, visit: null, album: [], diaryCat: {}, guest: null, invDay: 0, jealous: null, jealousAt: 0,
     };
     for (const k of COUNTS) st.cnt[k] = 0;
     return st;
@@ -3392,7 +3455,7 @@ function KockaEngine() {
     st.diary = {}; for (const k of Object.keys(Dy)) if (DIARY_IDS.includes(k) && okT(Dy[k])) st.diary[k] = Math.min(Dy[k], t);   // keeps the order found
     if (!st.diary.birthday) st.diary.birthday = st.born;
     const DC = obj(st.diaryCat); st.diaryCat = {};   // only for a found pal* entry, in a fixed order
-    for (const k of PAL_DIARY) if (st.diary[k] && has(VISITORS, DC[k])) st.diaryCat[k] = DC[k];
+    for (const k of CAT_DIARY) if (st.diary[k] && has(VISITORS, DC[k])) st.diaryCat[k] = DC[k];
     const d = st.day;
     st.day = d && typeof d === 'object' && isKey(d.key) && d.key <= dkey(t) && typeof d.ms === 'number' && d.ms >= 0 && d.ms <= 26 * HOUR ? {
       key: d.key, ms: num(d.ms, 0, 0, 2 * DAY), food: num(d.food, 0, 0, 200 * DAY), mood: num(d.mood, 0, -200 * DAY, 200 * DAY),
@@ -3406,7 +3469,7 @@ function KockaEngine() {
     for (const k of Object.keys(st)) if (!STATE_KEYS.includes(k)) delete st[k];
     return st;
   }
-  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat'];
+  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat', 'guest', 'invDay', 'jealous', 'jealousAt'];
   // valid(st): repairs st in place and says whether it is usable (false only for null, a non-object or no time at all)
   function valid(st) { return repair(st) !== null; }
 
@@ -3430,6 +3493,8 @@ function KockaEngine() {
       m += A && A.with === 'koxa' && Object.prototype.hasOwnProperty.call(VISIT_ACTS, A.kind) ? VISIT_ACTS[A.kind].mood : VISIT_MOOD[reaction(st, st.visit.id)];
     }
     if (st.yard && st.yard.tree) m -= 10;             // stuck on the tree
+    if (st.jealous) m -= 5;                           // she saw you with a visitor
+    if (st.guest && !st.out && !st.yard) m += 5;      // a friend sleeps over (she is at home with it)
     return Math.round(clamp(m, -100, 100));
   }
   const moodName = v => v >= 50 ? 'happy' : v >= 10 ? 'calm' : v >= -30 ? 'grumpy' : 'sad';
@@ -3455,6 +3520,7 @@ function KockaEngine() {
       lap: !!st.lap, lapSince: st.lap ? st.lap.since : null, lapDoze: !!(st.lap && st.lap.doze),
       garden: !!st.yard, wet: st.wet > t, tree: !!(st.yard && st.yard.tree), walk: !!(st.out && st.out.walk),
       pill: st.pill ? (dkey(t) >= st.pill ? 'today' : 'tomorrow') : null,
+      guest: st.guest ? st.guest.id : null, jealous: !!st.jealous,
     };
   }
 
@@ -3481,9 +3547,10 @@ function KockaEngine() {
     if (id === 'weight') return `${name} váží ${st.weight.toFixed(1).replace('.', ',')} kg.`;
     if (id === 'walk') return `Nejdelší toulka trvala ${fmtDur(st.walkMax)}.`;
     if (id === 'birthday') { const [y, m, d] = ymd(st.born); return `${name} k nám přišla ${d}. ${m + 1}. ${y}.`; }
-    if (PAL_DIARY.includes(id)) {
+    if (CAT_DIARY.includes(id)) {
       const c = st.diaryCat && Object.prototype.hasOwnProperty.call(VISITORS, st.diaryCat[id]) ? VISITORS[st.diaryCat[id]] : null;
       const f = c && c.fem;   // Koxa is a she: the plural is feminine only with a female cat
+      if (id === 'sleepover') return c ? `${name} měla poprvé návštěvu na noc: ${c.name}.` : `${name} měla poprvé návštěvu na noc.`;
       if (id === 'palFirst') return c ? (f ? `${name} má první kamarádku: ${c.name}.` : `${name} má prvního kamaráda: ${c.name}.`) : `${name} má prvního kočičího kamaráda.`;
       if (id === 'palGroom') return c ? `${name} a ${c.name} si poprvé navzájem ${f ? 'umyly' : 'umyli'} kožíšky.` : `${name} a kamarád si poprvé navzájem umyli kožíšky.`;
       return c ? `${name} a ${c.name} si poprvé ${f ? 'zdřímly' : 'zdřímli'} schoulen${f ? 'é' : 'í'} u sebe.` : `${name} si poprvé zdřímla schoulená u kamaráda.`;
@@ -3496,10 +3563,11 @@ function KockaEngine() {
     weight: 'Kolik váží? Uvidíš zítra.', walk: 'Ještě nebyla venku.', birthday: '',
     palFirst: 'Najde si kamaráda mezi kočkami od sousedů? Choď s ní na zahradu, když přijde návštěva.',
     palGroom: 'Budou si s kamarádem navzájem mýt kožíšek?', palSnuggle: 'Zdřímne si někdy schoulená u kamaráda?',
+    sleepover: 'Přespí u nás někdy kočka od sousedů? Když se s vámi oběma moc skamarádí, můžeš ji večer pozvat dovnitř.',
   };
   // Deníček: her two spots only; text = the fact when found, else a question
   function diary(st, name) {
-    const nm = cleanName(name || st.name), ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], PAL_DIARY);
+    const nm = cleanName(name || st.name), ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], CAT_DIARY);
     return ids.map(id => {
       const found = st.diary[id] || null;
       return { id, found, text: found ? entryText(st, id, nm) : (id.startsWith('spot_') ? 'Kde se ráda nechá hladit? Hlaď ji po srsti.' : HINTS[id]) };
@@ -3611,6 +3679,7 @@ function KockaEngine() {
   }
   function leaveYard(st, ev, type) {
     st.yard = null;
+    st.jealous = null;   // she saw the visitor in the garden; inside (or out on a walk) it passes without a dip
     if (st.visit && st.visit.act && st.visit.act.with) apart(st, st.t, true, ev);   // the visitor goes on alone
     if (type) ev.push({ type });
   }
@@ -3734,7 +3803,16 @@ function KockaEngine() {
       else if (A.cold >= 30 * MIN) getIll(st, 'cold', t + dt, ev);
     }
     if (st.lap) lapStep(st, t, dt, night, ev);
+    if (st.guest) guestStep(st, t, dt, ev);
     visitStep(st, t, dt, night, watching, ev);
+    // jealousy ends by itself 2 min after it began: a small dip (stroking her before that makes it all right);
+    // asleep, out, up the tree or back in the house she cannot be stroked for it, so it just passes, without the dip
+    if (st.jealous && (st.asleep || st.out || !st.yard || st.yard.tree)) st.jealous = null;
+    else if (st.jealous && t + dt >= st.jealous.since + JEALOUS.ok * MIN) {
+      N.love = Math.max(0, N.love - JEALOUS.love);
+      ev.push({ type: 'jealousEnd', id: st.jealous.id });
+      st.jealous = null;
+    }
     if (st.yard) gardenStep(st, t, dt, night, ev);
     // the cat flap: while the player is away she goes on a walk by herself (0.2 per daytime hour; bond Kamarádka, placed in the předsíň)
     else if (!watching && st.furniture.catFlap && st.lvl >= WALK_BOND && !st.out && !st.asleep && !st.lap && !st.ill && !night &&
@@ -3817,6 +3895,8 @@ function KockaEngine() {
       if (st.out) comeBack(st, end, ev);
       if (st.yard) leaveYard(st, ev, null);
       if (st.visit) endVisit(st, 'time', ev);
+      if (st.guest) guestOut(st, end, ev);
+      st.jealous = null;
       endDay(st, ev);
       st.t = now; st.day = freshDay(now);
       st.needs.food = 40; st.needs.water = 40;
@@ -3843,18 +3923,22 @@ function KockaEngine() {
     const no = reason => { ev.push({ type: 'refused', reason }); return { st, events: ev }; };
     if (typeof action !== 'string' || !ACTIONS.includes(action)) return no('Tohle teď nejde.');
     const before = wants(st), a = arg && typeof arg === 'object' ? arg : {};
-    const home = ['cleanLitter', 'letIn', 'call', 'vacuum', 'sow', 'waterBeds', 'harvest', 'feedVisitor', 'strokeVisitor', 'deletePhoto', 'buy', 'sell', 'place'];
+    const home = ['cleanLitter', 'letIn', 'call', 'vacuum', 'sow', 'waterBeds', 'harvest', 'feedVisitor', 'strokeVisitor', 'deletePhoto', 'buy', 'sell', 'place',
+      'treatVisitor', 'playVisitor', 'invite', 'photo'];   // invite and photo say themselves why not (Koxa out)
     // up the tree: only calling her, fetching her down, the garden, the shop and the camera
-    const TREE_OK = ['call', 'fetchDown', 'vetCure', 'goHouse', 'sow', 'waterBeds', 'harvest', 'buy', 'sell', 'place', 'photo', 'feedVisitor', 'strokeVisitor', 'deletePhoto'];
+    const TREE_OK = ['call', 'fetchDown', 'vetCure', 'goHouse', 'sow', 'waterBeds', 'harvest', 'buy', 'sell', 'place', 'photo', 'feedVisitor', 'strokeVisitor', 'deletePhoto',
+      'treatVisitor', 'playVisitor'];   // not invite: she would stay stuck up there (canInvite says so)
     if (st.yard && st.yard.tree && !TREE_OK.includes(action)) return no(`${name} je na stromě.`);
-    // on the lap: stroking, scratching, a treat from the hand and calling keep her there; anything else = standing up
-    if (st.lap && !['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff'].includes(action)) {
+    // on the lap: stroking, scratching, a treat from the hand, calling and a photo keep her there; anything else = standing up
+    if (st.lap && !['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff', 'photo'].includes(action)) {
       ev.push({ type: 'lapOff', dozing: st.lap.doze }); st.lap = null;
     }
     const onLap = !!st.lap, lapK = onLap ? 1.5 : 1;
     // stroking a dozing cat on the lap wakes her (she stays)
     const lapWake = () => { if (onLap && st.lap.doze) { st.lap.doze = false; ev.push({ type: 'wake', early: false, lap: true }); } };
     const annoy = d => { if (st.lap) st.lap.annoy = Math.min(10, st.lap.annoy + d); };
+    // jealous: stroking or scratching her within 2 min makes it all right again
+    const soothe = () => { if (!st.jealous) return; N.love = Math.min(100, N.love + JEALOUS.love); ev.push({ type: 'jealousOk', id: st.jealous.id }); st.jealous = null; };
     if (st.out && !home.includes(action)) return no(`${name} je venku.`);
     const wakeUp = () => { if (st.asleep) { st.asleep = false; st.wokeAt = t; ev.push({ type: 'wake', early: false }); } };
     const sleeping = () => { if (st.asleep) { seenQuirk(st, 'box', t, ev); no(`${name} spí, nebuď ji.`); return true; } return false; };
@@ -3920,6 +4004,7 @@ function KockaEngine() {
         if (st.asleep) { N.love = Math.min(100, N.love + 1); ev.push({ type: 'purr', region, sleeping: true }); seenQuirk(st, 'box', t, ev); break; }
         lapWake();
         if (sp === 'fast' || dir === 'against') { N.love = Math.max(0, N.love - 1); ev.push({ type: 'earsBack', rough: sp === 'fast' }); annoy(1); break; }
+        soothe();
         if (dir === 'sideways') { N.love = Math.min(100, N.love + 1 * half); ev.push({ type: 'tolerate', region }); break; }
         const spot = st.traits.spots.includes(region);
         N.love = Math.min(100, N.love + (spot ? 4 : 2) * half * lapK);
@@ -3935,6 +4020,7 @@ function KockaEngine() {
         const sec = typeof a.seconds === 'number' && Number.isFinite(a.seconds) ? clamp(a.seconds, 0, 5) : 1;
         if (region === 'belly') { belly(); break; }
         const per = REGIONS[region].scratch ? 4 : 1, half = sad || st.asleep ? 0.5 : 1;
+        if (!st.asleep) soothe();
         lapWake(); if (onLap) st.lap.pet = t;
         N.love = Math.min(100, N.love + per * sec * half * lapK);
         ev.push({ type: 'purr', region, sleeping: st.asleep });
@@ -4144,7 +4230,18 @@ function KockaEngine() {
         }
         break;
       }
-      case 'feedVisitor': case 'strokeVisitor': case 'photo': case 'deletePhoto': {
+      case 'invite': {
+        const id = typeof arg === 'string' ? arg : a.id, why = inviteWhy(st, id, t);
+        if (why) return no(why);
+        endVisit(st, 'inside', ev);
+        if (st.yard) leaveYard(st, ev, 'house');   // Koxa comes in with the guest (the night is in the living room)
+        st.guest = { id, since: t, until: next7(t), slept: false };
+        st.invDay = dkey(t);
+        ev.push({ type: 'guestIn', id });
+        palFound(st, 'sleepover', id, t, ev);
+        break;
+      }
+      case 'feedVisitor': case 'strokeVisitor': case 'photo': case 'deletePhoto': case 'treatVisitor': case 'playVisitor': {
         const why = socialAct(st, action, a, t, ev);
         if (why) return no(why);
         break;
@@ -4281,7 +4378,8 @@ function KockaEngine() {
   const VISITOR_IDS = Object.keys(VISITORS);
   // per hour: a visit in the daytime (×2.5 with the miska pro návštěvy in the garden, ×1.5 with a cushion there);
   // only Bivoj comes at night; a visit lasts 20–90 min (greedy and sleepy ones +30 min when fed)
-  const VISIT = deep({ day: 0.05, night: 0.03, bowl: 2.5, cushion: 1.5, stay: [20, 90], fedStay: 30, perVisit: 1 });
+  // perVisitLiked: the cap when the strokes are where it likes them (Phase B)
+  const VISIT = deep({ day: 0.05, night: 0.03, bowl: 2.5, cushion: 1.5, stay: [20, 90], fedStay: 30, perVisit: 1, perVisitLiked: 1.5 });
   // friendship (0–5 hearts, quarter steps) from a stroke / from food, by trait; at most +1 a visit from strokes
   const BY_TRAIT = deep({
     curious: [0.5, 0.5], shy: [0.25, 0.5], bold: [0.5, 0.5], playful: [0.5, 0.5],
@@ -4312,6 +4410,23 @@ function KockaEngine() {
     sleepy: { nap: 4, bench: 3, tree: 0.3 }, old: { nap: 4, bench: 3, tree: 0.3 }, playful: { wander: 2.5, tree: 2.5, nap: 0.5 },
     curious: { wander: 2.5, tree: 2.5, nap: 0.5 }, greedy: { bowl: 4 }, bold: { tree: 1.5 }, shy: { bench: 1.5, wander: 0.7 },
   });
+  // Phase B: where each cat likes a finger stroke (REGIONS ids; liked = +¼ heart and the higher cap), where it does not
+  // (no friendship: visitorDislike; shy Líza runs off under 2 hearts, Rambo swipes under 3), the fastest stroke it takes
+  // (px/s; faster = disliked) and a Czech line for the help and the visitor's menu
+  const VISITOR_LIKES = deep({
+    mourek: { likes: ['head', 'ears'], dislikes: ['belly'], max: 900, text: 'Mourek má rád hlazení na hlavě a za ušima. Na bříško mu nesahej.' },
+    liza: { likes: ['head', 'chin'], dislikes: ['ears', 'back', 'tailBase', 'belly', 'tail', 'paws'], max: 500, text: 'Líza se nechá hladit jen pomalu a jemně, na hlavě a na bradě. Jinde se lekne.' },
+    bivoj: { likes: ['back'], dislikes: ['belly', 'paws'], max: 900, text: 'Bivoj má rád hlazení na zádech. Bříško a tlapky si hlídá.' },
+    ciperka: { likes: ['head', 'ears', 'chin', 'back', 'tailBase', 'belly', 'paws'], dislikes: ['tail'], max: 900, text: 'Čiperka se nechá hladit skoro všude, jen ne na ocase.' },
+    pacicka: { likes: ['chin'], dislikes: ['tail'], max: 900, text: 'Pacička má nejradši drbání na bradě. Ocas nech být.' },
+    rambo: { likes: ['tailBase'], dislikes: ['belly', 'tail', 'paws'], max: 900, text: 'Rambo má rád hlazení u kořene ocasu. Na bříško mu nesahej, dokud tě dobře nezná – ohání se.' },
+    sedivka: { likes: ['back'], dislikes: ['paws', 'tail'], max: 900, text: 'Šedivka má moc ráda hlazení na zádech. Tlapky a ocas nech být.' },
+    fousek: { likes: ['ears', 'chin'], dislikes: ['paws'], max: 900, text: 'Fousek má rád drbání za ušima a na bradě. Tlapky nech být.' },
+  });
+  const PLAY_VISIT = 0.5;   // the feather for two: +¼ heart a game, at most +½ a visit, one game a minute
+  // jealousy: the chance (her hearts for that cat: under 1 / 1–3 / 3+), at most once every 20 min, 2 min to make it right
+  const JEALOUS = deep({ p: [0.4, 0.3, 0.2], every: 20, ok: 2, love: 4 });
+  const GUEST = deep({ max: 14, love: 3, energy: 1 });   // a sleepover: at most 14 h; sleeping together per hour
   const ALBUM_MAX = 200;
   const PHOTO_ROOMS = ['living', 'kitchen', 'hall', 'garden', 'lap', 'walk'];
   // Koxa's own hearts for a cat (a record from before Phase A has only the player's: she takes those over)
@@ -4348,13 +4463,15 @@ function KockaEngine() {
       }
       return;
     }
+    if (st.guest) return;                     // a friend sleeps over: nobody else comes
     if (weather(t, st) === 'rain' && !night) return;
     const F = st.furniture, cushion = (F.sillCushion && F.sillCushion.room === 'garden') || (F.bedDeluxe && F.bedDeluxe.room === 'garden');
     const rate = night ? VISIT.night : VISIT.day * (F.visitorBowl ? VISIT.bowl : 1) * (cushion ? VISIT.cushion : 1);
     if (!(rnd(st) < 1 - Math.exp(-rate * h))) return;
     const id = night ? 'bivoj' : VISITOR_IDS[Math.floor(rnd(st) * VISITOR_IDS.length)];
     const stay = VISIT.stay[0] + Math.floor(rnd(st) * (VISIT.stay[1] - VISIT.stay[0]));
-    st.visit = { id, since: t, until: t + stay * MIN, gain: 0, palGain: 0, greeted: false, ready: null, act: { kind: 'arrive', since: t, with: null } };
+    st.visit = { id, since: t, until: t + stay * MIN, gain: 0, palGain: 0, greeted: false, ready: null, act: { kind: 'arrive', since: t, with: null },
+      pet: 0, treat: false, play: 0, playGain: 0, hurt: false };
     const R = vrec(st, id); R.visits = Math.min(CMAX, R.visits + 1);
     ev.push({ type: 'visitor', id, reaction: st.out ? 'away' : reaction(st, id) });
     if (watching) ev.push({ type: 'visitAct', id, kind: 'arrive', with: null });
@@ -4389,16 +4506,19 @@ function KockaEngine() {
     const V = st.visit, g = Math.min(PAL_STEP, PAL_VISIT - V.palGain);
     if (g <= 0) return;
     V.palGain += g;
+    bumpPal(st, id, g, t, ev);
+  }
+  function bumpPal(st, id, g, t, ev) {
     const R = vrec(st, id), before = Math.floor(R.pal);
     R.pal = Math.round(clamp(R.pal + g, 0, 5) * 4) / 4;
     if (Math.floor(R.pal) > before) ev.push({ type: 'palUp', id, pal: Math.floor(R.pal) });
     if (R.pal >= 3) palFound(st, 'palFirst', id, t, ev);
   }
-  // a pal* diary entry and its cat (st.diaryCat keeps the fixed order of PAL_DIARY, as repair does)
+  // a pal* or sleepover diary entry and its cat (st.diaryCat keeps the fixed order of CAT_DIARY, as repair does)
   function palFound(st, dk, id, t, ev) {
     if (st.diary[dk]) return;
     const o = {}, C = st.diaryCat || {};
-    for (const k of PAL_DIARY) if (k === dk) o[k] = id; else if (Object.prototype.hasOwnProperty.call(C, k)) o[k] = C[k];
+    for (const k of CAT_DIARY) if (k === dk) o[k] = id; else if (Object.prototype.hasOwnProperty.call(C, k)) o[k] = C[k];
     st.diaryCat = o;
     find(st, dk, t, ev);
   }
@@ -4473,10 +4593,14 @@ function KockaEngine() {
     const act = okA ? { kind: A.kind, since: okT(A.since) && A.since >= S.since && A.since <= t ? A.since : S.since, with: A.with }
       : { kind: 'wander', since: S.since, with: null };
     const greeted = S.greeted === true || act.with === 'koxa';
+    const when = v => (okT(v) && v >= S.since && v <= t ? v : 0);
     return {
-      id: S.id, since: S.since, until: S.until, gain: clamp(fin(S.gain), 0, VISIT.perVisit),
+      id: S.id, since: S.since, until: S.until, gain: Math.round(clamp(fin(S.gain), 0, VISIT.perVisitLiked) * 4) / 4,
       palGain: Math.round(clamp(fin(S.palGain), 0, PAL_VISIT) * 4) / 4, greeted,
       ready: !greeted && okT(S.ready) && S.ready >= S.since && S.ready <= t ? S.ready : null, act,
+      // Phase B: the last stroke that counted (one a minute), the treat given, the last feather game and what it gave,
+      // Rambo's swipe already cost a quarter heart this visit
+      pet: when(S.pet), treat: S.treat === true, play: when(S.play), playGain: Math.round(clamp(fin(S.playGain), 0, PLAY_VISIT) * 4) / 4, hurt: S.hurt === true,
     };
   }
   function addFriend(st, id, d, ev) {
@@ -4484,20 +4608,27 @@ function KockaEngine() {
     R.friend = Math.round(clamp(R.friend + d, 0, 5) * 4) / 4;
     if (Math.floor(R.friend) > before) ev.push({ type: 'visitorFriend', id, hearts: Math.floor(R.friend) });
   }
-  // feedVisitor / strokeVisitor / photo / deletePhoto; returns a Czech refusal or null
+  // feedVisitor / strokeVisitor / treatVisitor / playVisitor / photo / deletePhoto; returns a Czech refusal or null
   function socialAct(st, action, a, t, ev) {
     if (action === 'photo') {
-      if (st.out) return `${st.name} je venku.`;
       if (st.album.length >= ALBUM_MAX) return `Album je plné (${ALBUM_MAX} fotek). Nějakou fotku smaž.`;
       const str = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
+      const room = PHOTO_ROOMS.includes(a.room) ? a.room : st.yard ? 'garden' : st.lap ? 'lap' : 'living';
+      // who else is in the photographed place: the visitor in the garden (also on the bench lap), the guest in the living
+      // room (never on the lap indoors: the lap photo shows only her and the player)
+      const outside = room === 'garden' || (room === 'lap' && !!st.yard), inside = room === 'living';
+      const vis = outside && st.visit ? st.visit.id : inside && st.guest ? st.guest.id : null;
+      const nokoxa = !!st.out || a.nokoxa === true;
+      if (nokoxa && !vis) return st.out ? `${st.name} je venku.` : 'Na fotce nikdo není.';
       const p = {
-        t, pose: str(a.pose, 20) || (st.asleep ? 'sleep' : 'sit'),
-        room: PHOTO_ROOMS.includes(a.room) ? a.room : st.yard ? 'garden' : st.lap ? 'lap' : 'living',
+        t, pose: str(a.pose, 20) || (st.asleep ? 'sleep' : 'sit'), room,
         mood: ['happy', 'calm', 'grumpy', 'sad'].includes(a.mood) ? a.mood : mood(st),
         phase: ['night', 'morning', 'day', 'evening'].includes(a.phase) ? a.phase : dayPhase(t),
         season: ['spring', 'summer', 'autumn', 'winter'].includes(a.season) ? a.season : season(t),
-        note: str(a.note, 60) || '', visitor: st.visit ? st.visit.id : null,
+        note: str(a.note, 60) || '', visitor: vis,
       };
+      if (vis) photoVisitor(p, { vpose: str(a.vpose, 20), vx: a.vx, vflip: a.vflip });
+      if (nokoxa) p.nokoxa = true;
       st.album.push(p);
       ev.push({ type: 'photo', n: st.album.length });
       return null;
@@ -4513,28 +4644,154 @@ function KockaEngine() {
     const id = typeof a.id === 'string' && Object.prototype.hasOwnProperty.call(VISITORS, a.id) ? a.id : null;
     if (!id) return 'Takovou kočku neznáme.';
     const V = VISITORS[id];
+    if (st.guest && st.guest.id === id) {   // the guest in the living room: strokes only, they change no hearts
+      if (action !== 'strokeVisitor') return `${V.name} je u nás na noc. To počká do rána.`;
+      const k = strokeKind(id, a);
+      if (k.slow) return null;
+      ev.push(k.why ? { type: 'visitorDislike', id, region: k.region, why: k.why, away: V.trait === 'shy' } : Object.assign({ type: 'visitorPurr', id }, k.region ? { region: k.region, liked: k.liked } : {}));
+      return null;
+    }
     if (!st.visit || st.visit.id !== id) return `${V.name} tu teď není.`;
-    const R = vrec(st, id);
+    const R = vrec(st, id), S = st.visit;
     if (!R.met) R.met = t;
     const [strokeGain, foodGain] = BY_TRAIT[V.trait];
     if (action === 'feedVisitor') {
       const today = dkey(t);
       if (R.fed === today) return `${V.name} už dnes ${V.fem ? 'dostala' : 'dostal'}.`;
       R.fed = today;
-      if (V.trait === 'greedy' || V.trait === 'sleepy') st.visit.until += VISIT.fedStay * MIN;   // stays longer
+      if (V.trait === 'greedy' || V.trait === 'sleepy') S.until += VISIT.fedStay * MIN;   // stays longer
       ev.push({ type: 'visitorFed', id });
       addFriend(st, id, foodGain, ev);
       if (palAwake(st)) addPal(st, id, t, ev);   // Koxa sees you are friends with it
       return null;
     }
-    // strokeVisitor: shy ones may run off, grumpy ones may swipe while they do not know you
-    if (V.trait === 'shy' && R.friend < 2 && rnd(st) < 0.6) { endVisit(st, 'shy', ev); return null; }
-    if (V.trait === 'grumpy' && R.friend < 2 && rnd(st) < 0.5) { ev.push({ type: 'visitorHiss', id }); addFriend(st, id, -0.25, ev); return null; }
-    ev.push({ type: 'visitorPurr', id });
-    const g = Math.min(strokeGain, VISIT.perVisit - st.visit.gain);
-    if (g > 0) { st.visit.gain += g; addFriend(st, id, g, ev); }
+    if (action === 'treatVisitor') {   // a pamlsek from the hand: once a visit, friendship as food; it counts as fed today
+      if (S.treat) return `${V.name} už pamlsek ${V.fem ? 'dostala' : 'dostal'}.`;
+      if (st.pamlsky < 1) return 'Nemáš žádné pamlsky.';
+      st.pamlsky -= 1; S.treat = true; R.fed = dkey(t);
+      ev.push({ type: 'visitorTreat', id });
+      addFriend(st, id, foodGain, ev);
+      if (palAwake(st)) addPal(st, id, t, ev);
+      jealousy(st, id, t, ev);
+      return null;
+    }
+    if (action === 'playVisitor') {   // the feather for two: one game a minute; Koxa plays along when she is with them
+      if (S.play && t - S.play < MIN) return `${V.name} si chvilku oddechne.`;
+      S.play = t;
+      const koxa = palAwake(st), caught = koxa && a.caught === 'koxa' ? 'koxa' : 'visitor';
+      ev.push({ type: 'visitorPlay', id, caught, koxa });
+      const g = Math.min(PAL_STEP, PLAY_VISIT - S.playGain);
+      if (g > 0) { S.playGain += g; addFriend(st, id, g, ev); }
+      if (koxa) {
+        const N = st.needs;
+        N.fun = Math.min(100, N.fun + (caught === 'koxa' ? 12 : 8)); N.energy = Math.max(0, N.energy - 3);
+        addPal(st, id, t, ev);
+      }
+      if (caught === 'visitor') jealousy(st, id, t, ev);   // the other cat got the feather
+      return null;
+    }
+    // strokeVisitor
+    let liked = false;
+    const k = strokeKind(id, a);
+    if (!k.region) {   // the menu's Pohladit (or an unknown region): shy ones may run off, grumpy ones may swipe
+      if (V.trait === 'shy' && R.friend < 2 && rnd(st) < 0.6) { endVisit(st, 'shy', ev); return null; }
+      if (V.trait === 'grumpy' && R.friend < 2 && rnd(st) < 0.5) { ev.push({ type: 'visitorHiss', id }); addFriend(st, id, -0.25, ev); return null; }
+      ev.push({ type: 'visitorPurr', id });
+    } else {
+      if (k.slow) return null;   // too slow: it does not notice
+      const swipe = () => { ev.push({ type: 'visitorHiss', id, region: k.region }); if (!S.hurt) { S.hurt = true; addFriend(st, id, -0.25, ev); } return null; };
+      if (k.why) {
+        if (V.trait === 'shy' && R.friend < 2) { endVisit(st, 'shy', ev); return null; }
+        if (V.trait === 'grumpy' && R.friend < 3) return swipe();
+        ev.push({ type: 'visitorDislike', id, region: k.region, why: k.why, away: V.trait === 'shy' });
+        return null;
+      }
+      liked = k.liked;
+      // grumpy Rambo under 2 hearts: half the minutes he swipes even at a neutral spot (the same answer all that minute)
+      if (!liked && V.trait === 'grumpy' && R.friend < 2 && rndSeed(st.seed, Math.floor(t / MIN), 30) < 0.5) return swipe();
+      ev.push({ type: 'visitorPurr', id, region: k.region, liked });
+    }
+    if (S.pet && t - S.pet < MIN) return null;   // friendship from strokes at most once a minute, however many strokes come
+    S.pet = t;
+    const g = Math.min(strokeGain + (liked ? PAL_STEP : 0), (liked ? VISIT.perVisitLiked : VISIT.perVisit) - S.gain);
+    if (g > 0) { S.gain += g; addFriend(st, id, g, ev); }
     if (palAwake(st)) addPal(st, id, t, ev);
+    jealousy(st, id, t, ev);
     return null;
+  }
+  // a finger stroke on a visitor: { region (null = none or unknown), slow, why (dislike: 'fast' | 'against' | 'region'), liked }
+  function strokeKind(id, a) {
+    const region = regionOf(a.region, null);
+    if (!region) return { region: null, slow: false, why: null, liked: false };
+    const L = VISITOR_LIKES[id];
+    const sp = typeof a.speed === 'number' ? (a.speed < 120 ? 'slow' : a.speed > L.max ? 'fast' : 'good') : ['slow', 'fast'].includes(a.speed) ? a.speed : 'good';
+    const dir = a.along === false || a.along === 'against' ? 'against' : a.along === 'sideways' ? 'sideways' : 'along';
+    const why = sp === 'fast' ? 'fast' : dir === 'against' ? 'against' : L.dislikes.includes(region) ? 'region' : null;
+    return { region, slow: sp === 'slow', why, liked: !why && dir === 'along' && L.likes.includes(region) };
+  }
+  // the visitor's place in a photo: vpose (≤ 20 characters), vx (0–400, whole), vflip (only when true); none = not stored
+  function photoVisitor(p, o) {
+    if (typeof o.vpose === 'string' && o.vpose) p.vpose = o.vpose.slice(0, 20);
+    if (typeof o.vx === 'number' && Number.isFinite(o.vx)) p.vx = Math.round(clamp(o.vx, 0, 400));
+    if (o.vflip === true) p.vflip = true;
+  }
+  // Koxa may get jealous when she sees you with a visitor (in the garden, awake, not up the tree, held or on the lap; from
+  // bond level Známá): a seeded chance from the moment (salt 31), at most once every 20 minutes
+  function jealousy(st, id, t, ev) {
+    if (!palAwake(st) || st.lvl < 1 || st.jealous || (st.jealousAt && t - st.jealousAt < JEALOUS.every * MIN)) return;
+    const p = palOf(st.visitors[id]), chance = JEALOUS.p[p < 1 ? 0 : p < 3 ? 1 : 2];
+    if (rndSeed(st.seed, Math.floor(t / 1000), 31) >= chance) return;
+    st.jealous = { since: t, id }; st.jealousAt = t;
+    ev.push({ type: 'jealous', id });
+  }
+  // the next 7:00 local time after t (a sleepover ends then)
+  function next7(t) {
+    const d = new Date(t); d.setHours(7, 0, 0, 0);
+    if (d.getTime() <= t) { d.setDate(d.getDate() + 1); d.setHours(7, 0, 0, 0); }
+    return d.getTime();
+  }
+  // why the visitor cannot be invited in for the night now (Czech), or null
+  function inviteWhy(st, id, t) {
+    if (typeof id !== 'string' || !Object.prototype.hasOwnProperty.call(VISITORS, id)) return 'Takovou kočku neznáme.';
+    const V = VISITORS[id], R = st.visitors[id];
+    if (st.guest) return st.guest.id === id ? `${V.name} už u nás na noc je.` : `Na noc už u nás je ${VISITORS[st.guest.id].name}.`;
+    if (!st.visit || st.visit.id !== id || st.visit.until <= t) return `${V.name} tu teď není.`;
+    if (st.out) return `${st.name} je venku.`;
+    if (st.yard && st.yard.tree) return `${st.name} je na stromě.`;
+    if (!R || R.friend < 5) return `${V.name} ještě není tak ${V.fem ? 'velká kamarádka' : 'velký kamarád'}.`;
+    if (palOf(R) < 3) return `${st.name} a ${V.name} ještě nejsou ${V.fem ? 'kamarádky' : 'kamarádi'}.`;
+    const h = new Date(t).getHours();
+    if (h < 18 || h >= 22) return 'Pozvat na noc jde jen večer (od 18 do 22 h).';
+    if (st.invDay === dkey(t)) return 'Dnes už u nás jedna návštěva spala.';
+    return null;
+  }
+  // for the UI (the button and its reason); does not change st
+  function canInvite(st, id, now) {
+    const why = inviteWhy(st, id, typeof now === 'number' && Number.isFinite(now) ? Math.max(now, st.t) : st.t);
+    return { ok: !why, reason: why };
+  }
+  // the guest: sleeping together at night when Koxa sleeps in the house and has 4+ hearts for it; goes home at `until`
+  function guestStep(st, t, dt, ev) {
+    const G = st.guest, ms = Math.min(t + dt, G.until) - t;
+    if (ms > 0 && st.asleep && !st.out && !st.yard && palOf(st.visitors[G.id]) >= 4) {
+      if (!G.slept) { G.slept = true; ev.push({ type: 'guestSleep', id: G.id }); }
+      const N = st.needs;
+      N.love = clamp(N.love + GUEST.love * ms / HOUR, 0, 100); N.energy = clamp(N.energy + GUEST.energy * ms / HOUR, 0, 100);
+    }
+    if (t + dt >= G.until) guestOut(st, t + dt, ev);
+  }
+  function guestOut(st, t, ev) {
+    const G = st.guest;
+    st.guest = null;
+    ev.push({ type: 'guestOut', id: G.id, slept: G.slept });
+    addFriend(st, G.id, PAL_STEP, ev);       // a good night: +¼ heart from the cat, +¼ of Koxa's
+    bumpPal(st, G.id, PAL_STEP, t, ev);
+  }
+  // help texts: where the cat likes to be stroked (null for an unknown id)
+  function visitorLikes(id) {
+    if (typeof id !== 'string' || !Object.prototype.hasOwnProperty.call(VISITOR_LIKES, id)) return null;
+    const L = VISITOR_LIKES[id];
+    return { likes: L.likes.slice(), dislikes: L.dislikes.slice(), gentle: L.max < 900, max: L.max, text: L.text };
   }
   function repairSocial(st, t) {
     const okT = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
@@ -4553,19 +4810,31 @@ function KockaEngine() {
       };
     }
     st.visit = fixVisit(st.visit, t);
+    const G = st.guest;
+    st.guest = G && typeof G === 'object' && own(VISITORS, G.id) && okT(G.since) && G.since <= t && okT(G.until) && G.until > t &&
+      G.until - G.since <= GUEST.max * HOUR ? { id: G.id, since: G.since, until: G.until, slept: G.slept === true } : null;
+    if (st.guest && st.visit && st.visit.id === st.guest.id) st.visit = null;
+    st.invDay = isKey(st.invDay) && st.invDay <= dkey(t) ? st.invDay : 0;
+    const J = st.jealous;
+    st.jealous = J && typeof J === 'object' && own(VISITORS, J.id) && okT(J.since) && J.since <= t && J.since > t - JEALOUS.ok * MIN ? { since: J.since, id: J.id } : null;
+    st.jealousAt = okT(st.jealousAt) && st.jealousAt <= t ? st.jealousAt : 0;
     const A = Array.isArray(st.album) ? st.album : [];
     st.album = [];
     for (const p of A) {
       if (st.album.length >= ALBUM_MAX) break;
       if (!p || typeof p !== 'object' || !okT(p.t)) continue;
       const str = (v, n, def) => (typeof v === 'string' ? v.slice(0, n) : def);
-      st.album.push({
+      const q = {
         t: Math.min(p.t, t), pose: str(p.pose, 20, 'sit'), room: PHOTO_ROOMS.includes(p.room) ? p.room : 'living',
         mood: ['happy', 'calm', 'grumpy', 'sad'].includes(p.mood) ? p.mood : 'calm',
         phase: ['night', 'morning', 'day', 'evening'].includes(p.phase) ? p.phase : 'day',
         season: ['spring', 'summer', 'autumn', 'winter'].includes(p.season) ? p.season : 'spring',
         note: str(p.note, 60, ''), visitor: own(VISITORS, p.visitor) ? p.visitor : null,
-      });
+      };
+      // Phase B fields only when present (an older photo stays as it was); the visitor's place only with a visitor
+      if (q.visitor) photoVisitor(q, p);
+      if (p.nokoxa === true && q.visitor) q.nokoxa = true;
+      st.album.push(q);
     }
   }
   function shiftSocial(st, d, now) {
@@ -4574,8 +4843,12 @@ function KockaEngine() {
     if (st.visit) {
       const V = st.visit, A = V.act && typeof V.act === 'object' ? V.act : {};
       st.visit = fixVisit(Object.assign({}, V, { since: V.since + d, until: V.until + d, ready: typeof V.ready === 'number' ? V.ready + d : null,
-        act: Object.assign({}, A, { since: A.since + d }) }), now);
+        act: Object.assign({}, A, { since: A.since + d }), pet: V.pet ? V.pet + d : 0, play: V.play ? V.play + d : 0 }), now);
     }
+    if (st.guest) st.guest = { id: st.guest.id, since: st.guest.since + d, until: st.guest.until + d, slept: st.guest.slept };
+    if (st.invDay > today) st.invDay = today;
+    if (st.jealous) st.jealous = { since: st.jealous.since + d, id: st.jealous.id };
+    if (st.jealousAt) st.jealousAt += d;
     for (const p of st.album) if (p.t > now) p.t = now;
   }
   // the Album screen: photos (newest first), postcards, the neighbour cats met, presents
@@ -4600,7 +4873,7 @@ function KockaEngine() {
 
   return {
     NEEDS, FOODS, TOYS, REGIONS, FEARS, QUIRKS, ILLS, LEVELS, HOLIDAYS, ACTIONS, CROPS, PRESENTS, WEATHERS, POSTCARDS, BEDS,
-    SHOP, GAMES, TRICKS, ROOMS, EARN_CAP, VISITORS, VISIT_ACTS, ALBUM_MAX, album,
+    SHOP, GAMES, TRICKS, ROOMS, EARN_CAP, VISITORS, VISIT_ACTS, VISITOR_LIKES, ALBUM_MAX, album, canInvite, visitorLikes,
     create, valid, repair, rename, advance, act, consumeTreats, minigameResult, shop, tricks,
     mood, moodValue, wants, needs, health, bondLevel, diary,
     dayPhase, season, holiday, easter, weather, postcardAt, bedCount,
@@ -4736,12 +5009,14 @@ function whenFree(g0, ms, fn) {
     if (nothingOpen()) fn(); else setTimeout(wait, 400);
   }, ms);
 }
-function showModal(html, buttons) {
+// buttons: { text, cls, fn, off (dimmed, does nothing), note (a small line under it) }; cls: a class for the card
+function showModal(html, buttons, cls) {
   hideToast();
   const card = $('#modalCard');
-  card.innerHTML = html + buttons.map((b, i) => `<button class="big ${b.cls || ''}" data-i="${i}">${b.text}</button>`).join('');
+  card.className = 'mcard' + (cls ? ' ' + cls : '');
+  card.innerHTML = html + buttons.map((b, i) => `<button class="big ${b.cls || ''}${b.off ? ' off' : ''}" data-i="${i}"${b.off ? ' aria-disabled="true"' : ''}>${b.text}</button>${b.note ? `<p class="bnote">${esc(b.note)}</p>` : ''}`).join('');
   card.onclick = e => {
-    const b = e.target.closest('[data-i]'); if (!b) return;
+    const b = e.target.closest('[data-i]'); if (!b || b.classList.contains('off')) return;
     $('#modal').hidden = true;
     const fn = buttons[+b.dataset.i].fn; if (fn) fn();
   };
@@ -4937,6 +5212,7 @@ function targets(list, hot) {
   for (const k of list) {
     let r;
     if (k === 'cat') { if (K.gone) continue; const c = catEl.getBoundingClientRect(), s = sceneEl.getBoundingClientRect(); r = { l: c.left - s.left + c.width * .18, t: c.top - s.top + c.height * .25, r: c.right - s.left - c.width * .18, b: c.bottom - s.top - c.height * .02 }; }
+    else if (k === 'visitor') { const m = visMovers()[0]; if (!m) continue; const c = m.art.getBoundingClientRect(), s = sceneEl.getBoundingClientRect(), z = nbSize(m.id); r = { l: c.left - s.left + c.width * (.5 - .32 * z), t: c.top - s.top + c.height * (.93 - .68 * z), r: c.left - s.left + c.width * (.5 + .32 * z), b: c.bottom - s.top - c.height * .02 }; }
     else if (/^bed\d$/.test(k)) r = bedRect(+k.slice(3));
     else r = spotRect(k);
     if (!r) continue;
@@ -4946,6 +5222,7 @@ function targets(list, hot) {
     el.classList.toggle('hot', k === hot);
   }
 }
+
 
 /* ---------- Switching places (arrows at the scene's edges, a short slide) ---------- */
 function neighbours() { const L = places(), i = L.indexOf(G.view); return { left: L[i - 1] || null, right: L[i + 1] || null }; }
@@ -4998,7 +5275,7 @@ const K = { bx: 105, by: 340, sc: 1, pose: '', key: '', flip: false, walking: fa
 const HEAD = { sit: [100, 64], loaf: [72, 126], sleep: [64, 146], eat: [66, 146], drink: [58, 154], groom: [100, 64], sulk: [100, 72],
   window: [100, 64], belly: [54, 150], stretch: [50, 134], pounce: [56, 80], walk: [66, 106], trot: [62, 104], carried: [100, 52], wriggle: [100, 52],
   lapLoaf: [72, 126], lapCurl: [64, 146], lapBelly: [54, 150], stalk: [50, 140], onBranch: [72, 120], climb: [100, 60],
-  sniff: [42, 140], arch: [56, 106], lickOther: [48, 76], sideLie: [50, 148], swipe: [84, 72], run: [54, 102] };
+  sniff: [42, 140], arch: [56, 106], lickOther: [48, 76], sideLie: [50, 148], swipe: [84, 72], run: [54, 102], rub: [49, 142] };
 const RAISED_Y = 400;                                      // feet above this line: the sill, the counter, the chair, a branch
 const depth = fy => (fy < RAISED_Y ? 0.9 : clamp(0.84 + (fy - 430) / 170 * 0.2, 0.82, 1.04));   // a little smaller further back
 const pose = (want, old) => (hasPose(want) ? want : old);
@@ -5017,6 +5294,11 @@ const floorAt = (p, x, y) => ({ room: p, pose: 'sit', fx: x, fy: y });
 // what she should be doing now: { room, pose, fx, fy (room point under her anchor), ax, ay (anchor in her drawing), flip, o }
 function decide() {
   const st = G.st, h = E.health(st), t = perf();
+  if (!st.jealous && (K.jealousPlace || (K.act && K.act.kind === 'jealous'))) {   // it passed without an event (asleep, out, inside)
+    if (K.place === K.jealousPlace) K.place = null;
+    if (K.act && K.act.kind === 'jealous') K.act = null;
+    K.jealousPlace = null;
+  }
   if (K.act && K.act.until && K.act.until <= t) { const a = K.act; K.act = null; if (a.end) a.end(); }
   if (K.act && K.act.started + 20000 < t && !K.act.until) K.act = null;      // never got there: drop it
   if (K.act && K.act.kind === 'visit' && K.place && K.place.until > t) K.act = null;   // the player put her somewhere: the visitor waits
@@ -5136,8 +5418,8 @@ function exitOf(from, to) {
   return { fx: right ? 470 : -70, fy: 548 };
 }
 let walkT = 0;
-const SPEED = { walk: 120, trot: 250, run: 330 };
-const STRIDE = { walk: 84, trot: 84, run: 112 };          // room units per leg cycle: the legs never glide
+const SPEED = { walk: 120, trot: 250, run: 330, creep: 55 };   // creep: a shy visitor coming to the hand, slowly
+const STRIDE = { walk: 84, trot: 84, run: 112, creep: 84 };          // room units per leg cycle: the legs never glide
 function update(now0) {
   if (!G || K.carry || K.chase || K.lapView) return;
   const d = decide();
@@ -5146,7 +5428,7 @@ function update(now0) {
   // on her way to another place: first out of this one
   if (d.room && d.room !== G.her && places().includes(d.room)) {
     const L = places(), step = L[L.indexOf(G.her) + Math.sign(L.indexOf(d.room) - L.indexOf(G.her))] || d.room;
-    if (!places().includes(G.her)) { G.her = d.room; return update(true); }
+    if (!places().includes(G.her)) { G.her = d.room; drawNav(); drawHint(); return update(true); }
     const ex = exitOf(G.her, step);
     showCat(G.her === G.view);
     return walkTo(Object.assign({ room: G.her, pose: 'walk' }, ex), b => {
@@ -5199,8 +5481,13 @@ function headPx() {
   return { x: c.left - s.left + u / 200 * c.width, y: c.top - s.top + (hd[1] - 30) / 200 * c.height };
 }
 function popFx(name, dx = 0) {
-  if (K.gone || K.noFx || typeof A.fx !== 'function') return;
-  const p = headPx(), d = document.createElement('div');
+  if (K.gone || K.noFx) return;
+  popAt(headPx(), name, dx);
+}
+// an effect (heart, sparkle, bang, zzz) floating up from a point in scene px
+function popAt(p, name, dx = 0) {
+  if (typeof A.fx !== 'function') return;
+  const d = document.createElement('div');
   d.innerHTML = A.fx(name);
   const el = d.firstElementChild; if (!el) return;
   el.classList.add('kx-fx-float');
@@ -5266,28 +5553,53 @@ function standUp() {
 }
 const fleeTo = { hungry: 'bowl', thirsty: 'water', offended: 'litter', annoyed: 'litter', scared: 'bed', rain: 'litter' };
 
-/* ---------- Hit tests (Koxa's body regions, items, spots) ---------- */
+/* ---------- Hit tests (the cats' body regions, items, spots) ---------- */
 const hctx = document.createElement('canvas').getContext('2d');
-function regs() {
-  if (!K.regs) K.regs = A.regions(K.pose, K.opts).map(r => ({ r, p: new Path2D(r.path), f: { id: r.id, fur: [-r.fur[0], r.fur[1]] } }));   // f: mirrored
-  return K.regs;
+// A cat picture for the hit tests: Koxa or a visitor's mover. c holds pose, opts, flip and the cached regions (regs,
+// cleared whenever the drawing changes); a neighbour's coat is drawn scaled around its feet (100, 186) by size.
+const nbSize = id => (A.neighbours && A.neighbours[id] && A.neighbours[id].size) || 1;
+const koxaPic = () => (K.gone ? null : { c: K, art: artEl, size: 1 });
+const moverPic = m => ({ c: m, art: m.art, size: nbSize(m.id) });
+function picRegs(c) {
+  if (!c.regs) {
+    try { c.regs = A.regions(c.pose, c.opts || {}).map(r => ({ r, p: new Path2D(r.path), f: { id: r.id, fur: [-r.fur[0], r.fur[1]] } })); }   // f: mirrored
+    catch (e) { c.regs = []; }
+  }
+  return c.regs;
 }
-// client point → her drawing's units
-function catUV(cx, cy) {
-  if (K.gone) return null;
-  const r = artEl.getBoundingClientRect();
+// client point → the drawing's own units
+function picUV(P, cx, cy) {
+  const r = P.art.getBoundingClientRect();
   if (!r.width) return null;
-  let u = (cx - r.left) / r.width * 200;
-  const v = (cy - r.top) / r.height * 200;
-  if (K.flip) u = 200 - u;
+  let u = (cx - r.left) / r.width * 200, v = (cy - r.top) / r.height * 200;
+  if (P.c.flip) u = 200 - u;
+  if (P.size !== 1) { u = 100 + (u - 100) / P.size; v = 186 + (v - 186) / P.size; }
   return { u, v };
 }
-// the region under a client point; its fur vector is in screen directions (mirrored when she faces right)
-function regionAtClient(cx, cy) {
-  const q = catUV(cx, cy);
+// the region under a client point; its fur vector is in screen directions (mirrored when the cat faces right)
+function regionOn(P, cx, cy) {
+  const q = P && picUV(P, cx, cy);
   if (!q || q.u < -10 || q.u > 210 || q.v < -10 || q.v > 210) return null;
-  for (const g of regs()) if (hctx.isPointInPath(g.p, q.u, q.v, 'nonzero')) return K.flip ? g.f : g.r;
+  for (const g of picRegs(P.c)) if (hctx.isPointInPath(g.p, q.u, q.v, 'nonzero')) return P.c.flip ? g.f : g.r;
   return null;
+}
+const regionAtClient = (cx, cy) => regionOn(koxaPic(), cx, cy);   // Koxa's own region
+// the cat under a client point: { m (a visitor's mover, null = Koxa), region }; where they overlap, the one in front
+function catHit(cx, cy) {
+  const k = regionAtClient(cx, cy);
+  let best = k ? { m: null, region: k, z: 20 } : null;
+  for (const m of visMovers()) {
+    const r = regionOn(moverPic(m), cx, cy);
+    if (r) { const z = +m.el.style.zIndex || 19; if (!best || z > best.z) best = { m, region: r, z }; }
+  }
+  return best;
+}
+// the Input block takes region ids as they are: a visitor's region is 'v:<visitor>:<region>'
+const VREG = /^v:([a-z]+):([A-Za-z]+)$/;
+const vRegion = r => { const x = r && VREG.exec(r.id); return x ? { id: x[1], region: x[2] } : null; };
+function hitRegionAt(cx, cy) {
+  const h = catHit(cx, cy);
+  return !h ? null : h.m ? { id: `v:${h.m.id}:${h.region.id}`, fur: h.region.fur } : h.region;
 }
 function catLoose(cx, cy) {   // a dropped treat or brush counts anywhere on her picture
   if (K.gone) return false;
@@ -5308,7 +5620,8 @@ const ITEMS = {
   water: { art: () => 'jug', label: () => 'Voda', to: ['water'] },
   scoop: { art: () => 'scoop', label: () => 'Lopatka', to: ['litter'] },
   brush: { art: () => 'brush', label: () => 'Kartáč', to: ['cat'] },
-  treat: { art: () => (treatKind === 'stick' ? artOr('treatBag', 'treat') : 'treat'), label: () => (treatKind === 'stick' ? 'Tyčinka' : 'Pamlsek'), count: () => (treatKind === 'stick' ? (G.st.stock && G.st.stock.stick) || 0 : G.st.pamlsky), to: ['cat'] },
+  treat: { art: () => (treatKind === 'stick' ? artOr('treatBag', 'treat') : 'treat'), label: () => (treatKind === 'stick' ? 'Tyčinka' : 'Pamlsek'), count: () => (treatKind === 'stick' ? (G.st.stock && G.st.stock.stick) || 0 : G.st.pamlsky),
+    get to() { return treatKind === 'stick' ? ['cat'] : ['cat', 'visitor']; } },   // the tyčinka is only for Koxa
   pill: { art: () => 'pill', label: () => 'Pilulka', to: ['cat'] },
   seeds: { art: () => artOr('seedPacket', 'treat'), label: () => 'Semínka', to: ['beds'] },
   can: { art: () => artOr('wateringCan', 'jug'), label: () => 'Konev', to: ['beds'] },
@@ -5461,7 +5774,7 @@ function startTilt() {
 let lastF = perf();
 function frame(t) {
   const dt = Math.min(0.05, (t - lastF) / 1000); lastF = t;
-  if (G) { stepToys(dt); stepLaser(dt); stepGame(dt); zVisitors(); }
+  if (G) { stepToys(dt); stepLaser(dt); stepGame(dt); zVisitors(); stepShy(); }
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -5609,10 +5922,10 @@ function handle(events) {
         break;
       }
       case 'palUp': { const V = E.VISITORS[ev.id]; if (V) notify(palText(n, V, ev.pal), 3400, true); break; }
-      case 'visitorLeave': { const V = E.VISITORS[ev.id] || { name: 'Kočka', fem: true }; if (G.view === 'garden') toast(V.name + ' ' + (V.fem ? 'odešla' : 'odešel') + (ev.reason === 'shy' ? (V.fem ? ' – lekla se' : ' – lekl se') : '') + '.', 2200); leaveVisitor(ev.reason); break; }
+      case 'visitorLeave': { const V = E.VISITORS[ev.id] || { name: 'Kočka', fem: true }; if (G.view === 'garden' && ev.reason !== 'inside') toast(V.name + ' ' + (V.fem ? 'odešla' : 'odešel') + (ev.reason === 'shy' ? (V.fem ? ' – lekla se' : ' – lekl se') : '') + '.', 2200); leaveVisitor(ev.reason); break; }
       case 'visitorFed': { const V = E.VISITORS[ev.id]; toast(`${V.name} si ${V.fem ? 'pochutnala' : 'pochutnal'}.`, 1800); break; }
-      case 'visitorPurr': { const V = E.VISITORS[ev.id]; toast(`${V.name} přede.`, 1500); break; }
-      case 'visitorHiss': { const V = E.VISITORS[ev.id]; say('hiss'); toast(`${V.name} ${V.fem ? 'prskla' : 'prskl'}! Ještě tě nezná.`, 2000); break; }
+      case 'visitorPurr': case 'visitorHiss': case 'visitorDislike': case 'visitorTreat': case 'visitorPlay':
+      case 'jealous': case 'jealousOk': case 'jealousEnd': case 'guestIn': case 'guestSleep': case 'guestOut': visitorEvent(ev); break;
       case 'visitorFriend': { const V = E.VISITORS[ev.id]; notify(`${V.name}: ${'♥'.repeat(ev.hearts)} – kamarádíte se.`, 3000, true); break; }
       case 'photo': toast(`Cvak! Fotka je v Deníčku (${ev.n}).`, 2000); break;
       case 'quirk':
@@ -5684,6 +5997,7 @@ function hintText() {
   if (laser.on) return `Přejížděj prstem po pokoji, ${n} poběží za tečkou.`;
   if (h.lap) return h.lapDoze ? `${n} ti usnula na klíně.` : `${n} ti leží na klíně – hlaď ji a drbej.`;
   if (h.tree) return `${n} je na stromě – zavolej ji, nebo ji podrž a sundej.`;
+  if (h.jealous) return `${n} žárlí – pohlaď ji taky, nebo ji podrbej.`;
   if (h.ill) return `${n} je nemocná (${h.illName}) – zajdi k veterináři.`;
   if (h.pill === 'today') return `${n} potřebuje ještě jednu pilulku – přetáhni ji k ní.`;
   if (G.seat && G.view === G.her && !h.asleep) return `Sedíš ${G.seat === 'bench' ? 'na lavičce' : 'v křesle'}. Přenes ${acc(n)} na klín, nebo ji zavolej.`;
@@ -5704,6 +6018,7 @@ function hintText() {
   if (w === 'fun') return `${n} se nudí – vezmi hračku.`;
   if (h.garden && h.wet) return `${n} zmokla a je mrzutá.`;
   { const v = visitorNow(); if (v && G.view !== 'garden' && !h.out) return `Na zahradě je na návštěvě ${v.name}.`; if (v && G.view === 'garden') return `Na návštěvě je ${v.name} – ťukni na ${v.fem ? 'ni' : 'něj'}.`; }
+  if (G.st.guest && E.VISITORS[G.st.guest.id]) { const V = E.VISITORS[G.st.guest.id]; return G.view === 'living' ? `${V.name} u nás spí na noc – můžeš ${V.fem ? 'ji' : 'ho'} pohladit.` : `${V.name} je na noc v obýváku.`; }
   if (K.idle && K.idle.p.dusk && G.her === 'hall') return `${n} sedí u dveří – chtěla by ven.`;
   return { happy: `${n} je spokojená.`, calm: `${n} odpočívá.`, grumpy: `${n} je mrzutá.`, sad: `${n} je smutná.` }[E.mood(G.st)];
 }
@@ -5751,14 +6066,24 @@ function onGesture(ev) {
   switch (ev.type) {
     case 'tap': return onTap(ev);
     case 'stroke': {
+      const vr = vRegion(ev.region);
+      if (vr) { strokeVisitorBy(vr, ev.along, ev.speed); return; }   // a visitor (in the garden, or the guest)
       if (K.carry || K.gone) return;
       stay();
       doAct('stroke', { region: ev.region.id, along: ev.along, speed: ev.speed });
       return;
     }
-    case 'scratchStart': if (!K.gone) { stay(); purr(1500, 0.8); } return;
-    case 'scratch': if (!K.gone) { stay(); doAct('scratch', { region: ev.region.id, seconds: (ev.seconds || 1) * (ev.fingers === 1 ? 0.75 : 1) }); } return;
+    // scratching a visitor counts as a gentle stroke along the fur (once a second)
+    case 'scratchStart': { const vr = vRegion(ev.region); if (vr) { const m = moverOf(vr.id); if (m) holdVisitor(m, 4000); return; } if (!K.gone) { stay(); purr(1500, 0.8); } return; }
+    case 'scratch': {
+      const vr = vRegion(ev.region);
+      if (vr) { strokeVisitorBy(vr, true, 300); return; }
+      if (!K.gone) { stay(); doAct('scratch', { region: ev.region.id, seconds: (ev.seconds || 1) * (ev.fingers === 1 ? 0.75 : 1) }); }
+      return;
+    }
     case 'pickup': {
+      { const w = where(ev.x, ev.y), hc = catHit(w.cx, w.cy);
+        if (hc && hc.m) { const V = E.VISITORS[hc.m.id]; if (V) tip('vhold', `${V.name} se chovat nenechá.`, 4000); return; } }   // a long press on a visitor
       if (K.gone) return;
       if (E.health(G.st).tree && can('fetchDown')) { doAct('fetchDown'); return; }
       if (K.lapView) return;
@@ -5832,7 +6157,7 @@ function onTap(ev) {
   if (ev.item === 'food' && !MODE.arrange) { foodMenu(); return; }
   if (ev.item === 'treat' && G.st.stock && G.st.stock.stick > 0) { treatKind = treatKind === 'stick' ? 'treat' : 'stick'; trayKeys.treat = ''; drawTray(); toast(treatKind === 'stick' ? 'Teď dáš kočičí tyčinku.' : 'Teď dáš pamlsek.', 1600); return; }
   if (ev.item && /^f:/.test(ev.item)) { toast('Přetáhni ho do pokoje.', 1600); return; }
-  if (!ev.item && visitorAt(w.cx, w.cy)) { visitorMenu(); return; }
+  if (!ev.item) { const vm = visitorAt(w.cx, w.cy); if (vm) { if (vm === GZ.m) guestMenu(); else visitorMenu(); return; } }
   if (ev.item) {
     if (toys[ev.item] && toys[ev.item].on && toyAt(w.cx, w.cy) === ev.item) {   // a toy on the floor: a little push
       const T = toys[ev.item]; T.vx = (Math.random() - .5) * 360; T.vy = (Math.random() - .5) * 200; T.kicked = false; T.moving = true; return;
@@ -5924,6 +6249,8 @@ function moveDrag(ev) {
     if (drag.last) drag.brushAcc += Math.hypot(w.cx - drag.last.cx, w.cy - drag.last.cy);
     if (drag.brushAcc > 140 && t - drag.brushAt > 900) { drag.brushAcc = 0; drag.brushAt = t; drag.brushed = true; stay(); doAct('brush'); }
   }
+  if (drag.item === 'treat') shyTreatMove(w);
+  if (drag.item === 'feather' && featherForTwoMove(w, dt)) { drag.last = w; return; }   // waved at a visitor: a game for two
   if (drag.item === 'feather' && !K.gone && !E.health(G.st).asleep && !K.lapView) {
     // a feather waved close to her: after a moment she jumps at it
     const c = catEl.getBoundingClientRect(), mid = { x: (c.left + c.right) / 2, y: c.top + c.height * .6 };
@@ -5940,6 +6267,7 @@ function moveDrag(ev) {
 }
 function endDrag() {
   if (!drag) return;
+  if (drag.shy && !drag.shy.done) shyCancel();
   const b = trayBtn(drag.item); if (b) b.classList.remove('lift');
   $('#ghost').hidden = true; targets([], null);
   dragging = null; drag = null; drawTray();
@@ -5956,15 +6284,17 @@ function dropItem(ev) {
   const tg = ev.target;
   if (!tg) {
     if (item === 'brush' && brushed) return;
+    if (item === 'treat' && treatKind === 'stick' && w.inScene && visitorAt(w.cx, w.cy)) { toast(`Tyčinka je jen pro ${acc(nm())}.`, 2200); return; }
     const tp = targetPlace(item);
     if (tp && tp !== G.view) { toast(`${NEED_SPOT[it.to[0]]} je ${PL[tp].in} – přejdi tam šipkou.`, 2400); return; }
     toast({ food: 'Granule patří do misky.', water: 'Vodu nalij do misky s vodou.', scoop: 'Lopatkou ukliď kočičí záchod.', brush: 'Přejížděj kartáčem po její srsti.',
-      treat: 'Pamlsek jí dej přímo – přetáhni ho k ní.', pill: 'Pilulku jí dej přímo – přetáhni ji k ní.', seeds: 'Semínka patří na záhon.', can: 'Konví zalij záhony.' }[item], 2200);
+      treat: 'Pamlsek dej přímo – přetáhni ho ke kočce.', pill: 'Pilulku jí dej přímo – přetáhni ji k ní.', seeds: 'Semínka patří na záhon.', can: 'Konví zalij záhony.' }[item], 2200);
     return;
   }
   if (item === 'food') doAct('feed', foodKind);
   else if (item === 'water') doAct('water');
   else if (item === 'scoop') doAct('cleanLitter');
+  else if (item === 'treat' && tg === 'visitor') treatToVisitor();
   else if (item === 'treat') { stay(); doAct('treat', treatKind === 'stick' ? 'stick' : undefined); }
   else if (item === 'pill') doAct('pill');
   else if (item === 'brush' && !brushed) { stay(); doAct('brush'); }
@@ -5997,8 +6327,10 @@ function hitTarget(x, y, item) {
   }
   const it = ITEMS[item];
   if (!it || !it.to) return null;
+  if (it.to.includes('visitor') && w.inScene) { const h = catHit(w.cx, w.cy); if (h) return h.m ? 'visitor' : 'cat'; }   // the one in front
   for (const k of it.to) {
     if (k === 'cat') { if (catLoose(w.cx, w.cy)) return 'cat'; continue; }
+    if (k === 'visitor') { if (w.inScene && visitorAt(w.cx, w.cy)) return 'visitor'; continue; }
     if (!w.inScene) continue;
     if (k === 'beds') { const i = bedAt(w.p); if (i >= 0) return 'bed' + i; continue; }
     if (inRect(w.p, spotRect(k))) return k;
@@ -6008,7 +6340,7 @@ function hitTarget(x, y, item) {
 gest = I.attach(appEl, {
   mode: 'care',
   ignore: '.topbar, #needs, a, input, select, textarea, label, [data-no-gesture]',
-  hitRegion: (x, y) => { if (K.carry) return null; const w = where(x, y); return w.inScene ? regionAtClient(w.cx, w.cy) : null; },
+  hitRegion: (x, y) => { if (K.carry) return null; const w = where(x, y); return w.inScene ? hitRegionAt(w.cx, w.cy) : null; },
   hitItem: (x, y) => { const w = where(x, y); return furnAt(w.cx, w.cy) || (MODE.arrange ? null : toyAt(w.cx, w.cy)) || trayItemAt(w.cx, w.cy); },
   hitTarget,
   canFlick: item => !!(ITEMS[item] && ITEMS[item].toy),
@@ -6474,10 +6806,19 @@ const vOpts = (m, extra) => Object.assign({ mood: m.mood }, extra || {});
 function mvDraw(m, ps, o, flip, step) {
   m.flip = !!flip; m.fl.classList.toggle('flip', m.flip);
   if (step) m.art.style.setProperty('--kx-step', step.toFixed(2) + 's');
+  m.base = o || {};
+  const f = m.face && m.face.until > perf() ? m.face.o : null;   // a short change of face (purring, ears back) over any pose
+  if (f) o = Object.assign({}, m.base, f);
   const key = ps + JSON.stringify(o || {});
   if (key === m.key) return;
   m.key = key; m.pose = ps; m.opts = o; m.regs = null;
   m.art.innerHTML = A.neighbour(m.id, hasPose(ps) ? ps : 'sit', o || {});
+}
+// the visitor purrs, puts its ears back … for ms (the pose stays)
+function vFace(m, o, ms) {
+  m.face = { o, until: perf() + ms };
+  mvDraw(m, m.pose, m.base, m.flip);
+  setTimeout(() => { if (m.face && m.face.until <= perf() + 30) { m.face = null; mvDraw(m, m.pose, m.base, m.flip); } }, ms + 40);
 }
 function mvPlace(m, d) { m.gen++; clearTimeout(m.t); m.walking = false; mvSet(m, boxOf(d), 0); mvDraw(m, d.pose, vOpts(m, d.o), d.flip); }
 // one leg of a way: a walk (trot, run), a jump up or down, or a move in its own pose (climbing: d.move, d.dur)
@@ -6507,7 +6848,7 @@ function mvPath(m, list, gait, done) {
     const L = legs[i++];
     if (!L.dur) { mvSet(m, L.b, 0); next(); return; }
     const dx = L.b.bx - m.b.bx, face = L.d.move ? !!L.d.flip : Math.abs(dx) > 6 ? dx > 0 : m.flip;
-    mvDraw(m, L.d.move || (L.jump ? (L.up ? 'jumpUp' : 'jumpDown') : L.g), vOpts(m), face, STRIDE[L.g] / SPEED[L.g]);
+    mvDraw(m, L.d.move || (L.jump ? (L.up ? 'jumpUp' : 'jumpDown') : L.g === 'creep' ? 'walk' : L.g), vOpts(m), face, STRIDE[L.g] / SPEED[L.g]);
     mvSet(m, L.b, L.dur, L.jump ? 'cubic-bezier(.3,.7,.4,1)' : 'linear');
     m.walking = true;
     m.t = setTimeout(next, L.dur * 1000 + 40);
@@ -6518,10 +6859,13 @@ function mvPath(m, list, gait, done) {
 // the one in front (feet lower on the screen) overlaps the other; carried Koxa stays on top
 let zAt = 0;
 function zVisitors() {
-  const t = perf(), m = VZ.m; if (!m || t - zAt < 120) return; zAt = t;
-  const dv = feetY(mvCur(m)) - feetY(curBox());
-  const front = !K.gone && !K.carry && (Math.abs(dv) < 6 && VZ.front ? VZ.front === 'v' : dv > 1);   // side by side: the scene says (the licker in front)
-  m.el.style.zIndex = front ? 21 : 19;
+  const t = perf(); if (t - zAt < 120) return; zAt = t;
+  for (const [m, Z] of [[VZ.m, VZ], [GZ.m, GZ]]) {
+    if (!m) continue;
+    const dv = feetY(mvCur(m)) - feetY(curBox());
+    const front = !K.gone && !K.carry && (Math.abs(dv) < 6 && Z.front ? Z.front === 'v' : dv > 1);   // side by side: the scene says (the licker in front)
+    m.el.style.zIndex = front ? 21 : 19;
+  }
 }
 
 // The garden for two cats (room units): the lawn strip in front of the fence, the pond to keep out of
@@ -6637,7 +6981,7 @@ function waitKoxa() {
 const REACH = { arch: [8, 201], sit: [41, 203], sniff: [-2, 203], sideLie: [2, 198], loaf: [23, 183], lickOther: [-1, 165],
   swipe: [16, 205], pounce: [10, 200], belly: [5, 208], stretch: [4, 195], stalk: [11, 208], run: [10, 208], trot: [17, 208],
   walk: [20, 201], sleep: [18, 187], groom: [41, 159], drink: [12, 208], eat: [16, 203], onBranch: [13, 191], onFence: [45, 155],
-  climb: [49, 151], jumpUp: [18, 207], jumpDown: [12, 201] };   // the widest of every mood (a happy sitting cat's tail sticks out)
+  climb: [49, 151], jumpUp: [18, 207], jumpDown: [12, 201], rub: [14, 186] };   // the widest of every mood (a happy sitting cat's tail sticks out)
 function reach(id, ps) {
   const e = REACH[ps] || [0, 210], nb = id && A.neighbours && A.neighbours[id], s = (nb && nb.size) || 1;
   let l = 100 - (100 - e[0]) * s, r = 100 + (e[1] - 100) * s;
@@ -6866,7 +7210,8 @@ const SCENES = { arrive: sArrive, wander: sWander, drink: sDrink, bench: sBench,
 const MOOD_OF = { standoff: 'grumpy', greet: 'happy', chase: 'happy', wrestle: 'happy', groom: 'happy', snuggle: 'happy' };
 // (re)start the scene of the current act
 function startAct() {
-  const v = G.st.visit, m = VZ.m; if (!v || !m) return;
+  const v = G.st.visit, m = VZ.m; if (!v || !m || VZ.leaving) return;
+  if (VZ.holdUntil > perf()) return;   // the player is busy with the visitor: the scene starts again afterwards (holdVisitor)
   VZ.gen++; clearTimeout(VZ.t);
   const kind = v.act && SCENES[v.act.kind] ? v.act.kind : 'wander';
   if (!(v.act && v.act.with === 'koxa') || (kind === 'snuggle' && E.health(G.st).asleep)) releaseKoxa();
@@ -6874,7 +7219,8 @@ function startAct() {
   SCENES[kind]();
 }
 // called whenever the scene may have changed (layout, a view, the engine's events, every few seconds)
-function drawVisitors() {
+function drawVisitors() { drawGardenVisitor(); drawGuest(); }
+function drawGardenVisitor() {
   if (!G) return;
   const v = visitorNow(), act = v && G.st.visit.act, show = G.view === 'garden' && !K.lapView && typeof A.neighbour === 'function';
   if (!show) { dropVisitor(); return; }
@@ -6891,45 +7237,372 @@ function drawVisitors() {
   else if (VZ.kAct && K.act !== VZ.kAct) { VZ.kAct = null; startAct(); }   // she was taken out of the scene: wait for her, then again
 }
 function dropVisitor() {
-  VZ.gen++; clearTimeout(VZ.t); releaseKoxa();
+  VZ.gen++; clearTimeout(VZ.t); releaseKoxa(); unhold(VZ);
   if (VZ.m) { VZ.m.gen++; clearTimeout(VZ.m.t); VZ.m.el.remove(); }
   VZ.m = null; VZ.leaving = false; VZ.key = ''; VZ.kind = '';
 }
-// the visit is over: over the fence (or out through the gate in a hurry when it got scared), then gone
+// the visit is over: over the fence (or out through the gate in a hurry when it got scared, or in through the door
+// with the player for the night), then gone
 function leaveVisitor(reason) {
   const m = VZ.m; if (!m || VZ.leaving) return;
-  VZ.gen++; clearTimeout(VZ.t); releaseKoxa(); VZ.leaving = true; VZ.key = ''; VZ.kind = ''; m.mood = 'calm';
-  const fn = spot('garden', 'fence'), gt = spot('garden', 'gate');
+  VZ.gen++; clearTimeout(VZ.t); releaseKoxa(); unhold(VZ); VZ.leaving = true; VZ.key = ''; VZ.kind = ''; m.mood = reason === 'inside' ? 'happy' : 'calm';
+  const fn = spot('garden', 'fence'), gt = spot('garden', 'gate'), dr = spot('garden', 'backDoor') || spot('garden', 'door');
   const gone = () => { m.el.classList.add('away'); setTimeout(() => { m.gen++; m.el.remove(); if (VZ.m === m) { VZ.m = null; VZ.leaving = false; } }, 700); };
-  if (reason === 'shy' && gt) mvPath(m, route({ pose: 'walk', fx: gt.x, fy: gt.y + 14 }), 'run', gone);
+  if (reason === 'inside' && dr) mvPath(m, route({ pose: 'walk', fx: dr.x, fy: Math.max(dr.y + 8, 430) }), 'walk', gone);
+  else if (reason === 'shy' && gt) mvPath(m, route({ pose: 'walk', fx: gt.x, fy: gt.y + 14 }), 'run', gone);
   else if (fn) mvPath(m, route({ pose: 'onFence', fx: fn.x, fy: fn.y, sc: 0.72, flip: false }), 'walk', () => setTimeout(gone, 500));
   else gone();
 }
-// a tap on the visitor: on its drawing (Koxa's body regions fit every neighbour), the one in front wins
+// the visitors' movers shown now (the garden visitor, the guest in the living room)
+const visMovers = () => [VZ.leaving ? null : VZ.m, GZ.leaving ? null : GZ.m].filter(Boolean);
+const moverOf = id => visMovers().find(m => m.id === id) || null;
+// a tap on a visitor: on its drawing (Koxa's body regions fit every neighbour), the one in front wins; returns its mover
 function visitorAt(cx, cy) {
-  const m = VZ.m; if (!m || VZ.leaving) return false;
-  const r = m.art.getBoundingClientRect(); if (!r.width) return false;
-  let u = (cx - r.left) / r.width * 200; const w = (cy - r.top) / r.height * 200;
-  if (m.flip) u = 200 - u;
-  if (u < -10 || u > 210 || w < -10 || w > 210) return false;
-  if (!m.regs) { try { m.regs = A.regions(m.pose, m.opts || {}).map(g => new Path2D(g.path)); } catch (e) { m.regs = []; } }
-  const inV = m.regs.some(p => hctx.isPointInPath(p, u, w, 'nonzero')), inK = !!regionAtClient(cx, cy);
-  if (inV && inK) return m.el.style.zIndex === '21';
-  if (inV) return true;
-  return !inK && u > 40 && u < 160 && w > 60 && w < 196;   // near enough (a small cat on the fence)
+  const h = catHit(cx, cy); if (h) return h.m;
+  for (const m of visMovers()) { const q = picUV(moverPic(m), cx, cy); if (q && q.u > 40 && q.u < 160 && q.v > 60 && q.v < 196) return m; }   // near enough (a small cat on the fence)
+  return null;
 }
 const heartsOf = n => '♥'.repeat(n) + '♡'.repeat(Math.max(0, 5 - n));
 // "S Koxou" ("Se Sašou" before s, z, š, ž) where the instrumental is safe (names ending in -a), else just her name
 const withHer = n => (/[^aeiouyáéíóúůý]a$/i.test(n) ? (/^[szšž]/i.test(n) ? 'Se ' : 'S ') + n.slice(0, -1) + 'ou' : n);   // se Sašou, s Koxou
+const likesLine = id => { const L = typeof E.visitorLikes === 'function' && E.visitorLikes(id); return L && L.text ? `<p class="vlike">${esc(L.text)}</p>` : ''; };
 function visitorMenu() {
   const v = visitorNow(); if (!v) return;
   const R = (G.st.visitors || {})[v.id] || { friend: 0 }, hearts = Math.floor(R.friend || 0), pal = Math.floor(typeof R.pal === 'number' ? R.pal : R.friend || 0);
-  const note = pal < 5 ? `<p>Když u toho bude ${esc(nm())}, pomůžeš jim, aby se ${v.fem ? 'skamarádily' : 'skamarádili'}.</p>` : '';
-  showModal(`<h2>${esc(v.name)}</h2><p class="hearts"><small>Ty</small> ${heartsOf(hearts)}</p><p class="hearts"><small>${esc(withHer(nm()))}</small> ${heartsOf(pal)}</p><p>Kočka od sousedů.</p>${note}`, [
-    { text: 'Pohladit', fn: () => doAct('strokeVisitor', { id: v.id }) },
+  const note = pal < 5 ? `<p class="vlike">Když u toho bude ${esc(nm())}, pomůžeš jim, aby se ${v.fem ? 'skamarádily' : 'skamarádili'}.</p>` : '';
+  const inv = typeof E.canInvite === 'function' && can('invite') ? E.canInvite(G.st, v.id, now()) : null;
+  showModal(`<h2>${esc(v.name)}</h2><p class="hearts"><small>Ty</small> ${heartsOf(hearts)}</p><p class="hearts"><small>${esc(withHer(nm()))}</small> ${heartsOf(pal)}</p>${likesLine(v.id)}${note}`, [
+    { text: 'Pohladit', fn: () => { const m = moverOf(v.id); if (m) holdVisitor(m, 3000); doAct('strokeVisitor', { id: v.id }); } },
     { text: 'Nakrmit', cls: 'alt', fn: () => doAct('feedVisitor', { id: v.id }) },
+    inv && { text: 'Pozvat na noc', cls: 'alt', off: !inv.ok, note: inv.ok ? '' : inv.reason, fn: () => doAct('invite', { id: v.id }) },
     { text: 'Nechat být', cls: 'alt' },
-  ]);
+  ].filter(Boolean), 'vmenu');
+}
+// a tap on the guest in the living room: only stroking until the morning
+function guestMenu() {
+  const g = G.st.guest, V = g && E.VISITORS[g.id]; if (!V) return;
+  showModal(`<h2>${esc(V.name)}</h2><p>Je u nás na noc. Ráno v 7 půjde domů.</p>${likesLine(g.id)}`, [
+    { text: 'Pohladit', fn: () => { const m = moverOf(g.id); if (m) holdVisitor(m, 3000); doAct('strokeVisitor', { id: g.id }); } },
+    { text: 'Nechat být', cls: 'alt' },
+  ], 'vmenu');
+}
+
+/* Phase B: the player and the visitor (SPEC §8b) */
+// The player is busy with a visitor (stroking, a treat, the feather): it stays where it is, the scene's timers stop and it
+// starts again a moment after the last touch (like Koxa's stay()). Z = the stage (VZ in the garden, GZ for the guest).
+const MOVING = /^(walk|trot|run|creep|stalk|pounce|sniff|swipe|arch|stretch|jumpUp|jumpDown)$/;
+const stageOf = m => (m && m === GZ.m ? GZ : VZ);
+function unhold(Z) { Z.holdUntil = 0; clearTimeout(Z.holdT); }
+function holdVisitor(m, ms) {
+  const Z = stageOf(m), t = perf(), was = Z.holdUntil > t;
+  Z.holdUntil = Math.max(Z.holdUntil || 0, t + ms);
+  if (!was) {
+    Z.gen++; clearTimeout(Z.t);
+    if (m.walking && !/^(jump|climb)/.test(m.pose)) { const c = mvCur(m); m.gen++; clearTimeout(m.t); m.walking = false; mvSet(m, c, 0); }
+    if (!m.walking && MOVING.test(m.pose)) mvDraw(m, 'sit', vOpts(m), m.flip);
+  }
+  clearTimeout(Z.holdT);
+  Z.holdT = setTimeout(function check() {
+    const left = Z.holdUntil - perf();
+    if (left > 0) { Z.holdT = setTimeout(check, left + 20); return; }
+    Z.holdUntil = 0;
+    if (Z.m === m && !Z.leaving) { if (Z === GZ) guestScene(); else startAct(); }
+  }, ms + 20);
+}
+// the visitor's head in scene px (for hearts and the like)
+function vHeadPx(m) {
+  const c = m.art.getBoundingClientRect(), s = sceneEl.getBoundingClientRect(), hd = HEAD[m.pose] || [100, 64], z = nbSize(m.id);
+  let u = 100 + (hd[0] - 100) * z; const v = 186 + (hd[1] - 30 - 186) * z;
+  if (m.flip) u = 200 - u;
+  return { x: c.left - s.left + u / 200 * c.width, y: c.top - s.top + v / 200 * c.height };
+}
+const vPop = (m, name, dx = 0) => popAt(vHeadPx(m), name, dx);
+function vPurrSound(ms) {
+  I.sound.purr(true, 0.5);
+  clearTimeout(purrOff); purrOff = setTimeout(() => { I.sound.purr(false); redraw(); }, Math.max(ms, K.purrUntil - perf()));
+}
+const vAt = m => anchorOf(mvCur(m));
+const raisedM = m => feetY(mvCur(m)) < RAISED_Y - 1;
+// a few steps away from the player (a shy cat, a stroke it did not like); not off a raised place
+function stepAway(m, dist = 80) {
+  if (raisedM(m)) return;
+  const p = vAt(m), dir = p.x < 200 ? -1 : 1, x = clamp(p.x + dir * dist, 50, 350);
+  const d = inRoom(m.id, { pose: 'sit', fx: x, fy: clamp(p.y - 10, 445, 590), flip: dir > 0 });
+  holdVisitor(m, 5000);
+  mvPath(m, m === VZ.m ? route(d) : [d], 'trot');
+}
+function strokeVisitorBy(vr, along, speed) {
+  const m = moverOf(vr.id); if (!m) return;
+  holdVisitor(m, 4000);
+  doAct('strokeVisitor', { id: vr.id, region: vr.region, along, speed });
+}
+const VNAME = id => E.VISITORS[id] || { name: 'Kočka', fem: true };
+const fem = (V, f, m) => (V.fem ? f : m);
+// a visitor's name in the accusative: Lízu, Šedivku, Mourka, Fouska, Bivoje, Ramba
+const vAcc = V => (V.fem ? V.name.replace(/a$/, 'u') : V.name.replace(/ek$/, 'ka').replace(/o$/, 'a').replace(/j$/, 'je'));
+// a gentle cat (Líza): where and how, from its likes ("Lízu hlaď jen na hlavě a na bradě, pomalu.")
+function gentleTip(id) {
+  const L = typeof E.visitorLikes === 'function' && E.visitorLikes(id); if (!L || !L.gentle) return '';
+  const w = L.likes.map(r => (E.REGIONS[r] ? E.REGIONS[r].loc : '')).filter(Boolean);
+  return w.length ? `${vAcc(VNAME(id))} hlaď jen ${w.length > 1 ? w.slice(0, -1).join(', ') + ' a ' + w[w.length - 1] : w[0]}, pomalu.` : '';
+}
+// what the engine said about the visitor (handle() calls this for the Phase B events)
+function visitorEvent(ev) {
+  const n = nm(), V = VNAME(ev.id), m = moverOf(ev.id);
+  switch (ev.type) {
+    case 'visitorPurr':
+      if (m) {
+        holdVisitor(m, 3000); vFace(m, { purring: true, mood: 'happy' }, 1800); vPurrSound(1600);
+        if (perf() - (m.heartAt || 0) > 1300) { m.heartAt = perf(); vPop(m, 'heart', (Math.random() - .5) * 24); buzz('purr'); }
+      }
+      if (ev.region) tip('vpurr', ev.liked ? `${V.name} přede – tohle ${fem(V, 'má moc ráda', 'má moc rád')}.` : `${V.name} přede.`, 7000);
+      else toast(`${V.name} přede.`, 1500);
+      break;
+    case 'visitorDislike':
+      if (m) { vFace(m, { ears: 'back', mood: 'grumpy' }, 1600); if (ev.away) stepAway(m); }
+      if (perf() - (tipAt.vmeow || 0) > 3000) { tipAt.vmeow = perf(); I.sound.meow('grumpy'); }
+      tip('vdislike', ev.why === 'against' ? `Hlaď ${fem(V, 'ji', 'ho')} po srsti – od hlavy k ocasu.` : gentleTip(ev.id)
+        || (ev.why === 'fast' ? `Pomaleji a jemně – ${V.name} se jinak bojí.` : `Tady to ${V.name} ${fem(V, 'nemá ráda', 'nemá rád')}.`), 5000);
+      break;
+    case 'visitorHiss':
+      say('hiss'); buzz('bite');
+      if (m) {
+        holdVisitor(m, 2500); vFace(m, { ears: 'back', mood: 'grumpy', openMouth: true }, 1300); vPop(m, 'bang');
+        if (!raisedM(m) && !m.walking) { mvDraw(m, 'swipe', vOpts(m), m.flip); setTimeout(() => { if (m.pose === 'swipe' && !m.walking) mvDraw(m, 'sit', vOpts(m), m.flip); }, 1000); }
+      }
+      tip('vhiss', ev.region ? `${V.name} se po tobě ${fem(V, 'ohnala', 'ohnal')}! Tady ještě ne.` : `${V.name} ${fem(V, 'prskla', 'prskl')}! Ještě tě nezná.`, 3000);
+      break;
+    case 'visitorTreat':
+      say('nom');
+      if (m) {
+        holdVisitor(m, 4500);
+        if (!raisedM(m)) { mvDraw(m, 'eat', vOpts(m, { noProp: true, mood: 'happy' }), m.flip); setTimeout(() => { if (m.pose === 'eat' && !m.walking) mvDraw(m, 'sit', vOpts(m, { mood: 'happy' }), m.flip); }, 2600); }
+        vPop(m, 'heart');
+      }
+      toast(`${V.name} si ${fem(V, 'pochutnala', 'pochutnal')} na pamlsku.`, 2000);
+      break;
+    case 'visitorPlay': playShow(ev, V); break;
+    case 'jealous': jealousShow(ev.id); notify(`${n} žárlí – pohlaď i ji.`, 3200); break;
+    case 'jealousOk': endJealous(); if (!K.gone) { purr(2200, 1); popFx('heart', -12); setTimeout(() => popFx('heart', 12), 300); say('trill'); } toast(`${n} je zase spokojená.`, 2000); break;
+    case 'jealousEnd':
+      endJealous();
+      if (!K.gone && G.her === G.view) { moodFor('earsUntil', 5000); const k = kPos(); busy('sulk', { room: G.her, pose: 'sulk', fx: clamp(k.x, 60, 340), fy: clamp(k.y, 450, 590), o: { mood: 'grumpy' } }, 3500); say('meow'); }
+      notify(`${n} se trochu urazila – nikdo ji nepohladil.`, 3200);
+      break;
+    case 'guestIn': notify(`${V.name} u nás přespí v obýváku. Ráno půjde domů.`, 3800, true); break;
+    case 'guestSleep': notify(`${n} a ${V.name} spí spolu.`, 3200, true); if (GZ.m) guestScene(); break;
+    case 'guestOut': notify(`${V.name} ${fem(V, 'odešla', 'odešel')} domů.`, 3200, true); leaveGuest(); break;
+  }
+}
+
+// A treat from the hand: dropped on the visitor. A shy cat with few hearts comes only to a hand that holds still near it
+// for a moment (it walks up slowly); anything else makes it back off.
+const shyNow = m => { const L = typeof E.visitorLikes === 'function' && E.visitorLikes(m.id), R = (G.st.visitors || {})[m.id]; return !!(L && L.gentle && m === VZ.m && (!R || R.friend < 2)); };
+function treatToVisitor() {
+  const m = visMovers()[0]; if (!m) return;
+  if (shyNow(m) && G.st.pamlsky > 0 && !(G.st.visit && G.st.visit.treat)) {
+    const V = VNAME(m.id); stepAway(m); vFace(m, { ears: 'back' }, 1400);
+    tip('shyTreat', `${V.name} se ${fem(V, 'lekla', 'lekl')}. Podrž pamlsek klidně u ${fem(V, 'ní', 'něj')} a chvilku počkej.`, 4000);
+    return;
+  }
+  holdVisitor(m, 3000);
+  doAct('treatVisitor', { id: m.id });
+}
+const SHY = { near: 1.2, still: 14, come: 450, eat: 1500 };   // cat widths; px the finger may move; ms before she comes and eats
+function shyTreatMove(w) {
+  const m = VZ.m; if (!m || VZ.leaving || G.view !== 'garden' || treatKind === 'stick' || !shyNow(m) || (G.st.visit && G.st.visit.treat) || G.st.pamlsky < 1) return;
+  if (overKoxa(w)) { shyQuiet(m); return; }   // the hand is over Koxa: the treat is hers, the shy one does not come
+  const c = m.art.getBoundingClientRect(), mid = { x: (c.left + c.right) / 2, y: c.top + c.height * .6 }, t = perf();
+  if (Math.hypot(w.cx - mid.x, w.cy - mid.y) > c.width * SHY.near * nbSize(m.id)) { if (drag.shy && !drag.shy.done) shyCancel(); return; }
+  const S = drag.shy || (drag.shy = { id: m.id, at: null, t: 0, coming: false, done: false, scared: false });
+  if (S.done) return;
+  const fast = drag.last && Math.hypot(w.cx - drag.last.cx, w.cy - drag.last.cy) > 40;
+  if (fast && !S.scared) { S.scared = true; shyCancel(true); return; }
+  if (!S.at || Math.hypot(w.cx - S.at.cx, w.cy - S.at.cy) > SHY.still) { if (S.coming) shyStop(m); S.at = w; S.t = t; S.coming = false; }
+  holdVisitor(m, 3000);
+}
+// every frame while a treat is held near a shy visitor (the finger may not move at all, so no events come)
+function stepShy() {
+  const S = drag && drag.shy; if (!S || S.done || !S.at) return;
+  const m = VZ.m; if (!m || m.id !== S.id || VZ.leaving) { drag.shy = null; return; }
+  if (overKoxa(S.at)) { shyQuiet(m); return; }   // Koxa came under the still hand
+  const el = perf() - S.t;
+  holdVisitor(m, 2000);
+  if (!S.coming && el > SHY.come) {   // she comes, slowly, until her head is under the hand
+    S.coming = true;
+    const p = vAt(m), x = S.at.r.x, dir = x > p.x ? 1 : -1, u = unit(p.y);
+    const d = inRoom(m.id, { pose: 'sit', fx: clamp(x - dir * 34 * u, 50, 350), fy: clamp(Math.max(S.at.r.y + 120, p.y), 445, 590), flip: dir > 0 });
+    if (!raisedM(m) && Math.abs(d.fx - p.x) > 8) { S.walkMs = mvPath(m, route(d), 'creep'); S.arrive = perf() + S.walkMs; } else S.arrive = perf();
+    vFace(m, { mood: 'calm' }, 400);
+  }
+  if (S.coming && el > SHY.eat && perf() >= (S.arrive || 0)) {
+    S.done = true; endDrag();
+    holdVisitor(m, 3000);
+    doAct('treatVisitor', { id: m.id });
+  }
+}
+// the hand (a where() point) is over Koxa, in front of the visitor
+function overKoxa(w) { const h = catHit(w.cx, w.cy); return !!(h && !h.m); }
+// the approach ends without a fright (the hand went over Koxa): she just stops
+function shyQuiet(m) { if (!drag.shy || drag.shy.done) return; drag.shy = null; shyStop(m); }
+// the hand moved away (or the treat was dropped) before she took it: she stops, and a scared one backs off
+function shyStop(m) {
+  if (!m.walking) return;
+  holdVisitor(m, 3000);
+  m.gen++; clearTimeout(m.t); m.walking = false; mvSet(m, mvCur(m), 0); mvDraw(m, 'sit', vOpts(m), m.flip);
+}
+function shyCancel(scared) {
+  const S = drag && drag.shy, m = VZ.m; if (!S) return;
+  drag.shy = null;
+  if (!m || m.id !== S.id) return;
+  shyStop(m);
+  if (scared || S.coming) {
+    const V = VNAME(m.id); stepAway(m); vFace(m, { ears: 'back' }, 1400);
+    tip('shyTreat', `${V.name} se bojí. Podrž pamlsek klidně u ${fem(V, 'ní', 'něj')} a chvilku počkej.`, 4000);
+  }
+}
+
+// The feather for two: waved near the visitor, it crouches; when the waving goes on, both cats (Koxa too when she is
+// free in the garden) go for it and the one nearer the feather catches it. Returns true when the visitor took the
+// feather (Koxa's own feather play is then skipped, so nothing counts twice).
+function featherForTwoMove(w, dt) {
+  const m = VZ.m;
+  if (!m || VZ.leaving || G.view !== 'garden' || K.lapView || busyMode()) return false;
+  const vis = G.st.visit; if (!vis || vis.id !== m.id) return false;
+  if (raisedM(m)) { drag.nearV = 0; return false; }   // up on the fence, a branch or the bench it cannot catch it: Koxa may play alone
+  if (vis.play && now() - vis.play < 60000) return false;   // it rests a minute: Koxa may still play alone
+  const c = m.art.getBoundingClientRect(), z = nbSize(m.id), mid = { x: (c.left + c.right) / 2, y: c.bottom - c.height * .35 * z };
+  if (Math.hypot(w.cx - mid.x, w.cy - mid.y) > c.width * .85 * z) { drag.nearV = 0; return false; }
+  drag.nearV = (drag.nearV || 0) + dt;
+  holdVisitor(m, 3000);
+  if (!m.walking) mvDraw(m, 'stalk', vOpts(m, { mood: 'happy' }), w.r.x > vAt(m).x);
+  if (drag.nearV > 1100 && perf() - lastPlay > 2500) {
+    drag.nearV = 0; lastPlay = perf();
+    const h = E.health(G.st), f = { fx: clamp(w.r.x, 40, 360), fy: clamp(w.r.y + 60, 450, 590) };
+    const kFree = G.her === 'garden' && h.garden && !h.tree && !h.asleep && !h.out && !K.carry && !K.gone && !K.chase && !(K.act && K.act.kind !== 'visit');
+    const dk = kFree ? Math.hypot(kPos().x - f.fx, kPos().y - f.fy) : Infinity, dv = Math.hypot(vAt(m).x - f.fx, vAt(m).y - f.fy);
+    VZ.feather = f;
+    doAct('playVisitor', { id: m.id, caught: dk < dv ? 'koxa' : 'visitor' });
+  }
+  return true;
+}
+function playShow(ev, V) {
+  const m = VZ.m, f = VZ.feather; VZ.feather = null;
+  if (!m || m.id !== ev.id || !f) return;
+  const kc = ev.caught === 'koxa', short = 72 * unit(f.fy), v = vAt(m), vs = Math.sign(v.x - f.fx) || 1;
+  holdVisitor(m, 4000);
+  const vd = inRoom(m.id, { pose: 'pounce', fx: clamp(f.fx + (kc ? vs * short : 0), 40, 360), fy: f.fy, ax: 36, flip: vs < 0, o: { mood: 'happy' } });
+  if (!raisedM(m)) mvPath(m, route(vd), 'trot', () => setTimeout(() => { if (m.pose === 'pounce' && !m.walking) mvDraw(m, 'sit', vOpts(m, { mood: 'happy' }), m.flip); }, 1200));
+  if (ev.koxa && !K.gone) {
+    freeKoxa();
+    const k = kPos(), ks = Math.sign(k.x - f.fx) || -vs;
+    busy('play', { room: 'garden', pose: 'pounce', fx: clamp(f.fx + (kc ? 0 : ks * short), 40, 360), fy: f.fy, ax: 36, flip: ks < 0, fast: true }, 1300);
+  }
+  say('chirp'); vPop(m, kc ? 'sparkle' : 'heart');
+  toast(ev.koxa ? (kc ? `${nm()} chytila peříčko dřív!` : `${V.name} ${fem(V, 'chytila', 'chytil')} peříčko dřív!`) : `${V.name} ${fem(V, 'chytila', 'chytil')} peříčko!`, 1800);
+}
+
+// Jealousy: she comes between the player and the visitor and rubs against its side (drawn in front of it); then she
+// waits there, looking at the player, until she is stroked (jealousOk) or two minutes pass (jealousEnd)
+const RUB_D = 104;   // art units from a sitting cat (tools/kocka-dev/art.html)
+function jealousShow(id) {
+  const m = VZ.m;
+  if (!m || m.id !== id || VZ.leaving || G.view !== 'garden' || G.her !== 'garden' || K.carry || K.lapView || K.gone || busyMode()) return;
+  freeKoxa();
+  holdVisitor(m, 7000);
+  if (!m.walking && MOVING.test(m.pose)) mvDraw(m, 'sit', vOpts(m), m.flip);
+  const v = vAt(m), after = (fx, fy) => { K.place = { p: { room: 'garden', pose: 'sit', fx: clamp(fx, 60, 340), fy: clamp(fy, 470, 590), o: { mood: 'grumpy' } }, until: perf() + 120000 }; K.jealousPlace = K.place; };
+  if (raisedM(m) || !hasPose('rub')) { after(v.x, 570); K.idle = null; update(); return; }
+  const u = unit(v.y);
+  let d = { room: 'garden', pose: 'rub', fx: v.x + RUB_D * u, fy: v.y + 6, flip: false, o: { mood: 'grumpy' }, fast: true };
+  if (!fitsRoom(null, d)) d = Object.assign(d, { fx: v.x - RUB_D * u, flip: true });
+  K.place = null;
+  busy('jealous', d, 4200, () => { if (G.st.jealous) { after(d.fx, d.fy + 40); update(); } });
+}
+function endJealous() {
+  if (K.act && K.act.kind === 'jealous') K.act = null;
+  if (K.jealousPlace && K.place === K.jealousPlace) { K.place = null; K.idle = null; }
+  K.jealousPlace = null;
+  if (!K.lapView) update();
+}
+
+// The guest for the night in the living room (st.guest): a mover like the garden visitor's. It sits, washes and walks a
+// little in the evening, sleeps at night (the křeslo, or the rug when the player sits there), and lies down next to
+// Koxa when she sleeps in the obývák and they are good friends. It goes home at 7:00 (out to the předsíň).
+const GZ = { m: null, gen: 0, t: 0, s: 0, key: '', front: '', holdUntil: 0, holdT: 0, leaving: false };
+const LIVING_SPOTS = [[96, 552], [176, 568], [204, 530], [136, 522], [64, 568]];   // the rug, clear of the pelíšek
+function glater(fn, ms) { const g = GZ.gen; clearTimeout(GZ.t); GZ.t = setTimeout(() => { if (g === GZ.gen && GZ.m && !GZ.leaving) fn(); }, Math.max(0, ms)); }
+function guestKind() {
+  const g = G.st.guest, h = E.health(G.st), R = (G.st.visitors || {})[g.id], pal = R ? (typeof R.pal === 'number' ? R.pal : R.friend || 0) : 0;
+  if (h.asleep && !h.out && G.her === 'living' && !K.walking && (g.slept || pal >= 4)) return 'together';
+  const hr = new Date(now()).getHours();
+  return E.dayPhase(now()) === 'night' || hr >= 22 || hr < 7 ? 'sleep' : 'eve';
+}
+function guestKey() { const k = guestKind(); return k === 'together' ? k + Math.round(kPos().x / 25) + Math.round(kPos().y / 25) : k + (G.seat || ''); }
+function drawGuest() {
+  if (!G) return;
+  const g = G.st.guest, show = G.view === 'living' && !K.lapView && typeof A.neighbour === 'function';
+  if (!show) { dropGuest(); return; }
+  if (!g || !E.VISITORS[g.id]) { if (GZ.m && !GZ.leaving) leaveGuest(); return; }
+  if (GZ.m && (GZ.m.id !== g.id || GZ.leaving)) dropGuest();
+  if (!GZ.m) { GZ.m = mover(g.id); GZ.m.mood = 'calm'; GZ.s = V.s; GZ.key = guestKey(); guestScene(true); return; }
+  if (GZ.s !== V.s) { GZ.s = V.s; mvSet(GZ.m, GZ.m.b, 0); }
+  const key = guestKey();
+  if (key !== GZ.key && !(GZ.holdUntil > perf())) { GZ.key = key; guestScene(); }
+}
+function guestScene(instant) {
+  const m = GZ.m; if (!m || GZ.leaving || !G.st.guest) return;
+  if (GZ.holdUntil > perf()) return;
+  GZ.gen++; clearTimeout(GZ.t); GZ.front = '';
+  const kind = guestKind(), z = { asleep: true };
+  const go = (list, gait) => { list = list.map(d => inRoom(m.id, d)); if (instant) { mvPlace(m, list[list.length - 1]); return 0; } return mvPath(m, list, gait || 'walk'); };
+  GZ.key = guestKey();
+  if (kind === 'together') {   // side by side with her (the distance of two lying cats)
+    const k = kPos(), gap = PAIR.sideLie * unit(k.y), side = s => ({ pose: 'sideLie', fx: k.x + s * gap, fy: clamp(k.y, 470, 590), flip: s < 0, o: z });
+    const at = fitsRoom(m.id, side(-1)) ? side(-1) : side(1);
+    m.mood = 'happy'; GZ.front = 'v';
+    const loop = j => { mvDraw(m, j % 2 ? 'sleep' : 'sideLie', vOpts(m, z), at.flip); glater(() => loop(j + 1), rnd(25000, 40000)); };
+    glater(() => loop(0), go([at]));
+    return;
+  }
+  const ch = spot('living', 'chair'), k = kPos(), chairFree = ch && G.seat !== 'chair' && Math.hypot(k.x - ch.x, k.y - ch.y) > 70;
+  if (kind === 'sleep') {
+    m.mood = 'calm';
+    const far = LIVING_SPOTS.filter(p => Math.hypot(p[0] - k.x, p[1] - k.y) > 110);
+    const p = (far.length ? far : LIVING_SPOTS)[0];
+    const at = chairFree ? { pose: 'sleep', fx: ch.x, fy: ch.y, flip: false, o: z } : { pose: 'sleep', fx: p[0], fy: p[1], flip: p[0] > 200, o: z };
+    const way = chairFree && !instant && !raisedM(m) ? [{ pose: 'sit', fx: ch.x - 50, fy: 456 }, at] : [at];
+    const loop = j => { mvDraw(m, j % 3 === 2 ? 'loaf' : 'sleep', vOpts(m, z), at.flip); glater(() => loop(j + 1), rnd(30000, 50000)); };
+    glater(() => loop(0), go(way));
+    return;
+  }
+  // the evening: a few calm things, now and then somewhere else (never right next to Koxa)
+  m.mood = 'calm';
+  const step = i => {
+    const kp = kPos(), from = vAt(m);
+    const ok = LIVING_SPOTS.filter(p => Math.hypot(p[0] - kp.x, p[1] - kp.y) > 100 && Math.hypot(p[0] - from.x, p[1] - from.y) > 40);
+    const r = Math.random();
+    let d;
+    if (i && chairFree && r < 0.15) d = { pose: 'loaf', fx: ch.x, fy: ch.y, flip: false };
+    else { const p = pick(ok.length ? ok : LIVING_SPOTS), q = Math.random(); d = { pose: q < 0.45 ? 'sit' : q < 0.75 ? 'loaf' : 'groom', fx: p[0], fy: p[1], flip: p[0] < from.x ? false : p[0] > from.x }; }
+    const way = raisedM(m) && d.fy >= RAISED_Y ? [{ pose: 'sit', fx: from.x - 40, fy: 458 }, d] : !raisedM(m) && d.fy < RAISED_Y ? [{ pose: 'sit', fx: d.fx - 50, fy: 456 }, d] : [d];
+    const t = go(i ? way : [d]);
+    instant = false;
+    glater(() => step(i + 1), t + rnd(9000, 18000));
+  };
+  step(0);
+}
+function dropGuest() {
+  GZ.gen++; clearTimeout(GZ.t); unhold(GZ);
+  if (GZ.m) { GZ.m.gen++; clearTimeout(GZ.m.t); GZ.m.el.remove(); }
+  GZ.m = null; GZ.leaving = false; GZ.key = '';
+}
+// the morning: out of the obývák toward the předsíň, then gone
+function leaveGuest() {
+  const m = GZ.m; if (!m || GZ.leaving) return;
+  GZ.gen++; clearTimeout(GZ.t); unhold(GZ); GZ.leaving = true; m.mood = 'calm';
+  const ex = exitOf('living', 'hall'), way = raisedM(m) ? [{ pose: 'sit', fx: vAt(m).x - 40, fy: 458 }] : [];
+  mvPath(m, way.concat([{ pose: 'walk', fx: ex.fx, fy: ex.fy }]), 'walk', () => { m.gen++; m.el.remove(); if (GZ.m === m) { GZ.m = null; GZ.leaving = false; } });
 }
 // the toast when they start doing something together (only seen in the garden)
 const JOINT_TEXT = {
@@ -6951,19 +7624,41 @@ $('#btnCam').innerHTML = icon('camera') || '<svg viewBox="0 0 24 24" fill="none"
 $('#btnCam').addEventListener('click', () => {
   I.sound.unlock();
   const h = E.health(G.st);
-  if (h.out) { toast(`${nm()} je venku – není koho fotit.`); return; }
-  if (!K.lapView && (G.her !== G.view || K.gone)) { toast(`${nm()} tu není – je ${PL[G.her] ? PL[G.her].in : 'jinde'}.`); return; }
+  // who is in the picture: Koxa when she is here, and the visitor in the garden or the guest in the obývák
+  const vm = K.lapView ? null : visMovers().find(m => (m === VZ.m && G.view === 'garden') || (m === GZ.m && G.view === 'living')) || null;
+  const kIn = !h.out && (K.lapView || (G.her === G.view && !K.gone));
+  if (!kIn && !vm) {
+    if (h.out) toast(`${nm()} je venku – není koho fotit.`); else toast(`${nm()} tu není – je ${PL[G.her] ? PL[G.her].in : 'jinde'}.`);
+    return;
+  }
   const f = $('#flash'); f.hidden = false; f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); setTimeout(() => { f.hidden = true; }, 500);
   buzz(15);
   const pz = K.pose && !/^(walk|trot|jump|carried|wriggle)/.test(K.pose) ? K.pose : 'sit';
-  doAct('photo', { pose: pz, room: K.lapView ? 'lap' : G.view, mood: E.mood(G.st), phase: E.dayPhase(now()), season: E.season(now()) });
+  const a = { pose: pz, room: K.lapView ? 'lap' : G.view, mood: E.mood(G.st), phase: E.dayPhase(now()), season: E.season(now()) };
+  if (vm) {
+    // the pair is centred in the photo: the visitor half their distance from the middle, Koxa on the other side (400 − vx)
+    const p = vAt(vm);
+    a.vpose = /^(walk|trot|run|creep|jump|climb|onFence|onBranch|stalk|pounce|swipe)/.test(vm.pose) ? 'sit' : vm.pose;
+    a.vx = Math.round(kIn ? 200 + clamp((p.x - kPos().x) / 2, -110, 110) : clamp(p.x, 40, 360));
+    if (vm.flip) a.vflip = true;
+  }
+  if (!kIn) a.nokoxa = true;
+  doAct('photo', a);
 });
 // a photo redrawn from its record: the place, her pose and mood, in the photo frame
 function photoHTML(p) {
   const room = p.room === 'lap' ? (typeof A.lap === 'function' ? A.lap({ phase: p.phase, season: p.season, place: 'chair' }) : '') : A.room({ id: p.room === 'walk' ? 'garden' : p.room, phase: p.phase, season: p.season, sunX: 0.5 });
-  const cat = A.cat(p.room === 'lap' && hasPose('lapLoaf') && !/^lap/.test(p.pose) ? 'lapLoaf' : p.pose, { mood: p.mood });
-  const vis = p.visitor && typeof A.neighbour === 'function' ? `<div class="ph-vis">${A.neighbour(p.visitor, 'sit', { mood: 'calm' })}</div>` : '';
-  return `<div class="ph-in">${room}${vis}<div class="ph-cat${p.room === 'lap' ? ' lap' : ''}">${cat}</div></div>${typeof A.photoFrame === 'function' ? A.photoFrame() : ''}`;
+  const pair = typeof p.vx === 'number' && p.visitor && p.room !== 'lap';   // Phase B: Koxa opposite the visitor
+  const cat = p.nokoxa ? '' : `<div class="ph-cat${p.room === 'lap' ? ' lap' : ''}"${pair ? ` style="left:${((400 - p.vx) / 4 - 32).toFixed(1)}%"` : ''}>${A.cat(p.room === 'lap' && hasPose('lapLoaf') && !/^lap/.test(p.pose) ? 'lapLoaf' : p.pose, { mood: p.mood })}</div>`;
+  let vis = '';
+  if (p.visitor && typeof A.neighbour === 'function') {
+    // where it stood (Phase B photos: vpose, vx, vflip), else the older place on the right
+    if (typeof p.vx === 'number') {
+      const ps = p.vpose && hasPose(p.vpose) ? p.vpose : 'sit';
+      vis = `<div class="ph-v2" style="left:${(p.vx / 4 - 32).toFixed(1)}%"><div${p.vflip ? ' class="flip"' : ''}>${A.neighbour(p.visitor, ps, { mood: 'calm', asleep: /^(sleep|sideLie)$/.test(ps) || undefined })}</div></div>`;
+    } else vis = `<div class="ph-vis">${A.neighbour(p.visitor, 'sit', { mood: 'calm' })}</div>`;
+  }
+  return `<div class="ph-in">${room}${vis}${cat}</div>${typeof A.photoFrame === 'function' ? A.photoFrame() : ''}`;
 }
 function albumHTML(st) {
   const al = E.album ? E.album(st) : { photos: [], postcards: [], visitors: [] };
@@ -7195,6 +7890,13 @@ const arrow = (x1, y1, x2, y2, c = '#2a8a3a') => { const a = Math.atan2(y2 - y1,
 const finger = (x, y) => `<circle cx="${x}" cy="${y}" r="13" fill="#fff" fill-opacity=".75" stroke="#7a4520" stroke-width="4"/>`;
 const ov = s => `<svg class="ov" viewBox="0 0 200 200">${s}</svg>`;
 const hrow = (pic, title, text) => `<div class="hrow"><div class="hpic${pic.two ? ' two' : ''}">${pic.s || pic}</div><p><b>${title}</b>${text}</p></div>`;
+// the stroking tips of the cats already met (help)
+function metLikes() {
+  if (typeof E.visitorLikes !== 'function') return '';
+  const met = Object.keys(E.VISITORS).filter(id => G.st.visitors && G.st.visitors[id] && (G.st.visitors[id].met || G.st.visitors[id].visits));
+  const L = met.map(id => E.visitorLikes(id)).filter(x => x && x.text);
+  return L.length ? `<ul class="vlikes">${L.map(x => `<li>${esc(x.text)}</li>`).join('')}</ul>` : '';
+}
 function renderHelp() {
   const n = esc(nm());
   $('#helpIn').innerHTML = `
@@ -7235,8 +7937,13 @@ function renderHelp() {
       ${hrow(A.item(artOr('scratcher', 'bed')), 'Zařídit pokoj', `Koupený nábytek přetáhni z lišty do pokoje; postavený můžeš posunout. ${n} ho používá: spí v pelíšku deluxe, leze na kočičí strom, škrábe škrabadlo, sedí v krabici. Kočičí dvířka jsou na dveřích v předsíni.`)}
       ${hrow(A.item(artOr('featherWand', 'feather')), 'Minihry', 'Chyť myšku, Laserová honička, Peříčko a Rybaření (na zahradě u rybníčku). Hra trvá 30 sekund, za body dostaneš pamlsky – nejvýš 30 za den.')}
       ${hrow(A.cat(hasPose('trickPaw') ? 'trickPaw' : 'sit', 'happy'), 'Výcvik', 'Zvol trik a dej gesto: Sedni = přejeď nahoru, Dej pac = ťukni na tlapku, Otoč se = zakruž prstem, Panáček = dvakrát nahoru. Když trik předvede, hned jí dej pamlsek. Pětkrát odměněný trik umí – pak ho můžeš předvést, jednou denně za pamlsek. Těžší triky jsou až od většího přátelství.')}
-      ${hrow(typeof A.neighbour === 'function' ? A.neighbour('mourek', 'sit', { mood: 'calm' }) : '', 'Návštěvy', `Na zahradu chodí kočky od sousedů. Chodí po zahradě, pijí z jezírka, spí na lavičce nebo lezou na strom. Když je ${n} venku s tebou, dělají něco spolu: očichají se, honí se, hravě se pošťuchují, myjí si kožíšky nebo spolu podřimují. Ťukni na návštěvu – pohladíš ji nebo ji nakrmíš. V Deníčku má každá kočka dvoje srdíčka: „Ty“ je vaše kamarádství, „${esc(withHer(nm()))}“ to její. Když návštěvu hladíš nebo krmíš, zatímco je ${n} na zahradě, pomáháš skamarádit se i jim dvěma. Bivoj a Rambo na ni zpočátku prskají – potřebují čas.`)}
-      ${hrow('<svg viewBox="0 0 24 24" fill="none" stroke="#7a4520" stroke-width="2"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.6"/></svg>', 'Fotky', 'Fotoaparátem v rohu pokoje ji vyfotíš. Fotky, pohlednice z toulek a kamarády od sousedů najdeš v Deníčku.')}
+      ${hrow(typeof A.neighbour === 'function' ? A.neighbour('mourek', 'sit', { mood: 'calm' }) : '', 'Návštěvy', `Na zahradu chodí kočky od sousedů. Chodí po zahradě, pijí z jezírka, spí na lavičce nebo lezou na strom. Když je ${n} venku s tebou, dělají něco spolu: očichají se, honí se, hravě se pošťuchují, myjí si kožíšky nebo spolu podřimují. Ťukni na návštěvu – pohladíš ji, nakrmíš nebo ji pozveš na noc. V Deníčku má každá kočka dvoje srdíčka: „Ty“ je vaše kamarádství, „${esc(withHer(nm()))}“ to její. Když návštěvu hladíš nebo krmíš, zatímco je ${n} na zahradě, pomáháš skamarádit se i jim dvěma. Bivoj a Rambo na ni zpočátku prskají – potřebují čas.`)}
+      ${hrow(typeof A.neighbour === 'function' ? A.neighbour('sedivka', 'sit', { mood: 'happy' }) + ov(arrow(96, 92, 140, 128)) : '', 'Hlazení návštěvy', `Návštěvu hladíš prstem jako ${acc(n)}, jen každá kočka má ráda něco jiného – co, se dozvíš, když na ni ťukneš. Moc rychle, proti srsti nebo na místě, kde to nemá ráda, to nepomůže: plachá Líza se lekne a uteče, Rambo se po tobě ožene. Kamarádství od hlazení roste nejvýš jednou za minutu.`)}${metLikes()}
+      ${hrow(A.item('treat'), 'Pamlsek z ruky', 'Přetáhni pamlsek přímo k návštěvě – dostane ho jednou za návštěvu. Plachá kočka si pro něj přijde, jen když ho chvilku držíš klidně kousek od ní.')}
+      ${hrow(A.item('feather'), 'Peříčko pro dva', `Mávej peříčkem u návštěvy. Když je na zahradě i ${n}, skočí po něm obě – chytí ho ta, která je blíž. Pak si chvilku oddechnou.`)}
+      ${hrow(hasPose('rub') ? A.cat('rub', 'grumpy') : A.cat('sulk', 'grumpy'), 'Žárlivost', `Když se věnuješ návštěvě, ${n} někdy žárlí: přijde se mezi vás otírat. Do dvou minut ji pohlaď nebo podrbej, jinak se trochu urazí.`)}
+      ${hrow(typeof A.neighbour === 'function' ? A.neighbour('pacicka', 'sleep', { mood: 'calm', asleep: true }) : '', 'Návštěva na noc', `Nejlepší kamarádku (5 srdíček u „Ty“ a aspoň 3 u „${esc(withHer(nm()))}“) můžeš večer od 18 do 22 hodin pozvat na noc, jednou za den. Přespí v obýváku a ráno v 7 půjde domů. ${n} jde ze zahrady dovnitř s ní. Když jsou opravdu dobré kamarádky, spí ${n} vedle ní.`)}
+      ${hrow('<svg viewBox="0 0 24 24" fill="none" stroke="#7a4520" stroke-width="2"><path d="M3 8h4l2-3h6l2 3h4v11H3z"/><circle cx="12" cy="13" r="3.6"/></svg>', 'Fotky', 'Fotoaparátem v rohu pokoje ji vyfotíš – i s návštěvou, nebo jen návštěvu. Fotky, pohlednice z toulek a kamarády od sousedů najdeš v Deníčku.')}
     </section>
     <section class="card"><h3>Co potřebuje</h3>
       <p class="fnote">Čárky nahoře ukazují, jak na tom je. Klepnutím na obrázek se dozvíš víc.</p>
@@ -7340,7 +8047,8 @@ document.addEventListener('contextmenu', e => e.preventDefault());
 if (/[?&]menu(=|&|$)/.test(location.search)) $('#btnHome').hidden = false;
 
 // For testing: real gestures need real points (client px) on her body, the tray and the room
-function settle() { clearTimeout(walkT); K.walking = false; K.goal = null; K.act = null; if (K.idle) K.idle.until = perf() + 60000; update(true); for (let i = 0; i < 4 && G.her !== decideRoom(); i++) { G.her = decideRoom(); update(true); } }
+// she is put where she is going at once (tests): the arrows and the hint follow her room
+function settle() { clearTimeout(walkT); K.walking = false; K.goal = null; K.act = null; if (K.idle) K.idle.until = perf() + 60000; update(true); for (let i = 0; i < 4 && G.her !== decideRoom(); i++) { G.her = decideRoom(); update(true); } drawNav(); drawHint(); drawVisitors(); }
 function decideRoom() { const d = decide(); return d && d.room ? d.room : G.her; }
 function catHits(id) {
   const r = artEl.getBoundingClientRect(), hits = [];
@@ -7381,12 +8089,38 @@ function spotPoint(name) {
   if (!r) return null;
   return { x: s.left + (r.l + r.r) / 2, y: s.top + (r.t + r.b) / 2 };
 }
-// tests: a point on the visitor's drawing (client px), or null
+// tests: a point on the visitor's drawing (client px), or null (the garden visitor, else the guest)
 function visitorPoint() {
-  const m = VZ.m; if (!m || VZ.leaving) return null;
+  const m = visMovers()[0]; if (!m) return null;
   const r = m.art.getBoundingClientRect();
-  for (let w = 120; w < 196; w += 5) for (let u = 20; u <= 180; u += 5) { const x = r.left + (m.flip ? 200 - u : u) / 200 * r.width, y = r.top + w / 200 * r.height; if (visitorAt(x, y)) return { x, y }; }
+  for (let w = 120; w < 196; w += 5) for (let u = 20; u <= 180; u += 5) { const x = r.left + (m.flip ? 200 - u : u) / 200 * r.width, y = r.top + w / 200 * r.height; if (visitorAt(x, y) === m) return { x, y }; }
   return null;
+}
+// tests: points of a stroke along (or against) the fur through the middle of the visitor's region, as strokePath does
+// for Koxa (only points where that visitor's region is in front)
+function visitorStrokePath(id, against) {
+  const m = visMovers()[0]; if (!m) return null;
+  const P = moverPic(m), r = m.art.getBoundingClientRect(), hits = [];
+  const inside = (x, y) => { const h = catHit(x, y); return h && h.m === m && h.region.id === id ? h.region : null; };
+  for (let v = 2; v < 200; v += 3) for (let u = 2; u < 200; u += 3) { const x = r.left + u / 200 * r.width, y = r.top + v / 200 * r.height, g = inside(x, y); if (g) hits.push({ x, y, g }); }
+  if (!hits.length || !P) return null;
+  const mx = hits.reduce((a, p) => a + p.x, 0) / hits.length, my = hits.reduce((a, p) => a + p.y, 0) / hits.length;
+  let c = hits[0]; for (const p of hits) if (Math.hypot(p.x - mx, p.y - my) < Math.hypot(c.x - mx, c.y - my)) c = p;
+  const f = c.g.fur, l = Math.hypot(f[0], f[1]) || 1, ux = f[0] / l * (against ? -1 : 1), uy = f[1] / l * (against ? -1 : 1);
+  let a = 0, b = 0;
+  while (a < 160 && inside(c.x - ux * (a + 2), c.y - uy * (a + 2))) a += 2;
+  while (b < 160 && inside(c.x + ux * (b + 2), c.y + uy * (b + 2))) b += 2;
+  const pts = [];
+  for (let i = 0; i <= 12; i++) { const d = -a + (a + b) * i / 12; pts.push({ x: c.x + ux * d, y: c.y + uy * d }); }
+  return pts;
+}
+// tests: a guest for the night now (until the next 7:00)
+function forceGuest(id) {
+  const t = now(), d = new Date(t); d.setHours(7, 0, 0, 0); if (d.getTime() <= t) d.setDate(d.getDate() + 1);
+  if (!G.st.visitors[id]) G.st.visitors[id] = { friend: 5, pal: 4, met: t, visits: 1, fed: 0 };
+  G.st.visit = null; G.st.guest = { id, since: t, until: d.getTime(), slept: false };
+  save(); refresh();
+  return G.st.guest;
 }
 // tests: a visitor now, doing kind (together with her for a joint kind); the engine goes on from there
 function forceVisit(id, kind = 'wander', mins = 60) {
@@ -7405,7 +8139,9 @@ window.Kocka = {
   settle, catPoint, strokePath, itemPoint, spotPoint,
   regionAt: (x, y) => { const g = regionAtClient(x, y); return g ? g.id : null; },
   openVet, openDiary, go, places, get view() { return G.view; }, get her() { return G.her; },
-  visitorPoint, forceVisit, get visitor() { const m = VZ.m; return m ? { id: m.id, kind: VZ.kind, key: VZ.key, pose: m.pose, flip: m.flip, walking: m.walking, z: m.el.style.zIndex, at: vPos(), leaving: VZ.leaving } : null; },
+  visitorPoint, forceVisit, visitorStrokePath, forceGuest, holdVisitor: (ms = 8000) => { const m = visMovers()[0]; if (m) holdVisitor(m, ms); return !!m; }, regionAtFull: (x, y) => { const g = hitRegionAt(x, y); return g ? g.id : null; },
+  get visitor() { const m = VZ.m; return m ? { id: m.id, kind: VZ.kind, key: VZ.key, pose: m.pose, flip: m.flip, walking: m.walking, z: m.el.style.zIndex, at: vPos(), leaving: VZ.leaving, held: VZ.holdUntil > perf(), opts: m.opts } : null; },
+  get guest() { const m = GZ.m; return m ? { id: m.id, key: GZ.key, pose: m.pose, flip: m.flip, walking: m.walking, z: m.el.style.zIndex, at: vAt(m), leaving: GZ.leaving, held: GZ.holdUntil > perf() } : null; },
   get pill() { if (!PG || !PG.mouth) return null; const r = $('#pillGame').getBoundingClientRect(); return { open: PG.open, mouth: { x: r.left + PG.mouth.x, y: r.top + PG.mouth.y }, pill: { x: r.left + PG.pill.x, y: r.top + PG.pill.y } }; },
 };
 })();

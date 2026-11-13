@@ -177,8 +177,8 @@ Pointer Events on the scene; mouse and pen behave like one finger.
   unlocked by bond + bought with pamlsky; positions saved; the window shows season and day phase.
 
 ## 8b. Návštěvy 2 (Phase A, user's decision 2026-11-13)
-Visitors live in the garden and do things together with Koxa; Koxa has her own friendship with every cat. Planned
-next: player interactions with a visitor and kittens visiting (no adoption).
+Visitors live in the garden and do things together with Koxa; Koxa has her own friendship with every cat. Phase B
+(below) adds the player's interactions with a visitor; planned next: kittens visiting (no adoption).
 - **Programme (engine):** `st.visit.act = { kind, since, with }` (`E.VISIT_ACTS`). Alone (`with: null`): `arrive` (on
   the fence, first minutes), `wander`, `drink` (the pond; never in winter), `bench`, `tree`, `nap`, `bowl` (only with
   the miska pro návštěvy). Together (`with: 'koxa'`, only while she is in the garden, awake, not up the tree, on the lap
@@ -204,6 +204,66 @@ next: player interactions with a visitor and kittens visiting (no adoption).
   lickOther 80 (loaf) / 90 (sideLie) / 100 (sit), sideLie 152, swipe 116 / 150, run 184 (art units). The one with the
   lower feet is drawn in front (the licker when they are level). A toast names joint acts; palUp says "Koxa a Líza:
   ♥♥♥ – jsou kamarádky". Deníček and the visitor's menu show both: "Ty ♥♥♡♡♡" and "S Koxou ♥♥♥♡♡".
+
+### Phase B: the player and the visitor (engine 2026-11-13)
+New randomness only from `rndSeed` keyed on the moment (salts 30, 31), never `st.n`; nothing depends on the step of
+`advance()` or on how often an action is called.
+- **Stroking with a finger:** `strokeVisitor { id, region, along, speed }` (Koxa's region ids). `E.VISITOR_LIKES` /
+  `E.visitorLikes(id)` = `{ likes, dislikes, gentle, max, text }`: Mourek head, ears (not the belly); Líza only head and
+  chin and only gently (≤ 500 px/s; everything else disliked); Bivoj back (not belly, paws); Čiperka everywhere but the
+  tail; Pacička chin (not tail); Rambo the root of the tail (not belly, tail, paws); Šedivka back (not paws, tail);
+  Fousek ears and chin (not paws). There is no "cheeks" region: chin and ears stand for them. A stroke slower than
+  120 px/s is not noticed; faster than `max`, against the fur or on a disliked spot = `visitorDislike { id, region, why:
+  'fast'|'against'|'region', away }` and no friendship; Líza under 2 hearts runs off (`visitorLeave` 'shy'), with 2+ she
+  moves away a bit (`away: true`); Rambo under 3 hearts swipes (`visitorHiss { id, region }`, −¼ heart once a visit), and
+  under 2 hearts he swipes even at a neutral spot in half of the minutes (the same answer for a whole minute). Liked
+  (along the fur) = the trait's gain +¼ and the cap +1½ a visit; neutral = the trait's gain, cap +1. Without a region
+  (the menu's Pohladit, or an unknown region) as in Phase 5. **Friendship from strokes counts once a minute** however
+  many strokes come (`st.visit.pet`); the other strokes still purr.
+- **Treat from the hand:** `treatVisitor { id }`: 1 pamlsek, once a visit (`st.visit.treat`), friendship as food by trait
+  (greedy +1, others +½), counts as fed today. "Nemáš žádné pamlsky." / "Pacička už pamlsek dostala."
+- **Feather for two:** `playVisitor { id, caught }`: one game a minute ("Čiperka si chvilku oddechne."), +¼ heart (at most
+  +½ a visit, `st.visit.play`, `playGain`); when Koxa is with them in the garden she plays too (fun +12 if she caught it,
+  else +8, energy −3, +¼ of her hearts within the Phase A cap), otherwise `caught` is always 'visitor'.
+- **Jealousy:** after a stroke that counted, a treat, or a game the visitor won, while Koxa is in the garden, awake, not up
+  the tree, held or on the lap, from bond level Známá: 40 / 30 / 20 % (her hearts for that cat under 1 / 1–3 / 3+), at
+  most once every 20 min (`st.jealousAt`). `st.jealous = { since, id }`, event `jealous`, mood −5 meanwhile; stroking or
+  scratching her within 2 min = `jealousOk` (love +4), else at 2 min `jealousEnd` (love −4). When she cannot be
+  stroked for it any more (falls asleep, goes or is let out, climbs the tree, leaves the garden) it just passes: no
+  event, no dip.
+- **Sleepover:** `invite { id }`; `E.canInvite(st, id, now)` = `{ ok, reason }` for the button. Only the cat visiting
+  now, 5 of the player's hearts, 3+ of Koxa's, 18–22 h, Koxa not out and not up the tree, one a day (`st.invDay`).
+  Invited from the garden, Koxa comes in with the guest (`leaveYard` 'house'), so the night is in the house.
+  Refusals: "Pacička ještě není tak velká kamarádka." / "Mourek ještě není tak velký kamarád.", "Koxa a Šedivka ještě
+  nejsou kamarádky.", "Pozvat na noc jde jen večer (od 18 do 22 h).", "Dnes už u nás jedna návštěva spala.", "… tu teď
+  není.", "Koxa je venku.", "Koxa je na stromě.". The visit ends (`visitorLeave` 'inside'), `st.guest = { id, since,
+  until, slept }` with `until` = the next 7:00 (never over 14 h), `guestIn`, the diary entry `sleepover` ("Koxa měla
+  poprvé návštěvu na noc: Šedivka."). No garden visits meanwhile; the guest is in the living room (strokes only, no
+  hearts; other actions "Šedivka je u nás na noc. To počká do rána."); Koxa's mood +5 while she is in the house (not
+  out, not in the garden). When Koxa sleeps in the house (never in the garden) and has
+  4+ hearts they sleep together (`guestSleep` once, love +3 and energy +1 an hour). At `until`: `guestOut { id, slept }`
+  and +¼ heart of each. A long absence ends it in the morning as usual; the clock moving back moves it along.
+- **Photos:** a photo record may have `vpose` (≤ 20), `vx` (0–400, whole), `vflip` (only true) — only with a visitor —
+  and `nokoxa` (only true). `visitor` = the visitor when the garden (or the bench lap) is photographed, the guest for
+  the living room (never for the lap indoors). A photo on the lap keeps her there. With Koxa out (or `nokoxa: true` from the UI) a photo needs a visitor in that place ("Na fotce nikdo
+  není."). Older photos are kept exactly as they were.
+- **UI (Phase B):** the Input block takes region ids as they are, so `hitRegion` returns Koxa's region or a visitor's as
+  `v:<visitor>:<region>` (`catHit`: the cat in front wins where they overlap; a neighbour's coat size is scaled back).
+  A finger stroke (and a scratch, as a gentle stroke) on a visitor goes to `strokeVisitor`; while the player is busy
+  with a visitor it stays put (`holdVisitor`, like Koxa's `stay()`) and its scene starts again a moment after the last
+  touch. Purring, ears back, a short step away (`away`), Rambo's swipe pose with a hiss, a heart over its head; toasts
+  are throttled (`tip`). The treat tray item also drops on a visitor (the pamlsek only: the tyčinka is Koxa's, "Tyčinka
+  je jen pro Koxu."); a shy one (`gentle`, under 2 hearts) comes
+  slowly (`creep` gait) to a hand held still near it for 1.5 s (never while the hand is over Koxa: her treat is hers)
+  and backs off from a quick hand or a direct drop. The feather waved near a visitor on the ground makes it crouch (one
+  up on the fence, a branch or the bench does not play); after 1.1 s both cats (Koxa when free in the garden) pounce and the one
+  nearer the feather catches it (`playVisitor`); while the visitor rests (a minute) Koxa's own feather play works as
+  before. Jealousy: Koxa trots to the visitor and does `rub` 104 art units from it, in front of it, then waits in
+  front of the player (`K.place`) until `jealousOk` / `jealousEnd`. The visitor's menu shows its likes line and
+  "Pozvat na noc" (dimmed with the reason from `canInvite`). The guest (`GZ`, its own mover in the obývák): calm things
+  on the rug in the evening, sleeps on the křeslo (the rug when the player sits there), lies down beside Koxa (sideLie,
+  `PAIR.sideLie`) when she sleeps in the obývák; at 7:00 it walks out toward the předsíň. Photos: `vx` = 200 + half
+  the distance to Koxa (Koxa drawn at 400 − vx), or the visitor's own x when Koxa is not there (`nokoxa`).
 
 ## 9. Holidays (date → props, texts)
 Advent 1.–23.12 (věnec), Mikuláš 5.12 (punčocha), Vánoce 24.12–6.1 (stromeček; she knocks ornaments down),

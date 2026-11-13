@@ -19,7 +19,9 @@
 //                            fangs), lickOther (sitting, the head forward and down, tongue out: licks a loaf / sideLie /
 //                            sit in front of it), sideLie (lying on the side, legs to the front; asleep breathes, Zzz),
 //                            swipe (play-fight: on the haunches, one paw raised high; pairs with belly or swipe), run (a
-//                            gallop by CSS, step --kx-step .34 s by default). All of them stand on (100, 186).
+//                            gallop by CSS, step --kx-step .34 s by default), rub (standing, leaning forward, the cheek
+//                            pushed against whatever is in front: a leg, a hand, another cat; eyes shut, tail straight up
+//                            with a hooked tip; sways by CSS). All of them stand on (100, 186).
 //   poses                    the list of pose names.
 //   anchors                  { pose: [x, y] } for poses that do not stand on (100, 186): put that point on the spot.
 //   regions(pose, opts)      [{ id, path, fur: [dx, dy] }] in the cat's 0..200 viewBox, ids from
@@ -479,6 +481,7 @@ function KockaArt() {
     sideLie(R, o, e) { sideLie(R, o, e); },
     swipe(R, o, e) { swipe(R, o, e); },
     run(R, o, e) { run(R, o, e); },
+    rub(R, o, e) { rub(R, o, e); },
   };
   /* ---------- gait: walk, trot, jumps (side view, facing left; flip the box with scaleX(-1) to go right) ---------- */
   // One leg: the upper part swings at the shoulder / hip (px, py), the lower part bends at the knee. Animated legs get
@@ -761,6 +764,31 @@ function KockaArt() {
     head(R, 54, 108, 0.84, 2, H(e, { eyes: wide(o, e), ears: o.ears || 'turned', blush: false }));
     R.region('back', ellPoly(118, 120, 58, 17), [1, 0]);
     R.mid = [118, 120];
+  }
+
+  // rubbing the cheek and side against something in front of her (a leg, a hand, another cat): standing, leaning
+  // forward with the paws a little behind, the head low and tilted so the cheek leads, eyes shut (happy: smiling,
+  // grumpy: half closed and jealous), ears turned, the tail straight up with a hooked tip; the body rocks forward and
+  // the head nuzzles by CSS (kx-rub, kx-nuzzle)
+  function rub(R, o, e) {
+    R.shadow = [118, 186, 58, 5];
+    R.wrap = { cls: 'kx-rub', ox: 124, oy: 186 };
+    leg(R, 104, 134, 25, 28, 12, { far: true, swing: -6 });
+    leg(R, 149, 132, 24, 31, 13, { far: true, swing: -10 });
+    R.open(btfY(o, 132)); R.open('rotate(-9 126 132)');
+    R.part(ell(126, 132, 46, 20), { patches: spots([[124, 122, 13, 1], [152, 132, 9, 0], [100, 138, 8, 0]]) });
+    R.close(); R.close();
+    R.part(ell(155, 127, 17, 19), { edge: true, patches: spots([[158, 135, 8, 0]]) });
+    tail(R, [168, 120, 176, 96, 170, 68, 173, 50, 175, 38, 170, 28, 159, 32]);
+    leg(R, 155, 135, 22, 31, 13, { swing: -10 });
+    leg(R, 98, 138, 24, 26, 12, { swing: -6 });
+    R.limb([98, 128, 88, 132, 78, 138, 70, 146], 25, {});
+    const eyes = o.asleep ? 'closed' : o.mood === 'grumpy' ? 'grumpy' : o.mood === 'sad' || o.ill ? 'tired' : o.mood === 'happy' ? 'happy' : 'closed';
+    R.open('', 'kx-nuzzle', 78, 138);
+    head(R, 52, 146, 0.84, -34, H(e, { eyes, ears: o.ears || 'turned' }));
+    R.close();
+    R.region('back', ellPoly(126, 132, 46, 20, -9), unit(1, -0.16));
+    R.mid = [126, 132];
   }
 
   /* ---------- the cat ---------- */
@@ -1484,6 +1512,8 @@ function KockaArt() {
 .kx-run .kx-phE{animation-delay:calc(var(--kx-step,.34s) * -.6)}
 .kx-run .kx-rocker{animation:kx-rock var(--kx-step,.34s) ease-in-out infinite}
 .koxa .kx-tail.kx-tw{animation:kx-tw .32s ease-in-out infinite}
+.kx-rub{animation:kx-rub 2.4s ease-in-out infinite}
+.kx-nuzzle{animation:kx-nuzzle 2.4s ease-in-out infinite}
 .kx-shakep{animation:kx-shakep .28s ease-in-out infinite}
 .kx-flick{animation:kx-flick .5s steps(2) infinite}
 .kx-drip path{animation:kx-drip 1.6s ease-in infinite}
@@ -1517,6 +1547,8 @@ function KockaArt() {
 @keyframes kx-bend3{0%,42%{transform:rotate(0deg)}60%{transform:rotate(-85deg)}90%,100%{transform:rotate(0deg)}}
 @keyframes kx-rock{0%,100%{transform:rotate(3deg)}50%{transform:rotate(-3deg) translate(0,-3px)}}
 @keyframes kx-spin{0%,100%{transform:scaleX(1)}25%{transform:scaleX(.12)}50%{transform:scaleX(-1)}75%{transform:scaleX(.12)}}
+@keyframes kx-rub{0%,100%{transform:rotate(0)}50%{transform:rotate(-2deg)}}
+@keyframes kx-nuzzle{0%,100%{transform:rotate(3deg)}50%{transform:rotate(-5deg)}}
 @keyframes kx-tw{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(4deg)}}
 @keyframes kx-shakep{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(10deg)}}
 @keyframes kx-drip{0%{opacity:0;transform:translate(0,0)}20%{opacity:1}100%{opacity:0;transform:translate(0,18px)}}

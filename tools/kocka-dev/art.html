@@ -110,7 +110,7 @@ const scene = (title, cats) => {
   return `<div><div style="position:relative;aspect-ratio:${W}/${H};overflow:hidden;border-radius:10px">${bg}${fig}</div>${title}</div>`;
 };
 // d = the horizontal distance between the two anchors (art units), as recommended to the UI
-const PAIR = { sniff: 172, arch: 190, lickSit: 100, lickLoaf: 80, sideLie: 152, swipe: 116, chase: 184 };
+const PAIR = { sniff: 172, arch: 190, lickSit: 100, lickLoaf: 80, sideLie: 152, swipe: 116, chase: 184, rubSit: 104 };
 const two = (title, d, l, r) => scene(`${title} (d ${d})`, [['mourek', l[0], l[1], 200 - d / 2, true], ['koxa', r[0], r[1], 200 + d / 2, false]]);
 h += '<h2>Pózy pro dva (Koxa right, Mourek left and flipped; d = distance of the anchors)</h2><div class="grid" style="grid-template-columns:repeat(3,1fr)">' +
   two('sniff ↔ sniff', PAIR.sniff, ['sniff', 'happy'], ['sniff', 'calm']) +
@@ -121,10 +121,15 @@ h += '<h2>Pózy pro dva (Koxa right, Mourek left and flipped; d = distance of th
   two('swipe ↔ belly', PAIR.swipe, ['belly', 'happy'], ['swipe', 'happy']) +
   scene(`run → run (chase, d ${PAIR.chase})`, [['koxa', 'run', 'happy', 200 - PAIR.chase / 2, false], ['mourek', 'run', 'calm', 200 + PAIR.chase / 2, false]]) +
   two('swipe ↔ swipe', 150, ['swipe', 'happy'], ['swipe', { mood: 'happy', openMouth: true }]) +
-  two('arch → sulk', 170, ['sulk', 'grumpy'], ['arch', { mood: 'grumpy', openMouth: true }]) + '</div>';
-const NEWP = ['sniff', 'arch', 'lickOther', 'sideLie', 'swipe', 'run', 'belly', 'pounce', 'climb', 'onBranch', 'drink'];
+  two('arch → sulk', 170, ['sulk', 'grumpy'], ['arch', { mood: 'grumpy', openMouth: true }]) +
+  two('rub → sit', PAIR.rubSit, ['sit', 'calm'], ['rub', 'happy']) +
+  scene(`rub → sit from the left (Koxa flipped, d ${PAIR.rubSit})`, [['liza', 'sit', 'happy', 200 + PAIR.rubSit / 2, false], ['koxa', 'rub', 'calm', 200 - PAIR.rubSit / 2, true]]) +
+  scene(`rub → Bivoj sit (jealous, d ${PAIR.rubSit})`, [['bivoj', 'sit', 'happy', 200 - PAIR.rubSit / 2, true], ['koxa', 'rub', 'grumpy', 200 + PAIR.rubSit / 2, false]]) + '</div>';
+const NEWP = ['sniff', 'arch', 'lickOther', 'sideLie', 'swipe', 'run', 'rub', 'belly', 'pounce', 'climb', 'onBranch', 'drink'];
 h += `<h2>Neighbours in the new poses (and belly, pounce, climb, onBranch, drink noProp)</h2><div class="grid" style="grid-template-columns:repeat(${NEWP.length},1fr)">`;
 for (const id of Object.keys(A.neighbours)) for (const p of NEWP) h += cell(A.neighbour(id, p, { mood: 'calm', noProp: true, openMouth: p === 'arch' }), `${A.neighbours[id].name} ${p}`, p === 'arch' || p === 'run' ? 'cottage' : 'paper');
+h += '</div><h2>rub × moods: Koxa, Mourek, Líza, Bivoj (phone size, 150 px)</h2><div style="display:flex;gap:6px;flex-wrap:wrap">';
+for (const who of ['koxa', 'mourek', 'liza', 'bivoj']) for (const m of MOODS) h += `<div class="cell ${who === 'liza' ? 'cottage' : 'paper'}" style="width:150px"><div class="box">${who === 'koxa' ? A.cat('rub', m) : A.neighbour(who, 'rub', m)}</div>${who} ${m}</div>`;
 h += '</div><h2>Neighbours on the garden fence</h2><div style="width:320px"><div class="room">' + A.room({ id: 'garden', phase: 'day', season: 'summer' }) +
   [['mourek', 60], ['liza', 160], ['bivoj', 360]].map(([id, x]) => { const f = A.rooms.garden.spots.fence, w = 110; return `<div style="position:absolute;left:${(x - w / 2) / 4}%;top:${(f.y - 186 / 200 * w) / 6}%;width:${w / 4}%;aspect-ratio:1">${A.neighbour(id, 'onFence', 'calm')}</div>`; }).join('') + '</div></div>';
 h += '<h2>Room: phase × season</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';

@@ -54,11 +54,28 @@
 //   visitAct { id, kind, with }     the visitor started another act (st.visit.act; watching only, or Koxa left the garden):
 //                                   kind of VISIT_ACTS, with = 'koxa' (together with her) | null (alone); 'arrive' follows 'visitor'
 //   palUp { id, pal }               Koxa's own friendship with a neighbour cat reached another whole heart (pal 1–5)
+//   Phase B (the player and the visitor, SPEC §8b):
+//   visitorPurr { id, region?, liked? }   a stroke it enjoys (region and liked only for a finger stroke with a region)
+//   visitorDislike { id, region, why: 'region'|'fast'|'against', away }   a stroke it does not like (no friendship);
+//                                   away: shy Líza (2+ hearts) moves away a bit; under 2 hearts she runs off instead
+//                                   (visitorLeave 'shy'), Rambo under 3 hearts swipes (visitorHiss { id, region })
+//   visitorTreat { id }             a pamlsek from the hand (treatVisitor)
+//   visitorPlay { id, caught, koxa } the feather for two (playVisitor); caught 'koxa' | 'visitor'; koxa: she played too
+//   jealous { id } / jealousOk { id } / jealousEnd { id }   Koxa saw you with a visitor (st.jealous); stroked or
+//                                   scratched within 2 min: all right again (love +4); else at the end love −4;
+//                                   asleep, out, up the tree or back in the house it just passes (no event, no dip)
+//   guestIn { id } / guestSleep { id } / guestOut { id, slept }   a sleepover (invite): the guest in the living room until
+//                                   7:00 (invited from the garden, Koxa comes in too: 'house'); guestSleep: Koxa and the
+//                                   guest sleep together in the house (pal 4+), once a night
+//   (visitorLeave gets reason 'inside' when the visitor was invited in)
 //   photo { n } / photoDeleted { n }   the album
 //   gift { n }                      pamlsky from the launcher link
 //   found { id, text }              a new Deníček entry
 //   quirk { id }                    her quirk was seen
 //   refused { reason }              the action is not possible now (Czech reason)
+// Phase B actions (act): strokeVisitor { id, region?, along?, speed? } (without region: the menu's Pohladit),
+//   treatVisitor { id }, playVisitor { id, caught: 'koxa' | 'visitor' }, invite { id }; photo also takes
+//   { vpose, vx, vflip, nokoxa } (where the visitor stood; nokoxa: Koxa is not in the picture)
 function KockaEngine() {
   const MIN = 60000, HOUR = 60 * MIN, DAY = 24 * HOUR, STEP = 10 * MIN;
   const AWAY = 72 * HOUR;          // longer absence: paní Nováková took her (§4); the rest is not simulated
@@ -196,12 +213,13 @@ function KockaEngine() {
   });
   const ACTIONS = deep(['feed', 'water', 'stroke', 'scratch', 'pickUp', 'putDown', 'play', 'brush', 'cleanLitter', 'letOut', 'letIn', 'treat', 'vetCure', 'pill', 'call', 'vacuum', 'lapOn', 'lapOff',
     'goGarden', 'goHouse', 'fetchDown', 'sow', 'waterBeds', 'harvest', 'catnip', 'buy', 'place', 'sell', 'train', 'showTrick',
-    'feedVisitor', 'strokeVisitor', 'photo', 'deletePhoto']);
+    'feedVisitor', 'strokeVisitor', 'photo', 'deletePhoto', 'treatVisitor', 'playVisitor', 'invite']);
   const CMAX = 1e6;  // counters saturate here (inc)
   const COUNTS = ['favFood', 'belly', 'toy', 'quirk'].concat(SPOTS.map(s => 'spot_' + s));
   // pal*: Koxa and a neighbour cat (the cat is st.diaryCat[id])
   const PAL_DIARY = ['palFirst', 'palGroom', 'palSnuggle'];
-  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], PAL_DIARY);
+  const CAT_DIARY = PAL_DIARY.concat(['sleepover']);   // the entries that name a neighbour cat (st.diaryCat), in this order
+  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], CAT_DIARY);
 
   /* --- small helpers --- */
   const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
@@ -303,7 +321,7 @@ function KockaEngine() {
       traits: drawTraits(seed), cnt: {}, diary: { birthday: now }, day: freshDay(now), want: null, wantAt: {}, lap: null,
       yard: null, wet: 0, beds: Array(BEDS).fill(null), pantry: {}, postcards: [], presents: {},
       stock: {}, owned: {}, furniture: {}, records: {}, tricks: {}, earnDay: { key: dkey(now), n: 0 }, train: null,
-      visitors: {}, visit: null, album: [], diaryCat: {},
+      visitors: {}, visit: null, album: [], diaryCat: {}, guest: null, invDay: 0, jealous: null, jealousAt: 0,
     };
     for (const k of COUNTS) st.cnt[k] = 0;
     return st;
@@ -420,7 +438,7 @@ function KockaEngine() {
     st.diary = {}; for (const k of Object.keys(Dy)) if (DIARY_IDS.includes(k) && okT(Dy[k])) st.diary[k] = Math.min(Dy[k], t);   // keeps the order found
     if (!st.diary.birthday) st.diary.birthday = st.born;
     const DC = obj(st.diaryCat); st.diaryCat = {};   // only for a found pal* entry, in a fixed order
-    for (const k of PAL_DIARY) if (st.diary[k] && has(VISITORS, DC[k])) st.diaryCat[k] = DC[k];
+    for (const k of CAT_DIARY) if (st.diary[k] && has(VISITORS, DC[k])) st.diaryCat[k] = DC[k];
     const d = st.day;
     st.day = d && typeof d === 'object' && isKey(d.key) && d.key <= dkey(t) && typeof d.ms === 'number' && d.ms >= 0 && d.ms <= 26 * HOUR ? {
       key: d.key, ms: num(d.ms, 0, 0, 2 * DAY), food: num(d.food, 0, 0, 200 * DAY), mood: num(d.mood, 0, -200 * DAY, 200 * DAY),
@@ -434,7 +452,7 @@ function KockaEngine() {
     for (const k of Object.keys(st)) if (!STATE_KEYS.includes(k)) delete st[k];
     return st;
   }
-  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat'];
+  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat', 'guest', 'invDay', 'jealous', 'jealousAt'];
   // valid(st): repairs st in place and says whether it is usable (false only for null, a non-object or no time at all)
   function valid(st) { return repair(st) !== null; }
 
@@ -458,6 +476,8 @@ function KockaEngine() {
       m += A && A.with === 'koxa' && Object.prototype.hasOwnProperty.call(VISIT_ACTS, A.kind) ? VISIT_ACTS[A.kind].mood : VISIT_MOOD[reaction(st, st.visit.id)];
     }
     if (st.yard && st.yard.tree) m -= 10;             // stuck on the tree
+    if (st.jealous) m -= 5;                           // she saw you with a visitor
+    if (st.guest && !st.out && !st.yard) m += 5;      // a friend sleeps over (she is at home with it)
     return Math.round(clamp(m, -100, 100));
   }
   const moodName = v => v >= 50 ? 'happy' : v >= 10 ? 'calm' : v >= -30 ? 'grumpy' : 'sad';
@@ -483,6 +503,7 @@ function KockaEngine() {
       lap: !!st.lap, lapSince: st.lap ? st.lap.since : null, lapDoze: !!(st.lap && st.lap.doze),
       garden: !!st.yard, wet: st.wet > t, tree: !!(st.yard && st.yard.tree), walk: !!(st.out && st.out.walk),
       pill: st.pill ? (dkey(t) >= st.pill ? 'today' : 'tomorrow') : null,
+      guest: st.guest ? st.guest.id : null, jealous: !!st.jealous,
     };
   }
 
@@ -509,9 +530,10 @@ function KockaEngine() {
     if (id === 'weight') return `${name} váží ${st.weight.toFixed(1).replace('.', ',')} kg.`;
     if (id === 'walk') return `Nejdelší toulka trvala ${fmtDur(st.walkMax)}.`;
     if (id === 'birthday') { const [y, m, d] = ymd(st.born); return `${name} k nám přišla ${d}. ${m + 1}. ${y}.`; }
-    if (PAL_DIARY.includes(id)) {
+    if (CAT_DIARY.includes(id)) {
       const c = st.diaryCat && Object.prototype.hasOwnProperty.call(VISITORS, st.diaryCat[id]) ? VISITORS[st.diaryCat[id]] : null;
       const f = c && c.fem;   // Koxa is a she: the plural is feminine only with a female cat
+      if (id === 'sleepover') return c ? `${name} měla poprvé návštěvu na noc: ${c.name}.` : `${name} měla poprvé návštěvu na noc.`;
       if (id === 'palFirst') return c ? (f ? `${name} má první kamarádku: ${c.name}.` : `${name} má prvního kamaráda: ${c.name}.`) : `${name} má prvního kočičího kamaráda.`;
       if (id === 'palGroom') return c ? `${name} a ${c.name} si poprvé navzájem ${f ? 'umyly' : 'umyli'} kožíšky.` : `${name} a kamarád si poprvé navzájem umyli kožíšky.`;
       return c ? `${name} a ${c.name} si poprvé ${f ? 'zdřímly' : 'zdřímli'} schoulen${f ? 'é' : 'í'} u sebe.` : `${name} si poprvé zdřímla schoulená u kamaráda.`;
@@ -524,10 +546,11 @@ function KockaEngine() {
     weight: 'Kolik váží? Uvidíš zítra.', walk: 'Ještě nebyla venku.', birthday: '',
     palFirst: 'Najde si kamaráda mezi kočkami od sousedů? Choď s ní na zahradu, když přijde návštěva.',
     palGroom: 'Budou si s kamarádem navzájem mýt kožíšek?', palSnuggle: 'Zdřímne si někdy schoulená u kamaráda?',
+    sleepover: 'Přespí u nás někdy kočka od sousedů? Když se s vámi oběma moc skamarádí, můžeš ji večer pozvat dovnitř.',
   };
   // Deníček: her two spots only; text = the fact when found, else a question
   function diary(st, name) {
-    const nm = cleanName(name || st.name), ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], PAL_DIARY);
+    const nm = cleanName(name || st.name), ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], CAT_DIARY);
     return ids.map(id => {
       const found = st.diary[id] || null;
       return { id, found, text: found ? entryText(st, id, nm) : (id.startsWith('spot_') ? 'Kde se ráda nechá hladit? Hlaď ji po srsti.' : HINTS[id]) };
@@ -639,6 +662,7 @@ function KockaEngine() {
   }
   function leaveYard(st, ev, type) {
     st.yard = null;
+    st.jealous = null;   // she saw the visitor in the garden; inside (or out on a walk) it passes without a dip
     if (st.visit && st.visit.act && st.visit.act.with) apart(st, st.t, true, ev);   // the visitor goes on alone
     if (type) ev.push({ type });
   }
@@ -762,7 +786,16 @@ function KockaEngine() {
       else if (A.cold >= 30 * MIN) getIll(st, 'cold', t + dt, ev);
     }
     if (st.lap) lapStep(st, t, dt, night, ev);
+    if (st.guest) guestStep(st, t, dt, ev);
     visitStep(st, t, dt, night, watching, ev);
+    // jealousy ends by itself 2 min after it began: a small dip (stroking her before that makes it all right);
+    // asleep, out, up the tree or back in the house she cannot be stroked for it, so it just passes, without the dip
+    if (st.jealous && (st.asleep || st.out || !st.yard || st.yard.tree)) st.jealous = null;
+    else if (st.jealous && t + dt >= st.jealous.since + JEALOUS.ok * MIN) {
+      N.love = Math.max(0, N.love - JEALOUS.love);
+      ev.push({ type: 'jealousEnd', id: st.jealous.id });
+      st.jealous = null;
+    }
     if (st.yard) gardenStep(st, t, dt, night, ev);
     // the cat flap: while the player is away she goes on a walk by herself (0.2 per daytime hour; bond Kamarádka, placed in the předsíň)
     else if (!watching && st.furniture.catFlap && st.lvl >= WALK_BOND && !st.out && !st.asleep && !st.lap && !st.ill && !night &&
@@ -845,6 +878,8 @@ function KockaEngine() {
       if (st.out) comeBack(st, end, ev);
       if (st.yard) leaveYard(st, ev, null);
       if (st.visit) endVisit(st, 'time', ev);
+      if (st.guest) guestOut(st, end, ev);
+      st.jealous = null;
       endDay(st, ev);
       st.t = now; st.day = freshDay(now);
       st.needs.food = 40; st.needs.water = 40;
@@ -871,18 +906,22 @@ function KockaEngine() {
     const no = reason => { ev.push({ type: 'refused', reason }); return { st, events: ev }; };
     if (typeof action !== 'string' || !ACTIONS.includes(action)) return no('Tohle teď nejde.');
     const before = wants(st), a = arg && typeof arg === 'object' ? arg : {};
-    const home = ['cleanLitter', 'letIn', 'call', 'vacuum', 'sow', 'waterBeds', 'harvest', 'feedVisitor', 'strokeVisitor', 'deletePhoto', 'buy', 'sell', 'place'];
+    const home = ['cleanLitter', 'letIn', 'call', 'vacuum', 'sow', 'waterBeds', 'harvest', 'feedVisitor', 'strokeVisitor', 'deletePhoto', 'buy', 'sell', 'place',
+      'treatVisitor', 'playVisitor', 'invite', 'photo'];   // invite and photo say themselves why not (Koxa out)
     // up the tree: only calling her, fetching her down, the garden, the shop and the camera
-    const TREE_OK = ['call', 'fetchDown', 'vetCure', 'goHouse', 'sow', 'waterBeds', 'harvest', 'buy', 'sell', 'place', 'photo', 'feedVisitor', 'strokeVisitor', 'deletePhoto'];
+    const TREE_OK = ['call', 'fetchDown', 'vetCure', 'goHouse', 'sow', 'waterBeds', 'harvest', 'buy', 'sell', 'place', 'photo', 'feedVisitor', 'strokeVisitor', 'deletePhoto',
+      'treatVisitor', 'playVisitor'];   // not invite: she would stay stuck up there (canInvite says so)
     if (st.yard && st.yard.tree && !TREE_OK.includes(action)) return no(`${name} je na stromě.`);
-    // on the lap: stroking, scratching, a treat from the hand and calling keep her there; anything else = standing up
-    if (st.lap && !['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff'].includes(action)) {
+    // on the lap: stroking, scratching, a treat from the hand, calling and a photo keep her there; anything else = standing up
+    if (st.lap && !['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff', 'photo'].includes(action)) {
       ev.push({ type: 'lapOff', dozing: st.lap.doze }); st.lap = null;
     }
     const onLap = !!st.lap, lapK = onLap ? 1.5 : 1;
     // stroking a dozing cat on the lap wakes her (she stays)
     const lapWake = () => { if (onLap && st.lap.doze) { st.lap.doze = false; ev.push({ type: 'wake', early: false, lap: true }); } };
     const annoy = d => { if (st.lap) st.lap.annoy = Math.min(10, st.lap.annoy + d); };
+    // jealous: stroking or scratching her within 2 min makes it all right again
+    const soothe = () => { if (!st.jealous) return; N.love = Math.min(100, N.love + JEALOUS.love); ev.push({ type: 'jealousOk', id: st.jealous.id }); st.jealous = null; };
     if (st.out && !home.includes(action)) return no(`${name} je venku.`);
     const wakeUp = () => { if (st.asleep) { st.asleep = false; st.wokeAt = t; ev.push({ type: 'wake', early: false }); } };
     const sleeping = () => { if (st.asleep) { seenQuirk(st, 'box', t, ev); no(`${name} spí, nebuď ji.`); return true; } return false; };
@@ -948,6 +987,7 @@ function KockaEngine() {
         if (st.asleep) { N.love = Math.min(100, N.love + 1); ev.push({ type: 'purr', region, sleeping: true }); seenQuirk(st, 'box', t, ev); break; }
         lapWake();
         if (sp === 'fast' || dir === 'against') { N.love = Math.max(0, N.love - 1); ev.push({ type: 'earsBack', rough: sp === 'fast' }); annoy(1); break; }
+        soothe();
         if (dir === 'sideways') { N.love = Math.min(100, N.love + 1 * half); ev.push({ type: 'tolerate', region }); break; }
         const spot = st.traits.spots.includes(region);
         N.love = Math.min(100, N.love + (spot ? 4 : 2) * half * lapK);
@@ -963,6 +1003,7 @@ function KockaEngine() {
         const sec = typeof a.seconds === 'number' && Number.isFinite(a.seconds) ? clamp(a.seconds, 0, 5) : 1;
         if (region === 'belly') { belly(); break; }
         const per = REGIONS[region].scratch ? 4 : 1, half = sad || st.asleep ? 0.5 : 1;
+        if (!st.asleep) soothe();
         lapWake(); if (onLap) st.lap.pet = t;
         N.love = Math.min(100, N.love + per * sec * half * lapK);
         ev.push({ type: 'purr', region, sleeping: st.asleep });
@@ -1172,7 +1213,18 @@ function KockaEngine() {
         }
         break;
       }
-      case 'feedVisitor': case 'strokeVisitor': case 'photo': case 'deletePhoto': {
+      case 'invite': {
+        const id = typeof arg === 'string' ? arg : a.id, why = inviteWhy(st, id, t);
+        if (why) return no(why);
+        endVisit(st, 'inside', ev);
+        if (st.yard) leaveYard(st, ev, 'house');   // Koxa comes in with the guest (the night is in the living room)
+        st.guest = { id, since: t, until: next7(t), slept: false };
+        st.invDay = dkey(t);
+        ev.push({ type: 'guestIn', id });
+        palFound(st, 'sleepover', id, t, ev);
+        break;
+      }
+      case 'feedVisitor': case 'strokeVisitor': case 'photo': case 'deletePhoto': case 'treatVisitor': case 'playVisitor': {
         const why = socialAct(st, action, a, t, ev);
         if (why) return no(why);
         break;
@@ -1309,7 +1361,8 @@ function KockaEngine() {
   const VISITOR_IDS = Object.keys(VISITORS);
   // per hour: a visit in the daytime (×2.5 with the miska pro návštěvy in the garden, ×1.5 with a cushion there);
   // only Bivoj comes at night; a visit lasts 20–90 min (greedy and sleepy ones +30 min when fed)
-  const VISIT = deep({ day: 0.05, night: 0.03, bowl: 2.5, cushion: 1.5, stay: [20, 90], fedStay: 30, perVisit: 1 });
+  // perVisitLiked: the cap when the strokes are where it likes them (Phase B)
+  const VISIT = deep({ day: 0.05, night: 0.03, bowl: 2.5, cushion: 1.5, stay: [20, 90], fedStay: 30, perVisit: 1, perVisitLiked: 1.5 });
   // friendship (0–5 hearts, quarter steps) from a stroke / from food, by trait; at most +1 a visit from strokes
   const BY_TRAIT = deep({
     curious: [0.5, 0.5], shy: [0.25, 0.5], bold: [0.5, 0.5], playful: [0.5, 0.5],
@@ -1340,6 +1393,23 @@ function KockaEngine() {
     sleepy: { nap: 4, bench: 3, tree: 0.3 }, old: { nap: 4, bench: 3, tree: 0.3 }, playful: { wander: 2.5, tree: 2.5, nap: 0.5 },
     curious: { wander: 2.5, tree: 2.5, nap: 0.5 }, greedy: { bowl: 4 }, bold: { tree: 1.5 }, shy: { bench: 1.5, wander: 0.7 },
   });
+  // Phase B: where each cat likes a finger stroke (REGIONS ids; liked = +¼ heart and the higher cap), where it does not
+  // (no friendship: visitorDislike; shy Líza runs off under 2 hearts, Rambo swipes under 3), the fastest stroke it takes
+  // (px/s; faster = disliked) and a Czech line for the help and the visitor's menu
+  const VISITOR_LIKES = deep({
+    mourek: { likes: ['head', 'ears'], dislikes: ['belly'], max: 900, text: 'Mourek má rád hlazení na hlavě a za ušima. Na bříško mu nesahej.' },
+    liza: { likes: ['head', 'chin'], dislikes: ['ears', 'back', 'tailBase', 'belly', 'tail', 'paws'], max: 500, text: 'Líza se nechá hladit jen pomalu a jemně, na hlavě a na bradě. Jinde se lekne.' },
+    bivoj: { likes: ['back'], dislikes: ['belly', 'paws'], max: 900, text: 'Bivoj má rád hlazení na zádech. Bříško a tlapky si hlídá.' },
+    ciperka: { likes: ['head', 'ears', 'chin', 'back', 'tailBase', 'belly', 'paws'], dislikes: ['tail'], max: 900, text: 'Čiperka se nechá hladit skoro všude, jen ne na ocase.' },
+    pacicka: { likes: ['chin'], dislikes: ['tail'], max: 900, text: 'Pacička má nejradši drbání na bradě. Ocas nech být.' },
+    rambo: { likes: ['tailBase'], dislikes: ['belly', 'tail', 'paws'], max: 900, text: 'Rambo má rád hlazení u kořene ocasu. Na bříško mu nesahej, dokud tě dobře nezná – ohání se.' },
+    sedivka: { likes: ['back'], dislikes: ['paws', 'tail'], max: 900, text: 'Šedivka má moc ráda hlazení na zádech. Tlapky a ocas nech být.' },
+    fousek: { likes: ['ears', 'chin'], dislikes: ['paws'], max: 900, text: 'Fousek má rád drbání za ušima a na bradě. Tlapky nech být.' },
+  });
+  const PLAY_VISIT = 0.5;   // the feather for two: +¼ heart a game, at most +½ a visit, one game a minute
+  // jealousy: the chance (her hearts for that cat: under 1 / 1–3 / 3+), at most once every 20 min, 2 min to make it right
+  const JEALOUS = deep({ p: [0.4, 0.3, 0.2], every: 20, ok: 2, love: 4 });
+  const GUEST = deep({ max: 14, love: 3, energy: 1 });   // a sleepover: at most 14 h; sleeping together per hour
   const ALBUM_MAX = 200;
   const PHOTO_ROOMS = ['living', 'kitchen', 'hall', 'garden', 'lap', 'walk'];
   // Koxa's own hearts for a cat (a record from before Phase A has only the player's: she takes those over)
@@ -1376,13 +1446,15 @@ function KockaEngine() {
       }
       return;
     }
+    if (st.guest) return;                     // a friend sleeps over: nobody else comes
     if (weather(t, st) === 'rain' && !night) return;
     const F = st.furniture, cushion = (F.sillCushion && F.sillCushion.room === 'garden') || (F.bedDeluxe && F.bedDeluxe.room === 'garden');
     const rate = night ? VISIT.night : VISIT.day * (F.visitorBowl ? VISIT.bowl : 1) * (cushion ? VISIT.cushion : 1);
     if (!(rnd(st) < 1 - Math.exp(-rate * h))) return;
     const id = night ? 'bivoj' : VISITOR_IDS[Math.floor(rnd(st) * VISITOR_IDS.length)];
     const stay = VISIT.stay[0] + Math.floor(rnd(st) * (VISIT.stay[1] - VISIT.stay[0]));
-    st.visit = { id, since: t, until: t + stay * MIN, gain: 0, palGain: 0, greeted: false, ready: null, act: { kind: 'arrive', since: t, with: null } };
+    st.visit = { id, since: t, until: t + stay * MIN, gain: 0, palGain: 0, greeted: false, ready: null, act: { kind: 'arrive', since: t, with: null },
+      pet: 0, treat: false, play: 0, playGain: 0, hurt: false };
     const R = vrec(st, id); R.visits = Math.min(CMAX, R.visits + 1);
     ev.push({ type: 'visitor', id, reaction: st.out ? 'away' : reaction(st, id) });
     if (watching) ev.push({ type: 'visitAct', id, kind: 'arrive', with: null });
@@ -1417,16 +1489,19 @@ function KockaEngine() {
     const V = st.visit, g = Math.min(PAL_STEP, PAL_VISIT - V.palGain);
     if (g <= 0) return;
     V.palGain += g;
+    bumpPal(st, id, g, t, ev);
+  }
+  function bumpPal(st, id, g, t, ev) {
     const R = vrec(st, id), before = Math.floor(R.pal);
     R.pal = Math.round(clamp(R.pal + g, 0, 5) * 4) / 4;
     if (Math.floor(R.pal) > before) ev.push({ type: 'palUp', id, pal: Math.floor(R.pal) });
     if (R.pal >= 3) palFound(st, 'palFirst', id, t, ev);
   }
-  // a pal* diary entry and its cat (st.diaryCat keeps the fixed order of PAL_DIARY, as repair does)
+  // a pal* or sleepover diary entry and its cat (st.diaryCat keeps the fixed order of CAT_DIARY, as repair does)
   function palFound(st, dk, id, t, ev) {
     if (st.diary[dk]) return;
     const o = {}, C = st.diaryCat || {};
-    for (const k of PAL_DIARY) if (k === dk) o[k] = id; else if (Object.prototype.hasOwnProperty.call(C, k)) o[k] = C[k];
+    for (const k of CAT_DIARY) if (k === dk) o[k] = id; else if (Object.prototype.hasOwnProperty.call(C, k)) o[k] = C[k];
     st.diaryCat = o;
     find(st, dk, t, ev);
   }
@@ -1501,10 +1576,14 @@ function KockaEngine() {
     const act = okA ? { kind: A.kind, since: okT(A.since) && A.since >= S.since && A.since <= t ? A.since : S.since, with: A.with }
       : { kind: 'wander', since: S.since, with: null };
     const greeted = S.greeted === true || act.with === 'koxa';
+    const when = v => (okT(v) && v >= S.since && v <= t ? v : 0);
     return {
-      id: S.id, since: S.since, until: S.until, gain: clamp(fin(S.gain), 0, VISIT.perVisit),
+      id: S.id, since: S.since, until: S.until, gain: Math.round(clamp(fin(S.gain), 0, VISIT.perVisitLiked) * 4) / 4,
       palGain: Math.round(clamp(fin(S.palGain), 0, PAL_VISIT) * 4) / 4, greeted,
       ready: !greeted && okT(S.ready) && S.ready >= S.since && S.ready <= t ? S.ready : null, act,
+      // Phase B: the last stroke that counted (one a minute), the treat given, the last feather game and what it gave,
+      // Rambo's swipe already cost a quarter heart this visit
+      pet: when(S.pet), treat: S.treat === true, play: when(S.play), playGain: Math.round(clamp(fin(S.playGain), 0, PLAY_VISIT) * 4) / 4, hurt: S.hurt === true,
     };
   }
   function addFriend(st, id, d, ev) {
@@ -1512,20 +1591,27 @@ function KockaEngine() {
     R.friend = Math.round(clamp(R.friend + d, 0, 5) * 4) / 4;
     if (Math.floor(R.friend) > before) ev.push({ type: 'visitorFriend', id, hearts: Math.floor(R.friend) });
   }
-  // feedVisitor / strokeVisitor / photo / deletePhoto; returns a Czech refusal or null
+  // feedVisitor / strokeVisitor / treatVisitor / playVisitor / photo / deletePhoto; returns a Czech refusal or null
   function socialAct(st, action, a, t, ev) {
     if (action === 'photo') {
-      if (st.out) return `${st.name} je venku.`;
       if (st.album.length >= ALBUM_MAX) return `Album je plné (${ALBUM_MAX} fotek). Nějakou fotku smaž.`;
       const str = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
+      const room = PHOTO_ROOMS.includes(a.room) ? a.room : st.yard ? 'garden' : st.lap ? 'lap' : 'living';
+      // who else is in the photographed place: the visitor in the garden (also on the bench lap), the guest in the living
+      // room (never on the lap indoors: the lap photo shows only her and the player)
+      const outside = room === 'garden' || (room === 'lap' && !!st.yard), inside = room === 'living';
+      const vis = outside && st.visit ? st.visit.id : inside && st.guest ? st.guest.id : null;
+      const nokoxa = !!st.out || a.nokoxa === true;
+      if (nokoxa && !vis) return st.out ? `${st.name} je venku.` : 'Na fotce nikdo není.';
       const p = {
-        t, pose: str(a.pose, 20) || (st.asleep ? 'sleep' : 'sit'),
-        room: PHOTO_ROOMS.includes(a.room) ? a.room : st.yard ? 'garden' : st.lap ? 'lap' : 'living',
+        t, pose: str(a.pose, 20) || (st.asleep ? 'sleep' : 'sit'), room,
         mood: ['happy', 'calm', 'grumpy', 'sad'].includes(a.mood) ? a.mood : mood(st),
         phase: ['night', 'morning', 'day', 'evening'].includes(a.phase) ? a.phase : dayPhase(t),
         season: ['spring', 'summer', 'autumn', 'winter'].includes(a.season) ? a.season : season(t),
-        note: str(a.note, 60) || '', visitor: st.visit ? st.visit.id : null,
+        note: str(a.note, 60) || '', visitor: vis,
       };
+      if (vis) photoVisitor(p, { vpose: str(a.vpose, 20), vx: a.vx, vflip: a.vflip });
+      if (nokoxa) p.nokoxa = true;
       st.album.push(p);
       ev.push({ type: 'photo', n: st.album.length });
       return null;
@@ -1541,28 +1627,154 @@ function KockaEngine() {
     const id = typeof a.id === 'string' && Object.prototype.hasOwnProperty.call(VISITORS, a.id) ? a.id : null;
     if (!id) return 'Takovou kočku neznáme.';
     const V = VISITORS[id];
+    if (st.guest && st.guest.id === id) {   // the guest in the living room: strokes only, they change no hearts
+      if (action !== 'strokeVisitor') return `${V.name} je u nás na noc. To počká do rána.`;
+      const k = strokeKind(id, a);
+      if (k.slow) return null;
+      ev.push(k.why ? { type: 'visitorDislike', id, region: k.region, why: k.why, away: V.trait === 'shy' } : Object.assign({ type: 'visitorPurr', id }, k.region ? { region: k.region, liked: k.liked } : {}));
+      return null;
+    }
     if (!st.visit || st.visit.id !== id) return `${V.name} tu teď není.`;
-    const R = vrec(st, id);
+    const R = vrec(st, id), S = st.visit;
     if (!R.met) R.met = t;
     const [strokeGain, foodGain] = BY_TRAIT[V.trait];
     if (action === 'feedVisitor') {
       const today = dkey(t);
       if (R.fed === today) return `${V.name} už dnes ${V.fem ? 'dostala' : 'dostal'}.`;
       R.fed = today;
-      if (V.trait === 'greedy' || V.trait === 'sleepy') st.visit.until += VISIT.fedStay * MIN;   // stays longer
+      if (V.trait === 'greedy' || V.trait === 'sleepy') S.until += VISIT.fedStay * MIN;   // stays longer
       ev.push({ type: 'visitorFed', id });
       addFriend(st, id, foodGain, ev);
       if (palAwake(st)) addPal(st, id, t, ev);   // Koxa sees you are friends with it
       return null;
     }
-    // strokeVisitor: shy ones may run off, grumpy ones may swipe while they do not know you
-    if (V.trait === 'shy' && R.friend < 2 && rnd(st) < 0.6) { endVisit(st, 'shy', ev); return null; }
-    if (V.trait === 'grumpy' && R.friend < 2 && rnd(st) < 0.5) { ev.push({ type: 'visitorHiss', id }); addFriend(st, id, -0.25, ev); return null; }
-    ev.push({ type: 'visitorPurr', id });
-    const g = Math.min(strokeGain, VISIT.perVisit - st.visit.gain);
-    if (g > 0) { st.visit.gain += g; addFriend(st, id, g, ev); }
+    if (action === 'treatVisitor') {   // a pamlsek from the hand: once a visit, friendship as food; it counts as fed today
+      if (S.treat) return `${V.name} už pamlsek ${V.fem ? 'dostala' : 'dostal'}.`;
+      if (st.pamlsky < 1) return 'Nemáš žádné pamlsky.';
+      st.pamlsky -= 1; S.treat = true; R.fed = dkey(t);
+      ev.push({ type: 'visitorTreat', id });
+      addFriend(st, id, foodGain, ev);
+      if (palAwake(st)) addPal(st, id, t, ev);
+      jealousy(st, id, t, ev);
+      return null;
+    }
+    if (action === 'playVisitor') {   // the feather for two: one game a minute; Koxa plays along when she is with them
+      if (S.play && t - S.play < MIN) return `${V.name} si chvilku oddechne.`;
+      S.play = t;
+      const koxa = palAwake(st), caught = koxa && a.caught === 'koxa' ? 'koxa' : 'visitor';
+      ev.push({ type: 'visitorPlay', id, caught, koxa });
+      const g = Math.min(PAL_STEP, PLAY_VISIT - S.playGain);
+      if (g > 0) { S.playGain += g; addFriend(st, id, g, ev); }
+      if (koxa) {
+        const N = st.needs;
+        N.fun = Math.min(100, N.fun + (caught === 'koxa' ? 12 : 8)); N.energy = Math.max(0, N.energy - 3);
+        addPal(st, id, t, ev);
+      }
+      if (caught === 'visitor') jealousy(st, id, t, ev);   // the other cat got the feather
+      return null;
+    }
+    // strokeVisitor
+    let liked = false;
+    const k = strokeKind(id, a);
+    if (!k.region) {   // the menu's Pohladit (or an unknown region): shy ones may run off, grumpy ones may swipe
+      if (V.trait === 'shy' && R.friend < 2 && rnd(st) < 0.6) { endVisit(st, 'shy', ev); return null; }
+      if (V.trait === 'grumpy' && R.friend < 2 && rnd(st) < 0.5) { ev.push({ type: 'visitorHiss', id }); addFriend(st, id, -0.25, ev); return null; }
+      ev.push({ type: 'visitorPurr', id });
+    } else {
+      if (k.slow) return null;   // too slow: it does not notice
+      const swipe = () => { ev.push({ type: 'visitorHiss', id, region: k.region }); if (!S.hurt) { S.hurt = true; addFriend(st, id, -0.25, ev); } return null; };
+      if (k.why) {
+        if (V.trait === 'shy' && R.friend < 2) { endVisit(st, 'shy', ev); return null; }
+        if (V.trait === 'grumpy' && R.friend < 3) return swipe();
+        ev.push({ type: 'visitorDislike', id, region: k.region, why: k.why, away: V.trait === 'shy' });
+        return null;
+      }
+      liked = k.liked;
+      // grumpy Rambo under 2 hearts: half the minutes he swipes even at a neutral spot (the same answer all that minute)
+      if (!liked && V.trait === 'grumpy' && R.friend < 2 && rndSeed(st.seed, Math.floor(t / MIN), 30) < 0.5) return swipe();
+      ev.push({ type: 'visitorPurr', id, region: k.region, liked });
+    }
+    if (S.pet && t - S.pet < MIN) return null;   // friendship from strokes at most once a minute, however many strokes come
+    S.pet = t;
+    const g = Math.min(strokeGain + (liked ? PAL_STEP : 0), (liked ? VISIT.perVisitLiked : VISIT.perVisit) - S.gain);
+    if (g > 0) { S.gain += g; addFriend(st, id, g, ev); }
     if (palAwake(st)) addPal(st, id, t, ev);
+    jealousy(st, id, t, ev);
     return null;
+  }
+  // a finger stroke on a visitor: { region (null = none or unknown), slow, why (dislike: 'fast' | 'against' | 'region'), liked }
+  function strokeKind(id, a) {
+    const region = regionOf(a.region, null);
+    if (!region) return { region: null, slow: false, why: null, liked: false };
+    const L = VISITOR_LIKES[id];
+    const sp = typeof a.speed === 'number' ? (a.speed < 120 ? 'slow' : a.speed > L.max ? 'fast' : 'good') : ['slow', 'fast'].includes(a.speed) ? a.speed : 'good';
+    const dir = a.along === false || a.along === 'against' ? 'against' : a.along === 'sideways' ? 'sideways' : 'along';
+    const why = sp === 'fast' ? 'fast' : dir === 'against' ? 'against' : L.dislikes.includes(region) ? 'region' : null;
+    return { region, slow: sp === 'slow', why, liked: !why && dir === 'along' && L.likes.includes(region) };
+  }
+  // the visitor's place in a photo: vpose (≤ 20 characters), vx (0–400, whole), vflip (only when true); none = not stored
+  function photoVisitor(p, o) {
+    if (typeof o.vpose === 'string' && o.vpose) p.vpose = o.vpose.slice(0, 20);
+    if (typeof o.vx === 'number' && Number.isFinite(o.vx)) p.vx = Math.round(clamp(o.vx, 0, 400));
+    if (o.vflip === true) p.vflip = true;
+  }
+  // Koxa may get jealous when she sees you with a visitor (in the garden, awake, not up the tree, held or on the lap; from
+  // bond level Známá): a seeded chance from the moment (salt 31), at most once every 20 minutes
+  function jealousy(st, id, t, ev) {
+    if (!palAwake(st) || st.lvl < 1 || st.jealous || (st.jealousAt && t - st.jealousAt < JEALOUS.every * MIN)) return;
+    const p = palOf(st.visitors[id]), chance = JEALOUS.p[p < 1 ? 0 : p < 3 ? 1 : 2];
+    if (rndSeed(st.seed, Math.floor(t / 1000), 31) >= chance) return;
+    st.jealous = { since: t, id }; st.jealousAt = t;
+    ev.push({ type: 'jealous', id });
+  }
+  // the next 7:00 local time after t (a sleepover ends then)
+  function next7(t) {
+    const d = new Date(t); d.setHours(7, 0, 0, 0);
+    if (d.getTime() <= t) { d.setDate(d.getDate() + 1); d.setHours(7, 0, 0, 0); }
+    return d.getTime();
+  }
+  // why the visitor cannot be invited in for the night now (Czech), or null
+  function inviteWhy(st, id, t) {
+    if (typeof id !== 'string' || !Object.prototype.hasOwnProperty.call(VISITORS, id)) return 'Takovou kočku neznáme.';
+    const V = VISITORS[id], R = st.visitors[id];
+    if (st.guest) return st.guest.id === id ? `${V.name} už u nás na noc je.` : `Na noc už u nás je ${VISITORS[st.guest.id].name}.`;
+    if (!st.visit || st.visit.id !== id || st.visit.until <= t) return `${V.name} tu teď není.`;
+    if (st.out) return `${st.name} je venku.`;
+    if (st.yard && st.yard.tree) return `${st.name} je na stromě.`;
+    if (!R || R.friend < 5) return `${V.name} ještě není tak ${V.fem ? 'velká kamarádka' : 'velký kamarád'}.`;
+    if (palOf(R) < 3) return `${st.name} a ${V.name} ještě nejsou ${V.fem ? 'kamarádky' : 'kamarádi'}.`;
+    const h = new Date(t).getHours();
+    if (h < 18 || h >= 22) return 'Pozvat na noc jde jen večer (od 18 do 22 h).';
+    if (st.invDay === dkey(t)) return 'Dnes už u nás jedna návštěva spala.';
+    return null;
+  }
+  // for the UI (the button and its reason); does not change st
+  function canInvite(st, id, now) {
+    const why = inviteWhy(st, id, typeof now === 'number' && Number.isFinite(now) ? Math.max(now, st.t) : st.t);
+    return { ok: !why, reason: why };
+  }
+  // the guest: sleeping together at night when Koxa sleeps in the house and has 4+ hearts for it; goes home at `until`
+  function guestStep(st, t, dt, ev) {
+    const G = st.guest, ms = Math.min(t + dt, G.until) - t;
+    if (ms > 0 && st.asleep && !st.out && !st.yard && palOf(st.visitors[G.id]) >= 4) {
+      if (!G.slept) { G.slept = true; ev.push({ type: 'guestSleep', id: G.id }); }
+      const N = st.needs;
+      N.love = clamp(N.love + GUEST.love * ms / HOUR, 0, 100); N.energy = clamp(N.energy + GUEST.energy * ms / HOUR, 0, 100);
+    }
+    if (t + dt >= G.until) guestOut(st, t + dt, ev);
+  }
+  function guestOut(st, t, ev) {
+    const G = st.guest;
+    st.guest = null;
+    ev.push({ type: 'guestOut', id: G.id, slept: G.slept });
+    addFriend(st, G.id, PAL_STEP, ev);       // a good night: +¼ heart from the cat, +¼ of Koxa's
+    bumpPal(st, G.id, PAL_STEP, t, ev);
+  }
+  // help texts: where the cat likes to be stroked (null for an unknown id)
+  function visitorLikes(id) {
+    if (typeof id !== 'string' || !Object.prototype.hasOwnProperty.call(VISITOR_LIKES, id)) return null;
+    const L = VISITOR_LIKES[id];
+    return { likes: L.likes.slice(), dislikes: L.dislikes.slice(), gentle: L.max < 900, max: L.max, text: L.text };
   }
   function repairSocial(st, t) {
     const okT = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
@@ -1581,19 +1793,31 @@ function KockaEngine() {
       };
     }
     st.visit = fixVisit(st.visit, t);
+    const G = st.guest;
+    st.guest = G && typeof G === 'object' && own(VISITORS, G.id) && okT(G.since) && G.since <= t && okT(G.until) && G.until > t &&
+      G.until - G.since <= GUEST.max * HOUR ? { id: G.id, since: G.since, until: G.until, slept: G.slept === true } : null;
+    if (st.guest && st.visit && st.visit.id === st.guest.id) st.visit = null;
+    st.invDay = isKey(st.invDay) && st.invDay <= dkey(t) ? st.invDay : 0;
+    const J = st.jealous;
+    st.jealous = J && typeof J === 'object' && own(VISITORS, J.id) && okT(J.since) && J.since <= t && J.since > t - JEALOUS.ok * MIN ? { since: J.since, id: J.id } : null;
+    st.jealousAt = okT(st.jealousAt) && st.jealousAt <= t ? st.jealousAt : 0;
     const A = Array.isArray(st.album) ? st.album : [];
     st.album = [];
     for (const p of A) {
       if (st.album.length >= ALBUM_MAX) break;
       if (!p || typeof p !== 'object' || !okT(p.t)) continue;
       const str = (v, n, def) => (typeof v === 'string' ? v.slice(0, n) : def);
-      st.album.push({
+      const q = {
         t: Math.min(p.t, t), pose: str(p.pose, 20, 'sit'), room: PHOTO_ROOMS.includes(p.room) ? p.room : 'living',
         mood: ['happy', 'calm', 'grumpy', 'sad'].includes(p.mood) ? p.mood : 'calm',
         phase: ['night', 'morning', 'day', 'evening'].includes(p.phase) ? p.phase : 'day',
         season: ['spring', 'summer', 'autumn', 'winter'].includes(p.season) ? p.season : 'spring',
         note: str(p.note, 60, ''), visitor: own(VISITORS, p.visitor) ? p.visitor : null,
-      });
+      };
+      // Phase B fields only when present (an older photo stays as it was); the visitor's place only with a visitor
+      if (q.visitor) photoVisitor(q, p);
+      if (p.nokoxa === true && q.visitor) q.nokoxa = true;
+      st.album.push(q);
     }
   }
   function shiftSocial(st, d, now) {
@@ -1602,8 +1826,12 @@ function KockaEngine() {
     if (st.visit) {
       const V = st.visit, A = V.act && typeof V.act === 'object' ? V.act : {};
       st.visit = fixVisit(Object.assign({}, V, { since: V.since + d, until: V.until + d, ready: typeof V.ready === 'number' ? V.ready + d : null,
-        act: Object.assign({}, A, { since: A.since + d }) }), now);
+        act: Object.assign({}, A, { since: A.since + d }), pet: V.pet ? V.pet + d : 0, play: V.play ? V.play + d : 0 }), now);
     }
+    if (st.guest) st.guest = { id: st.guest.id, since: st.guest.since + d, until: st.guest.until + d, slept: st.guest.slept };
+    if (st.invDay > today) st.invDay = today;
+    if (st.jealous) st.jealous = { since: st.jealous.since + d, id: st.jealous.id };
+    if (st.jealousAt) st.jealousAt += d;
     for (const p of st.album) if (p.t > now) p.t = now;
   }
   // the Album screen: photos (newest first), postcards, the neighbour cats met, presents
@@ -1628,7 +1856,7 @@ function KockaEngine() {
 
   return {
     NEEDS, FOODS, TOYS, REGIONS, FEARS, QUIRKS, ILLS, LEVELS, HOLIDAYS, ACTIONS, CROPS, PRESENTS, WEATHERS, POSTCARDS, BEDS,
-    SHOP, GAMES, TRICKS, ROOMS, EARN_CAP, VISITORS, VISIT_ACTS, ALBUM_MAX, album,
+    SHOP, GAMES, TRICKS, ROOMS, EARN_CAP, VISITORS, VISIT_ACTS, VISITOR_LIKES, ALBUM_MAX, album, canInvite, visitorLikes,
     create, valid, repair, rename, advance, act, consumeTreats, minigameResult, shop, tricks,
     mood, moodValue, wants, needs, health, bondLevel, diary,
     dayPhase, season, holiday, easter, weather, postcardAt, bedCount,
