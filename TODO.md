@@ -32,7 +32,6 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 - [ ] Prší: a change of "Soupeři" starts a new game at once (written down as "who plays, not a level", so an exception to "a new difficulty applies from the next game"). Keep it, or apply it from the next game like a level?
 - [ ] Spojování obrázků: being stuck is never an end (Zamíchat always goes on), so "played" always equals "won" and Settings show "vyhráno N z N". Show only "vyhráno N" (and "bez Zamíchat"), or count a game as played at its first pair?
 - [ ] `.claude/settings.json` turns off the `playwright`, `code-review` and `context7` plugins, but not `security-guidance`, which your own settings enable. Turn every plugin off for this project, or keep `security-guidance` on?
-- [ ] CLAUDE.md audit (2026-11-13): commit the changes (CLAUDE.md, new-game skill, TODO.md, README Dáma row, the drawings' author in images/sets.js, Kočka SPEC §10, a launcher comment)? Commit 18b9679 (the orchestrator rule) is already in master, not pushed.
 
 
 - [ ] Kočka (choices made while building, keep?): two tray rows (care items above, toys + Laser + Zavolat + Víc below; labels 12.5 px); the toast at the top of the room; "Vysát pokoj" in Nastavení → Pokoj; the Veterinář button only while she is ill; toys stay on the floor until picked up; a wide short window shows the room narrower with the wall continuing at the sides; the album shows the newest 24 photos; gardening pays a little (a seed pack sells for 1.5× its price) but far less than the minigames.
