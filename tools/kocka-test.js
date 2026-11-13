@@ -3185,5 +3185,81 @@ section('Input: pat runs, rhythm, sounds (the Input block)');
   }
 }
 
+section('Art: rearUp lifts her rear right under the finger (the Cat art block)');
+{
+  // the Cat art block from the same file as the engine (an .html: the "Cat art" block; a .js: art.js next to it)
+  let asrc;
+  if (/\.html?$/i.test(file)) {
+    const m = fs.readFileSync(file, 'utf8').match(/\/\* -{10} Cat art -{10} \*\/([\s\S]*?)\/\* -{10} Cat art end -{10} \*\//);
+    asrc = m ? m[1] : null;
+  } else {
+    const near = path.join(path.dirname(file), 'art.js');
+    asrc = fs.readFileSync(fs.existsSync(near) ? near : path.join(__dirname, 'kocka-dev', 'src', 'art.js'), 'utf8');
+  }
+  ok(!!asrc, 'the Cat art block is there');
+  let A = null;
+  try { A = new Function(asrc + '\nreturn KockaArt;')()(); } catch (e) { ok(false, 'Cat art block loads: ' + e.message); }
+  if (A) {
+    // a region path → polygons (M L H V C S Q T Z, absolute and relative; curves in 12 steps), hit by the nonzero rule
+    const flatten = d => {
+      const tok = d.match(/[a-zA-Z]|-?\d*\.?\d+(?:e-?\d+)?/g) || [], subs = [];
+      let i = 0, cmd = '', x = 0, y = 0, sx = 0, sy = 0, cur = null;
+      const num = () => +tok[i++];
+      const bez = P0 => { for (let k = 1; k <= 12; k++) { let P = P0.map(q => q.slice()); while (P.length > 1) P = P.slice(1).map((q, j) => [P[j][0] + (q[0] - P[j][0]) * k / 12, P[j][1] + (q[1] - P[j][1]) * k / 12]); cur.push(P[0]); } };
+      while (i < tok.length) {
+        if (/[a-zA-Z]/.test(tok[i])) cmd = tok[i++];
+        const C = cmd.toUpperCase(), ox = cmd === C ? 0 : x, oy = cmd === C ? 0 : y;
+        if (C === 'Z') { x = sx; y = sy; cur = null; continue; }
+        if (C === 'M') { x = ox + num(); y = oy + num(); sx = x; sy = y; cur = [[x, y]]; subs.push(cur); cmd = cmd === C ? 'L' : 'l'; continue; }
+        if (!cur) { cur = [[x, y]]; subs.push(cur); }
+        let e;
+        if (C === 'L' || C === 'T') e = [ox + num(), oy + num()];
+        else if (C === 'H') e = [ox + num(), y];
+        else if (C === 'V') e = [x, oy + num()];
+        else if (C === 'C') { const a = [ox + num(), oy + num()], b = [ox + num(), oy + num()]; e = [ox + num(), oy + num()]; bez([[x, y], a, b, e]); }
+        else if (C === 'Q' || C === 'S') { const a = [ox + num(), oy + num()]; e = [ox + num(), oy + num()]; bez([[x, y], a, e]); }
+        else throw new Error('path command ' + cmd);
+        if (C === 'L' || C === 'T' || C === 'H' || C === 'V') cur.push(e);
+        x = e[0]; y = e[1];
+      }
+      return subs;
+    };
+    const inside = (subs, px, py) => {
+      let w = 0;
+      for (const sp of subs) for (let k = 0; k < sp.length; k++) {
+        const [x1, y1] = sp[k], [x2, y2] = sp[(k + 1) % sp.length], c = (x2 - x1) * (py - y1) - (px - x1) * (y2 - y1);
+        if (y1 <= py) { if (y2 > py && c > 0) w++; } else if (y2 <= py && c < 0) w--;
+      }
+      return w !== 0;
+    };
+    const regs = (p, o) => A.regions(p, o).map(r => ({ id: r.id, s: flatten(r.path) }));
+    const hit = (R, u, v) => { for (const r of R) if (inside(r.s, u, v)) return r.id; return null; };
+    // the UI's regionMid(): the region sampled on a 3-unit grid
+    const grid = (R, id) => { const r = R.find(g => g.id === id), pts = []; if (r) for (let v = 0; v < 200; v += 3) for (let u = 0; u < 200; u += 3) if (inside(r.s, u, v)) pts.push([u, v]); return pts; };
+    const midOf = pts => ({ x: pts.reduce((a, q) => a + q[0], 0) / pts.length, y: pts.reduce((a, q) => a + q[1], 0) / pts.length });
+    const RU = regs('rearUp', { mood: 'happy' }), ids = RU.map(r => r.id);
+    ok(ids.indexOf('tailBase') >= 0 && ids.indexOf('tailBase') < ids.indexOf('paws'), 'rearUp: tailBase is hit before paws: ' + ids.join());
+    const ORDER = ['nose', 'chin', 'tail', 'paws', 'head', 'ears', 'tailBase', 'belly', 'back'];
+    for (const p of ['sit', 'loaf', 'belly', 'sideLie', 'shake']) { const L = A.regions(p, 'calm').map(r => r.id); ok(L.join() === ORDER.filter(id => L.includes(id)).join(), `${p} keeps the usual hit order: ${L.join()}`); }
+    const b = midOf(grid(RU, 'tailBase'));
+    for (const [p, mood] of [['sit', 'calm'], ['loaf', 'calm'], ['belly', 'happy'], ['sideLie', 'happy']]) {
+      const pts = grid(regs(p, { mood }), 'tailBase');
+      if (!pts.length) { ok(false, p + ': has a tailBase'); continue; }
+      // the UI puts rearUp so the two tailBase middles line up horizontally (both poses stand on (100, 186))
+      const a = midOf(pts), dx = a.x - b.x, on = q => hit(RU, q[0] - dx, q[1]);
+      ok(on([a.x, a.y]) === 'tailBase', `${p} → rearUp: the middle of its tailBase stays on tailBase (${on([a.x, a.y])})`);
+      const low = pts.filter(q => q[1] >= a.y), lowOn = low.filter(q => on(q) === 'tailBase').length;
+      ok(lowOn === low.length, `${p} → rearUp: the lower part of its tailBase lands on tailBase (${lowOn}/${low.length})`);
+      const allOn = pts.filter(q => on(q) === 'tailBase').length;
+      ok(allOn / pts.length >= 0.95, `${p} → rearUp: at least 95 % of its tailBase lands on tailBase (${allOn}/${pts.length})`);
+    }
+    // the contract of SPEC §13.2: rearUp's tailBase (vertex centroid as art.html prints it) within 15 units of loaf's
+    const cen = d => { const n = (d.match(/-?\d*\.?\d+/g) || []).map(Number); let x = 0, y = 0, k = 0; for (let i = 0; i + 1 < n.length; i += 2) { x += n[i]; y += n[i + 1]; k++; } return [x / k, y / k]; };
+    const tb = (p, o) => cen(A.regions(p, o).find(g => g.id === 'tailBase').path);
+    const r = tb('rearUp', 'happy'), l = tb('loaf', 'calm');
+    ok(Math.hypot(r[0] - l[0], r[1] - l[1]) <= 15, 'rearUp tailBase within 15 units of loaf\'s: ' + Math.hypot(r[0] - l[0], r[1] - l[1]).toFixed(1));
+  }
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

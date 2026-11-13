@@ -498,7 +498,10 @@ visibly continuing or restarting) and a button for each `fx` name.
 
 `rearUp`'s `tailBase` centroid lies within 15 art units of the `tailBase` centroid in `loaf` (**Decided:** `loaf` is the
 reference; art.html prints the distance to `loaf` and to `sit`), so a tap run on her rear goes on when she lifts it
-(`PAT_NEAR` and the same region id cover the rest).
+(`PAT_NEAR` and the same region id cover the rest). After the reviews: `rearUp`'s `tailBase` covers the whole raised
+haunch down over the hind legs and comes **before `paws`** in that pose's hit order (`R.order`), so the lower part of
+the `tailBase` of `sit`, `loaf`, `belly` and `sideLie` (the UI lines them up horizontally) lands on it, never on `paws`
+or on nothing (`tools/kocka-test.js` measures it).
 
 **New options** of `cat()` (and of `regions()`/`mouth()`/`headPoint()` where they move something):
 
@@ -813,6 +816,14 @@ later the text "Z kuchyně se ozvalo cink… {n} shodila z linky plecháček." w
 conditions are not met within 3 minutes of visible time, it is shown as text only: shelf → that same text (she is put in
 the kitchen); ambush → "{n} na tebe chvíli číhala za rohem a pak to vzdala." A reload drops a held payback (the engine
 already counted the day).
+**After the reviews** (2026-11-13): in the garden (no kitchen counter there) the shelf is played as the ambush, and its
+3-minute text is the ambush's. The shelf's 3-minute text moves her to the kitchen (with the mug on its floor) only when
+she is free (awake, at home, not held, carried, on the lap, sulking, in a scene or a mode); otherwise only the text.
+`K.sulkPlace` remembers its room and is made again when the engine has her elsewhere (the `garden` / `house` events
+clear it). Training, showing a trick and the minigames are refused while she is cross ("{n} si s tebou teď hrát nechce.
+Zlobí se.", the engine's words for play) and while she sulks ("{n} je uražená. Nejdřív ji usmiř – pohlaď ji nebo jí dej
+pamlsek."), and `decide()` skips the sulk spot during a minigame or training. Scratching her while she is cross does
+not purr. A tap ignored by `K.teaseLock` and a boop that ends in a swat call `gest.cancel()`, so the next tap is n = 1.
 
 **`hintText()`** (after `h.scared`/`h.asleep`, before the long offence and the wants):
 - cross: "{n} se zlobí – nech ji chvíli být."
@@ -824,8 +835,8 @@ already counted the day).
 
 | Row | Picture | Text |
 |---|---|---|
-| Poplácání | `rearUp` (fallback `loaf`), happy, a tap ring | "Ťukej na ni lehce prstem pořád dokola. Na zádech má ráda klidné, pravidelné poplácávání a na jednom místě úplně nejradši – zkus ho najít, i správné tempo. Hlavu, bradu a tlapky snese. Ocas nech být a bříško je past: chytí tě za ruku a kope." |
-| Než se naštve | `sit` grumpy with `warn` | "Když švihá špičkou ocasu, dává uši do stran a cuká jí kůže na zádech, má toho dost. Přestaň – když ťukáš dál, naježí se, uteče a urazí se. Rychlé bubnování nemá ráda nikdy, a když je mrzutá, ani pomalé. Při jídle ji nech. Spící ${n} jen cukne uchem." |
+| Poplácání | `rearUp` (fallback `loaf`), happy, a tap ring | "Ťukej na ni lehce prstem pořád dokola. Na zádech má ráda klidné, pravidelné poplácávání a na jednom místě úplně nejradši – zkus ho najít, i správné tempo. Hlavu, bradu, uši a tlapky jen snese, i rychlé bubnování. Ocas nech být a bříško je past: chytí tě za ruku a kope." |
+| Než se naštve | `sit` grumpy with `warn` | "Když švihá špičkou ocasu, dává uši do stran a cuká jí kůže na zádech, má toho dost. Přestaň. Rychlé bubnování po zádech, ťukání na ocas a poplácávání, když je mrzutá: pak se naježí, uteče a urazí se. Když ji poplácáváš moc dlouho, jemně tě kousne (z klína seskočí). Při jídle ji nech. Spící ${n} jen cukne uchem." |
 | Ťuknutí do nosu | `sit` calm with `eyes: 'cross'` | "Ťukni jí jednou do nosu: zašilhá, kýchne a zatřepe hlavou. Třikrát za minutu je ale moc – plácne tě tlapkou (drápky nechá schované) a urazí se." |
 | Usmíření | `rub` happy (fallback `sit`) | "Uražená sedí zády k tobě na druhém konci pokoje. Pohlaď ji po srsti, podrbej ji nebo jí dej pamlsek a usmíříte se – otře se ti o ruku. Za pár minut ji to přejde i samo. Když to se škádlením přeženeš, opravdu se zlobí: 20 minut tě neposlouchá, nehraje si a na pohlazení plácne tlapkou. Pak ji nech být. A někdy ti to vrátí…" |
 | Konev (Zahrada) | the can + `shake` wet (two) | "Konví zaléváš záhony. Když zaliješ i ${an}, vyskočí, otřepe se a je mokrá a uražená. Návštěvy konví nepokropíš. V zimě a když spí, to nejde." |

@@ -445,7 +445,8 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 //                            head units round the nose, only when the face is visible, neighbours and kittens too; tailBase = kořen ocasu,
 //                            the back just in front of the tail root, in every pose that has 'back'). The list is in
 //                            hit-test order: the first region whose path contains the point wins (nose before chin, chin before head, head
-//                            before ears, so 'ears' is only the visible ear above the head plus a small margin). Paths
+//                            before ears, so 'ears' is only the visible ear above the head plus a small margin; rearUp puts
+//                            tailBase before paws: its kořen ocasu covers the raised haunch down over the hind legs). Paths
 //                            may hold several subpaths (both ears, every paw): use the nonzero rule. `fur` is the unit
 //                            vector of stroking along the fur (head → tail; on the head from the forehead over the top,
 //                            on the chin and throat downwards). Pass the same opts as cat() (the tail follows the mood).
@@ -1327,7 +1328,10 @@ function KockaArt() {
     R.close();
     head(R, 60, 140, 0.9, -8, H(e, { eyes: o.asleep || o.ill ? e.eyes : e.eyes === 'grumpy' ? 'grumpy' : 'happy', blush: !o.ill, ears: o.ears || 'turned' }));
     R.region('back', BODY, unit(1, -0.7));
-    R.tailBaseAt = [157, 156, 23, 22, -20, unit(1, -0.8)];
+    // the kořen ocasu covers the whole raised haunch down over the hind legs, and wins over the hind paws here: a tap run
+    // from the lower part of loaf's, belly's or sideLie's tailBase lands on it and goes on (never on 'paws' or nothing)
+    R.tailBaseAt = [159, 164, 28, 28, -20, unit(1, -0.8)];
+    R.order = ['nose', 'chin', 'tail', 'tailBase', 'paws', 'head', 'ears', 'belly', 'back'];
     R.mid = [120, 146];
     R.skin = [124, 120];
   }
@@ -1503,7 +1507,7 @@ function KockaArt() {
       const fur = K ? unit(g.fur[0] * K.sx, g.fur[1] * K.sy) : g.fur;
       if (by[g.id]) by[g.id].path += path; else by[g.id] = { id: g.id, path, fur };
     }
-    return ORDER.filter(id => by[id]).map(id => by[id]);
+    return (R.order || ORDER).filter(id => by[id]).map(id => by[id]);
   }
   // a point of the pose's drawing → the kitten's box: squash, the lap zoom, size
   function kitMap(R) {
@@ -6364,11 +6368,13 @@ function decide() {
   }
   const here = h.garden ? 'garden' : G.her === 'garden' ? 'hall' : G.her;
   if (h.scared) { const bd = spot(bedRoom, 'bed') || { x: 316, y: 562 }; return { room: bedRoom, pose: 'loaf', fx: bd.x - 54, fy: bd.y - 92, ax: 115, o: { ears: 'back' } }; }
-  // teased: she sulks with her back to the player at the other end of the room (made again after a reload)
-  if (h.sulk || h.cross) {
-    if (!K.sulkPlace) K.sulkPlace = sulkSpot(true);
+  // teased: she sulks with her back to the player at the other end of the room (made again after a reload, and when the
+  // engine took her out to the garden or back in, so she is never drawn in a room she is not in); not while she
+  // trains or plays a minigame (those are refused while she sulks: this only guards a sulk that began meanwhile)
+  if ((h.sulk || h.cross) && !MODE.train && !MODE.game) {
+    if (!K.sulkPlace || (K.sulkPlace.room && K.sulkPlace.room !== here)) K.sulkPlace = sulkSpot(true);
     if (K.sulkPlace.p) return K.sulkPlace.p;
-  } else K.sulkPlace = null;
+  } else if (!h.sulk && !h.cross) K.sulkPlace = null;
   if (K.place && K.place.until > t) return K.place.p;
   const w = E.wants(st), n = E.needs(st), urgent = (w === 'food' && n.food < 15) || (w === 'water' && n.water < 15);
   if (h.offended) return { room: here, pose: 'sulk', fx: 200, fy: 545 };
@@ -7044,8 +7050,8 @@ function handle(events) {
         break;
       }
       // the garden
-      case 'garden': if (places().includes('garden')) { /* she follows the player out */ K.idle = null; } if (ev.weather === 'rain') tip('rain', `Prší. ${n} déšť nesnáší.`, 30000); break;
-      case 'house': K.idle = null; break;
+      case 'garden': if (places().includes('garden')) { /* she follows the player out */ K.idle = null; } if (K.sulkPlace) K.sulkPlace = null; if (ev.weather === 'rain') tip('rain', `Prší. ${n} déšť nesnáší.`, 30000); break;
+      case 'house': K.idle = null; if (K.sulkPlace) K.sulkPlace = null; break;   // a sulk goes on in the new place (decide() makes it there)
       case 'wet': say('yowl'); notify(`${n} zmokla a je mrzutá.`); break;
       case 'snowPaws': if (G.view === 'garden') tip('snow', `${n} si otřepává tlapky od sněhu.`, 60000); break;
       case 'climbStuck': say('plaintive'); notify(`${n} vylezla na strom a neumí dolů! Zavolej ji, nebo ji podrž a sundej.`, 4600, true); break;
@@ -7095,7 +7101,7 @@ function sulkSpot(fast) {
   const fx = clamp(k.x < 200 ? 330 : 70, Math.min(200, vl + 62), Math.max(200, vr - 62));
   let fy = garden ? clamp(k.y, 470, 590) : 560;
   if (garden && fx > POND.l - 20 && fx < POND.r + 20 && fy < POND.b + 12) fy = POND.b + 12;   // never in the pond
-  return { p: { room, pose: 'sulk', fx, fy, fast, o: { mood: 'grumpy', ears: 'back' } }, until: perf() + Math.max(0, h.teaseUntil - now()) };
+  return { p: { room, pose: 'sulk', fx, fy, fast, o: { mood: 'grumpy', ears: 'back' } }, room, until: perf() + Math.max(0, h.teaseUntil - now()) };
 }
 // a point of her drawing (0…200 units) in scene px
 function catPx(u, v) {
@@ -7268,12 +7274,19 @@ function paybackCheck() {
   if (q.playing) { if (t - q.playing > 20000) paybackDone(q); return; }   // the scene was cut short
   if (!document.hidden) q.vis += Math.min(4000, t - q.last);
   q.last = t;
-  if ((q.force || t - K.welcomeAt >= 5000) && paybackFree()) { q.playing = t; if (q.kind === 'ambush') ambushScene(q); else shelfScene(q); return; }
-  if (q.vis >= 180000) {   // not in 3 minutes of looking: only the text
-    if (q.kind === 'shelf') { shelfAway(); notify(`Z kuchyně se ozvalo cink… ${nm()} shodila z linky plecháček.`); }
+  // in the garden there is no kitchen counter: the shelf becomes the ambush there
+  const garden = E.health(G.st).garden;
+  if ((q.force || t - K.welcomeAt >= 5000) && paybackFree()) { q.playing = t; if (q.kind === 'ambush' || garden) ambushScene(q); else shelfScene(q); return; }
+  if (q.vis >= 180000) {   // not in 3 minutes of looking: only the text (she is moved to the kitchen only when she is free)
+    if (q.kind === 'shelf' && !garden) { shelfAway(); notify(`Z kuchyně se ozvalo cink… ${nm()} shodila z linky plecháček.`); }
     else notify(`${nm()} na tebe chvíli číhala za rohem a pak to vzdala.`);
     paybackDone(q);
   }
+}
+// may she be moved to the kitchen for the shelf now (awake, at home, not held, on the lap, sulking or busy)?
+function paybackMovable() {
+  const h = E.health(G.st);
+  return !busyMode() && !K.carry && !K.lapView && !K.act && !K.gone && !h.asleep && !h.out && !h.garden && !h.tree && !h.lap && !h.held && !h.sulk && !h.cross;
 }
 function paybackDone(q) {
   if (PB.q === q) PB.q = null;
@@ -7315,7 +7328,10 @@ function shelfScene(q) {
     });
   });
 }
-function shelfAway() {   // she did it while the player was elsewhere: she is in the kitchen, the mug on its floor
+// she did it while the player was elsewhere: she is in the kitchen, the mug on its floor; when she is not free (asleep,
+// out, in the garden, on the lap, carried, sulking, busy …) nothing moves: only the text tells it
+function shelfAway() {
+  if (!paybackMovable()) return;
   const ctr = spot('kitchen', 'counter') || { x: 282, y: 322 };
   if (G.her !== 'kitchen' && places().includes('kitchen')) { G.her = 'kitchen'; K.idle = null; update(); }
   Object.assign(MUG, { on: true, seen: false, x: ctr.x + 62, y: Math.max(ctr.y + 170, 492), rot: 150, key: '' });
@@ -7448,7 +7464,8 @@ function onGesture(ev) {
       return;
     }
     // scratching a visitor counts as a gentle stroke along the fur (once a second)
-    case 'scratchStart': { const vr = vRegion(ev.region); if (vr) { const m = moverOf(vr.id); if (m) holdVisitor(m, 4000); return; } if (!K.gone) { stay(); purr(1500, 0.8); } return; }
+    // while she is cross no purr: the scratch only gets a swat (a sulk is made up by it, so the purr is right there)
+    case 'scratchStart': { const vr = vRegion(ev.region); if (vr) { const m = moverOf(vr.id); if (m) holdVisitor(m, 4000); return; } if (!K.gone) { stay(); if (!E.health(G.st).cross) purr(1500, 0.8); } return; }
     case 'scratch': {
       const vr = vRegion(ev.region);
       if (vr) { strokeVisitorBy(vr, true, 300); return; }
@@ -7504,7 +7521,7 @@ function placeCarry(w) {
 }
 function dropCat(target, w) {
   K.carry = null; targets([], null);
-  { const h = E.health(G.st); if (h.sulk || h.cross) K.sulkPlace = { p: null, until: perf() + Math.max(0, h.teaseUntil - now()) }; }   // she sulks where she is put
+  { const h = E.health(G.st); if (h.sulk || h.cross) K.sulkPlace = { p: null, room: G.view === 'garden' && !h.garden ? 'hall' : G.view, until: perf() + Math.max(0, h.teaseUntil - now()) }; }   // she sulks where she is put
   if ((target === 'chair' || target === 'bench') && can('lapOn')) {
     if (G.seat !== target) G.seat = target;
     doAct('putDown', target);
@@ -7554,7 +7571,8 @@ function onTap(ev) {
     if (h.asleep && !h.lapDoze) { tip('sleepTap', `${n} spí, nebuď ji.`, 2500); popFx('zzz'); flickEar(); return; }
     if (h.lapDoze) { popFx('zzz'); return; }
     if (h.tree) { say('plaintive'); tip('tree', `Podrž na ní prst a sundáš ji.`, 4000); return; }
-    if (K.gone || K.carry || K.teaseLock > perf()) return;      // right after a blowUp, a trap, a swat …: the tap is ignored
+    if (K.gone || K.carry) return;
+    if (K.teaseLock > perf()) { gest.cancel(); return; }        // right after a blowUp, a trap, a swat …: ignored, and the run ends
     const pat = ev.pat && !/^v:/.test(ev.pat.region) ? ev.pat : null;   // a run of taps on Koxa
     if (h.cross) {
       if (pat && pat.n >= 2) patTap(pat);
@@ -7568,7 +7586,7 @@ function onTap(ev) {
     const want = E.wants(G.st);
     bubble(want ? (icon(want) || 'Mňau!') : md === 'happy' ? 'Mrrr!' : 'Mňau?');
     const rid = pat ? pat.region : ev.region && ev.region.id;
-    if (rid === 'nose' && K.boopUntil <= perf()) doAct('boop');   // she squints and sneezes (a second one waits for the first)
+    if (rid === 'nose' && K.boopUntil <= perf() && doAct('boop').some(e => e.type === 'boop' && e.swat)) gest.cancel();   // she squints and sneezes (a second one waits for the first); the swat ends the run
     return;
   }
   if (!w.inScene || K.lapView) return;
@@ -7978,10 +7996,16 @@ function gameMenu() {
   })).concat([{ text: 'Zavřít', cls: 'alt' }]));
   void today;
 }
+// teased: cross = the engine's own words for play; a sulk is made up first (by stroking or a treat, as the help says)
+function teaseRefusal() {
+  const h = E.health(G.st);
+  return h.cross ? `${nm()} si s tebou teď hrát nechce. Zlobí se.` : h.sulk ? `${nm()} je uražená. Nejdřív ji usmiř – pohlaď ji nebo jí dej pamlsek.` : '';
+}
 function startGame(id) {
   const h = E.health(G.st);
   if (h.out) { toast(`${nm()} je venku.`); return; }
   if (h.asleep) { toast(`${nm()} spí, nebuď ji.`); return; }
+  { const no = teaseRefusal(); if (no) { toast(no, 3200); return; } }
   if (h.lap || G.seat) standUp();
   if (laser.on) setLaser(false);
   const info = GAME_INFO[id];
@@ -8127,6 +8151,7 @@ function trainMenu() {
 function startTrain(id) {
   const h = E.health(G.st);
   if (h.out || h.asleep) { toast(h.out ? `${nm()} je venku.` : `${nm()} spí, nebuď ji.`); return; }
+  { const no = teaseRefusal(); if (no) { toast(no, 3200); return; } }
   if (h.lap || G.seat) standUp();
   if (G.view === 'garden' && !h.garden) go('hall', -1);
   G.her = G.view;
@@ -8153,6 +8178,7 @@ function perform(id) {
   setTimeout(drawHint, 1600);
 }
 function showOff(id) {
+  { const no = teaseRefusal(); if (no) { toast(no, 3200); return; } }
   const evs = doAct('showTrick', { trick: id });
   const p = evs.find(e => e.type === 'perform');
   if (p && p.ok) perform(id);
@@ -9779,8 +9805,8 @@ function renderHelp() {
       ${hrow(A.cat('sit', 'happy') + ov(finger(80, 46) + finger(120, 46)), 'Drbání', 'Jedním nebo dvěma prsty ji drbej za ušima, na hlavě nebo na bradě. Prsty pohybuj sem a tam na jednom místě.')}
       ${hrow(cat('belly', 'happy', 'loaf'), 'Bříško', 'Bříško si nechá podrbat jen někdy, jindy tě hravě kousne. Když je mrzutá, kousne pokaždé.')}
       ${hrow(A.cat('sit', 'calm') + ov(tap(100, 120)), 'Ťuknutí', 'Ťukni na ni a podívá se na tebe. Když něco chce, ukáže ti to v bublině.')}
-      ${hrow(cat('rearUp', 'happy', 'loaf') + ov(tap(150, 150)), 'Poplácání', 'Ťukej na ni lehce prstem pořád dokola. Na zádech má ráda klidné, pravidelné poplácávání a na jednom místě úplně nejradši – zkus ho najít, i správné tempo. Hlavu, bradu a tlapky snese. Ocas nech být a bříško je past: chytí tě za ruku a kope.')}
-      ${hrow(A.cat('sit', { mood: 'grumpy', warn: true }), 'Než se naštve', `Když švihá špičkou ocasu, dává uši do stran a cuká jí kůže na zádech, má toho dost. Přestaň – když ťukáš dál, naježí se, uteče a urazí se. Rychlé bubnování nemá ráda nikdy, a když je mrzutá, ani pomalé. Při jídle ji nech. Spící ${n} jen cukne uchem.`)}
+      ${hrow(cat('rearUp', 'happy', 'loaf') + ov(tap(150, 150)), 'Poplácání', 'Ťukej na ni lehce prstem pořád dokola. Na zádech má ráda klidné, pravidelné poplácávání a na jednom místě úplně nejradši – zkus ho najít, i správné tempo. Hlavu, bradu, uši a tlapky jen snese, i rychlé bubnování. Ocas nech být a bříško je past: chytí tě za ruku a kope.')}
+      ${hrow(A.cat('sit', { mood: 'grumpy', warn: true }), 'Než se naštve', `Když švihá špičkou ocasu, dává uši do stran a cuká jí kůže na zádech, má toho dost. Přestaň. Rychlé bubnování po zádech, ťukání na ocas a poplácávání, když je mrzutá: pak se naježí, uteče a urazí se. Když ji poplácáváš moc dlouho, jemně tě kousne (z klína seskočí). Při jídle ji nech. Spící ${n} jen cukne uchem.`)}
       ${hrow(A.cat('sit', { mood: 'calm', eyes: 'cross' }), 'Ťuknutí do nosu', 'Ťukni jí jednou do nosu: zašilhá, kýchne a zatřepe hlavou. Třikrát za minutu je ale moc – plácne tě tlapkou (drápky nechá schované) a urazí se.')}
       ${hrow(cat('rub', 'happy'), 'Usmíření', 'Uražená sedí zády k tobě na druhém konci pokoje. Pohlaď ji po srsti, podrbej ji nebo jí dej pamlsek a usmíříte se – otře se ti o ruku. Za pár minut ji to přejde i samo. Když to se škádlením přeženeš, opravdu se zlobí: 20 minut tě neposlouchá, nehraje si a na pohlazení plácne tlapkou. Pak ji nech být. A někdy ti to vrátí…')}
       ${hrow(A.cat('carried', 'happy'), 'Nošení', 'Podrž na ní prst a zvedneš ji. Přenes ji do pelíšku, na okno nebo do křesla. Doneseš-li ji ke dveřím v předsíni, půjdete spolu na zahradu. Když nemá náladu, vykroutí se.')}

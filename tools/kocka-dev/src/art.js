@@ -50,7 +50,8 @@
 //                            head units round the nose, only when the face is visible, neighbours and kittens too; tailBase = kořen ocasu,
 //                            the back just in front of the tail root, in every pose that has 'back'). The list is in
 //                            hit-test order: the first region whose path contains the point wins (nose before chin, chin before head, head
-//                            before ears, so 'ears' is only the visible ear above the head plus a small margin). Paths
+//                            before ears, so 'ears' is only the visible ear above the head plus a small margin; rearUp puts
+//                            tailBase before paws: its kořen ocasu covers the raised haunch down over the hind legs). Paths
 //                            may hold several subpaths (both ears, every paw): use the nonzero rule. `fur` is the unit
 //                            vector of stroking along the fur (head → tail; on the head from the forehead over the top,
 //                            on the chin and throat downwards). Pass the same opts as cat() (the tail follows the mood).
@@ -932,7 +933,10 @@ function KockaArt() {
     R.close();
     head(R, 60, 140, 0.9, -8, H(e, { eyes: o.asleep || o.ill ? e.eyes : e.eyes === 'grumpy' ? 'grumpy' : 'happy', blush: !o.ill, ears: o.ears || 'turned' }));
     R.region('back', BODY, unit(1, -0.7));
-    R.tailBaseAt = [157, 156, 23, 22, -20, unit(1, -0.8)];
+    // the kořen ocasu covers the whole raised haunch down over the hind legs, and wins over the hind paws here: a tap run
+    // from the lower part of loaf's, belly's or sideLie's tailBase lands on it and goes on (never on 'paws' or nothing)
+    R.tailBaseAt = [159, 164, 28, 28, -20, unit(1, -0.8)];
+    R.order = ['nose', 'chin', 'tail', 'tailBase', 'paws', 'head', 'ears', 'belly', 'back'];
     R.mid = [120, 146];
     R.skin = [124, 120];
   }
@@ -1108,7 +1112,7 @@ function KockaArt() {
       const fur = K ? unit(g.fur[0] * K.sx, g.fur[1] * K.sy) : g.fur;
       if (by[g.id]) by[g.id].path += path; else by[g.id] = { id: g.id, path, fur };
     }
-    return ORDER.filter(id => by[id]).map(id => by[id]);
+    return (R.order || ORDER).filter(id => by[id]).map(id => by[id]);
   }
   // a point of the pose's drawing → the kitten's box: squash, the lap zoom, size
   function kitMap(R) {
