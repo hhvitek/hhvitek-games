@@ -862,12 +862,14 @@ function showModal(html, buttons) {
    Its answer depends only on the position, the game's seed and the move number, so Undo and a reload give the same
    reply to the same move. */
 let worker = null, workerOk = true, job = 0, pending = null, watchdog = 0;
+// the worker's source is made into a URL once per page, so a terminated worker (Undo, Nová hra) leaves nothing behind
+let workerUrl = null;
 function makeWorker() {
   if (!workerOk) return null;
   try {
     const src = DamaEngine.toString() + '\nconst E = DamaEngine();\nonmessage = e => { postMessage({ id: e.data.id, r: E.think(e.data.o) }); };';
-    const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
-    const w = new Worker(url);
+    workerUrl = workerUrl || URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+    const w = new Worker(workerUrl);
     w.onmessage = e => { if (pending && e.data.id === pending.id) { const cb = pending.cb; pending = null; clearTimeout(watchdog); cb(e.data.r); } };
     w.onerror = e => { if (e && e.preventDefault) e.preventDefault(); workerOk = false; worker = null; runHere(); };
     return w;

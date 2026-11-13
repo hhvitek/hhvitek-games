@@ -994,7 +994,7 @@ function renderHelp() {
       <li>Pod některými políčky jsou schované miny ${ic('sMine')}. Odkryj všechna políčka, pod kterými mina není.</li>
       <li>Číslo na odkrytém políčku říká, kolik min je v osmi políčkách kolem něj. Políčko bez čísla nemá kolem žádnou minu a samo odkryje sousedy.</li>
       <li><b>První ťuknutí je vždy bezpečné</b> a odkryje kus plochy.</li>
-      <li>Tlačítko <b>Odkrýt / Vlajka</b> dole přepíná, co dělá ťuknutí. Vlajkou ${ic('sFlag')} si označíš, kde je podle tebe mina; políčko s vlajkou se omylem neodkryje. Druhým ťuknutím vlajku zase sundáš.</li>
+      <li>Tlačítko <b>Odkrýt / Vlajka</b> dole přepíná, co dělá ťuknutí. Vlajkou ${ic('sFlag')} si označíš, kde je podle tebe mina; políčko s vlajkou se omylem neodkryje. Vlajku sundáš dalším ťuknutím v režimu Vlajka${S.longPress ? ' nebo podržením prstu v režimu Odkrýt' : ''}.</li>
       ${S.longPress ? '<li><b>Podržením prstu</b> uděláš opak ťuknutí: v režimu Odkrýt dáš vlajku, v režimu Vlajka políčko odkryješ. Na počítači dělá totéž pravé tlačítko myši.</li>' : '<li>Podržení prstu jde zapnout v Nastavení: pak dělá opak ťuknutí.</li>'}
       <li>Ťukni na odkryté číslo, kolem kterého už je stejně vlajek, kolik ukazuje: odkryjí se všechna ostatní políčka kolem. Když je některá vlajka špatně, vybuchne mina.</li>
       <li>Nahoře je počet min, které zbývá označit (miny minus vlajky), a čas.</li>

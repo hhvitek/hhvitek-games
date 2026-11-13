@@ -567,6 +567,8 @@ const rulesChanged = () => S.level !== G.level || S.fleet !== G.rules.fleet || S
 // before the battle the opponent and "again" change at once and your arranged ships stay; only another fleet needs a
 // new placement
 const changesHere = () => !G.started && S.fleet === G.rules.fleet;
+// after Hrát, before your first shot: a new game (the opponent may have shot already) with your ships where they were
+const keepsShips = () => G.started && S.fleet === G.rules.fleet;
 function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
 function save() {
   try {
@@ -627,13 +629,15 @@ function count() {
   const n = yourShots();
   if (!G.helped && (st.best == null || n < st.best)) { G.record = st.best != null; st.best = n; }
 }
-// a new game: the starter changes every game (a game in which you did not shoot yet keeps its starter)
-function newGame(msg) {
+// a new game: the starter changes every game (a game in which you did not shoot yet keeps its starter);
+// keepMine (a settings change before your first shot) keeps your arranged ships when the fleet is the same
+function newGame(msg, keepMine) {
   stopThinking();
   const starter = !G ? 0 : isFresh() ? G.starter : 1 - G.starter;
   const seed = rnd(2 ** 31), L = E.FLEETS[S.fleet];
+  const mine = keepMine && G && keepsShips() ? cleanFleet(G.mine) : E.randomFleet(L, randUnit);
   G = { level: S.level, rules: { fleet: S.fleet, again: S.again }, foe: O.create(rnd, G && G.foe ? [G.foe.name] : []), seed, starter,
-        mine: E.randomFleet(L, randUnit), theirs: E.randomFleet(L, E.rng(seed)), hist: [], started: false, shots: [],
+        mine, theirs: E.randomFleet(L, E.rng(seed)), hist: [], started: false, shots: [],
         helped: false, counted: false, record: false, status: 'playing' };
   hintCell = -1; drag = null; fresh = -1;
   sync(); save(); render();
@@ -981,7 +985,7 @@ const swatch = id => `<span class="swatch" data-theme="${id}"><span class="cells
 function renderSettings() {
   const changed = G && rulesChanged();
   const notice = !changed ? '' : changesHere() ? '<div class="notice">Platí hned, tvoje rozmístěné lodě zůstávají.</div>'
-    : isFresh() ? `<div class="notice">Po návratu do hry začne <b>nová hra</b> s tímto nastavením${!G.started ? ' a lodě se rozmístí znovu' : ''}.</div>`
+    : isFresh() ? `<div class="notice">Po návratu do hry začne <b>nová hra</b> s tímto nastavením${keepsShips() ? ', tvoje lodě zůstanou rozmístěné, jak jsou' : ' a lodě se rozmístí znovu'}.</div>`
     : `<div class="notice">Změna platí od příští hry.${hasProgress() ? ' Rozehraná hra zůstává.' : ''}</div>`;
   const fl = FLEETS.find(f => f.id === S.fleet);
   $('#settingsIn').innerHTML = `
@@ -1035,7 +1039,7 @@ function closeSettings() {
     G.level = S.level; G.rules.again = S.again;
     sync(); save(); render(); toast(msg);
   }
-  else if (rulesChanged() && isFresh()) newGame('Začala nová hra s novým nastavením'); // keeps the starter
+  else if (rulesChanged() && isFresh()) newGame(keepsShips() ? 'Nová hra s novým nastavením, tvoje lodě zůstaly' : 'Začala nová hra s novým nastavením', true); // keeps the starter
   else if (rulesChanged()) { render(); toast(`Změna platí od příští hry${hasProgress() ? '. Rozehraná hra zůstává.' : ''}`); }
   else render();
   cpuTurn();

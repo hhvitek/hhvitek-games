@@ -972,6 +972,7 @@ function validGame(g) {
       }
     }
     if (!ok) g.history = [];
+    else if (g.history.length > HISTORY_MAX) g.history = g.history.slice(-HISTORY_MAX);
     g.hints = Number.isInteger(g.hints) && g.hints >= 0 ? g.hints : 0;
     g.warned = g.warned === true;
     g.counted = g.counted === true;
@@ -1261,6 +1262,8 @@ function autoCross(touched) {
   for (const r of rows) if (sameRuns(runsOf(rowLine(G.cells, P, r)), cl.rows[r])) for (let c = 0; c < w; c++) if (!G.cells[r * w + c]) G.cells[r * w + c] = 2;
   for (const c of cols) if (sameRuns(runsOf(colLine(G.cells, P, c)), cl.cols[c])) for (let r = 0; r < P.h; r++) if (!G.cells[r * w + c]) G.cells[r * w + c] = 2;
 }
+// Zpět keeps the newest strokes only, so the save stays small (an entry with auto-crosses can hold 225 cells)
+const HISTORY_MAX = 200;
 // after a stroke (or the test solve): one history entry with every changed cell, then the win check
 function commit(snap, touched) {
   if (S.autoCross) autoCross(touched);
@@ -1268,6 +1271,7 @@ function commit(snap, touched) {
   G.cells.forEach((v, i) => { if (v !== snap[i]) entry.push([i, snap[i], v]); });
   if (!entry.length) { paint(); return; }
   G.history.push(entry);
+  if (G.history.length > HISTORY_MAX) G.history.splice(0, G.history.length - HISTORY_MAX); // the oldest strokes lose Zpět
   if (S.mistakes) G.warned = true;
   hint = null;
   if (solved(G)) win();

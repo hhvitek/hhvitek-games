@@ -876,12 +876,14 @@ function showModal(html, buttons) {
    Its answer depends only on the marks, the game's seed and the level, so Undo and a reload give the same reply to the
    same move. */
 let worker = null, workerOk = true, job = 0, pending_ = null, watchdog = 0;
+// the worker's source is made into a URL once per page, so a terminated worker (Undo, Nová hra) leaves nothing behind
+let workerUrl = null;
 function makeWorker() {
   if (!workerOk) return null;
   try {
     const src = PiskvorkyEngine.toString() + '\nconst E = PiskvorkyEngine();\nonmessage = e => { postMessage({ id: e.data.id, r: E.think(e.data.o) }); };';
-    const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
-    const w = new Worker(url);
+    workerUrl = workerUrl || URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+    const w = new Worker(workerUrl);
     w.onmessage = e => { if (pending_ && e.data.id === pending_.id) { const cb = pending_.cb; pending_ = null; clearTimeout(watchdog); cb(e.data.r); } };
     w.onerror = e => { if (e && e.preventDefault) e.preventDefault(); workerOk = false; worker = null; runHere(); };
     return w;

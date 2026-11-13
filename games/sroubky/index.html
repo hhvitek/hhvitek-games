@@ -461,9 +461,10 @@ let verdict = null;   // what the solver says about the current position (cached
 const busyToast = () => moving ? toast('Chvilku, matky se ještě přesouvají') : toast('Chvilku, připravuji hru…', 60000);
 const L = () => levelOf(G.level);
 const cap = () => L().cap;
-// a game counts as played from its first move (G.counted); before that it is untouched and may be replaced
-const isFresh = () => !G.counted;
-const inProgress = () => G && G.status === 'playing' && G.counted;
+// a game counts as played (statistics) from its first move (G.counted); it is untouched while no move is on the board
+// (also after Od začátku or undoing every move), so it may be replaced and needs no confirmation
+const isFresh = () => G.moves === 0 && !G.history.length && G.status === 'playing';
+const inProgress = () => G && G.status === 'playing' && !isFresh();
 const stat = id => bests[id] || (bests[id] = { played: 0, won: 0, best: null });
 
 function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }

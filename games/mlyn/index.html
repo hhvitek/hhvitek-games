@@ -866,12 +866,14 @@ function showModal(html, buttons) {
    Its answer depends only on the position, the game's seed and the move number, so Undo and a reload give the same
    reply to the same move. */
 let worker = null, workerOk = true, job = 0, pending = null, watchdog = 0;
+// the worker's source is made into a URL once per page, so a terminated worker (Undo, Nová hra) leaves nothing behind
+let workerUrl = null;
 function makeWorker() {
   if (!workerOk) return null;
   try {
     const src = MlynEngine.toString() + '\nconst E = MlynEngine();\nonmessage = e => { postMessage({ id: e.data.id, r: E.think(e.data.o) }); };';
-    const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
-    const w = new Worker(url);
+    workerUrl = workerUrl || URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+    const w = new Worker(workerUrl);
     w.onmessage = e => { if (pending && e.data.id === pending.id) { const cb = pending.cb; pending = null; clearTimeout(watchdog); cb(e.data.r); } };
     w.onerror = e => { if (e && e.preventDefault) e.preventDefault(); workerOk = false; worker = null; runHere(); };
     return w;
@@ -1146,7 +1148,7 @@ function tapPoint(i) {
   if (pend) {
     const m = pend.list.find(x => E.mRm(x) === i);
     if (m !== undefined) { playYours(m, true); return; }
-    toast(shownText()[i] === foe ? 'Kámen z mlýna vzít nejde, soupeř má i jiné kameny' : 'Vezmi kámen s oranžovým kroužkem');
+    toast(shownText()[i] === foe ? 'Kámen z mlýna vzít nejde, soupeř má na desce i kameny mimo mlýny' : 'Vezmi kámen s oranžovým kroužkem');
     return;
   }
   const list = E.moves(t, G.jump), [hand, board] = stones(t, G.you);
@@ -1321,7 +1323,7 @@ function renderHelp() {
       <li>Každý hráč má <b>9 kamenů</b>. Začínají bílé; kdo začíná, se každou hru střídá.</li>
       <li><b>Pokládání:</b> nejdřív hráči střídavě pokládají kameny na volné body (kde se kříží nebo končí čáry).</li>
       <li><b>Posouvání:</b> když jsou všechny kameny položené, táhne se kamenem po čáře na sousední volný bod.</li>
-      <li><b>Mlýn</b> jsou tři tvoje kameny v jedné řadě na čáře. Kdo mlýn složí (položením i posunutím), vezme soupeři jeden kámen. Kámen z mlýna vzít nejde, pokud má soupeř i jiné kameny. Dva mlýny najednou berou také jen jeden kámen.</li>
+      <li><b>Mlýn</b> jsou tři tvoje kameny v jedné řadě na čáře. Kdo mlýn složí (položením i posunutím), vezme soupeři jeden kámen. Kámen z mlýna vzít nejde, pokud má soupeř na desce i kameny mimo mlýny. Dva mlýny najednou berou také jen jeden kámen.</li>
       <li>Mlýn můžeš otevřít (odtáhnout z něj kámen) a pak znovu zavřít: zase bereš.</li>
       <li><b>Skákání:</b> komu zbudou jen tři kameny, smí skočit na kterýkoli volný bod. Dá se vypnout v Nastavení.</li>
       <li><b>Prohrává</b>, komu zbudou jen dva kameny, nebo kdo nemůže táhnout (všechny jeho kameny jsou zablokované).</li>
