@@ -406,6 +406,7 @@ ROCKET.legAngle = Math.atan2(ROCKET.footY - ROCKET.hingeY, ROCKET.footX - ROCKET
 const LIMITS = { vDown: 4, vSide: 2, tilt: 8, tipMax: 25 };
 const TIP_G = 18; // the tip-over's pace (m/s², not the world's gravity: a slow topple on the Moon was only waiting)
 // steering and the engine: rate-limited, damped, auto-levelling rotation; on/off throttle with a spool-up
+const GOV = { on: true, base: 1.2, slope: .3, top: 45, k: 1.5 };
 const CTRL = { rate: 70 * DEG, level: 25 * DEG, levelGain: 4, damp: 0.12, maxTilt: 40 * DEG, spoolUp: 0.25, spoolDown: 0.1, relight: 0.3 };
 // air: density = mission.air * exp(-height / scale); drag = k * density * |v rel| * v rel (the side of a long body
 // catches much more air than its end)
@@ -473,23 +474,23 @@ const CHAPTERS = [
   { id: 2, name: 'Moře', what: 'Přistání na lodi uprostřed moře.' },
   { id: 3, name: 'Vítr', what: 'Vítr odnáší raketu do strany.' },
   { id: 4, name: 'Noc a mraky', what: 'Večer, noc, mlha a bouře.' },
-  { id: 5, name: 'Zážehy', what: 'Silný motor, který jde zapálit jen několikrát.' },
-  { id: 6, name: 'Jiné světy', what: 'Měsíc a Mars: slabá tíže a pozemský motor je tu moc silný.' },
+  { id: 5, name: 'Zážehy', what: 'Motor jde zapálit jen několikrát a paliva je málo: zapal ho pozdě a pak ho drž.' },
+  { id: 6, name: 'Jiné světy', what: 'Měsíc a Mars: slabá tíže a skoro žádný vzduch, pohyb do strany nic nebrzdí.' },
 ];
 
-const HOT = 1.9; // thrust/weight of the chapter 5 engine (2.4 when nearly empty): it cannot hover
-// chapter 6 keeps the ordinary Earth engine (thrust/weight 1.3 on Earth): on a light world it is far too strong
+const HOT = 1.9; // thrust/weight of the chapter 5 engine (2.4 when nearly empty): it brakes hard, so it can be lit late
+// chapter 6 keeps the ordinary Earth engine (thrust/weight 1.3 on Earth): strong on a light world (the governor tames it)
 const EARTH_ENGINE = 1.3 * PLANETS.earth.g, MOON_TWR = EARTH_ENGINE / PLANETS.moon.g, MARS_TWR = EARTH_ENGINE / PLANETS.mars.g;
 const MISSIONS = [
   // 1. Poušť
-  { id: 'm01', chapter: 1, num: 1, name: 'První přistání', what: 'Raketa padá rovnou nad plošinu. Drž plamen a dosedni pomalu.', seed: 11,
+  { id: 'm01', chapter: 1, num: 1, name: 'První přistání', what: 'Raketa padá rovnou nad plošinu. Začni brzdit včas a motor drž až na zem.', seed: 11,
     start: { x: 0, alt: 250, vx: 0, vy: -22 }, fuel: 25 },
   { id: 'm02', chapter: 1, num: 2, name: 'Posun do strany', what: 'Raketa letí šikmo. Nakloň ji, ať doletí nad plošinu.', seed: 12,
-    start: { x: -80, alt: 280, vx: 6, vy: -28 }, fuel: 22, pad: { halfWidth: 22 } },
+    start: { x: -80, alt: 280, vx: 6, vy: -28 }, fuel: 22, pad: { halfWidth: 20 } },
   { id: 'm03', chapter: 1, num: 3, name: 'Z výšky', what: 'Pád z velké výšky rychleji než zvuk, skrz vrstvu mraků.', seed: 13,
     start: { x: -120, alt: 2000, vx: 5, vy: -360 }, fuel: 34, scene: { clouds: { base: 1200, top: 1800 } }, pad: { halfWidth: 16 } },
   { id: 'm04', chapter: 1, num: 4, name: 'Úzká plošina', what: 'Úzká plošina: obě nohy se na ni musí vejít.', seed: 14,
-    start: { x: 45, alt: 280, vx: -4, vy: -30 }, fuel: 23, pad: { halfWidth: 12 } },
+    start: { x: 45, alt: 280, vx: -4, vy: -30 }, fuel: 23, pad: { halfWidth: 13 } },
   // 2. Moře
   { id: 'm05', chapter: 2, num: 1, name: 'Loď na moři', what: 'Plošina je loď. Když ji mineš, raketa spadne do moře.', seed: 21,
     start: { x: -55, alt: 280, vx: 5, vy: -30 }, fuel: 23, pad: { kind: 'barge', halfWidth: 14 } },
@@ -518,25 +519,25 @@ const MISSIONS = [
   { id: 'm16', chapter: 4, num: 4, name: 'Bouře na moři', what: 'Noc, déšť, blesky, vlny a poryvy.', seed: 44,
     start: { x: 45, alt: 340, vx: -4, vy: -32 }, fuel: 29, wind: { steady: -5, gusts: 8 },
     pad: { kind: 'barge', halfWidth: 12, drift: 7, waves: { heave: 1.8, pitch: 5, period: 7 } }, scene: { sky: 'storm', rain: true, lightning: true, clouds: { base: 450, top: 1100 } } },
-  // 5. Zážehy (a strong engine: no hovering, light it late)
-  { id: 'm17', chapter: 5, num: 1, name: '3 zážehy', what: 'Silný motor jde zapálit jen třikrát. Vznášet se nedá.', seed: 51,
-    twr: HOT, ignitions: 3, start: { x: -85, alt: 600, vx: 8, vy: -70 }, fuel: 19, pad: { halfWidth: 11.5 } },
+  // 5. Zážehy (few ignitions and a small tank: light the strong engine late and hold it)
+  { id: 'm17', chapter: 5, num: 1, name: '3 zážehy', what: 'Motor jde zapálit jen třikrát a paliva je málo. Když motor pustíš, zážeh je pryč.', seed: 51,
+    twr: HOT, ignitions: 3, start: { x: -85, alt: 600, vx: 8, vy: -70 }, fuel: 17, pad: { halfWidth: 12.5 } },
   { id: 'm18', chapter: 5, num: 2, name: '2 zážehy', what: 'Jen dva zážehy: jeden na srovnání směru, druhý na přistání.', seed: 52,
-    twr: HOT, ignitions: 2, start: { x: 110, alt: 600, vx: -12, vy: -68 }, fuel: 18, wind: { steady: 3 }, pad: { halfWidth: 11.5 } },
-  { id: 'm19', chapter: 5, num: 3, name: 'Jediný zážeh', what: 'Jediný zážeh: zapal motor co nejpozději a nepouštěj ho.', seed: 53,
-    twr: HOT, ignitions: 1, start: { x: -50, alt: 550, vx: 4, vy: -65 }, fuel: 16, pad: { halfWidth: 11.5 } },
+    twr: HOT, ignitions: 2, start: { x: 110, alt: 600, vx: -12, vy: -68 }, fuel: 18, wind: { steady: 3 }, pad: { halfWidth: 12.5 } },
+  { id: 'm19', chapter: 5, num: 3, name: 'Jediný zážeh', what: 'Jediný zážeh: zapal motor pozdě a už ho nepouštěj.', seed: 53,
+    twr: HOT, ignitions: 1, start: { x: -50, alt: 550, vx: 4, vy: -65 }, fuel: 16, pad: { halfWidth: 12 } },
   { id: 'm20', chapter: 5, num: 4, name: 'Jediný zážeh na lodi', what: 'Jediný zážeh a loď na vlnách.', seed: 54,
-    twr: HOT, ignitions: 1, start: { x: 40, alt: 550, vx: -4, vy: -65 }, fuel: 16, pad: { kind: 'barge', halfWidth: 11.5, waves: { heave: 1, pitch: 3, period: 8 } } },
+    twr: HOT, ignitions: 1, start: { x: 40, alt: 550, vx: -4, vy: -65 }, fuel: 16, pad: { kind: 'barge', halfWidth: 12.5, waves: { heave: 1, pitch: 3, period: 8 } } },
   // 6. Jiné světy
-  { id: 'm21', chapter: 6, num: 1, name: 'Měsíc', what: 'Motor stavěný pro Zemi je tu moc silný: krátké přesné zážehy, nic nebrzdí boční pohyb.', seed: 61,
-    world: 'moon', twr: MOON_TWR, ignitions: 3, start: { x: -75, alt: 280, vx: 8, vy: -20 }, fuel: 11, scene: { sky: 'moon', terrain: 'moon' } },
-  { id: 'm22', chapter: 6, num: 2, name: 'Kráter', what: 'Plošina je na dně kráteru. Přeleť okraj a brzdi krátkými zážehy.', seed: 62,
-    world: 'moon', twr: MOON_TWR, ignitions: 2, start: { x: -260, alt: 700, vx: 12, vy: -12 }, fuel: 14, scene: { sky: 'moon', terrain: 'crater' },
+  { id: 'm21', chapter: 6, num: 1, name: 'Měsíc', what: 'Slabá tíže a žádný vzduch: pohyb do strany tu nic nebrzdí, musíš ho zastavit sám.', seed: 61,
+    world: 'moon', twr: MOON_TWR, ignitions: 3, start: { x: -75, alt: 280, vx: 8, vy: -20 }, fuel: 11, pad: { halfWidth: 13 }, scene: { sky: 'moon', terrain: 'moon' } },
+  { id: 'm22', chapter: 6, num: 2, name: 'Kráter', what: 'Plošina je na dně kráteru. Přeleť okraj a pak se do kráteru trefuj.', seed: 62,
+    world: 'moon', twr: MOON_TWR, ignitions: 2, start: { x: -260, alt: 700, vx: 12, vy: -12 }, fuel: 14, pad: { halfWidth: 12.5 }, scene: { sky: 'moon', terrain: 'crater' },
     crater: { floor: 110, rim: 250, out: 420, h: 140 } },
-  { id: 'm23', chapter: 6, num: 3, name: 'Mars', what: 'Tíže je třetinová a vzduch skoro nebrzdí. Pozemský motor je moc silný a zapálíš ho jen dvakrát.', seed: 63,
-    world: 'mars', twr: MARS_TWR, ignitions: 2, start: { x: -90, alt: 600, vx: 8, vy: -50 }, fuel: 17, scene: { sky: 'mars', terrain: 'mars' } },
-  { id: 'm24', chapter: 6, num: 4, name: 'Prachová bouře', what: 'Prachová bouře na Marsu: silné poryvy, špatně vidět a moc silný motor.', seed: 64,
-    world: 'mars', twr: MARS_TWR, ignitions: 2, start: { x: 85, alt: 600, vx: -7, vy: -50 }, fuel: 19, wind: { steady: 12, gusts: 20 }, scene: { sky: 'dust', terrain: 'mars', haze: 0.6 } },
+  { id: 'm23', chapter: 6, num: 3, name: 'Mars', what: 'Tíže je třetinová a řídký vzduch skoro nebrzdí. Motor zapálíš jen dvakrát.', seed: 63,
+    world: 'mars', twr: MARS_TWR, ignitions: 2, start: { x: -90, alt: 600, vx: 8, vy: -50 }, fuel: 17, pad: { halfWidth: 12.5 }, scene: { sky: 'mars', terrain: 'mars' } },
+  { id: 'm24', chapter: 6, num: 4, name: 'Prachová bouře', what: 'Prachová bouře na Marsu: silné poryvy a špatně vidět.', seed: 64,
+    world: 'mars', twr: MARS_TWR, ignitions: 2, start: { x: 85, alt: 600, vx: -7, vy: -50 }, fuel: 19, wind: { steady: 12, gusts: 20 }, pad: { halfWidth: 12.5 }, scene: { sky: 'dust', terrain: 'mars', haze: 0.6 } },
 ].map(mission);
 const PARS = {}; // the fuel par of each mission, filled in below (see Score)
 
@@ -685,11 +686,22 @@ function step(f, input, dt) {
   f.a += f.w * dt;
   if (f.a > CTRL.maxTilt) { f.a = CTRL.maxTilt; if (f.w > 0) f.w = 0; }
   if (f.a < -CTRL.maxTilt) { f.a = -CTRL.maxTilt; if (f.w < 0) f.w = 0; }
-  // the engine: a new burn after more than 0.3 s off uses one ignition; a shorter gap is the same burn
+  // the landing governor (user's wish 2026-11-14: the game is about hitting the pad, not balancing above it): a held
+  // engine never lifts the rocket and never brakes it below a gentle descent: GOV.base m/s at the surface, growing by
+  // GOV.slope per metre up to GOV.top (so high up it still brakes hard). Holding it down to the ground lands softly,
+  // when the braking started early enough; letting go saves fuel and time.
+  let cap = 1;
+  if (GOV.on) {
+    const down = -(f.vy - f.deck.vy), vT = GOV.base + GOV.slope * Math.min(f.alt, GOV.top);
+    cap = clamp((m.g + GOV.k * (down - vT)) / Math.max(.3, Math.cos(f.a)) / thrustAccel(f), 0, 1);
+  }
+  // the engine: a new burn after more than 0.3 s off uses one ignition; a shorter gap is the same burn. A new burn
+  // waits (held) while the governor would give no thrust at all, so it never spends an ignition on nothing.
   const want = !!(input && input.burn);
   if (want && !f.burning) {
     if (f.fuel <= 0) { if (!f.pressed) ev(f, 'noIgnition', { why: 'fuel' }); }
     else if (f.session) f.burning = true;
+    else if (cap <= 0) { /* falling slower than the governor allows: it lights once the rocket is fast enough */ }
     else if (f.ignLeft === 0) { if (!f.pressed) ev(f, 'noIgnition', { why: 'ignitions' }); }
     else {
       f.burning = f.session = true; f.ignUsed++;
@@ -703,7 +715,8 @@ function step(f, input, dt) {
     f.sinceOff += dt;
     if (f.sinceOff > CTRL.relight) { f.session = false; ev(f, 'shutdown'); }
   }
-  f.throttle = f.burning ? Math.min(1, f.throttle + dt / CTRL.spoolUp) : Math.max(0, f.throttle - dt / CTRL.spoolDown);
+  const goal = f.burning ? cap : 0;
+  f.throttle = goal > f.throttle ? Math.min(goal, f.throttle + dt / CTRL.spoolUp) : Math.max(goal, f.throttle - dt / CTRL.spoolDown);
   if (f.throttle > 0 && f.fuel > 0) {
     f.fuel = Math.max(0, f.fuel - f.throttle * dt);
     f.burnTime += f.throttle * dt;
@@ -910,20 +923,24 @@ function impact(f) {
 }
 
 /* ---------- Score ---------- */
-// only a landing scores: softness 0–400, precision 0–300, upright 0–100, fuel 0–200; stars at 1 / 600 / 850
-const STARS = [600, 850], FUEL_SPAN = 0.6, PAR_SHARE = 0.8; // par = 80 % of the fuel the score autopilot uses
+// only a landing scores (user's wish 2026-11-14: the game is about hitting the pad): precision 0–500, fuel 0–250,
+// upright 0–150, softness 0–100 (the governor makes every held landing soft); stars at 1 / 600 / 850
+const STARS = [600, 850], FUEL_SPAN = 0.6, PAR_SHARE = 0.9; // par = PAR_SHARE of the fuel the score autopilot uses
+const POINTS = { precision: 500, fuel: 250, upright: 150, softness: 100 };
 function score(f) {
   const o = f && f.outcome;
   if (!o || !o.ok) return { softness: 0, precision: 0, upright: 0, fuel: 0, total: 0, stars: 0 };
   const m = f.mission;
   const v = clamp(o.vDown, 0, LIMITS.vDown) / LIMITS.vDown;
-  const softness = Math.round(400 * (1 - v * v));
-  const precision = Math.round(300 * clamp(1 - o.dist / m.pad.halfWidth, 0, 1));
+  const softness = Math.round(POINTS.softness * (1 - v * v));
+  // precision: the distance from the centre against the room the feet leave (0 where a foot reaches the edge)
+  const room = Math.max(1, m.pad.halfWidth - ROCKET.footX);
+  const precision = Math.round(POINTS.precision * clamp(1 - o.dist / room, 0, 1));
   const tl = clamp(o.tilt / LIMITS.tilt, 0, 1);
-  const upright = Math.round(100 * (1 - tl * tl));
-  // fuel: 200 when it used no more than the mission's par, 0 at 1.6 × par
+  const upright = Math.round(POINTS.upright * (1 - tl * tl));
+  // fuel: full when it used no more than the mission's par, 0 at (1 + FUEL_SPAN) × par
   const par = parOf(m), used = m.fuel - o.fuelLeft;
-  const fuel = par > 0 ? Math.round(200 * clamp(1 - (used - par) / (FUEL_SPAN * par), 0, 1)) : 0;
+  const fuel = par > 0 ? Math.round(POINTS.fuel * clamp(1 - (used - par) / (FUEL_SPAN * par), 0, 1)) : 0;
   const total = softness + precision + upright + fuel;
   return { softness, precision, upright, fuel, total, stars: total >= STARS[1] ? 3 : total >= STARS[0] ? 2 : 1 };
 }
@@ -933,14 +950,16 @@ function bestKey(missionId, aid) { return missionId + (aid ? '+a' : ''); }
 
 /* ---------- Autopilot ---------- */
 // autopilot(flight, 'safe' | 'score') -> input. Brakes along a speed profile (part of the engine's power, drag
-// counted), steers with E-guidance to the pad centre at the expected touchdown, keeps a limited burn alive with short
-// gaps, and uses a correction burn high up when the rocket would miss the pad by far.
-// safe: brakes early with 60 % of the spare thrust; score: late and hard, soft and centred. An options object
-// { mode, k, vtd, slope, aim, lean } overrides the mode's numbers (aim: metres off the centre, lean: degrees of tilt
-// kept at touchdown; the tests use them for an "average pilot").
+// counted) that meets the landing governor's top speed at its top height, then holds the engine to the ground (the
+// governor lowers the rocket gently); steers with E-guidance to the pad centre at the expected touchdown, keeps a
+// limited burn alive with short gaps, and uses a correction burn high up when the rocket would miss the pad by far.
+// safe: brakes early with 60 % of the spare thrust, on and off along the profile; score: late and hard, and once it
+// brakes it holds the engine (what a player does). An options object { mode, k, hold, aim, lean } overrides the
+// mode's numbers (aim: metres off the centre, lean: degrees of tilt kept at touchdown; the tests use them for an
+// "average pilot" and a beginner).
 const PILOTS = {
-  safe: { k: 0.6, vtd: 1.3, slope: 0.3, aim: 0, lean: 0 },
-  score: { k: 0.85, vtd: 0.6, slope: 0.8, aim: 0, lean: 0 },
+  safe: { k: 0.6, hold: false, aim: 0, lean: 0 },
+  score: { k: 0.92, hold: true, aim: 0, lean: 0 },
 };
 function autopilot(f, mode) {
   const OFF = { left: false, right: false, burn: false, steer: 0 };
@@ -949,24 +968,21 @@ function autopilot(f, mode) {
   const base = PILOTS[name] || PILOTS.safe, forScore = base === PILOTS.score;
   const P = typeof mode === 'object' && mode ? Object.assign({}, base, mode) : base;
   const m = f.mission, g = m.g, d = f.deck;
-  const ap = f.ap || (f.ap = { on: false, corr: false, check: -1, err: 0 });
+  const ap = f.ap || (f.ap = { on: false, corr: false, check: -1, err: 0, held: false });
   const A = thrustAccel(f);
   const h = f.y + ROCKET.footY - (d.y - (f.x - d.x) * Math.tan(d.a));
   const vy = f.vy - d.vy;
-  // vertical: the speed allowed at this height when braking with k of the spare thrust (drag helps on the way)
-  const k = P.k, vtd = P.vtd;
-  const brake = Math.max(0.3, A * Math.cos(12 * DEG) - g) * k;
+  // vertical: the speed allowed at this height when braking with k of the spare thrust (drag helps on the way) down
+  // to the governor's speed at its top height; below that height the engine is held and the governor does the rest
+  const brake = Math.max(0.3, A * Math.cos(12 * DEG) - g) * P.k;
   const cd = AIR.kAxial * density(f, f.y);
-  const hh = Math.max(0, h);
-  const v2 = cd > 1e-7 ? brake / cd * (Math.exp(2 * cd * hh) - 1) : 2 * brake * hh;
-  // near the ground a steady final descent (vtd + slope × height) instead of the steep end of the braking curve
-  let vref = -Math.min(Math.sqrt(vtd * vtd + v2), vtd + P.slope * hh);
-  // still drifting sideways near the ground: come down slower and fix it first
-  if (hh < 30 && Math.abs(f.vx - d.vx) > 0.6) vref = Math.max(vref, -(0.6 + 0.04 * hh));
+  const hh = Math.max(0, h), top = GOV.top, vTop = GOV.base + GOV.slope * top, above = Math.max(0, hh - top);
+  const v2 = cd > 1e-7 ? brake / cd * (Math.exp(2 * cd * above) - 1) : 2 * brake * above;
+  const vref = -Math.sqrt(vTop * vTop + v2);
   // the engine needs a moment to spool up or down: decide on the speed it will have by then
   const vyP = vy + (A * f.throttle * Math.cos(f.a) - g) * 0.15;
   const hyst = 0.25;
-  let burn = ap.on ? vyP < vref + hyst : vyP < vref - hyst;
+  let burn = ap.held || hh < top || (ap.on ? vyP < vref + hyst : vyP < vref - hyst);
   ap.on = burn;
   // a correction burn high up when the rocket would land far from the pad
   const limited = f.ignLeft !== null;
@@ -980,18 +996,18 @@ function autopilot(f, mode) {
   else if (canCorr && h > 350 && Math.abs(ap.err) > (forScore ? 45 : 30)) ap.corr = true;
   let tilt;
   if (ap.corr) {
-    // a strong engine (chapter 6) would lift the rocket back up: lean further and push only while it falls
+    // a strong engine (chapters 5 and 6) leans further: the governor gives it only the thrust that keeps the descent
     const strong = A * Math.cos(32 * DEG) > 1.2 * g;
     tilt = -Math.sign(ap.err) * clamp(Math.abs(ap.err) / 4, 6, strong ? 40 : 32) * DEG;
-    burn = !strong || vy < 0;
+    burn = true;
   } else {
     // horizontal: E-guidance to the pad centre (and its speed) at the expected touchdown
-    // time to touchdown along the profile: the braking curve, then the steady final descent (v = vtd + slope × h)
-    const s = P.slope, hLin = Math.max(0, 2 * (brake - vtd * s) / (s * s)), vLin = vtd + s * hLin;
-    const tLin = Math.log((vtd + s * Math.min(hh, hLin)) / vtd) / s;
-    const T = clamp((hh > hLin ? 2 * (hh - hLin) / (Math.max(1, -vy) + vLin) : 0) + tLin, forScore ? 2.2 : 2.5, 25);
+    // time to touchdown: the braking down to the governor's top height, then the governed descent (v = base + slope × h)
+    const gb = GOV.base, gs = GOV.slope;
+    const tLow = Math.log((gb + gs * Math.min(hh, top)) / gb) / gs;
+    const T = clamp((hh > top ? 2 * (hh - top) / (Math.max(1, -vy) + vTop) : 0) + tLow, forScore ? 2.2 : 2.5, 25);
     // the last 12 m allow only a small tilt: be over the target and still by the time they start
-    const tail = hh > 12 ? Math.log((vtd + s * Math.min(12, hLin)) / vtd) / s : 0;
+    const tail = hh > 12 ? Math.log((gb + gs * Math.min(12, top)) / gb) / gs : 0;
     const Th = Math.max(hh > 12 ? 1.5 : 2.2, T - tail);
     const dd = deckAt(f, f.t + T);
     const zem = dd.x - dd.vx * (T - Th) + P.aim - (f.x + f.vx * Th), zev = dd.vx - f.vx;
@@ -1005,6 +1021,8 @@ function autopilot(f, mode) {
     tilt = clamp(tilt, -lim, lim);
     if (h < 12) tilt = clamp(tilt, d.a - lim, d.a + lim) + (h < 4 ? P.lean * DEG : 0);
   }
+  // a player holds the engine once the braking started (the correction burn high up is not the braking)
+  if (P.hold && burn && !ap.corr) ap.held = true;
   // keep a limited burn alive: the engine may be off for at most 0.3 s without using an ignition
   if (limited && f.session && !burn && f.sinceOff > 0.18) burn = true;
   let steer = clamp((tilt - f.a) / (0.2 * CTRL.rate) - f.w * 0.02, -1, 1);
@@ -1045,14 +1063,14 @@ function dailyTry(date, seed) {
   const hot = world !== 'moon' && r() < 0.3;
   o.ignitions = hot ? pick([2, 3, 3]) : null;
   if (world === 'moon') {
-    Object.assign(o, { world: 'moon', twr: MOON_TWR, ignitions: 4, fuel: 12, scene: { sky: 'moon', terrain: 'moon' } });
+    Object.assign(o, { world: 'moon', twr: MOON_TWR, ignitions: 4, fuel: 12, pad: { halfWidth: pick([13, 14, 16]) }, scene: { sky: 'moon', terrain: 'moon' } });
     o.start = { x: side * between(40, 100), alt: between(250, 350), vx: -side * between(0, 8), vy: -between(15, 25) };
-    o.what = 'Měsíc: slabá tíže, žádný vzduch a moc silný motor.';
+    o.what = 'Měsíc: slabá tíže a žádný vzduch, pohyb do strany nic nebrzdí.';
   } else if (world === 'mars') {
-    Object.assign(o, { world: 'mars', twr: MARS_TWR, ignitions: 2, fuel: 18, scene: { sky: r() < 0.5 ? 'mars' : 'dust', terrain: 'mars' } });
+    Object.assign(o, { world: 'mars', twr: MARS_TWR, ignitions: 2, fuel: 18, pad: { halfWidth: pick([13, 14, 16]) }, scene: { sky: r() < 0.5 ? 'mars' : 'dust', terrain: 'mars' } });
     o.wind = { steady: side * between(0, 10), gusts: between(0, 16) };
     o.start = { x: side * between(40, 120), alt: between(550, 700), vx: -side * between(0, 8), vy: -between(45, 60) };
-    o.what = 'Mars: řídký vzduch, třetinová tíže a moc silný motor.';
+    o.what = 'Mars: řídký vzduch a třetinová tíže.';
   } else {
     const sea = world === 'sea';
     o.twr = hot ? HOT : 1.3;
@@ -1096,10 +1114,10 @@ function outcomeText(f) {
 
 /* ---------- Pars: the fuel an expert uses (score: fuel left counts against this) ---------- */
 // (seconds of full thrust; PAR_SHARE of what the score autopilot uses, measured by tools/pristani-test.js --pars)
-Object.assign(PARS, { m01: 8.7, m02: 9.5, m03: 18.6, m04: 9.3, m05: 9.2, m06: 9.3, m07: 9.3, m08: 9.6, m09: 9.3, m10: 9.5, m11: 10.1, m12: 9, m13: 9.8, m14: 9.7, m15: 10.1, m16: 9.9, m17: 7.6, m18: 7.7, m19: 6.2, m20: 6.1, m21: 2.6, m22: 3.4, m23: 6, m24: 6.3 });
+Object.assign(PARS, { m01: 11.2, m02: 12, m03: 23.1, m04: 12.2, m05: 12.2, m06: 12.1, m07: 12.2, m08: 12.8, m09: 12.6, m10: 12.5, m11: 13.6, m12: 12.6, m13: 13, m14: 13, m15: 13.7, m16: 13.3, m17: 10.2, m18: 10.4, m19: 9.2, m20: 9.1, m21: 3, m22: 4.1, m23: 7.7, m24: 7.8 });
 
 return {
-  DT, DEG, ROCKET, LIMITS, CTRL, AIR, DECK, PLANETS, STARS, FUEL_SPAN, PAR_SHARE, PILOTS, PARS, MISSIONS, CHAPTERS,
+  DT, DEG, ROCKET, LIMITS, CTRL, GOV, AIR, DECK, PLANETS, STARS, POINTS, FUEL_SPAN, PAR_SHARE, PILOTS, PARS, MISSIONS, CHAPTERS,
   mission, createFlight, step, takeEvents, impact, relSpeed, score, bestKey, autopilot, fly, dailyMission, outcomeText,
   judgeTouchdown, windAt, water, deckAt, ground, surfaceY, footBody, toWorld, feet, thrustAccel, density, rng, hashStr, parOf,
 };
@@ -1144,7 +1162,7 @@ function freshProgress() { return { stars: {}, bests: {}, ghosts: {}, daily: { d
 function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
 function save() {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ v: 2, settings: S, stars: P.stars, bests: P.bests, ghosts: P.ghosts, daily: P.daily, last: P.last }));
+    localStorage.setItem(KEY, JSON.stringify({ v: 3, settings: S, stars: P.stars, bests: P.bests, ghosts: P.ghosts, daily: P.daily, last: P.last }));
     localStorage.removeItem(BADGE); // a flight is short and never saved, so there is never a "Rozehráno" badge
   } catch (e) {} // rule: storage may be full or blocked; the game goes on
 }
@@ -1160,9 +1178,10 @@ function validProgress(s) {
   const p = freshProgress();
   if (!isObj(s)) return p;
   if (isObj(s.stars)) for (const id of MIDS) { const v = s.stars[id]; if (Number.isInteger(v) && v >= 1 && v <= 3) p.stars[id] = v; }
-  if (isObj(s.bests)) for (const id of MIDS) for (const k of [id, id + '+a']) { const v = s.bests[k]; if (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1000) p.bests[k] = Math.round(v); }
-  // v 2 (2026-11-14) made the missions shorter: an older ghost would fly a start that no longer exists
-  if (s.v === 2 && isObj(s.ghosts)) for (const id of MIDS) { const g = validGhost(s.ghosts[id]); if (g) p.ghosts[id] = g; }
+  // v 3 (2026-11-14, the landing governor) scores on another scale: older bests and ghosts would never be beaten
+  if (s.v === 3 && isObj(s.bests)) for (const id of MIDS) for (const k of [id, id + '+a']) { const v = s.bests[k]; if (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1000) p.bests[k] = Math.round(v); }
+  // (v 2 made the missions shorter: an older ghost would fly a start that no longer exists)
+  if (s.v === 3 && isObj(s.ghosts)) for (const id of MIDS) { const g = validGhost(s.ghosts[id]); if (g) p.ghosts[id] = g; }
   if (isObj(s.daily)) {
     const d = s.daily, q = p.daily;
     if (typeof d.date === 'string' && DATE_RE.test(d.date)) q.date = d.date;
@@ -2947,7 +2966,7 @@ const SND = (() => {
 
 /* ---------- Flight state and the main loop ---------- */
 let M = null, F = null, ghost = null, mode = 'brief', paused = false, auto = null, frozen = false;
-let ignGone = false, climbSaid = false, slapped = false, lastInp = NONE0(), flightAid = false, rec = [], resultShown = false, acc = 0, lastT = 0, slowFrames = 0, outcomeRes = null;
+let ignGone = false, slapped = false, lastInp = NONE0(), flightAid = false, rec = [], resultShown = false, acc = 0, lastT = 0, slowFrames = 0, outcomeRes = null;
 const NONE = { left: false, right: false, burn: false };
 function NONE0() { return { left: false, right: false, burn: false }; }
 const r1 = v => Math.round(v * 10) / 10, r3 = v => Math.round(v * 1000) / 1000;
@@ -2965,7 +2984,7 @@ function newFlight() {
   rec = [r1(F.x), r1(F.y), r3(F.a), 0];
   rX = pX = F.x; rY = pY = F.y; rA = pA = F.a;
   ghost = M.chapter ? P.ghosts[M.id] || null : null;
-  flightAid = S.aid; resultShown = false; slapped = false; ignGone = false; climbSaid = false; outcomeRes = null; acc = 0; camSnap = true;
+  flightAid = S.aid; resultShown = false; slapped = false; ignGone = false; outcomeRes = null; acc = 0; camSnap = true;
   tipNow = ''; tipHeld = 0; tipCheck = 0; tipDir = '';
   for (const p of ptrs.values()) p.ign = true; // a finger already down never burns the new flight
 }
@@ -3140,24 +3159,21 @@ function recordOutcome() {
   return res;
 }
 const TIPS = {
-  fastDown: 'Zapal motor dřív nebo ho drž déle. Těsně nad zemí stačí krátké zážehy.',
+  fastDown: 'Začni brzdit dřív a pak motor drž až na zem: u země raketu zpomalí sám.',
   fastSide: 'Před dosednutím zastav pohyb do strany: nakloň raketu proti němu.',
   noLegs: 'Nohy se vysouvají samy, ale potřebují chvilku. Přileť pomaleji.',
-  tilt: 'Těsně nad zemí pusť náklon, raketa se sama narovná.',
+  tilt: 'Těsně nad zemí už nenakláněj, raketa se sama narovná.',
   edge: 'Obě nohy musí být na plošině. Míř víc do středu.',
   offPad: 'Sleduj šipku k plošině a nakloň se k ní včas, ještě vysoko.',
   away: 'Drž se nad plošinou, šipka u okraje ukazuje, kde je.',
 };
-// the tip after a failure fits the mission: a strong engine with few ignitions wants a late, long last burn
-function tipFor(o) {
+// the tip after a failure fits the mission: with few ignitions the last burn is held to the ground
+// (named failTip: tipFor below is the tip during the flight)
+function failTip(o) {
   if (!o) return '';
   const fall = o.reason === 'fastDown' || o.reason === 'noLegs';
-  if (fall && M.ignitions && ignGone) return M.world !== 'earth'
-    ? 'Došly zážehy a motor už nešel zapálit. Šetři je: krátce brzdi včas a poslední zážeh si nech těsně nad zem.'
-    : 'Došly zážehy a motor už nešel zapálit. Poslední zážeh zapal až nízko a drž ho až do dosednutí.';
-  if (o.reason === 'fastDown' && M.ignitions) return M.world !== 'earth'
-    ? 'Motor je tu velmi silný: brzdi krátkými zážehy a ten poslední zapal těsně nad zemí.'
-    : 'Zážehů je málo: zapal motor pozdě a drž ho až dolů.';
+  if (fall && M.ignitions && ignGone) return 'Došly zážehy a motor už nešel zapálit. Když motor jednou zapálíš na brzdění, nepouštěj ho až do dosednutí.';
+  if (o.reason === 'fastDown' && M.ignitions) return 'Zapal motor o kousek dřív a pak ho drž až na zem: u země raketu zpomalí sám.';
   return TIPS[o.reason] || '';
 }
 function presentResult() {
@@ -3172,15 +3188,15 @@ function presentResult() {
     c.innerHTML = `<div class="in">
       <div class="rstars">${[1, 2, 3].map(i => `<span class="${i <= sc.stars ? 'on' : ''}">★</span>`).join('')}</div>
       <h2>${esc(txt.title)}</h2><p class="det">${esc(txt.detail)}</p>
-      <div class="rows"><span>Měkké dosednutí</span><b>${sc.softness} / 400</b><span>Přesnost</span><b>${sc.precision} / 300</b>
-        <span>Rovně</span><b>${sc.upright} / 100</b><span>Ušetřené palivo</span><b>${sc.fuel} / 200</b>
+      <div class="rows"><span>Přesnost</span><b>${sc.precision} / ${E.POINTS.precision}</b><span>Ušetřené palivo</span><b>${sc.fuel} / ${E.POINTS.fuel}</b>
+        <span>Rovně</span><b>${sc.upright} / ${E.POINTS.upright}</b><span>Měkké dosednutí</span><b>${sc.softness} / ${E.POINTS.softness}</b>
         <span class="tot">Body</span><b class="tot">${sc.total}</b></div>
       <div class="rec ${r.newBest ? 'new' : ''}">${r.stale ? 'Výzva minulého dne se nepočítá' : [r.newBest ? 'Nový rekord!' : r.best != null ? `Rekord: ${r.best}` : '', r.daily ? `Série: ${dailyInfo().streak} ${dny(dailyInfo().streak)}` : ''].filter(Boolean).join(' · ')}</div>
       ${r.unlocked ? `<div class="tip">Odemčená mise ${mLabel(r.unlocked)} ${esc(r.unlocked.name)}.</div>` : ''}
     </div>
     <div class="cfoot"><button data-act="missions">Mise</button><button data-act="retry">${ico.retry}Znovu</button>${hasNext ? `<button class="pri" data-act="next">Další${ico.next}</button>` : ''}</div>`;
   } else {
-    const tip = o && o.fuelOut ? 'Šetři palivem: zapaluj motor až níž a ne na dlouho.' : tipFor(o);
+    const tip = o && o.fuelOut ? (M.ignitions ? 'Došlo palivo: zapal motor až níž a pak ho drž až na zem. Kdo brzdí moc brzo, tomu malá nádrž nevydrží.' : 'Došlo palivo: neber motor zbytečně brzo a nenakláněj raketu víc, než je potřeba.') : failTip(o);
     c.innerHTML = `<div class="in">
       <div class="kick">${M.chapter ? `${mLabel(M)} · ${esc(M.name)}` : 'Výzva dne'}</div>
       <h2>${esc(txt.title)}</h2><p>${esc(txt.detail)}</p>
@@ -3311,37 +3327,40 @@ function initSensor(newFlight) {
 
 /* ---------- Tips during the flight (setting "Rady během letu", on by default; user's wish 2026-11-14) ---------- */
 // One short line on top of the scene says what to do now. Checked in this order, the first that applies wins:
-// rising with the engine on, falling faster than the engine can still stop (the "Dolů" box blinks too), tilted near
-// the ground, sliding sideways near the ground, and high up heading away from the pad. A tip stays at least 0.8 s
-// (a more urgent one takes over at once). Display only: like the impact marker it changes nothing in the flight.
+// falling faster than the engine can still stop (the "Dolů" box blinks too), tilted near the ground, sliding sideways
+// near the ground, high up heading away from the pad, and low down with the engine on: keep holding it. A tip stays
+// at least 0.8 s (a more urgent one takes over at once). Display only: like the impact marker it changes nothing.
 let tipNow = '', tipHeld = 0, tipCheck = 0, tipDir = '';
-const TIP_ORDER = ['rise', 'fast', 'tilt', 'side', 'dir'];
+const TIP_ORDER = ['fast', 'tilt', 'side', 'dir', 'hold'];
 // the speed down the engine can still stop at this height with room for a late reaction, and a slow last 10 m (the
-// help's table: 15 m/s at 100 m, 11 at 50, 8 at 25, 3 at 10). "Brzdi!" shows above it and stays until the speed is
-// half of it: a simulated player who burns only while this tip is up lands about 2 of 3 Earth missions with a 0.25 to
-// 0.35 s reaction (the autopilot steering; measured 2026-11-14, the steeper or later curves did worse).
-// Not with limited ignitions: braking on and off there wastes them (the briefing tells that strategy instead).
+// help's numbers: 15 m/s at 100 m, 11 at 50). "Brzdi!" shows above it while the engine is off and, once the player
+// holds the engine, stays until the landing governor has the rocket on its gentle descent (govSpeed): keep holding.
+// With few ignitions it comes later, because the small tank would not last a burn started that early. Measured
+// 2026-11-14 (a simulated player who holds the engine from a reaction time after the tip, the autopilot steering):
+// it lands every mission with a reaction of 0.3–1 s.
 function downLimit(h) {
-  const brake = Math.max(.3, E.thrustAccel(F) * Math.cos(12 * E.DEG) - M.g);
-  return Math.min(Math.sqrt(.8 * brake * Math.max(0, h)) + 1, 1 + .25 * Math.max(0, h));
+  const brake = Math.max(.3, E.thrustAccel(F) * Math.cos(12 * E.DEG) - M.g), c = M.ignitions ? 1.2 : .8;
+  return Math.min(Math.sqrt(c * brake * Math.max(0, h)) + 1, 1 + .25 * Math.max(0, h));
 }
+// about the speed down a held engine keeps at this height (the governor's target and its small lag)
+function govSpeed(h) { return 1.3 * (E.GOV.base + E.GOV.slope * Math.min(Math.max(0, h), E.GOV.top)); }
 function tipFor() {
-  const rel = E.relSpeed(F), h = F.alt, tilt = (F.a - F.deck.a) / E.DEG, free = F.ignLeft === null;
-  if (rel.down < -1 && F.burning && h > 3 && (free || M.world !== 'earth')) return 'rise';
-  if (free && h > .5 && rel.down > downLimit(h) * (tipNow === 'fast' ? .5 : 1)) return 'fast';
+  const rel = E.relSpeed(F), h = F.alt, tilt = (F.a - F.deck.a) / E.DEG, lit = F.fuel > 0 && (F.ignLeft !== 0 || F.session);
+  if (lit && h > .5 && (F.burning ? tipNow === 'fast' && rel.down > govSpeed(h) + .5 : rel.down > downLimit(h))) return 'fast';
   if (h < 15 && Math.abs(tilt) > 6) return 'tilt';
   if (h < 30 && Math.abs(rel.side) > LIMITS.vSide * .8) return 'side';
-  if (h > 50 && tipDir) return 'dir';
+  if (h > 50 && tipDir && (!M.ignitions || F.session)) return 'dir'; // with few ignitions tilting (= burning) early wastes them
+  if (F.burning && h < E.GOV.top) return 'hold';
   return '';
 }
 function tipText(k) {
   const rel = E.relSpeed(F);
   switch (k) {
-    case 'rise': return 'Stoupáš – pusť motor';
     case 'fast': return 'Brzdi! Drž motor';
     case 'tilt': return 'Narovnej raketu';
     case 'side': return rel.side > 0 ? 'Letíš doprava – nakloň raketu doleva' : 'Letíš doleva – nakloň raketu doprava';
     case 'dir': return tipDir === 'right' ? 'Plošina je vpravo – nakloň raketu doprava' : 'Plošina je vlevo – nakloň raketu doleva';
+    case 'hold': return 'Drž motor až na zem, raketa dosedne sama';
   }
   return '';
 }
@@ -3359,7 +3378,7 @@ function updateTips(dt) {
   tipHeld += dt;
   const want = tipFor();
   if (want !== tipNow && (tipHeld >= .8 || (want && (!tipNow || TIP_ORDER.indexOf(want) < TIP_ORDER.indexOf(tipNow))))) { tipNow = want; tipHeld = 0; }
-  if (tipNow) { el.textContent = tipText(tipNow); el.classList.toggle('bad', tipNow === 'fast' || tipNow === 'rise'); }
+  if (tipNow) { el.textContent = tipText(tipNow); el.classList.toggle('bad', tipNow === 'fast'); }
   el.classList.toggle('hide', !tipNow || msgT > 0); // a flash ("Došlo palivo") has the place for its moment
 }
 
@@ -3377,8 +3396,6 @@ function updateHud() {
   const up = fl && shownVd < -.05;
   hset($('#gVy small'), 'vyl', up ? 'Nahoru m/s' : 'Dolů m/s');
   hset($('#gVy b'), 'vy', (up ? '↑ ' : '') + num(Math.abs(shownVd)));
-  // a strong engine on a light world lifts the rocket back up: say so once a flight (subtly, on the HUD)
-  if (up && !climbSaid && !S.tips && mode === 'fly' && M.world !== 'earth' && F.burning && vd < -1.5) { climbSaid = true; flashMsg('Stoupáš – pusť motor'); }
   hset($('#gVx b'), 'vx', (fl && Math.abs(vs) >= .05 ? (vs < 0 ? '← ' : '') : '') + num(shownVs) + (fl && vs >= .05 ? ' →' : ''));
   const cls = (v, lim) => !near && fl ? 'g' : v <= lim ? 'g ok' : 'g bad';
   hset($('#gVy'), 'vyc', o ? (o.vDown <= LIMITS.vDown ? 'g ok' : 'g bad') : cls(Math.max(0, vd), LIMITS.vDown) + (tipNow === 'fast' && fl ? ' warn' : ''), 'className');
@@ -3433,9 +3450,9 @@ const CTL_HINT = {
 };
 // the briefing's advice for the mission's kind of engine (shown with "Rady během letu")
 function landTip(m) {
-  if (m.world !== 'earth') return 'motor je tu moc silný. Brzdi krátce a pusť ho, jakmile raketa přestane padat, jinak vyletí zpátky nahoru. Zážehy šetři na konec.';
-  if (m.ignitions) return `motor je silný a zapálíš ho jen ${m.ignitions === 1 ? 'jednou' : m.ignitions === 2 ? 'dvakrát' : m.ignitions + '×'}. Nech raketu padat, zapal ho pozdě a drž ho až na zem.`;
-  return 'brzdi brzo. Ve 100 m padej nejvýš 15 m/s, v 50 m 11, v 25 m 8. U země motor pouštěj a zase drž, ať padáš 1 až 3 m/s.';
+  if (m.world !== 'earth') return 'pohyb do strany tu nic nebrzdí. Nakloň se k plošině brzo a pohyb do strany zastav ještě ve výšce. Motor je silný, stačí ho zapálit pozdě, a pak ho drž až na zem.';
+  if (m.ignitions) return `motor zapálíš jen ${m.ignitions === 1 ? 'jednou' : m.ignitions === 2 ? 'dvakrát' : m.ignitions + '×'} a paliva je málo. Nech raketu padat, zapal ho, až naskočí „Brzdi!“, a pak ho nepouštěj až na zem.`;
+  return 'až naskočí „Brzdi!“, drž motor a už ho nepouštěj: u země raketu zpomalí sám a posadí ji měkce. Hlavní je trefit plošinu: nakláněj raketu k ní a nad ní ji narovnej.';
 }
 function conditions(m) {
   const c = [];
@@ -3538,7 +3555,7 @@ function renderSettings() {
     </section>
     <section class="card"><h3>Pomůcky</h3>
       ${toggleRow('tips', 'Rady během letu')}
-      <div class="fnote">Nahoře nad krajinou se objeví krátká rada, co teď udělat („Brzdi! Drž motor“, „Stoupáš – pusť motor“, „Narovnej raketu“), a karta před startem řekne, jak v misi přistát.</div>
+      <div class="fnote">Nahoře nad krajinou se objeví krátká rada, co teď udělat („Brzdi! Drž motor“, „Narovnej raketu“, „Drž motor až na zem“), a karta před startem řekne, jak v misi přistát.</div>
       ${toggleRow('aid', 'Ukazovat místo dopadu')}
       <div class="fnote">Značka na zemi ukazuje, kam by raketa dopadla bez motoru: zelená, kde se na plošinu vejdou obě nohy, jinak červená. Rekordy se s ní a bez ní počítají zvlášť, hvězdy platí vždycky.</div>
       ${toggleRow('ghost', 'Ukazovat nejlepší let')}
@@ -3591,15 +3608,15 @@ function renderHelp() {
   $('#helpIn').innerHTML = `
     <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Přistání<small>Jak hrát</small></h2></div>
     <section class="card help"><h3>O co jde</h3>
-      <p>Raketa padá k zemi. Zbrzdi ji motorem a posaď ji na plošinu (nebo na loď): pomalu, rovně a na obě nohy.</p>
+      <p>Raketa padá k zemi. Zbrzdi ji motorem a posaď ji na plošinu (nebo na loď): rovně, na obě nohy a co nejblíž středu.</p>
       <p>Když plošinu mineš, raketa vybuchne, nad mořem spadne do vody. Jeden let trvá kolem dvaceti sekund a <b>Znovu</b> ho hned zopakuje.</p>
     </section>
     <section class="card help"><h3>Jak přistát</h3>
       <ul>
-        <li><b>Brzdi brzo.</b> Motor je jen o kousek silnější, než raketa váží, takže brzdí pomalu. Kdo začne brzdit až u země, nestihne to.</li>
-        <li><b>Hlídej nahoře dvě čísla: Výška a Dolů.</b> Rychlost dolů smí být nejvýš: ve 100 m 15 m/s, v 50 m 11 m/s, ve 25 m 8 m/s, v 10 m 3 m/s. Když je víc, drž motor.</li>
-        <li><b>U země motor pouštěj a zase drž.</b> Když ho držíš pořád, raketa se zastaví a začne stoupat. Když ho pustíš, zase zrychlí. Drž rychlost dolů kolem 1 až 3 m/s, až raketa dosedne.</li>
-        <li><b>Do strany jen zlehka.</b> Raketa letí tam, kam míří špička, ale jen když hoří motor. Nakloň ji, ať doletí nad plošinu, ještě ve výšce ji narovnej a těsně nad zemí už nenakláněj.</li>
+        <li><b>Brzdi včas.</b> Motor je jen o kousek silnější, než raketa váží, takže brzdí pomalu. Kdo začne brzdit až u země, nestihne to. Hlídej nahoře Výšku a Dolů: ve 100 m padej nejvýš asi 15 m/s, v 50 m 11 m/s.</li>
+        <li><b>Pak motor drž až na zem.</b> Motor raketu nikdy nezvedne nahoru: u země ji sám zpomalí a posadí měkce, kolem 1,5 m/s. Když ho pustíš, raketa zase zrychlí.</li>
+        <li><b>Hlavně se traf na plošinu.</b> Raketa letí tam, kam míří špička, ale jen když hoří motor. Nakloň ji brzo, ať doletí nad plošinu, ještě ve výšce ji narovnej a zastav pohyb do strany. Těsně nad zemí už nenakláněj.</li>
+        <li><b>Šetři palivo.</b> Čím později začneš brzdit, tím míň paliva spotřebuješ. V kapitole Zážehy je paliva tak málo, že kdo brzdí moc brzo, tomu nevydrží.</li>
       </ul>
       <p>Raketa přistane, když při dotyku země platí:</p>
       <div class="lim"><b>do ${LIMITS.vDown} m/s</b><span>rychlost dolů</span><b>do ${LIMITS.vSide} m/s</b><span>rychlost do strany</span><b>do ${LIMITS.tilt}°</b><span>náklon (na lodi vůči palubě)</span></div>
@@ -3616,15 +3633,15 @@ function renderHelp() {
     </section>
     <section class="card help"><h3>Body a hvězdy</h3>
       <p>Za přistání dostaneš body:</p>
-      <div class="lim"><b>400</b><span>za měkké dosednutí</span><b>300</b><span>za přistání blízko středu</span><b>100</b><span>za rovnou raketu</span><b>200</b><span>za ušetřené palivo</span></div>
-      <p style="margin-top:10px">Každé přistání je ★, od 600 bodů ★★, od 850 bodů ★★★. Přistáním odemkneš další misi.</p>
-      <p><b>Rady během letu</b>: nahoře nad krajinou se objeví, co teď udělat („Brzdi! Drž motor“, „Stoupáš – pusť motor“, „Narovnej raketu“), a karta před startem řekne, jak v misi přistát.</p>
+      <div class="lim"><b>${E.POINTS.precision}</b><span>za přistání blízko středu</span><b>${E.POINTS.fuel}</b><span>za ušetřené palivo</span><b>${E.POINTS.upright}</b><span>za rovnou raketu</span><b>${E.POINTS.softness}</b><span>za měkké dosednutí</span></div>
+      <p style="margin-top:10px">Za přesnost dostaneš všechno na středu plošiny a nic, když noha stojí na samém kraji. Každé přistání je ★, od ${E.STARS[0]} bodů ★★, od ${E.STARS[1]} bodů ★★★. Přistáním odemkneš další misi.</p>
+      <p><b>Rady během letu</b>: nahoře nad krajinou se objeví, co teď udělat („Brzdi! Drž motor“, „Narovnej raketu“, „Drž motor až na zem“), a karta před startem řekne, jak v misi přistát.</p>
       <p><b>Průhledná raketa</b> je tvůj dosud nejlepší let v této misi, můžeš se s ní závodit. <b>Značka na zemi</b> ukazuje, kam by raketa dopadla, kdyby motor nehořel; zelená je tam, kde se na plošinu vejdou obě nohy. Všechno tohle jde vypnout v nastavení.</p>
     </section>
     <section class="card help"><h3>Mise</h3>
       <ul>${E.CHAPTERS.map(c => `<li><b>${c.id}. ${esc(c.name)}</b>: ${esc(c.what)}</li>`).join('')}</ul>
       <p><b>Zážehy</b>: v některých misích jde motor zapálit jen několikrát, kolik ti jich zbývá, ukazuje údaj nahoře. Zážeh se spotřebuje pokaždé, když motor pustíš na víc než 0,3 sekundy a pak ho znovu zapálíš.</p>
-      <p>V kapitole Zážehy je motor tak silný, že raketu ve vzduchu neudržíš: zapal ho co nejpozději a drž ho až na zem. Na Měsíci a na Marsu je motor ještě silnější: krátké stisknutí raketu prudce zabrzdí, proto brzdi jen krátce a motor včas pusť, jinak raketa vyletí zpátky nahoru.</p>
+      <p>V kapitole Zážehy je paliva málo a každé puštění motoru stojí zážeh: nech raketu padat, zapal motor pozdě a pak ho drž až na zem. Na Měsíci a na Marsu skoro nic nebrzdí pohyb do strany: zastav ho sám, nakloněním proti němu, ještě ve výšce.</p>
       <p><b>Výzva dne</b>: každý den jeden nový let, stejný pro všechny. Když v něm přistaneš den co den, roste ti série; vynechaný den ji vrátí na nulu.</p>
       <p><b>Pauza</b>: tlačítko vpravo nad čísly let zastaví. Zastaví se i sám, když otevřeš nastavení nebo nápovědu.</p>
     </section>

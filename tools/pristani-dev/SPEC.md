@@ -68,7 +68,9 @@ Settings section "Ovládání" first. Never inverted: left means the nose (and t
   full tilt), holding anywhere on the scene burns. Copy the permission handling from `games/kulicka/`; when the sensor
   is unavailable it says so and falls back to Dva palce.
 - Rotation is rate-limited (≈ 70 °/s), damped, limited to ±40°, and **auto-levels** (≈ 25 °/s) with no tilt input.
-- Throttle is on/off with a spool-up of ≈ 0.25 s (it feels heavy).
+- Throttle is on/off with a spool-up of ≈ 0.25 s (it feels heavy). A held engine is capped by the **landing
+  governor** (section 11): it never lifts the rocket and never brakes it below a gentle descent, so the player brakes
+  in time and then just holds the engine; no pulsing near the ground.
 
 ## 3. Rules of a flight
 
@@ -76,9 +78,11 @@ Settings section "Ovládání" first. Never inverted: left means the nose (and t
   goes for points lands most missions in 14–19 s, Z výšky and Kráter in about 27 s).
 - Limited **fuel** (a bar). Some missions limit **ignitions** ("Zážehy: 3"): every new burn after the engine was off
   for more than 0.3 s uses one; with none left the engine will not light (a click and a toast-like flash on the HUD).
-  From chapter 5 the engine's thrust is well above the weight (≈ 2.4 g even when nearly empty), so hovering is
-  impossible and the burn must be timed (hoverslam). Chapter 6 keeps the ordinary Earth engine (1.3 × 9.81 m/s²): on
-  the Moon that is ≈ 7.9 local g, on Mars ≈ 3.4, with 2–3 ignitions, so every burn is a hard short kick.
+  From chapter 5 the engine's thrust is well above the weight (1.9 g, ≈ 2.4 g nearly empty) and the tank is small:
+  a burn held from the start runs out of fuel (tested), so it must be lit late and then held (one ignition each time
+  it is let go for more than 0.3 s). Chapter 6 keeps the ordinary Earth engine (1.3 × 9.81 m/s²): on the Moon that is
+  ≈ 7.9 local g, on Mars ≈ 3.4; the governor tames it (before 2026-11-14 it threw the rocket back up), so the light
+  worlds are about steering: no air means sideways speed never damps.
 - Legs deploy by themselves below the mission's leg height (≈ 120 m game altitude); touchdown without legs = crash.
 - **Touchdown succeeds** when: vertical speed ≤ 4 m/s, horizontal speed (relative to the pad) ≤ 2 m/s, tilt ≤ 8°
   (relative to the deck on the barge), legs deployed and both feet on the pad. Otherwise:
@@ -89,10 +93,11 @@ Settings section "Ovládání" first. Never inverted: left means the nose (and t
   - fuel runs out → it just falls (the HUD says so),
   - leaving the scene sideways far away → "Raketa uletěla mimo oblast" (failure).
 - The fail card says exactly why with the numbers ("Dosednutí 7,4 m/s, nejvýš 4 m/s").
-- **Score** (only for a successful landing, 0–1000): softness 0–400 (0 m/s → 400, 4 m/s → 0), precision 0–300
-  (distance of the rocket's axis from the pad centre relative to the pad half-width), uprightness 0–100, fuel left
-  0–200. **Stars**: landed ★, ≥ 600 ★★, ≥ 850 ★★★ (tune so that 3 stars are hard but reachable: the Node autopilot
-  tuned for score should reach about 900).
+- **Score** (only for a successful landing, 0–1000; re-weighted 2026-11-14, the game is about hitting the pad):
+  precision 0–500 (the distance of the rocket's axis from the pad centre against the room the feet leave, halfWidth −
+  8.5 m: 500 on the centre, 0 with a foot on the edge), fuel saved 0–250, uprightness 0–150, softness 0–100 (every held
+  landing is soft now). **Stars**: landed ★, ≥ 600 ★★, ≥ 850 ★★★ (tune so that 3 stars are hard but reachable: the
+  Node autopilot tuned for score should reach about 900).
 - **Wind**: a steady speed plus gusts (smooth noise from the seed) and optionally shear (different wind high and low);
   it pushes the rocket sideways (drag ∝ relative speed). A wind sock/arrow with the speed in the HUD.
 - **Waves**: deck heave and pitch from a sum of two sines (predictable), drift = the barge moves sideways slowly.
@@ -109,8 +114,10 @@ Settings section "Ovládání" first. Never inverted: left means the nose (and t
 3. **Vítr**: Stálý vítr · Poryvy · Střih větru (direction flips with altitude) · Vítr nad mořem.
 4. **Noc a mraky**: Západ slunce · Noc (only the pad lights, the rocket's lights and the flame's light) ·
    Mlha (low cloud deck, pad visible late) · Bouře na moři (night, rain, lightning, waves, gusts).
-5. **Zážehy** (hoverslam, no hover): 3 zážehy · 2 zážehy · Jediný zážeh (land) · Jediný zážeh na lodi.
-6. **Jiné světy** (the Earth engine on a light world is far too strong: short precise burns, limited ignitions):
+5. **Zážehy** (few ignitions, a small tank: light the strong engine late, then hold it): 3 zážehy · 2 zážehy ·
+   Jediný zážeh (land) · Jediný zážeh na lodi.
+6. **Jiné světy** (light gravity, no or thin air: sideways speed never damps, steering onto the pad is the skill;
+   limited ignitions):
    Měsíc (1.62 m/s², no air: no drag, no smoke, ballistic dust, black sky with Earth; 3 ignitions) ·
    Kráter (pad in a crater between rims; 2) · Mars (3.71 m/s², thin air, red sky; 2) · Prachová bouře (Mars, gusts, dust
    haze; 2).
@@ -178,7 +185,8 @@ sea**. Angles inside a flight are **radians, positive = nose to the right** (clo
   for leg progress `p` (0 folded along the body, 1 out) and `side` −1 / 1; `E.toWorld(x, y, a, bx, by)` turns body
   coordinates into world ones; `E.feet(f)` = both feet in the world now.
 - `E.LIMITS` = `{ vDown: 4, vSide: 2, tilt: 8, tipMax: 25 }` (the touchdown limits for the help and the HUD colours).
-- `E.CTRL` (turn 70 °/s, levelling 25 °/s, ±40°, spool-up 0.25 s, spool-down 0.1 s, relight grace 0.3 s), `E.AIR`,
+- `E.CTRL` (turn 70 °/s, levelling 25 °/s, ±40°, spool-up 0.25 s, spool-down 0.1 s, relight grace 0.3 s),
+  `E.GOV` = `{ on, base: 1.2, slope: 0.3, top: 45, k: 1.5 }` (the landing governor, section 11), `E.AIR`,
   `E.DECK` (`height` 2.5 m of the deck top above the water, `drift` period 90 s), `E.PLANETS`, `E.STARS` = [600, 850].
 
 ### Missions
@@ -239,18 +247,22 @@ sea**. Angles inside a flight are **radians, positive = nose to the right** (clo
   "Do moře" / "Loď minuta o 40 m.", plus "Došlo palivo." when the tank was empty.
 
 ### Score
-- `E.score(f)` → `{ softness 0–400, precision 0–300, upright 0–100, fuel 0–200, total, stars }`; zeros and 0 stars
-  for a failure. Softness = 400 × (1 − (vDown / 4)²), precision = 300 × (1 − dist / halfWidth), upright = 100 ×
-  (1 − (tilt / 8)²), fuel = 200 when the flight used at most the mission's par, falling to 0 at 1.6 × par
-  (`E.parOf(m)`; par = 80 % of the fuel the score autopilot uses, so 200 is for experts). Stars: landed ★, ≥ 600 ★★,
-  ≥ 850 ★★★. Measured (`node tools/pristani-test.js`): the score autopilot gets ≈ 895 (★★★ on 23 of 24 missions), the
-  safe one ≈ 790, an "average pilot" (aims 30 % of the pad off the centre, 2 m/s, 2.5° tilt) ≈ 650 (★★).
+- `E.score(f)` → `{ precision 0–500, fuel 0–250, upright 0–150, softness 0–100, total, stars }` (the maxima are
+  `E.POINTS`); zeros and 0 stars for a failure. Precision = 500 × (1 − dist / (halfWidth − 8.5)), fuel = 250 when the
+  flight used at most the mission's par, falling to 0 at 1.6 × par (`E.parOf(m)`; par = 90 % of the fuel the score
+  autopilot uses: braking later than it, as an expert does, gets the full 250), upright = 150 × (1 − (tilt / 8)²),
+  softness = 100 × (1 − (vDown / 4)²). Stars: landed ★, ≥ 600 ★★, ≥ 850 ★★★. Measured 2026-11-14
+  (`node tools/pristani-test.js`): the score autopilot gets ≈ 915 (★★★ on 22 of 24 missions), the safe one ≈ 935, an
+  "average pilot" (aims halfway between the centre and a foot on the edge, 2.5° tilt) ≈ 660 (★★ on 23 of 24).
 - `E.bestKey(missionId, aid)` → `'m01'` or `'m01+a'` (bests per mission and per "Ukazovat místo dopadu").
 
 ### Autopilot
-- `E.autopilot(f, 'safe' | 'score' | { mode, k, vtd, slope, aim, lean })` → an input for this step (with `steer`
-  and matching `left/right`). It keeps its memory in `f.ap`, which the physics never reads. `'safe'` lands every
-  mission with a margin (≈ 1.4 m/s, centred); `'score'` brakes late and hard for points. Useful for a demo flight and
+- `E.autopilot(f, 'safe' | 'score' | { mode, k, hold, aim, lean })` → an input for this step (with `steer`
+  and matching `left/right`). It keeps its memory in `f.ap`, which the physics never reads. It brakes along a profile
+  (k of the spare thrust) that meets the governor's speed at its top height (14.7 m/s at 45 m) and holds the engine
+  below it. `'safe'` (k 0.6) brakes on and off along the profile and lands every mission with a margin (centred);
+  `'score'` (k 0.92, `hold`) brakes late and, once it brakes, holds the engine to the ground as a player does (its
+  fuel sets the pars). Useful for a demo flight and
   the screenshot pass. `E.fly(mission, seed, pilot)` flies a whole flight at once (pilot = a mode or a function
   `f => input`) and returns the finished flight.
 
@@ -301,17 +313,60 @@ sea**. Angles inside a flight are **radians, positive = nose to the right** (clo
 
 The user could not land and found the help hard to follow, so the help was rewritten in plain words with a "Jak
 přistát" section, and a setting **"Rady během letu"** (`tips`, on by default) was added:
-- the briefing card shows "Jak přistát:" with the strategy for the mission's engine (Earth: brake early, the speed
-  table; limited ignitions: light late and hold to the ground; Moon/Mars: short burns, let go when it stops falling);
+- the briefing card shows "Jak přistát:" with the strategy for the mission (since 2026-11-14: Earth: hold the engine
+  from "Brzdi!" to the ground, aim at the pad; limited ignitions: let it fall, light at "Brzdi!", never let go;
+  Moon/Mars: stop the sideways speed high up, light late, hold);
 - during the flight one line on top of the scene (`#tip`, under a flash of `#msg`) says what to do now, the first that
-  applies: "Stoupáš – pusť motor" (burning and rising), "Brzdi! Drž motor" (faster down than `downLimit(h)`: the
-  engine's braking with room for a late reaction, capped at 1 + h/4 near the ground; the "Dolů" box blinks; it stays
-  until half that speed; not with limited ignitions, where on-and-off braking wastes them), "Narovnej raketu" (below
-  15 m, tilted over 6° to the deck), "Letíš doprava – nakloň raketu doleva" (below 30 m, sideways over 1.6 m/s),
-  "Plošina je vpravo – nakloň raketu doprava" (above 50 m, the no-engine impact more than 1.5 pad half-widths off).
-  A tip stays at least 0.8 s unless a more urgent one comes. Display only, like the impact marker, but the records are
-  not split by it (it changes nothing in the flight).
-- Measured with a simulated player who burns only while "Brzdi!" is up (autopilot steering, a pure reaction delay): it
-  lands about 2 of 3 Earth missions with a 0.25–0.35 s reaction. Simple tips for the limited-ignition missions did not
-  land in simulation, so those get only the briefing advice and the steering tips.
+  applies: "Brzdi! Drž motor" (engine off and faster down than `downLimit(h)`: the engine's braking with room for a
+  late reaction, `sqrt(c × brake × h) + 1` with c = 0.8, or 1.2 with limited ignitions where a burn started that early
+  would empty the small tank, capped at 1 + h/4 near the ground; the "Dolů" box blinks; once the engine is held it
+  stays until the governor has the rocket on its gentle descent), "Narovnej raketu" (below 15 m, tilted over 6° to
+  the deck), "Letíš doprava – nakloň raketu doleva" (below 30 m, sideways over 1.6 m/s), "Plošina je vpravo –
+  nakloň raketu doprava" (above 50 m, the no-engine impact more than 1.5 pad half-widths off), "Drž motor až na zem,
+  raketa dosedne sama" (calm: the engine held below 45 m). "Stoupáš – pusť motor" is gone with the governor (a held
+  engine cannot climb). A tip stays at least 0.8 s unless a more urgent one comes. Display only, like the impact
+  marker, but the records are not split by it (it changes nothing in the flight).
+- Measured with a simulated player who burns only while "Brzdi!" is up (before the governor): it landed about 2 of 3
+  Earth missions with a 0.25–0.35 s reaction. With the governor (2026-11-14) a player who starts holding the engine a
+  reaction time after "Brzdi!" and holds it to the ground (autopilot steering) lands all 24 missions (6 seeds each)
+  with a reaction of 0.3–1 s; with the earlier tip (c = 0.8) on the limited-ignition missions the tank ran dry.
 
+## 11. The landing governor and the pad game (user's wish 2026-11-14)
+
+The user: "the whole game happens 5 m above the ground where I have to try terribly hard to get under 4 m/s; it
+should be about hitting the pad, make it more human". The on/off engine (thrust/weight 1.3, 0.25 s spool-up) made
+every landing a fight of pulsing the engine just above the ground.
+- **Governor** (`GOV` in `step()`): while the engine is held, the throttle is capped so the speed down relative to
+  the deck never falls below `vT = base + slope × min(alt, top)` = 1.2 m/s at the surface + 0.3 m/s per metre, up to
+  14.7 m/s at 45 m and above, and never makes the rocket climb (`throttle = (g + k (down − vT)) / cos(tilt) / thrust`,
+  clamped to 0–1, k = 1.5); faster than `vT` it is plain full thrust. Holding the engine down to the ground lands at
+  ≈ 1.4–2 m/s (the score autopilot's mean 1.6) when the braking started early enough; held too late it still crashes.
+  Letting go saves fuel. A strong engine (chapters 5 and 6) is tamed the same way.
+- **What is left to master**: when to start braking (later = less fuel and more points; too late = crash), hitting
+  the pad (the pad widths, offsets, sideways speeds, wind, gusts, the barge's drift and waves, no air on the Moon) and
+  the fuel/ignitions of chapter 5. Near the ground there is nothing to balance: the side-speed (2 m/s) and tilt (8°)
+  limits stayed, because the measurements showed few failures from them (without braking errors the beginner's
+  failures are over 80 % "a foot off the pad"; only on the airless Moon and Mars sideways speed matters, which is the
+  chapter's point).
+- **Pads retuned for targeting**: m02 20 (was 22), m04 13 (12), chapter 5 12.5 / 12.5 / 12 / 12.5 (all 11.5),
+  chapter 6 13 / 12.5 / 12.5 / 12.5 (all were 30 m), the Moon and Mars dailies 13–16; m17's tank 16 (19: a burn held
+  from the start no longer runs out). The Moon and Mars dailies pick their pad, so those dailies changed.
+- **Beginner bot** (`beginner()` in the test): now plays the new way (once it brakes it holds the engine to the
+  ground) and does not know yet how late is too late: its braking moment is the autopilot's profile with k drawn from
+  0.7–2.0 (on Earth above ≈ 1.4 the engine cannot make it up). A second pass with k = 1 (it always brakes in time, as
+  the tip tells) measures only the targeting; both must get harder chapter by chapter. Measured (40 tries, 200 on m01):
+
+  | chapter | beginner | brakes in time (targeting only) | before the rework (old engine, old bot) |
+  |---|---|---|---|
+  | 1 Poušť | 40 % (m01 49 %) | 92 % | 39 % (m01 40 %) |
+  | 2 Moře | 32 % | 77 % | 33 % |
+  | 3 Vítr | 30 % | 71 % | 27 % |
+  | 4 Noc a mraky | 26 % | 60 % | 28 % |
+  | 5 Zážehy | 23 % | 53 % | 28 % |
+  | 6 Jiné světy | 22 % (Měsíc 48, Kráter 8, Mars 8, Prachová bouře 28) | 41 % | 20 % |
+
+  The bot's braking errors are most of its failures; a real player who follows "Brzdi!" avoids them, so for people
+  the targeting column is closer to how the chapters feel. The Moon is the easiest to brake on (a slow fall, a strong
+  engine) and the hardest to stop sideways on; Kráter and Mars fall fast, so braking there is the hardest.
+- **Autopilots**: both land all 24 missions on 4 seeds; flights 15–30 s; the score autopilot ≈ 915 points (★★★ on
+  22 of 24), the pars re-measured (PAR_SHARE 0.9).

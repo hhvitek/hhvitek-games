@@ -76,19 +76,26 @@ for (const m of E.MISSIONS) {
   ok(E.parOf(m) > 0 && E.parOf(m) < m.fuel, `${p} a fuel par below the tank`);
   ok(m.pad.halfWidth >= ROCKET.footX + 3, `${p} the pad leaves at least 3 m beside each foot`);
 }
+// holding the engine the whole flight (from the first second, the autopilot steering): the governor lands the ordinary
+// Earth missions, but the small tanks of chapter 5 do not last (there the burn must start late)
+const holdAll = m => E.fly(m, m.seed, f => Object.assign(E.autopilot(f, 'safe'), { burn: true }));
 for (const m of E.MISSIONS.filter(m => m.chapter === 5)) {
   const f = E.createFlight(m);
-  const full = E.thrustAccel(f) / m.g; f.fuel = 0.05 * f.fuel0; const empty = E.thrustAccel(f) / m.g;
-  ok(full > 1.8 && empty > 2.3 && empty < 2.6, `${m.id}: cannot hover (thrust ${full.toFixed(2)} g full, ${empty.toFixed(2)} g nearly empty)`);
+  const full = E.thrustAccel(f) / m.g;
+  ok(full > 1.8 && m.ignitions >= 1, `${m.id}: a strong engine with ${m.ignitions} ignition(s) (thrust ${full.toFixed(2)} g)`);
+  const h = holdAll(m);
+  ok(!h.outcome.ok && h.outcome.fuelOut, `${m.id}: the engine held from the start runs out of fuel (${h.outcome.reason}, fuel ${h.fuel.toFixed(1)})`);
 }
 for (const m of E.MISSIONS.filter(m => m.chapter <= 4)) {
   const f = E.createFlight(m);
   const full = E.thrustAccel(f) / m.g;
-  ok(full > 1.1 && full < 1.5, `${m.id}: can hover a bit (thrust ${full.toFixed(2)} g)`);
+  ok(full > 1.1 && full < 1.5, `${m.id}: the ordinary engine (thrust ${full.toFixed(2)} g)`);
+  const h = holdAll(m);
+  ok(h.outcome.ok, `${m.id}: the engine held the whole flight lands (${h.outcome.reason}, ${h.outcome.vDown.toFixed(1)} m/s)`);
 }
 for (const m of E.MISSIONS.filter(m => m.chapter === 6)) {
   const f = E.createFlight(m), full = E.thrustAccel(f);
-  ok(near(full, 1.3 * 9.81, 0.01) && full / m.g > 3 && m.ignitions >= 2, `${m.id}: the Earth engine on a light world, far too strong (${(full / m.g).toFixed(1)} g), ${m.ignitions} ignitions`);
+  ok(near(full, 1.3 * 9.81, 0.01) && full / m.g > 3 && m.ignitions >= 2, `${m.id}: the Earth engine on a light world (${(full / m.g).toFixed(1)} g), ${m.ignitions} ignitions`);
 }
 ok(byId('m21').air === 0 && byId('m21').g === 1.62, 'the Moon: 1.62 m/s², no air');
 ok(byId('m23').g === 3.71 && byId('m23').air > 0 && byId('m23').air < 0.2, 'Mars: 3.71 m/s², thin air');
@@ -169,6 +176,41 @@ console.log('Engine');
   run(f, NONE, 0.05); run(f, BURN, 0.05);
   ok(types(f).filter(t => t === 'noIgnition').length === 1, 'a new press flags noIgnition again');
   ok(f.ignUsed === 2, 'ignUsed counts the ignitions');
+}
+
+/* ---------- The landing governor ---------- */
+console.log('Governor');
+{
+  // a held engine never lifts the rocket: every mission flown with the engine held from the start (autopilot steering)
+  let rise = 0, worst = '';
+  for (const m of E.MISSIONS) {
+    const f = E.createFlight(m, m.seed);
+    while (f.phase === 'flying' && f.t < 120) {
+      E.step(f, Object.assign(E.autopilot(f, 'safe'), { burn: true }), DT);
+      const down = -(f.vy - f.deck.vy);
+      if (f.phase === 'flying' && down < rise) { rise = down; worst = `${m.id} at ${f.alt.toFixed(1)} m`; }
+    }
+  }
+  ok(rise > -0.05, `a held engine never climbs (fastest up ${(-rise).toFixed(3)} m/s${worst ? ', ' + worst : ''})`);
+  // braking started early enough: holding the engine to the ground lands softly on every kind of world
+  for (const [id, alt, v] of [['m01', 150, 20], ['m01', 60, 15], ['m01', 20, 6], ['m05', 120, 18], ['m06', 80, 14], ['m19', 200, 30], ['m21', 120, 12], ['m23', 150, 20]]) {
+    const m = byId(id), f = place(m, { gap: alt, vy: -v, relDeck: true });
+    until(f, BURN, x => x.phase !== 'flying', 60);
+    ok(f.outcome && f.outcome.ok && f.outcome.vDown < 2.5, `${id}: held from ${alt} m at ${v} m/s it lands softly (${f.outcome ? f.outcome.reason + ' ' + f.outcome.vDown.toFixed(2) + ' m/s' : 'no outcome'})`);
+  }
+  // far too fast: full thrust, no governor in the way (and it still crashes)
+  const fast = place(byId('m01'), { gap: 100, vy: -45 });
+  run(fast, BURN, 0.4);
+  ok(fast.throttle === 1, `far too fast: full thrust (${fast.throttle.toFixed(2)})`);
+  until(fast, BURN, x => x.phase !== 'flying', 30);
+  ok(fast.outcome && fast.outcome.reason === 'fastDown', 'held too late it still crashes');
+  // on the gentle descent near the ground the throttle is below full and close to hovering
+  const slow = place(byId('m01'), { gap: 10, vy: -4 });
+  run(slow, BURN, 0.5);
+  const hover = byId('m01').g / E.thrustAccel(slow);
+  ok(slow.throttle < 0.95 && Math.abs(slow.throttle - hover) < 0.25 && -slow.vy > 1 && -slow.vy < 5, `near the ground a held engine only slows the descent (throttle ${slow.throttle.toFixed(2)}, hover ${hover.toFixed(2)}, ${(-slow.vy).toFixed(1)} m/s)`);
+  // the governor is the rule the touchdown speed of a held engine comes from
+  ok(E.GOV.on && E.GOV.base >= 1 && E.GOV.base <= 1.5 && E.GOV.base + E.GOV.slope * E.GOV.top > 10, 'the governor: a gentle speed at the surface, a fast one up high');
 }
 
 /* ---------- Legs ---------- */
@@ -350,26 +392,27 @@ console.log('Wind and waves');
 /* ---------- Score ---------- */
 console.log('Score');
 {
-  const m = byId('m01'), par = E.parOf(m);
+  const m = byId('m01'), par = E.parOf(m), Pt = E.POINTS, room = m.pad.halfWidth - ROCKET.footX;
   const fake = o => ({ mission: m, outcome: Object.assign({ ok: true, vDown: 0, vSide: 0, tilt: 0, dist: 0, fuelLeft: m.fuel - par }, o) });
+  ok(Pt.precision + Pt.fuel + Pt.upright + Pt.softness === 1000 && Pt.precision > Pt.fuel && Pt.fuel > Pt.upright && Pt.upright >= Pt.softness, 'the points: 1000 in all, precision first, then fuel, upright, softness');
   let s = E.score(fake({}));
-  ok(s.softness === 400 && s.precision === 300 && s.upright === 100 && s.fuel === 200 && s.total === 1000 && s.stars === 3, 'a perfect landing: 1000 and ★★★');
-  s = E.score(fake({ vDown: 4, dist: m.pad.halfWidth, tilt: 8, fuelLeft: m.fuel - par * (1 + E.FUEL_SPAN) }));
-  ok(s.total === 0 && s.stars === 1, 'at every limit: 0 points but still ★ (it landed)');
+  ok(s.softness === Pt.softness && s.precision === Pt.precision && s.upright === Pt.upright && s.fuel === Pt.fuel && s.total === 1000 && s.stars === 3, 'a perfect landing: 1000 and ★★★');
+  s = E.score(fake({ vDown: 4, dist: room, tilt: 8, fuelLeft: m.fuel - par * (1 + E.FUEL_SPAN) }));
+  ok(s.total === 0 && s.stars === 1, 'at every limit (a foot on the edge): 0 points but still ★ (it landed)');
   s = E.score(fake({ vDown: 2 }));
-  ok(s.softness === 300, `softness: 2 m/s gives 300 (${s.softness})`);
-  s = E.score(fake({ dist: m.pad.halfWidth / 2 }));
-  ok(s.precision === 150, 'precision: half the pad gives 150');
+  ok(s.softness === Pt.softness * 0.75, `softness: 2 m/s gives three quarters (${s.softness})`);
+  s = E.score(fake({ dist: room / 2 }));
+  ok(s.precision === Pt.precision / 2, `precision: halfway between the centre and a foot on the edge gives half (${s.precision})`);
   s = E.score(fake({ fuelLeft: m.fuel - par * (1 + E.FUEL_SPAN / 2) }));
-  ok(s.fuel === 100, 'fuel: halfway between par and 1.6 × par gives 100');
+  ok(s.fuel === Pt.fuel / 2, 'fuel: halfway between par and 1.6 × par gives half');
   s = E.score(fake({ fuelLeft: m.fuel }));
-  ok(s.fuel === 200, 'fuel: never more than 200');
+  ok(s.fuel === Pt.fuel, 'fuel: never more than full');
   // a landing worth exactly t points: take points off the precision, then off the fuel
   const total = t => {
-    const cut = 1000 - t, cutP = Math.min(cut, 300), cutF = cut - cutP;
-    return E.score(fake({ dist: m.pad.halfWidth * cutP / 300, fuelLeft: m.fuel - par * (1 + E.FUEL_SPAN * cutF / 200) }));
+    const cut = 1000 - t, cutP = Math.min(cut, Pt.precision), cutF = cut - cutP;
+    return E.score(fake({ dist: room * cutP / Pt.precision, fuelLeft: m.fuel - par * (1 + E.FUEL_SPAN * cutF / Pt.fuel) }));
   };
-  ok(total(600).total === 600 && total(849).total === 849, 'exact totals for the star edges');
+  ok(total(600).total === 600 && total(849).total === 849 && total(400).total === 400, 'exact totals for the star edges');
   ok(total(850).stars === 3 && total(849).stars === 2 && total(600).stars === 2 && total(599).stars === 1, 'stars: ★★ from 600, ★★★ from 850');
   ok(E.score({ mission: m, outcome: { ok: false, reason: 'fastDown' } }).total === 0 && E.score({ mission: m, outcome: null }).stars === 0, 'a failure scores nothing');
   ok(E.bestKey('m01', true) === 'm01+a' && E.bestKey('m01', false) === 'm01', 'best score kept per mission and aid');
@@ -377,8 +420,8 @@ console.log('Score');
 
 /* ---------- Autopilot: every mission ---------- */
 console.log(`Autopilot (${SEEDS} seeds each; safe = landed / tried, time and fuel left with the mission seed)`);
-// an average landing: halfway between the centre and where a foot would leave the pad, 2 m/s, a little tilted
-const AVERAGE = m => ({ mode: 'safe', aim: 0.5 * (m.pad.halfWidth - ROCKET.footX), vtd: 2, lean: 2.5 });
+// an average landing: halfway between the centre and where a foot would leave the pad, a little tilted
+const AVERAGE = m => ({ mode: 'safe', aim: 0.5 * (m.pad.halfWidth - ROCKET.footX), lean: 2.5 });
 const scoreTotals = [], avgStars = [], avgTotals = [];
 console.log(`  ${'mission'.padEnd(28)} safe   time  fuel  safe pts   best pts    average pts`);
 for (const m of E.MISSIONS) {
@@ -419,16 +462,19 @@ for (const m of E.MISSIONS) {
 }
 
 /* ---------- A beginner: information about the difficulty ---------- */
-// A pilot who knows the strategy (the average autopilot) but plays like a person: sees the HUD a reaction time late
-// (0.2–0.35 s) and guesses only part of what changed since (60–90 %), reads the numbers with noise, glances every
-// 0.1–0.15 s, presses the buttons on/off (a press lasts at least 0.15 s) and aims and leans a little off. Real
-// first-timers do worse at first (they still have to find the strategy). Guard bands are asserted, so a change cannot
-// make the game trivial or brutal by accident (user's wish 2026-11-13: it must not be easy, and it gets harder).
-function beginner(m, seed) {
+// A pilot who knows the strategy (brake, then hold the engine to the ground and steer onto the pad) but plays like a
+// person: sees the HUD a reaction time late (0.2–0.35 s) and guesses only part of what changed since (60–90 %), reads
+// the numbers with noise, glances every 0.1–0.15 s, presses the buttons on/off (a press lasts at least 0.15 s), aims
+// and leans a little off, and does not know yet how late is too late: it starts braking at its own moment (the
+// autopilot's profile with k = 0.7–2 of the spare thrust; on Earth above about 1.4 the engine cannot make it up). Once
+// it brakes it holds the engine to the ground (the landing governor lowers it gently). Real first-timers do worse at
+// first (they still have to find the strategy). Guard bands are asserted, so a change cannot make the game trivial or
+// brutal by accident (user's wish 2026-11-13: it must not be easy, and it gets harder).
+function beginner(m, seed, brakeK) {
   const r = E.rng(seed), gauss = () => (r() + r() + r() - 1.5) * 1.15;
   const delay = 0.2 + r() * 0.15, guess = 0.6 + r() * 0.3;
-  const opts = { mode: 'safe', vtd: 1.5 + r(), aim: 6 * gauss(), lean: (r() - 0.5) * 6 };
-  const ap = { on: false, corr: false, check: -1, err: 0 }, hist = [];
+  const opts = { mode: 'safe', hold: true, k: brakeK || 0.7 + r() * 1.3, aim: 6 * gauss(), lean: (r() - 0.5) * 6 };
+  const ap = { on: false, corr: false, check: -1, err: 0, held: false }, hist = [];
   let input = NONE, look = 0, held = 9;
   return f => {
     hist.push({ t: f.t, x: f.x, y: f.y, vx: f.vx, vy: f.vy, a: f.a, w: f.w, throttle: f.throttle });
@@ -443,9 +489,9 @@ function beginner(m, seed) {
     const p = Object.assign({}, f, seen, { mission: sees, ap, _imp: null, y: d.y + (seen.y - d.y) * (1 + 0.05 * gauss()),
       vy: d.vy + (seen.vy - d.vy) * (1 + 0.08 * gauss()) + 0.3 * gauss(), vx: seen.vx + 0.3 * gauss() });
     const o = E.autopilot(p, opts);
-    // nobody presses the burn while the rocket is not falling, except for a sideways correction burn high up (the
-    // autopilot's short pulses that keep a limited burn alive are too quick for a finger: a press lasts 0.15 s or more)
-    const want = o.burn && (ap.corr || p.vy - d.vy < -0.3);
+    // the burn is pressed for a correction high up and, once the braking started, held to the ground (the autopilot's
+    // short pulses that keep a limited burn alive between them are too quick for a finger)
+    const want = o.burn && (ap.corr || ap.held);
     const burn = want === input.burn || held >= 0.15 ? want : input.burn;
     if (burn !== input.burn) held = 0;
     input = { left: o.steer < -0.3, right: o.steer > 0.3, burn };
@@ -453,24 +499,38 @@ function beginner(m, seed) {
   };
 }
 {
-  const TRIES = Math.max(10, +opt('--beginner', 40)), rate = {};
-  console.log(`Beginner (landed / tried: ${5 * TRIES} tries on m01, ${TRIES} on the others)`);
-  for (const m of E.MISSIONS) {
-    const n = m.id === 'm01' ? 5 * TRIES : TRIES;
-    let landed = 0;
-    for (let k = 0; k < n; k++) { const f = E.fly(m, m.seed + k, beginner(m, 1234 + k * 7919)); if (f.outcome && f.outcome.ok) landed++; }
-    rate[m.id] = landed / n;
-  }
-  const pct = v => Math.round(100 * v) + ' %', means = {};
-  for (const c of E.CHAPTERS) {
-    const ms = E.MISSIONS.filter(m => m.chapter === c.id);
-    means[c.id] = ms.reduce((s, m) => s + rate[m.id], 0) / ms.length;
-    console.log(`  ${c.id}. ${c.name.padEnd(12)} ${ms.map(m => `${m.id} ${pct(rate[m.id]).padStart(5)}`).join('   ')}   mean ${pct(means[c.id])}`);
-  }
+  const TRIES = Math.max(10, +opt('--beginner', 40)), pct = v => Math.round(100 * v) + ' %';
+  // the landing rate per mission and per chapter; brakeK fixes the braking moment (null: the beginner's own)
+  const measure = (title, brakeK) => {
+    const rate = {}, means = {}, reasons = {};
+    console.log(`${title} (landed / tried: ${5 * TRIES} tries on m01, ${TRIES} on the others)`);
+    for (const m of E.MISSIONS) {
+      const n = m.id === 'm01' ? 5 * TRIES : TRIES, why = reasons[m.chapter] || (reasons[m.chapter] = {});
+      let landed = 0;
+      for (let k = 0; k < n; k++) {
+        const f = E.fly(m, m.seed + k, beginner(m, 1234 + k * 7919, brakeK));
+        if (f.outcome && f.outcome.ok) landed++;
+        else { const r = f.outcome ? f.outcome.reason : 'none'; why[r] = (why[r] || 0) + 1; }
+      }
+      rate[m.id] = landed / n;
+    }
+    for (const c of E.CHAPTERS) {
+      const ms = E.MISSIONS.filter(m => m.chapter === c.id);
+      means[c.id] = ms.reduce((s, m) => s + rate[m.id], 0) / ms.length;
+      console.log(`  ${c.id}. ${c.name.padEnd(12)} ${ms.map(m => `${m.id} ${pct(rate[m.id]).padStart(5)}`).join('   ')}   mean ${pct(means[c.id]).padStart(5)}   (${Object.entries(reasons[c.id]).map(([k, v]) => k + ' ' + v).join(', ')})`);
+    }
+    return { rate, means };
+  };
+  const { rate, means } = measure('Beginner', null);
   ok(rate.m01 >= 0.3 && rate.m01 <= 0.7, `the beginner lands m01 in 30–70 % (${pct(rate.m01)})`);
   // the difficulty rises through the game: no chapter mean is more than 5 points above the one before
   for (let c = 2; c <= 6; c++) ok(means[c] <= means[c - 1] + 0.05, `chapter ${c} is not easier for the beginner than chapter ${c - 1} (${pct(means[c])} vs ${pct(means[c - 1])})`);
   ok(means[6] <= means[1] - 0.15, `chapter 6 is much harder for the beginner than chapter 1 (${pct(means[6])} vs ${pct(means[1])})`);
+  // the same beginner who always brakes in time (as the "Brzdi!" tip tells): what is left is hitting the pad, and
+  // that must get harder through the game too (user's wish 2026-11-14: the game is about hitting the pad)
+  const aim = measure('Beginner who brakes in time (only the targeting)', 1).means;
+  for (let c = 2; c <= 6; c++) ok(aim[c] <= aim[c - 1] + 0.05, `targeting: chapter ${c} is not easier than chapter ${c - 1} (${pct(aim[c])} vs ${pct(aim[c - 1])})`);
+  ok(aim[1] >= 0.75 && aim[6] <= aim[1] - 0.25, `targeting: chapter 1 is mostly landed, chapter 6 much less (${pct(aim[1])}, ${pct(aim[6])})`);
 }
 
 /* ---------- Daily challenge ---------- */
