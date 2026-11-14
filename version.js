@@ -1,7 +1,15 @@
 // The app version, shown in the launcher's Nastavení and used by sw.js to name its cache.
 // Written by tools/release.js from CHANGELOG.md: never edit by hand.
-globalThis.APP_VERSION = { version: '1.0.24', date: '2026-11-14' };
+globalThis.APP_VERSION = { version: '1.0.25', date: '2026-11-14' };
 globalThis.APP_CHANGES = [
+  {
+    "version": "1.0.25",
+    "date": "2026-11-14",
+    "items": [
+      "Přistání: hra je teď hlavně o tom trefit plošinu. Stačí včas začít brzdit a pak motor držet: u země raketu zpomalí sám a posadí ji měkce, motor ji už nikdy nevyhodí nahoru a nad zemí není potřeba motor pouštět a zase mačkat.",
+      "Přistání: body jsou hlavně za přesnost (500), pak za ušetřené palivo (250), rovnou raketu (150) a měkké dosednutí (100); dosavadní rekordy se proto počítají znovu (hvězdy zůstávají). Plošiny jsou místy o kousek širší, Měsíc a Mars mají užší plošinu a jiné texty a rady."
+    ]
+  },
   {
     "version": "1.0.24",
     "date": "2026-11-14",
