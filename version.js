@@ -1,7 +1,15 @@
 // The app version, shown in the launcher's Nastavení and used by sw.js to name its cache.
 // Written by tools/release.js from CHANGELOG.md: never edit by hand.
-globalThis.APP_VERSION = { version: '1.0.22', date: '2026-11-14' };
+globalThis.APP_VERSION = { version: '1.0.23', date: '2026-11-14' };
 globalThis.APP_CHANGES = [
+  {
+    "version": "1.0.23",
+    "date": "2026-11-14",
+    "items": [
+      "Nadpisy v nastavení, nápovědě a dialozích mají ve všech hrách i ve výběru her stejné písmo jako název hry nahoře.",
+      "Přistání: řízení náklonem telefonu funguje stejně, ať telefon držíš rovně, nebo skloněný; rychlosti nad lodí ukazují přesně to, co rozhodne při dosednutí; výbuch, hrom a šplouchnutí už nekončí předčasně."
+    ]
+  },
   {
     "version": "1.0.22",
     "date": "2026-11-14",
