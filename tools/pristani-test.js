@@ -257,6 +257,40 @@ function outcome(f, seconds = 15) { until(f, NONE, x => x.over, seconds); return
   ok(f.outcome.ok && near(f.outcome.vDown, 1, 0.25), `on a heaving deck the speed is relative to it (deck ${deckVy.toFixed(2)} m/s, vDown ${f.outcome.vDown.toFixed(2)})`);
   const d = E.deckAt(f, f.t);
   ok(near(f.a, d.a, 1e-9) && near(f.vy, d.vy, 1e-9), 'after landing the rocket rides the deck');
+  // the HUD's speeds (E.relSpeed) are exactly what touchdown judges, also on a pitching, drifting deck
+  {
+    let same = 0, all = 0;
+    for (const m of [waves, sea, byId('m08'), byId('m20')]) for (const dx of [-5, 0, 5]) for (const wait of [0, 1.3, 2.9]) {
+      const g = place(m, { dx, vy: -6, vx: 1.5, relDeck: true, gap: 1 + 0.4 * wait });
+      for (let i = 0; i < wait / DT && g.phase === 'flying'; i++) E.step(g, BURN, DT); // other moments of the waves
+      until(g, NONE, x => x.phase !== 'flying', 10);
+      if (!g.outcome || g.outcome.where !== 'deck' || g.outcome.ok) continue;
+      all++;
+      const r = E.relSpeed(g); // a crash leaves the rocket where it touched
+      if (r.down === g.outcome.vDown && Math.abs(r.side) === g.outcome.vSide) same++;
+    }
+    ok(all >= 12 && same === all, `relSpeed equals the touchdown speeds on the deck (${same} of ${all} crashes)`);
+    let n = 0, off = 0;
+    for (const m of E.MISSIONS.filter(x => x.pad.kind === 'barge')) for (const pilot of ['safe', 'score']) {
+      const g = E.createFlight(m, m.seed); let last = null;
+      while (g.phase === 'flying' && g.t < 120) { last = E.relSpeed(g); E.step(g, E.autopilot(g, pilot), DT); }
+      if (!g.outcome || g.outcome.where !== 'deck') continue;
+      n++; off = Math.max(off, Math.abs(last.down - g.outcome.vDown), Math.abs(Math.abs(last.side) - g.outcome.vSide));
+    }
+    ok(n >= 8 && off < 0.25, `the HUD speeds a step before touchdown match the judged ones (${n} barge landings, at most ${off.toFixed(3)} m/s off)`);
+    const g = E.createFlight(land); run(g, NONE, 3); const r = E.relSpeed(g);
+    ok(r.down === -g.vy && r.side === g.vx, 'on land relSpeed is the plain speed');
+  }
+  // a very fast fall never passes through the deck between two steps (the contact is swept)
+  {
+    let deck = 0, all = 0;
+    for (const v of [150, 200, 300, 450]) for (const gap of [0.05, 0.5, 1.1]) {
+      const g = place(sea, { vy: -v, gap, relDeck: true }); all++;
+      until(g, NONE, x => x.phase !== 'flying', 2);
+      if (g.outcome && g.outcome.where === 'deck' && g.outcome.reason === 'fastDown') deck++;
+    }
+    ok(deck === all, `a fall at 150–450 m/s hits the deck, not the sea under it (${deck} of ${all})`);
+  }
   // out of the area
   f = E.createFlight(land); f.x = land.area + 5; E.step(f, NONE, DT);
   ok(f.outcome && f.outcome.reason === 'away' && f.phase === 'gone' && /mimo oblast/.test(E.outcomeText(f).detail), 'out of the area: failure');

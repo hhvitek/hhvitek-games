@@ -565,17 +565,22 @@ function waterSlope(f, x, t) {
   let s = 0; for (const c of W) s += c.a * c.k * Math.cos(c.k * x - c.w * t + c.p);
   return s;
 }
-function deckRaw(f, t) {
+// the barge deck's centre and angle at time t, written into o
+function deckRaw(f, t, o) {
   const p = f.mission.pad;
   const x = p.x + (p.drift || 0) * Math.sin(TAU * t / DECK.drift);
   const s = f.env.slopeMax ? waterSlope(f, x, t) / f.env.slopeMax : 0;
-  return { x, y: DECK.height + 0.85 * water(f, x, t), a: -(p.waves.pitch || 0) * DEG * s };
+  o.x = x; o.y = DECK.height + 0.85 * water(f, x, t); o.a = -(p.waves.pitch || 0) * DEG * s;
+  return o;
 }
-// the landing surface at time t: centre x, y of its top, angle a (positive = right end lower) and their speeds
-function deckAt(f, t) {
-  const p = f.mission.pad;
-  if (p.kind !== 'barge') return { x: p.x, y: 0, a: 0, vx: 0, vy: 0, va: 0 };
-  const d = deckRaw(f, t), d0 = deckRaw(f, t - 0.005), d1 = deckRaw(f, t + 0.005);
+const DECK_LO = {}, DECK_HI = {}; // scratch for the deck speeds (the engine is synchronous, nothing keeps them)
+// the landing surface at time t: centre x, y of its top, angle a (positive = right end lower) and their speeds;
+// `out` (optional) is an object to fill instead of a new one (the aid's prediction calls this thousands of times a frame)
+function deckAt(f, t, out) {
+  const p = f.mission.pad, d = out || {};
+  if (p.kind !== 'barge') { d.x = p.x; d.y = 0; d.a = 0; d.vx = 0; d.vy = 0; d.va = 0; return d; }
+  deckRaw(f, t, d);
+  const d0 = deckRaw(f, t - 0.005, DECK_LO), d1 = deckRaw(f, t + 0.005, DECK_HI);
   d.vx = (d1.x - d0.x) / 0.01; d.vy = (d1.y - d0.y) / 0.01; d.va = (d1.a - d0.a) / 0.01;
   return d;
 }
@@ -736,7 +741,15 @@ function touchAt(f, P) {
   if (m.pad.kind === 'barge') {
     const c = Math.cos(d.a), s = Math.sin(d.a), dx = P.x - d.x, dy = P.y - d.y;
     const u = dx * c - dy * s, n = dx * s + dy * c;
-    if (Math.abs(u) <= m.pad.halfWidth && n <= 0 && n > -Math.min(DECK.thick, 1.2)) return 'deck'; // (deeper = came in through the hull's side)
+    const layer = Math.min(DECK.thick, 1.2);
+    if (Math.abs(u) <= m.pad.halfWidth && n <= 0 && n > -layer) return 'deck'; // (deeper = came in through the hull's side)
+    if (n <= -layer) {
+      // deeper: a very fast fall (above about 140 m/s) may have crossed the deck within this step; sweep the point
+      // back along its speed relative to the deck and take the deck when it was above it and crossed it on the deck
+      const rx = f.vx - d.vx, ry = f.vy - d.vy;
+      const u0 = u - (rx * c - ry * s) * DT, n0 = n - (rx * s + ry * c) * DT;
+      if (n0 > 0) { const k = n0 / (n0 - n); if (Math.abs(u0 + (u - u0) * k) <= m.pad.halfWidth) return 'deck'; }
+    }
     return P.y <= water(f, P.x, f.t) ? 'water' : null;
   }
   const gy = ground(f, P.x);
@@ -781,10 +794,7 @@ function touchdown(f, kind) {
   const sOf = P => (P.x - d.x) * c - (P.y - d.y) * s;
   const axisS = sOf({ x: f.x, y: f.y });
   const feetS = [-1, 1].map(side => sOf(toWorld(f.x, f.y, f.a, side * ROCKET.footX, ROCKET.footY)));
-  // the rocket's speed relative to the deck point under it (the barge heaves, pitches and drifts)
-  const rx = f.x - d.x, ry = f.y - d.y;
-  const ux = f.vx - (d.vx + d.va * ry), uy = f.vy - (d.vy - d.va * rx);
-  const vDown = -(ux * s + uy * c), vSide = Math.abs(ux * c - uy * s), tilt = (f.a - d.a) / DEG;
+  const rel = relSpeed(f), vDown = rel.down, vSide = Math.abs(rel.side), tilt = (f.a - d.a) / DEG;
   const j = judgeTouchdown({ legs: f.legs, vDown, vSide, tilt, axisS, feetS, hw: m.pad.halfWidth, sea: m.surface === 'sea' });
   f.outcome = makeOutcome(f, Object.assign(j, { where: kind, vDown, vSide, tilt: Math.abs(tilt), dist: Math.abs(axisS), axisS }));
   f.burning = f.session = false; f.throttle = 0; // the engine stops at every outcome (no flame while it tips)
@@ -808,6 +818,15 @@ function touchdown(f, kind) {
     f.phase = 'tipping';
     ev(f, 'tipStart', { dir });
   }
+}
+// the rocket's speed relative to the deck point under it (the barge heaves, pitches and drifts), along the deck's
+// normal (down, + = towards the deck) and along the deck (side, + = to the right): exactly what touchdown judges,
+// so the HUD shows these; on land it is -vy and vx
+function relSpeed(f) {
+  const d = f.deck, c = Math.cos(d.a), s = Math.sin(d.a);
+  const rx = f.x - d.x, ry = f.y - d.y;
+  const ux = f.vx - (d.vx + d.va * ry), uy = f.vy - (d.vy - d.va * rx);
+  return { down: -(ux * s + uy * c), side: ux * c - uy * s };
 }
 function restOnDeck(f) {
   const d = f.deck, c = Math.cos(d.a), s = Math.sin(d.a), u = f.post.s, n = -ROCKET.footY;
@@ -858,19 +877,21 @@ function afterOutcome(f, dt) {
 function takeEvents(f) { const e = f.events; f.events = []; return e; }
 
 /* ---------- Aid: where the rocket would hit with the engine off ---------- */
+const IMP_DECK = {}; // scratch: the prediction allocates nothing per step
 function impact(f) {
   if (f._imp && f._imp.n === f.n) return f._imp.v;
   let v = null;
   if (f.phase === 'flying') {
     const m = f.mission, h = 0.05;
     let x = f.x, y = f.y, vx = f.vx, vy = f.vy, t = f.t;
+    const d = IMP_DECK;
     for (let i = 0; i < 1800; i++) {
       const rho = density(f, y);
       let ax = 0, ay = -m.g;
       if (rho > 0) { const wx = vx - windAt(f, t, y), sp = Math.hypot(wx, vy); ax -= AIR.kSide * rho * sp * wx; ay -= AIR.kAxial * rho * sp * vy; }
       vx += ax * h; vy += ay * h; x += vx * h; y += vy * h; t += h;
       if (vy < 0) {
-        const d = deckAt(f, t), sy = surfaceY(f, x, t, d);
+        deckAt(f, t, d); const sy = surfaceY(f, x, t, d);
         if (y + ROCKET.footY <= sy) { v = { x, y: sy, t: t - f.t, onPad: Math.abs(x - d.x) <= m.pad.halfWidth - ROCKET.footX, padX: d.x }; break; } // green only where both feet fit
       }
     }
@@ -1070,7 +1091,7 @@ Object.assign(PARS, { m01: 10.7, m02: 14.3, m03: 21.4, m04: 14.1, m05: 14.1, m06
 
 return {
   DT, DEG, ROCKET, LIMITS, CTRL, AIR, DECK, PLANETS, STARS, FUEL_SPAN, PAR_SHARE, PILOTS, PARS, MISSIONS, CHAPTERS,
-  mission, createFlight, step, takeEvents, impact, score, bestKey, autopilot, fly, dailyMission, outcomeText,
+  mission, createFlight, step, takeEvents, impact, relSpeed, score, bestKey, autopilot, fly, dailyMission, outcomeText,
   judgeTouchdown, windAt, water, deckAt, ground, surfaceY, footBody, toWorld, feet, thrustAccel, density, rng, hashStr, parOf,
 };
 }
@@ -2869,7 +2890,7 @@ const SND = (() => {
   function burst({ type = 'lowpass', f0 = 1000, f1 = f0, q = .7, dur = .5, g = .5, at = 0, attack = .005 }) {
     if (!ac || !S.sound) return;
     try {
-      const t = ac.currentTime + at, src = ac.createBufferSource(); src.buffer = white;
+      const t = ac.currentTime + at, src = ac.createBufferSource(); src.buffer = white; src.loop = true; // (longer than the 2 s buffer: the explosion, thunder)
       const f = filt(type, f0, q), gg = gain(0);
       f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
       gg.gain.setValueAtTime(0, t); gg.gain.linearRampToValueAtTime(g, t + attack); gg.gain.exponentialRampToValueAtTime(.0005, t + dur);
@@ -2954,13 +2975,13 @@ function startFlight(force) {
   if (!force && performance.now() - briefAt < 400) return; // a double tap on Další must not skip the briefing
   if (staleDaily()) { freshDaily(); return; }
   SND.init(); SND.resume();
-  if (S.ctl === 'tilt') initSensor();
+  if (S.ctl === 'tilt') initSensor(true);
   for (const p of ptrs.values()) p.ign = true; // rule of the briefing: the tap that starts never burns
   noBurnUntil = performance.now() + 350;
   flightAid = S.aid; // the aid may have been switched in the settings while the briefing was up
   setMode('fly');
 }
-function retry() { if (staleDaily()) { freshDaily(); return; } newFlight(); noBurnUntil = performance.now() + 350; SND.init(); SND.resume(); if (S.ctl === 'tilt') initSensor(); setMode('fly'); }
+function retry() { if (staleDaily()) { freshDaily(); return; } newFlight(); noBurnUntil = performance.now() + 350; SND.init(); SND.resume(); if (S.ctl === 'tilt') initSensor(true); setMode('fly'); }
 function nextMission() {
   const i = MIDS.indexOf(M.id);
   if (i >= 0 && i < MIDS.length - 1 && isUnlocked(i + 1)) openMission(MIDS[i + 1]); else openMissions();
@@ -3002,6 +3023,9 @@ function resume() {
 }
 const LANDSCAPE = matchMedia('(orientation:landscape) and (max-height:500px)'); // the #rotate notice covers the game
 let postAt = 0;
+// taps on the result card's buttons and on the mission tiles wait 350 ms after they appear: the card may come up under
+// a finger still down (the tap that skipped the outcome), and a double tap on Mise must not pick a mission
+let resultAt = 0, missionsAt = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = lastT ? (now - lastT) / 1000 : 1 / 60;
@@ -3152,7 +3176,7 @@ function presentResult() {
     </div>
     <div class="cfoot"><button data-act="missions">Mise</button><button class="pri" data-act="retry">${ico.retry}Znovu</button></div>`;
   }
-  setMode('result');
+  setMode('result'); resultAt = performance.now();
   if (r.ok) SND.chime();
 }
 
@@ -3160,6 +3184,7 @@ function presentResult() {
 const ptrs = new Map();
 const keys = { L: false, R: false, B: false };
 let sensor = 'off', tiltRaw = null, tiltZero = null, tiltSteer = 0, testTilt = null, sensorT = 0;
+let tiltUx = 0, tiltUy = 1, lateSensor = false; // the smoothed direction of "up" on the screen; a reading after the fallback
 function ctlNow() { return S.ctl === 'tilt' && sensor === 'none' && testTilt === null ? 'thumbs' : S.ctl; }
 function zoneOf(p) {
   const c = ctlNow();
@@ -3217,6 +3242,7 @@ addEventListener('keyup', e => { keyHeld.delete(e.key); const k = KEYMAP[e.key];
 // the cards' buttons
 for (const id of ['#brief', '#result', '#pausecard']) $(id).addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
+  if (id === '#result' && performance.now() - resultAt < 350) return;
   const a = b.dataset.act;
   if (a === 'start') startFlight();
   else if (a === 'retry') retry();
@@ -3224,13 +3250,25 @@ for (const id of ['#brief', '#result', '#pausecard']) $(id).addEventListener('cl
   else if (a === 'missions') openMissions();
   else if (a === 'resume') resume();
 });
-// Náklon telefonu: left/right tilt of the phone held upright (gamma), zero = how it was held at the start
+// Náklon telefonu: the roll of the phone within the screen's plane, like a steering wheel (top edge to the right =
+// right), zero = how it was held at the start. It comes from the direction of "up" seen in the screen's plane, so it
+// does not depend on how far the phone leans back (gamma alone did: near upright 2° was full steer) and keeps its
+// sides past vertical. A phone lying flat has no such direction: the steer stays as it was.
 function onOrient(e) {
-  if (e.gamma == null) return;
-  tiltRaw = tiltRaw == null ? e.gamma : tiltRaw * .65 + e.gamma * .35;
-  if (tiltZero == null) tiltZero = tiltRaw;
-  const d = tiltRaw - tiltZero, dz = Math.abs(d) < 3 ? 0 : d - Math.sign(d) * 3;
-  tiltSteer = clamp(dz / 22, -1, 1);
+  if (e.beta == null || e.gamma == null) return;
+  if (sensor === 'none') { lateSensor = true; return; } // the fallback to Dva palce holds for the rest of this flight
+  const R = Math.PI / 180, b = e.beta * R, g = e.gamma * R;
+  // world "up" in the phone's coordinates (x to the right edge, y to the top edge)
+  const ux = -Math.cos(b) * Math.sin(g), uy = Math.sin(b), len = Math.hypot(ux, uy);
+  if (len > .06) { // more than about 3.5° from flat
+    // smooth the direction as a vector: it never averages across the jump from +180° to −180°
+    const k = tiltRaw == null ? 1 : .35;
+    tiltUx += (ux / len - tiltUx) * k; tiltUy += (uy / len - tiltUy) * k;
+    tiltRaw = Math.atan2(-tiltUx, tiltUy) / R;
+    if (tiltZero == null) tiltZero = tiltRaw;
+    const d = ((tiltRaw - tiltZero) % 360 + 540) % 360 - 180, dz = Math.abs(d) < 3 ? 0 : d - Math.sign(d) * 3;
+    tiltSteer = clamp(dz / 22, -1, 1); // 3° dead zone, 25° = full steer
+  }
   if (sensor !== 'ok') { sensor = 'ok'; clearTimeout(sensorT); }
 }
 function listen() {
@@ -3244,8 +3282,11 @@ function noSensor() {
   sensor = 'none';
   for (const p of ptrs.values()) p.bOnly = true; // fingers already down keep only burning (no sudden steering in Dva palce)
   showControls(); toast('Náklon telefonu tu nejde, ovládej dvěma palci', 3600); }
-function initSensor() {
+// newFlight: a flight starts (Start, Znovu), not a pause that ends; a sensor that answered only after the fallback
+// to Dva palce takes over from the next flight
+function initSensor(newFlight) {
   tiltZero = tiltRaw; // the way the phone is held now counts as straight
+  if (newFlight && sensor === 'none' && lateSensor) { sensor = 'ok'; lateSensor = false; tiltRaw = tiltZero = null; return; }
   if (sensor === 'ok' || sensor === 'wait' || sensor === 'none') return;
   // a browser with requestPermission (iOS) asks; this runs from the tap that starts the flight
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -3262,7 +3303,7 @@ function hset(el, k, v, prop = 'textContent') { if (hudC[k] !== v) { hudC[k] = v
 function updateHud() {
   if (!F || !M) return;
   const fl = F.phase === 'flying';
-  const vd = -(F.vy - F.deck.vy), vs = F.vx - F.deck.vx, near = F.alt < Math.max(150, M.legAlt * 1.3) || F.legsOut;
+  const rel = E.relSpeed(F), vd = rel.down, vs = rel.side, near = F.alt < Math.max(150, M.legAlt * 1.3) || F.legsOut;
   const o = F.outcome;
   const shownVd = fl ? vd : o ? o.vDown : 0, shownVs = fl ? Math.abs(vs) : o ? o.vSide : 0;
   hset($('#hMission'), 'mis', `<b>${mLabel(M)}</b> ${esc(M.chapter ? M.name : M.what.split('.')[0])}`, 'innerHTML');
@@ -3322,7 +3363,7 @@ const ICON = {
 const CTL_HINT = {
   thumbs: 'Drž levou nebo pravou půlku obrazovky: motor hoří a raketa se nakloní tím směrem. Obě najednou: hoří rovně.',
   buttons: '◀ ▶ vlevo raketu naklánějí, plamen vpravo zapaluje motor.',
-  tilt: 'Nakláněj telefon doleva a doprava. Motor hoří, dokud držíš prst na obrazovce.',
+  tilt: 'Nakláněj telefon doleva a doprava jako volant. Motor hoří, dokud držíš prst na obrazovce.',
 };
 function conditions(m) {
   const c = [];
@@ -3390,7 +3431,7 @@ function renderMissions() {
   $('#missionsIn').innerHTML = html;
 }
 function openMissions() {
-  hideToast(); renderMissions();
+  hideToast(); renderMissions(); missionsAt = performance.now();
   $('#screenMissions').hidden = false; $('#screenMissions').scrollTop = 0;
   const cur = $('#missionsIn .mt.cur');
   if (cur) setTimeout(() => { try { cur.scrollIntoView({ block: 'center' }); } catch (e) {} }, 0);
@@ -3400,6 +3441,7 @@ $('#missionsIn').addEventListener('click', e => {
   const [act, arg] = b.dataset.act.split(':');
   if (act === 'close') { $('#screenMissions').hidden = true; return; }
   if (act === 'go') {
+    if (performance.now() - missionsAt < 350) return;
     const i = MIDS.indexOf(arg);
     if (arg !== 'daily' && !isUnlocked(i)) { { const f = missionOf(firstOpen()); toast(`Mise je zamčená. Nejdřív přistaň v misi ${mLabel(f)} ${f.name}`); } return; }
     $('#screenMissions').hidden = true;
@@ -3418,7 +3460,7 @@ function renderSettings() {
     <section class="card"><h3>Ovládání</h3>
       ${opt('ctl:thumbs', S.ctl === 'thumbs', 'Dva palce', 'Drž levou půlku obrazovky: raketa se nakloní doleva a motor hoří. Pravou doprava. Obě najednou: motor hoří a raketa se narovná.')}
       ${opt('ctl:buttons', S.ctl === 'buttons', 'Tlačítka', 'Vlevo ◀ a ▶ jen naklánějí, vpravo plamen zapaluje motor. Jde tak naklánět bez hoření.')}
-      ${opt('ctl:tilt', S.ctl === 'tilt', 'Náklon telefonu', 'Nakloň telefon doleva nebo doprava. Motor hoří, dokud se prstem dotýkáš obrazovky.')}
+      ${opt('ctl:tilt', S.ctl === 'tilt', 'Náklon telefonu', 'Nakloň telefon doleva nebo doprava jako volant, jedno jak moc ho držíš skloněný. Motor hoří, dokud se prstem dotýkáš obrazovky.')}
       ${S.ctl === 'tilt' && sensor === 'none' ? '<div class="notice">Tenhle telefon náklon nehlásí, hraje se proto dvěma palci.</div>' : ''}
     </section>
     <section class="card"><h3>Pomůcky</h3>
@@ -3449,7 +3491,7 @@ $('#settingsIn').addEventListener('click', e => {
       { text: 'Ne, nechat', cls: 'alt' }]);
     return;
   }
-  if (act === 'ctl') { S.ctl = arg; if (arg === 'tilt' && sensor === 'none') sensor = 'off'; }
+  if (act === 'ctl') { S.ctl = arg; if (arg === 'tilt' && sensor === 'none') { sensor = 'off'; lateSensor = false; } }
   else if (act === 'theme') S.theme = arg;
   else if (act === 'toggle') { S[arg] = !S[arg]; if (arg === 'sound' && S.sound) { SND.init(); SND.resume(); } }
   else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
@@ -3481,7 +3523,7 @@ function renderHelp() {
       <ul>
         <li><b>Dva palce</b>: drž levou půlku obrazovky, motor hoří a raketa se naklání doleva. Pravou doprava. Obě najednou: motor hoří a raketa se rovná. Nic: motor nehoří.</li>
         <li><b>Tlačítka</b>: ◀ a ▶ vlevo jen naklánějí, plamen vpravo zapaluje motor.</li>
-        <li><b>Náklon telefonu</b>: nakláněj telefon, motor hoří, dokud držíš prst na obrazovce.</li>
+        <li><b>Náklon telefonu</b>: nakláněj telefon doleva a doprava jako volant (nezáleží na tom, jak moc ho držíš skloněný k sobě), motor hoří, dokud držíš prst na obrazovce.</li>
         <li>Raketa jde ve směru, kam míří špička, když motor hoří. Bez náklonu se sama narovná. Motor chvilku nabíhá.</li>
         <li>Nohy se vysunou samy kousek nad zemí.</li>
         <li>Na počítači: šipky ← → naklánějí, mezerník nebo ↑ zapaluje motor.</li>
@@ -3499,7 +3541,7 @@ function renderHelp() {
     </section>
     <section class="card help"><h3>Mise</h3>
       <ul>${E.CHAPTERS.map(c => `<li><b>${c.id}. ${esc(c.name)}</b>: ${esc(c.what)}</li>`).join('')}</ul>
-      <p><b>Zážehy</b>: v některých misích jde motor zapálit jen několikrát. Když ho pustíš na víc než třetinu sekundy, další stisk je nový zážeh. Silný motor se nedá udržet ve vznášení: zapal ho co nejpozději a drž až dolů. Na Měsíci a na Marsu je pozemský motor ještě mnohem silnější: krátký zážeh raketu prudce zabrzdí, takže ho pusť včas, těsně nad zemí.</p>
+      <p><b>Zážehy</b>: v některých misích jde motor zapálit jen několikrát. Když ho pustíš na víc než 0,3 sekundy, další stisk je nový zážeh. Silný motor se nedá udržet ve vznášení: zapal ho co nejpozději a drž až dolů. Na Měsíci a na Marsu je pozemský motor ještě mnohem silnější: krátký zážeh raketu prudce zabrzdí, takže ho pusť včas, těsně nad zemí.</p>
       <p><b>Výzva dne</b>: každý den jiný let, pro všechny stejný. Přistání ve výzvě každý den prodlužuje sérii, vynechaný den ji začne od nuly.</p>
       <p><b>Pauza</b>: tlačítko vpravo nad údaji o letu. Let se zastaví i při otevření nastavení nebo nápovědy.</p>
     </section>

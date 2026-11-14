@@ -228,6 +228,9 @@ sea**. Angles inside a flight are **radians, positive = nose to the right** (clo
   `explode { x, y, where }` (the centre of the rocket), `splash { x, y, v }`, `away`, `over`.
 - `E.impact(f)` → `null` or `{ x, y, t, onPad, padX }`: where the rocket would hit with the engine off (the aid
   marker; `onPad` = both feet would fit on the pad: |x − padX| ≤ halfWidth − ROCKET.footX). Cached per step, so calling it every frame is cheap.
+- `E.relSpeed(f)` → `{ down, side }`: the rocket's speed relative to the deck point under it, along the deck's normal
+  (+ = towards it) and along the deck (signed, + = right); exactly what touchdown judges, so the HUD shows it (on land
+  `-vy` and `vx`).
 - Scene functions (same ones the physics uses): `E.windAt(f, t, h)`, `E.water(f, x, t)` (the sea surface; the
   renderer's spring water should follow it as its swell), `E.deckAt(f, t)`, `E.ground(f, x)` (land and the crater),
   `E.surfaceY(f, x, t)`, `E.density(f, h)`, `E.thrustAccel(f)`.
