@@ -296,3 +296,22 @@ sea**. Angles inside a flight are **radians, positive = nose to the right** (clo
   ones). The braking itself (thrust/weight 1.3) was not changed: about 10 s of every Earth flight is the burn. Bot
   landing rate (80 tries): ch1 39 %, ch2 33 %, ch3 27 %, ch4 28 %, ch5 28 %, ch6 20 % (Měsíc 25, Kráter 13, Mars 20,
   Prachová bouře 23). The autopilot times in total: safe 760 → 513 s, score 642 → 403 s.
+
+## 10. Tips during the flight (user's wish 2026-11-14)
+
+The user could not land and found the help hard to follow, so the help was rewritten in plain words with a "Jak
+přistát" section, and a setting **"Rady během letu"** (`tips`, on by default) was added:
+- the briefing card shows "Jak přistát:" with the strategy for the mission's engine (Earth: brake early, the speed
+  table; limited ignitions: light late and hold to the ground; Moon/Mars: short burns, let go when it stops falling);
+- during the flight one line on top of the scene (`#tip`, under a flash of `#msg`) says what to do now, the first that
+  applies: "Stoupáš – pusť motor" (burning and rising), "Brzdi! Drž motor" (faster down than `downLimit(h)`: the
+  engine's braking with room for a late reaction, capped at 1 + h/4 near the ground; the "Dolů" box blinks; it stays
+  until half that speed; not with limited ignitions, where on-and-off braking wastes them), "Narovnej raketu" (below
+  15 m, tilted over 6° to the deck), "Letíš doprava – nakloň raketu doleva" (below 30 m, sideways over 1.6 m/s),
+  "Plošina je vpravo – nakloň raketu doprava" (above 50 m, the no-engine impact more than 1.5 pad half-widths off).
+  A tip stays at least 0.8 s unless a more urgent one comes. Display only, like the impact marker, but the records are
+  not split by it (it changes nothing in the flight).
+- Measured with a simulated player who burns only while "Brzdi!" is up (autopilot steering, a pure reaction delay): it
+  lands about 2 of 3 Earth missions with a 0.25–0.35 s reaction. Simple tips for the limited-ignition missions did not
+  land in simulation, so those get only the briefing advice and the steering tips.
+

@@ -246,7 +246,7 @@ The user chose these; keep them when changing a game:
   levels itself), "Tlačítka" and "Náklon telefonu". 24 missions in 6 chapters, each adding one thing (Poušť, Moře,
   Vítr, Noc a mraky, Zážehy = no hover and limited ignitions, Jiné světy), unlocked one by one with 1–3 stars from
   the touchdown score; "Výzva dne" from the date with a streak; a ghost of the best flight; the impact marker aid
-  (bests kept per mission and aid). "Mise" stands in place of "Nová hra" and a flight is never saved (it is short;
+  (bests kept per mission and aid). "Rady během letu" (user's wish 2026-11-14, on by default, switchable in settings): the briefing says how to land the mission and a line on the scene says what to do now ("Brzdi! Drž motor" …); the help is written in plain words with a "Jak přistát" section. "Mise" stands in place of "Nová hra" and a flight is never saved (it is short;
   "Znovu" restarts at once, no confirmation). Every mission is proved landable by the autopilot in
   `tools/pristani-test.js`. Not easy (user's wish 2026-11-13: "the fun is that it does not work at
   first"): the first mission was not made easier; the test's beginner bot (knows the strategy, adds reaction delay

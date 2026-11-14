@@ -126,6 +126,13 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 #msg{position:absolute;left:50%;top:12px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);padding:8px 14px;border-radius:12px;background:var(--card);color:var(--ink);font-size:17px;font-weight:800;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.35);pointer-events:none;transition:opacity .3s}
 #msg.hide{opacity:0}
 #msg.bad{color:var(--bad)}
+/* a tip during the flight (Rady během letu): what to do now */
+#tip{position:absolute;left:50%;top:12px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);padding:7px 13px;border-radius:12px;background:var(--card);color:var(--ink);font-size:16px;font-weight:800;text-align:center;box-shadow:0 4px 14px rgba(0,0,0,.35);pointer-events:none;transition:opacity .25s}
+#tip.hide{opacity:0}
+#tip.bad{color:var(--bad)}
+.g.warn{animation:gwarn .6s steps(2,jump-none) infinite}
+@keyframes gwarn{0%{box-shadow:inset 0 0 0 2px var(--bad)}100%{box-shadow:inset 0 0 0 2px transparent}}
+.g.warn b{color:var(--bad)}
 
 /* the control marks: Dva palce (two halves), Tlačítka (◀ ▶ and the flame), Náklon telefonu (a hint and the tilt) */
 .zones{position:absolute;left:var(--gut);right:var(--gut);bottom:12px;display:flex;gap:12px;pointer-events:none}
@@ -157,6 +164,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 .ccard h2{font-size:26px;line-height:1.15;font-weight:800;margin:2px 0 6px}
 .ccard p{font-size:17px;line-height:1.35;color:var(--ink)}
 .ccard p.soft{color:var(--soft);font-size:16px;margin-top:6px}
+.ccard p.howto{font-size:16px;margin-top:8px;line-height:1.35}
 .conds{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
 .cond{display:flex;align-items:center;gap:5px;padding:4px 9px;border-radius:9px;background:var(--alt);font-size:15px;font-weight:700;white-space:nowrap}
 .cond svg{width:15px;height:15px;fill:currentColor}
@@ -336,6 +344,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
     <div id="brief" class="ccard" hidden></div>
     <div id="result" class="ccard" hidden></div>
     <div id="pausecard" class="ccard" hidden></div>
+    <div id="tip" class="hide" role="status"></div>
     <div id="msg" class="hide"></div>
   </main>
 </div>
@@ -1125,7 +1134,7 @@ const THEMES = [
   { id: 'steel', name: 'Ocel',  meta: '#353d46' },
 ];
 const CTLS = ['thumbs', 'buttons', 'tilt'];
-const DEFAULTS = { ctl: 'thumbs', aid: true, ghost: true, sound: true, vibrate: true, theme: 'night' };
+const DEFAULTS = { ctl: 'thumbs', aid: true, tips: true, ghost: true, sound: true, vibrate: true, theme: 'night' };
 const MIDS = E.MISSIONS.map(m => m.id);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const isObj = o => !!o && typeof o === 'object' && !Array.isArray(o);
@@ -1169,7 +1178,7 @@ function validProgress(s) {
 }
 function normalize(s) {
   if (!CTLS.includes(s.ctl)) s.ctl = DEFAULTS.ctl;
-  for (const k of ['aid', 'ghost', 'sound', 'vibrate']) if (typeof s[k] !== 'boolean') s[k] = DEFAULTS[k];
+  for (const k of ['aid', 'tips', 'ghost', 'sound', 'vibrate']) if (typeof s[k] !== 'boolean') s[k] = DEFAULTS[k];
   if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
 }
 
@@ -2957,6 +2966,7 @@ function newFlight() {
   rX = pX = F.x; rY = pY = F.y; rA = pA = F.a;
   ghost = M.chapter ? P.ghosts[M.id] || null : null;
   flightAid = S.aid; resultShown = false; slapped = false; ignGone = false; climbSaid = false; outcomeRes = null; acc = 0; camSnap = true;
+  tipNow = ''; tipHeld = 0; tipCheck = 0; tipDir = '';
   for (const p of ptrs.values()) p.ign = true; // a finger already down never burns the new flight
 }
 // the briefing of a mission: the rocket hangs at the start, a card says what is new
@@ -3052,6 +3062,7 @@ function update(dt) {
   flashA *= Math.exp(-dt * 7); trauma = Math.max(0, trauma - dt * 1.1); boomT = Math.max(0, boomT - dt);
   igniteT = Math.max(0, igniteT - dt);
   if (msgT > 0) { msgT -= dt; if (msgT <= 0) $('#msg').classList.add('hide'); }
+  updateTips(dt);
   if (freezeT > 0) { freezeT -= dt; return; } // the explosion's moment of stillness
   let ts = 1;
   if (slowT > 0) { slowT -= dt; ts = .3; }
@@ -3298,6 +3309,60 @@ function initSensor(newFlight) {
   listen();
 }
 
+/* ---------- Tips during the flight (setting "Rady během letu", on by default; user's wish 2026-11-14) ---------- */
+// One short line on top of the scene says what to do now. Checked in this order, the first that applies wins:
+// rising with the engine on, falling faster than the engine can still stop (the "Dolů" box blinks too), tilted near
+// the ground, sliding sideways near the ground, and high up heading away from the pad. A tip stays at least 0.8 s
+// (a more urgent one takes over at once). Display only: like the impact marker it changes nothing in the flight.
+let tipNow = '', tipHeld = 0, tipCheck = 0, tipDir = '';
+const TIP_ORDER = ['rise', 'fast', 'tilt', 'side', 'dir'];
+// the speed down the engine can still stop at this height with room for a late reaction, and a slow last 10 m (the
+// help's table: 15 m/s at 100 m, 11 at 50, 8 at 25, 3 at 10). "Brzdi!" shows above it and stays until the speed is
+// half of it: a simulated player who burns only while this tip is up lands about 2 of 3 Earth missions with a 0.25 to
+// 0.35 s reaction (the autopilot steering; measured 2026-11-14, the steeper or later curves did worse).
+// Not with limited ignitions: braking on and off there wastes them (the briefing tells that strategy instead).
+function downLimit(h) {
+  const brake = Math.max(.3, E.thrustAccel(F) * Math.cos(12 * E.DEG) - M.g);
+  return Math.min(Math.sqrt(.8 * brake * Math.max(0, h)) + 1, 1 + .25 * Math.max(0, h));
+}
+function tipFor() {
+  const rel = E.relSpeed(F), h = F.alt, tilt = (F.a - F.deck.a) / E.DEG, free = F.ignLeft === null;
+  if (rel.down < -1 && F.burning && h > 3 && (free || M.world !== 'earth')) return 'rise';
+  if (free && h > .5 && rel.down > downLimit(h) * (tipNow === 'fast' ? .5 : 1)) return 'fast';
+  if (h < 15 && Math.abs(tilt) > 6) return 'tilt';
+  if (h < 30 && Math.abs(rel.side) > LIMITS.vSide * .8) return 'side';
+  if (h > 50 && tipDir) return 'dir';
+  return '';
+}
+function tipText(k) {
+  const rel = E.relSpeed(F);
+  switch (k) {
+    case 'rise': return 'Stoupáš – pusť motor';
+    case 'fast': return 'Brzdi! Drž motor';
+    case 'tilt': return 'Narovnej raketu';
+    case 'side': return rel.side > 0 ? 'Letíš doprava – nakloň raketu doleva' : 'Letíš doleva – nakloň raketu doprava';
+    case 'dir': return tipDir === 'right' ? 'Plošina je vpravo – nakloň raketu doprava' : 'Plošina je vlevo – nakloň raketu doleva';
+  }
+  return '';
+}
+function updateTips(dt) {
+  const el = $('#tip');
+  const on = S.tips && mode === 'fly' && !paused && F && F.phase === 'flying';
+  if (!on) { if (tipNow) { tipNow = ''; el.classList.add('hide'); } return; }
+  // where the rocket would come down without the engine (a few times a second: it is a short simulation)
+  tipCheck -= dt;
+  if (tipCheck <= 0) {
+    tipCheck = .25;
+    const im = F.alt > 50 ? E.impact(F) : null, miss = im ? im.x - im.padX : 0;
+    tipDir = im && Math.abs(miss) > M.pad.halfWidth * 1.5 ? (miss < 0 ? 'right' : 'left') : '';
+  }
+  tipHeld += dt;
+  const want = tipFor();
+  if (want !== tipNow && (tipHeld >= .8 || (want && (!tipNow || TIP_ORDER.indexOf(want) < TIP_ORDER.indexOf(tipNow))))) { tipNow = want; tipHeld = 0; }
+  if (tipNow) { el.textContent = tipText(tipNow); el.classList.toggle('bad', tipNow === 'fast' || tipNow === 'rise'); }
+  el.classList.toggle('hide', !tipNow || msgT > 0); // a flash ("Došlo palivo") has the place for its moment
+}
+
 /* ---------- HUD row ---------- */
 const hudC = {};
 function hset(el, k, v, prop = 'textContent') { if (hudC[k] !== v) { hudC[k] = v; el[prop] = v; } }
@@ -3313,10 +3378,10 @@ function updateHud() {
   hset($('#gVy small'), 'vyl', up ? 'Nahoru m/s' : 'Dolů m/s');
   hset($('#gVy b'), 'vy', (up ? '↑ ' : '') + num(Math.abs(shownVd)));
   // a strong engine on a light world lifts the rocket back up: say so once a flight (subtly, on the HUD)
-  if (up && !climbSaid && mode === 'fly' && M.world !== 'earth' && F.burning && vd < -1.5) { climbSaid = true; flashMsg('Stoupáš – pusť motor'); }
+  if (up && !climbSaid && !S.tips && mode === 'fly' && M.world !== 'earth' && F.burning && vd < -1.5) { climbSaid = true; flashMsg('Stoupáš – pusť motor'); }
   hset($('#gVx b'), 'vx', (fl && Math.abs(vs) >= .05 ? (vs < 0 ? '← ' : '') : '') + num(shownVs) + (fl && vs >= .05 ? ' →' : ''));
   const cls = (v, lim) => !near && fl ? 'g' : v <= lim ? 'g ok' : 'g bad';
-  hset($('#gVy'), 'vyc', o ? (o.vDown <= LIMITS.vDown ? 'g ok' : 'g bad') : cls(Math.max(0, vd), LIMITS.vDown), 'className');
+  hset($('#gVy'), 'vyc', o ? (o.vDown <= LIMITS.vDown ? 'g ok' : 'g bad') : cls(Math.max(0, vd), LIMITS.vDown) + (tipNow === 'fast' && fl ? ' warn' : ''), 'className');
   hset($('#gVx'), 'vxc', o ? (o.vSide <= LIMITS.vSide ? 'g ok' : 'g bad') : cls(Math.abs(vs), LIMITS.vSide), 'className');
   const fr = clamp(F.fuel / F.fuel0, 0, 1);
   hset($('#hFuel').style, 'fuel', `scaleX(${fr.toFixed(3)})`, 'transform');
@@ -3366,6 +3431,12 @@ const CTL_HINT = {
   buttons: '◀ ▶ vlevo raketu naklánějí, plamen vpravo zapaluje motor.',
   tilt: 'Nakláněj telefon doleva a doprava jako volant. Motor hoří, dokud držíš prst na obrazovce.',
 };
+// the briefing's advice for the mission's kind of engine (shown with "Rady během letu")
+function landTip(m) {
+  if (m.world !== 'earth') return 'motor je tu moc silný. Brzdi krátce a pusť ho, jakmile raketa přestane padat, jinak vyletí zpátky nahoru. Zážehy šetři na konec.';
+  if (m.ignitions) return `motor je silný a zapálíš ho jen ${m.ignitions === 1 ? 'jednou' : m.ignitions === 2 ? 'dvakrát' : m.ignitions + '×'}. Nech raketu padat, zapal ho pozdě a drž ho až na zem.`;
+  return 'brzdi brzo. Ve 100 m padej nejvýš 15 m/s, v 50 m 11, v 25 m 8. U země motor pouštěj a zase drž, ať padáš 1 až 3 m/s.';
+}
 function conditions(m) {
   const c = [];
   const w = m.wind || {};
@@ -3399,6 +3470,7 @@ function renderBrief() {
       <p>${esc(m.what)}</p>
       <div class="conds">${conditions(m)}</div>
       <div class="best">${best}</div>
+      ${S.tips ? `<p class="howto"><b>Jak přistát:</b> ${esc(landTip(m))}</p>` : ''}
       ${m.chapter === 1 && m.num <= 2 || !P.stars.m01 ? `<p class="soft">${esc(CTL_HINT[ctlNow()])}</p>` : ''}
     </div>
     <div class="cfoot"><button class="pri" data-act="start">${ICON.fire.replace('<svg', '<svg style="fill:currentColor;stroke:none"')}Start</button></div>`;
@@ -3465,6 +3537,8 @@ function renderSettings() {
       ${S.ctl === 'tilt' && sensor === 'none' ? '<div class="notice">Tenhle telefon náklon nehlásí, hraje se proto dvěma palci.</div>' : ''}
     </section>
     <section class="card"><h3>Pomůcky</h3>
+      ${toggleRow('tips', 'Rady během letu')}
+      <div class="fnote">Nahoře nad krajinou se objeví krátká rada, co teď udělat („Brzdi! Drž motor“, „Stoupáš – pusť motor“, „Narovnej raketu“), a karta před startem řekne, jak v misi přistát.</div>
       ${toggleRow('aid', 'Ukazovat místo dopadu')}
       <div class="fnote">Značka na zemi ukazuje, kam by raketa dopadla bez motoru: zelená, kde se na plošinu vejdou obě nohy, jinak červená. Rekordy se s ní a bez ní počítají zvlášť, hvězdy platí vždycky.</div>
       ${toggleRow('ghost', 'Ukazovat nejlepší let')}
@@ -3516,35 +3590,43 @@ function applyLook() {
 function renderHelp() {
   $('#helpIn').innerHTML = `
     <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Přistání<small>Jak hrát</small></h2></div>
-    <section class="card help"><h3>Cíl</h3>
-      <p>Raketa padá k zemi. Motorem ji zbrzdi, nakláněním dovez nad plošinu (nebo loď) a dosedni na obě nohy: pomalu, rovně a co nejblíž středu.</p>
-      <p>Mimo plošinu raketa vybuchne, na moři spadne do vody. Let trvá kolem dvaceti sekund a <b>Znovu</b> ho hned začne znovu.</p>
+    <section class="card help"><h3>O co jde</h3>
+      <p>Raketa padá k zemi. Zbrzdi ji motorem a posaď ji na plošinu (nebo na loď): pomalu, rovně a na obě nohy.</p>
+      <p>Když plošinu mineš, raketa vybuchne, nad mořem spadne do vody. Jeden let trvá kolem dvaceti sekund a <b>Znovu</b> ho hned zopakuje.</p>
+    </section>
+    <section class="card help"><h3>Jak přistát</h3>
+      <ul>
+        <li><b>Brzdi brzo.</b> Motor je jen o kousek silnější, než raketa váží, takže brzdí pomalu. Kdo začne brzdit až u země, nestihne to.</li>
+        <li><b>Hlídej nahoře dvě čísla: Výška a Dolů.</b> Rychlost dolů smí být nejvýš: ve 100 m 15 m/s, v 50 m 11 m/s, ve 25 m 8 m/s, v 10 m 3 m/s. Když je víc, drž motor.</li>
+        <li><b>U země motor pouštěj a zase drž.</b> Když ho držíš pořád, raketa se zastaví a začne stoupat. Když ho pustíš, zase zrychlí. Drž rychlost dolů kolem 1 až 3 m/s, až raketa dosedne.</li>
+        <li><b>Do strany jen zlehka.</b> Raketa letí tam, kam míří špička, ale jen když hoří motor. Nakloň ji, ať doletí nad plošinu, ještě ve výšce ji narovnej a těsně nad zemí už nenakláněj.</li>
+      </ul>
+      <p>Raketa přistane, když při dotyku země platí:</p>
+      <div class="lim"><b>do ${LIMITS.vDown} m/s</b><span>rychlost dolů</span><b>do ${LIMITS.vSide} m/s</b><span>rychlost do strany</span><b>do ${LIMITS.tilt}°</b><span>náklon (na lodi vůči palubě)</span></div>
+      <p style="margin-top:10px">Obě nohy musí být na plošině. Čísla nahoře jsou zelená, když jsou v pořádku, a červená, když ne. Když to nevyjde, karta po letu napíše proč a co zkusit příště.</p>
     </section>
     <section class="card help"><h3>Ovládání</h3>
       <ul>
-        <li><b>Dva palce</b>: drž levou půlku obrazovky, motor hoří a raketa se naklání doleva. Pravou doprava. Obě najednou: motor hoří a raketa se rovná. Nic: motor nehoří.</li>
-        <li><b>Tlačítka</b>: ◀ a ▶ vlevo jen naklánějí, plamen vpravo zapaluje motor.</li>
-        <li><b>Náklon telefonu</b>: nakláněj telefon doleva a doprava jako volant (nezáleží na tom, jak moc ho držíš skloněný k sobě), motor hoří, dokud držíš prst na obrazovce.</li>
-        <li>Raketa jde ve směru, kam míří špička, když motor hoří. Bez náklonu se sama narovná. Motor chvilku nabíhá.</li>
-        <li>Nohy se vysunou samy kousek nad zemí.</li>
+        <li><b>Dva palce</b> (výchozí): drž levou půlku obrazovky a motor hoří a raketa se naklání doleva. Pravou půlku: doprava. Obě půlky najednou: motor hoří a raketa letí rovně, tak se brzdí. Nedržíš nic: motor nehoří a raketa se sama narovná.</li>
+        <li><b>Tlačítka</b>: šipky vlevo raketu jen naklánějí, tlačítko s plamenem vpravo zapaluje motor.</li>
+        <li><b>Náklon telefonu</b>: nakláněj telefon doleva a doprava jako volant (je jedno, jak moc ho držíš skloněný k sobě). Motor hoří, dokud se prstem dotýkáš obrazovky.</li>
+        <li>Motor se rozjede až za chvilku, s tím počítej. Nohy se vysunou samy, kousek nad zemí.</li>
         <li>Na počítači: šipky ← → naklánějí, mezerník nebo ↑ zapaluje motor.</li>
       </ul>
     </section>
-    <section class="card help"><h3>Dosednutí</h3>
-      <p>Raketa přistane, když při dotyku platí:</p>
-      <div class="lim"><b>do ${LIMITS.vDown} m/s</b><span>rychlost dolů</span><b>do ${LIMITS.vSide} m/s</b><span>rychlost do strany</span><b>do ${LIMITS.tilt}°</b><span>náklon (na lodi vůči palubě)</span></div>
-      <p style="margin-top:10px">A obě nohy musí být na plošině. Údaje nahoře zezelenají, když jsou v pořádku, a zčervenají, když ne.</p>
-    </section>
     <section class="card help"><h3>Body a hvězdy</h3>
-      <div class="lim"><b>400</b><span>měkké dosednutí</span><b>300</b><span>přesnost, blízko středu</span><b>100</b><span>rovně</span><b>200</b><span>ušetřené palivo</span></div>
-      <p style="margin-top:10px">Přistání je ★, od 600 bodů ★★, od 850 bodů ★★★. Každé přistání odemkne další misi.</p>
-      <p><b>Nejlepší let</b>: průhledná raketa ukazuje tvůj dosud nejlepší let mise. <b>Místo dopadu</b>: značka na zemi ukazuje, kam by raketa dopadla bez motoru; zelená je, kde se na plošinu vejdou obě nohy. Obojí jde vypnout v nastavení.</p>
+      <p>Za přistání dostaneš body:</p>
+      <div class="lim"><b>400</b><span>za měkké dosednutí</span><b>300</b><span>za přistání blízko středu</span><b>100</b><span>za rovnou raketu</span><b>200</b><span>za ušetřené palivo</span></div>
+      <p style="margin-top:10px">Každé přistání je ★, od 600 bodů ★★, od 850 bodů ★★★. Přistáním odemkneš další misi.</p>
+      <p><b>Rady během letu</b>: nahoře nad krajinou se objeví, co teď udělat („Brzdi! Drž motor“, „Stoupáš – pusť motor“, „Narovnej raketu“), a karta před startem řekne, jak v misi přistát.</p>
+      <p><b>Průhledná raketa</b> je tvůj dosud nejlepší let v této misi, můžeš se s ní závodit. <b>Značka na zemi</b> ukazuje, kam by raketa dopadla, kdyby motor nehořel; zelená je tam, kde se na plošinu vejdou obě nohy. Všechno tohle jde vypnout v nastavení.</p>
     </section>
     <section class="card help"><h3>Mise</h3>
       <ul>${E.CHAPTERS.map(c => `<li><b>${c.id}. ${esc(c.name)}</b>: ${esc(c.what)}</li>`).join('')}</ul>
-      <p><b>Zážehy</b>: v některých misích jde motor zapálit jen několikrát. Když ho pustíš na víc než 0,3 sekundy, další stisk je nový zážeh. Silný motor se nedá udržet ve vznášení: zapal ho co nejpozději a drž až dolů. Na Měsíci a na Marsu je pozemský motor ještě mnohem silnější: krátký zážeh raketu prudce zabrzdí, takže ho pusť včas, těsně nad zemí.</p>
-      <p><b>Výzva dne</b>: každý den jiný let, pro všechny stejný. Přistání ve výzvě každý den prodlužuje sérii, vynechaný den ji začne od nuly.</p>
-      <p><b>Pauza</b>: tlačítko vpravo nad údaji o letu. Let se zastaví i při otevření nastavení nebo nápovědy.</p>
+      <p><b>Zážehy</b>: v některých misích jde motor zapálit jen několikrát, kolik ti jich zbývá, ukazuje údaj nahoře. Zážeh se spotřebuje pokaždé, když motor pustíš na víc než 0,3 sekundy a pak ho znovu zapálíš.</p>
+      <p>V kapitole Zážehy je motor tak silný, že raketu ve vzduchu neudržíš: zapal ho co nejpozději a drž ho až na zem. Na Měsíci a na Marsu je motor ještě silnější: krátké stisknutí raketu prudce zabrzdí, proto brzdi jen krátce a motor včas pusť, jinak raketa vyletí zpátky nahoru.</p>
+      <p><b>Výzva dne</b>: každý den jeden nový let, stejný pro všechny. Když v něm přistaneš den co den, roste ti série; vynechaný den ji vrátí na nulu.</p>
+      <p><b>Pauza</b>: tlačítko vpravo nad čísly let zastaví. Zastaví se i sám, když otevřeš nastavení nebo nápovědu.</p>
     </section>
     <button class="big" data-act="close">Rozumím, letět</button>`;
 }
