@@ -402,7 +402,7 @@ const CTRL = { rate: 70 * DEG, level: 25 * DEG, levelGain: 4, damp: 0.12, maxTil
 // catches much more air than its end)
 const AIR = { scale: 6000, kAxial: 1.1e-3, kSide: 3.2e-3 };
 const MASS_FUEL = 0.3;         // fuel mass / dry mass with a full tank: thrust/weight grows by 30 % as it empties
-const DECK = { height: 2.5, thick: 5, drift: 60 }; // barge deck above the mean sea, its thickness, drift period (s)
+const DECK = { height: 2.5, thick: 5, drift: 90 }; // barge deck above the mean sea, its thickness, drift period (s)
 const PLANETS = {
   earth: { g: 9.81, air: 1, sound: 340 },
   moon: { g: 1.62, air: 0, sound: 0 },
@@ -474,60 +474,60 @@ const EARTH_ENGINE = 1.3 * PLANETS.earth.g, MOON_TWR = EARTH_ENGINE / PLANETS.mo
 const MISSIONS = [
   // 1. Poušť
   { id: 'm01', chapter: 1, num: 1, name: 'První přistání', what: 'Raketa padá rovnou nad plošinu. Drž plamen a dosedni pomalu.', seed: 11,
-    start: { x: 0, alt: 450, vx: 0, vy: -22 }, fuel: 30 },
+    start: { x: 0, alt: 250, vx: 0, vy: -22 }, fuel: 25 },
   { id: 'm02', chapter: 1, num: 2, name: 'Posun do strany', what: 'Raketa letí šikmo. Nakloň ji, ať doletí nad plošinu.', seed: 12,
-    start: { x: -220, alt: 650, vx: 10, vy: -28 }, fuel: 32, pad: { halfWidth: 22 } },
+    start: { x: -80, alt: 280, vx: 6, vy: -28 }, fuel: 22, pad: { halfWidth: 22 } },
   { id: 'm03', chapter: 1, num: 3, name: 'Z výšky', what: 'Pád z velké výšky rychleji než zvuk, skrz vrstvu mraků.', seed: 13,
-    start: { x: -150, alt: 3000, vx: 6, vy: -400 }, fuel: 40, scene: { clouds: { base: 1200, top: 1800 } }, pad: { halfWidth: 16 } },
+    start: { x: -120, alt: 2000, vx: 5, vy: -360 }, fuel: 34, scene: { clouds: { base: 1200, top: 1800 } }, pad: { halfWidth: 16 } },
   { id: 'm04', chapter: 1, num: 4, name: 'Úzká plošina', what: 'Úzká plošina: obě nohy se na ni musí vejít.', seed: 14,
-    start: { x: 120, alt: 700, vx: -6, vy: -30 }, fuel: 32, pad: { halfWidth: 12 } },
+    start: { x: 45, alt: 280, vx: -4, vy: -30 }, fuel: 23, pad: { halfWidth: 12 } },
   // 2. Moře
   { id: 'm05', chapter: 2, num: 1, name: 'Loď na moři', what: 'Plošina je loď. Když ji mineš, raketa spadne do moře.', seed: 21,
-    start: { x: -150, alt: 700, vx: 8, vy: -30 }, fuel: 32, pad: { kind: 'barge', halfWidth: 14 } },
+    start: { x: -55, alt: 280, vx: 5, vy: -30 }, fuel: 23, pad: { kind: 'barge', halfWidth: 14 } },
   { id: 'm06', chapter: 2, num: 2, name: 'Vlny', what: 'Vlny lodí houpají nahoru a dolů a naklánějí ji.', seed: 22,
-    start: { x: 120, alt: 700, vx: -6, vy: -30 }, fuel: 32, pad: { kind: 'barge', halfWidth: 14, waves: { heave: 1.8, pitch: 5, period: 8 } } },
+    start: { x: 45, alt: 280, vx: -4, vy: -30 }, fuel: 23, pad: { kind: 'barge', halfWidth: 14, waves: { heave: 1.8, pitch: 5, period: 8 } } },
   { id: 'm07', chapter: 2, num: 3, name: 'Unášená loď', what: 'Proud loď pomalu unáší do strany.', seed: 23,
-    start: { x: -100, alt: 700, vx: 5, vy: -30 }, fuel: 32, pad: { kind: 'barge', halfWidth: 13.5, drift: 30 } },
+    start: { x: -35, alt: 280, vx: 3, vy: -30 }, fuel: 24, pad: { kind: 'barge', halfWidth: 13.5, drift: 12 } },
   { id: 'm08', chapter: 2, num: 4, name: 'Vlny a drift', what: 'Vlny i proud najednou.', seed: 24,
-    start: { x: 150, alt: 750, vx: -8, vy: -32 }, fuel: 34, pad: { kind: 'barge', halfWidth: 13, drift: -25, waves: { heave: 1.2, pitch: 3.5, period: 7.5 } } },
+    start: { x: 55, alt: 320, vx: -5, vy: -32 }, fuel: 26, pad: { kind: 'barge', halfWidth: 13, drift: -10, waves: { heave: 1.2, pitch: 3.5, period: 7.5 } } },
   // 3. Vítr
   { id: 'm09', chapter: 3, num: 1, name: 'Stálý vítr', what: 'Vítr fouká pořád stejně a odnáší raketu.', seed: 31,
-    start: { x: -150, alt: 750, vx: 4, vy: -30 }, fuel: 34, wind: { steady: 8 }, pad: { halfWidth: 13.5 } },
+    start: { x: -55, alt: 300, vx: 2, vy: -30 }, fuel: 24, wind: { steady: 8 }, pad: { halfWidth: 13.5 } },
   { id: 'm10', chapter: 3, num: 2, name: 'Poryvy', what: 'Vítr se mění v poryvech.', seed: 32,
-    start: { x: 100, alt: 750, vx: -4, vy: -30 }, fuel: 34, wind: { steady: 3, gusts: 9 }, pad: { halfWidth: 13 } },
+    start: { x: 35, alt: 300, vx: -2, vy: -30 }, fuel: 24, wind: { steady: 3, gusts: 9 }, pad: { halfWidth: 13 } },
   { id: 'm11', chapter: 3, num: 3, name: 'Střih větru', what: 'Nahoře fouká vítr na jednu stranu, dole na druhou.', seed: 33,
-    start: { x: -120, alt: 900, vx: 6, vy: -32 }, fuel: 36, wind: { steady: -9, shear: { alt: 450, high: 12 } }, pad: { halfWidth: 13 } },
+    start: { x: -45, alt: 360, vx: 4, vy: -32 }, fuel: 28, wind: { steady: -9, shear: { alt: 230, high: 12 } }, pad: { halfWidth: 13 } },
   { id: 'm12', chapter: 3, num: 4, name: 'Vítr nad mořem', what: 'Vítr, poryvy a vlny.', seed: 34,
-    start: { x: 140, alt: 750, vx: -6, vy: -30 }, fuel: 36, wind: { steady: 6, gusts: 6 }, pad: { kind: 'barge', halfWidth: 12.5, waves: { heave: 1, pitch: 3, period: 8 } } },
+    start: { x: 50, alt: 300, vx: -4, vy: -30 }, fuel: 24, wind: { steady: 6, gusts: 6 }, pad: { kind: 'barge', halfWidth: 12.5, waves: { heave: 1, pitch: 3, period: 8 } } },
   // 4. Noc a mraky
   { id: 'm13', chapter: 4, num: 1, name: 'Západ slunce', what: 'Slunce zapadá a stíny jsou dlouhé.', seed: 41,
-    start: { x: -180, alt: 800, vx: 8, vy: -32 }, fuel: 34, wind: { steady: 4, gusts: 3 }, scene: { sky: 'sunset', clouds: { base: 1500, top: 1800 } }, pad: { halfWidth: 12.5 } },
+    start: { x: -65, alt: 320, vx: 5, vy: -32 }, fuel: 24, wind: { steady: 4, gusts: 3 }, scene: { sky: 'sunset', clouds: { base: 1500, top: 1800 } }, pad: { halfWidth: 12.5 } },
   { id: 'm14', chapter: 4, num: 2, name: 'Noc', what: 'Tma. Svítí jen plošina, raketa a plamen.', seed: 42,
-    start: { x: 160, alt: 800, vx: -7, vy: -32 }, fuel: 34, wind: { steady: -3, gusts: 4 }, scene: { sky: 'night' }, pad: { halfWidth: 12.5 } },
+    start: { x: 60, alt: 320, vx: -4, vy: -32 }, fuel: 25, wind: { steady: -3, gusts: 4 }, scene: { sky: 'night' }, pad: { halfWidth: 12.5 } },
   { id: 'm15', chapter: 4, num: 3, name: 'Mlha', what: 'Nízká mlha: plošinu uvidíš až těsně nad zemí.', seed: 43,
-    start: { x: -140, alt: 900, vx: 6, vy: -34 }, fuel: 34, wind: { steady: 2, gusts: 3 }, scene: { sky: 'fog', fog: { base: 0, top: 320 } }, pad: { halfWidth: 12 } },
+    start: { x: -50, alt: 360, vx: 4, vy: -34 }, fuel: 25, wind: { steady: 2, gusts: 3 }, scene: { sky: 'fog', fog: { base: 0, top: 180 } }, pad: { halfWidth: 12 } },
   { id: 'm16', chapter: 4, num: 4, name: 'Bouře na moři', what: 'Noc, déšť, blesky, vlny a poryvy.', seed: 44,
-    start: { x: 120, alt: 850, vx: -6, vy: -32 }, fuel: 38, wind: { steady: -5, gusts: 8 },
-    pad: { kind: 'barge', halfWidth: 12, drift: 15, waves: { heave: 1.8, pitch: 5, period: 7 } }, scene: { sky: 'storm', rain: true, lightning: true, clouds: { base: 600, top: 1400 } } },
+    start: { x: 45, alt: 340, vx: -4, vy: -32 }, fuel: 29, wind: { steady: -5, gusts: 8 },
+    pad: { kind: 'barge', halfWidth: 12, drift: 7, waves: { heave: 1.8, pitch: 5, period: 7 } }, scene: { sky: 'storm', rain: true, lightning: true, clouds: { base: 450, top: 1100 } } },
   // 5. Zážehy (a strong engine: no hovering, light it late)
   { id: 'm17', chapter: 5, num: 1, name: '3 zážehy', what: 'Silný motor jde zapálit jen třikrát. Vznášet se nedá.', seed: 51,
-    twr: HOT, ignitions: 3, start: { x: -260, alt: 1800, vx: 14, vy: -90 }, fuel: 24, pad: { halfWidth: 11.5 } },
+    twr: HOT, ignitions: 3, start: { x: -85, alt: 600, vx: 8, vy: -70 }, fuel: 19, pad: { halfWidth: 11.5 } },
   { id: 'm18', chapter: 5, num: 2, name: '2 zážehy', what: 'Jen dva zážehy: jeden na srovnání směru, druhý na přistání.', seed: 52,
-    twr: HOT, ignitions: 2, start: { x: 220, alt: 1700, vx: -12, vy: -85 }, fuel: 23, wind: { steady: 3 }, pad: { halfWidth: 11.5 } },
+    twr: HOT, ignitions: 2, start: { x: 110, alt: 600, vx: -12, vy: -68 }, fuel: 18, wind: { steady: 3 }, pad: { halfWidth: 11.5 } },
   { id: 'm19', chapter: 5, num: 3, name: 'Jediný zážeh', what: 'Jediný zážeh: zapal motor co nejpozději a nepouštěj ho.', seed: 53,
-    twr: HOT, ignitions: 1, start: { x: -60, alt: 1500, vx: 4, vy: -85 }, fuel: 18, pad: { halfWidth: 11.5 } },
+    twr: HOT, ignitions: 1, start: { x: -50, alt: 550, vx: 4, vy: -65 }, fuel: 16, pad: { halfWidth: 11.5 } },
   { id: 'm20', chapter: 5, num: 4, name: 'Jediný zážeh na lodi', what: 'Jediný zážeh a loď na vlnách.', seed: 54,
-    twr: HOT, ignitions: 1, start: { x: 50, alt: 1500, vx: -3, vy: -85 }, fuel: 18, pad: { kind: 'barge', halfWidth: 11.5, waves: { heave: 1, pitch: 3, period: 8 } } },
+    twr: HOT, ignitions: 1, start: { x: 40, alt: 550, vx: -4, vy: -65 }, fuel: 16, pad: { kind: 'barge', halfWidth: 11.5, waves: { heave: 1, pitch: 3, period: 8 } } },
   // 6. Jiné světy
   { id: 'm21', chapter: 6, num: 1, name: 'Měsíc', what: 'Motor stavěný pro Zemi je tu moc silný: krátké přesné zážehy, nic nebrzdí boční pohyb.', seed: 61,
-    world: 'moon', twr: MOON_TWR, ignitions: 2, start: { x: -150, alt: 700, vx: 8, vy: -20 }, fuel: 14, scene: { sky: 'moon', terrain: 'moon' } },
+    world: 'moon', twr: MOON_TWR, ignitions: 3, start: { x: -75, alt: 280, vx: 8, vy: -20 }, fuel: 11, scene: { sky: 'moon', terrain: 'moon' } },
   { id: 'm22', chapter: 6, num: 2, name: 'Kráter', what: 'Plošina je na dně kráteru. Přeleť okraj a brzdi krátkými zážehy.', seed: 62,
-    world: 'moon', twr: MOON_TWR, ignitions: 4, start: { x: -300, alt: 800, vx: 8, vy: -15 }, fuel: 16, scene: { sky: 'moon', terrain: 'crater' },
+    world: 'moon', twr: MOON_TWR, ignitions: 2, start: { x: -260, alt: 700, vx: 12, vy: -12 }, fuel: 14, scene: { sky: 'moon', terrain: 'crater' },
     crater: { floor: 110, rim: 250, out: 420, h: 140 } },
   { id: 'm23', chapter: 6, num: 3, name: 'Mars', what: 'Tíže je třetinová a vzduch skoro nebrzdí. Pozemský motor je moc silný a zapálíš ho jen dvakrát.', seed: 63,
-    world: 'mars', twr: MARS_TWR, ignitions: 2, start: { x: -200, alt: 1300, vx: 10, vy: -60 }, fuel: 22, scene: { sky: 'mars', terrain: 'mars' } },
+    world: 'mars', twr: MARS_TWR, ignitions: 2, start: { x: -90, alt: 600, vx: 8, vy: -50 }, fuel: 17, scene: { sky: 'mars', terrain: 'mars' } },
   { id: 'm24', chapter: 6, num: 4, name: 'Prachová bouře', what: 'Prachová bouře na Marsu: silné poryvy, špatně vidět a moc silný motor.', seed: 64,
-    world: 'mars', twr: MARS_TWR, ignitions: 3, start: { x: 180, alt: 1300, vx: -10, vy: -60 }, fuel: 24, wind: { steady: 12, gusts: 20 }, scene: { sky: 'dust', terrain: 'mars', haze: 0.6 } },
+    world: 'mars', twr: MARS_TWR, ignitions: 2, start: { x: 85, alt: 600, vx: -7, vy: -50 }, fuel: 19, wind: { steady: 12, gusts: 20 }, scene: { sky: 'dust', terrain: 'mars', haze: 0.6 } },
 ].map(mission);
 const PARS = {}; // the fuel par of each mission, filled in below (see Score)
 
@@ -1019,14 +1019,14 @@ function dailyMission(date) {
   for (let attempt = 0; attempt < 12; attempt++) {
     const m = dailyTry(date, (base + Math.imul(attempt, 0x9E3779B1)) >>> 0);
     const f = fly(m, m.seed, 'safe', 90);
-    if (f.outcome && f.outcome.ok && f.outcome.t >= 15 && f.outcome.t <= 45) {
+    if (f.outcome && f.outcome.ok && f.outcome.t >= 10 && f.outcome.t <= 35) {
       const best = fly(m, m.seed, 'score', 90);
       m.par = best.outcome && best.outcome.ok ? Math.round((m.fuel - best.outcome.fuelLeft) * PAR_SHARE * 10) / 10 : m.fuel / 2;
       return m;
     }
   }
   return mission({ id: 'daily-' + date, chapter: 0, name: 'Výzva dne', what: 'Klidný den nad plošinou.', seed: base || 1,
-    start: { x: -100, alt: 600, vx: 5, vy: -25 }, fuel: 32, par: 12 });
+    start: { x: -50, alt: 280, vx: 5, vy: -25 }, fuel: 24, par: 9 });
 }
 function dailyTry(date, seed) {
   const r = rng(seed), pick = a => a[Math.floor(r() * a.length)], between = (a, b) => a + r() * (b - a);
@@ -1036,29 +1036,29 @@ function dailyTry(date, seed) {
   const hot = world !== 'moon' && r() < 0.3;
   o.ignitions = hot ? pick([2, 3, 3]) : null;
   if (world === 'moon') {
-    Object.assign(o, { world: 'moon', twr: MOON_TWR, ignitions: 4, fuel: 16, scene: { sky: 'moon', terrain: 'moon' } });
-    o.start = { x: side * between(60, 200), alt: between(600, 800), vx: -side * between(0, 10), vy: -between(20, 32) };
+    Object.assign(o, { world: 'moon', twr: MOON_TWR, ignitions: 4, fuel: 12, scene: { sky: 'moon', terrain: 'moon' } });
+    o.start = { x: side * between(40, 100), alt: between(250, 350), vx: -side * between(0, 8), vy: -between(15, 25) };
     o.what = 'Měsíc: slabá tíže, žádný vzduch a moc silný motor.';
   } else if (world === 'mars') {
-    Object.assign(o, { world: 'mars', twr: MARS_TWR, ignitions: 2, fuel: 24, scene: { sky: r() < 0.5 ? 'mars' : 'dust', terrain: 'mars' } });
+    Object.assign(o, { world: 'mars', twr: MARS_TWR, ignitions: 2, fuel: 18, scene: { sky: r() < 0.5 ? 'mars' : 'dust', terrain: 'mars' } });
     o.wind = { steady: side * between(0, 10), gusts: between(0, 16) };
-    o.start = { x: side * between(60, 220), alt: between(1300, 1700), vx: -side * between(0, 10), vy: -between(70, 90) };
+    o.start = { x: side * between(40, 120), alt: between(550, 700), vx: -side * between(0, 8), vy: -between(45, 60) };
     o.what = 'Mars: řídký vzduch, třetinová tíže a moc silný motor.';
   } else {
     const sea = world === 'sea';
     o.twr = hot ? HOT : 1.3;
-    o.fuel = hot ? 22 : 36;
+    o.fuel = hot ? 19 : 26;
     o.wind = { steady: side * between(0, 7), gusts: between(0, 7) };
-    if (r() < 0.2) o.wind.shear = { alt: between(300, 600), high: -side * between(4, 10) };
+    if (r() < 0.2) o.wind.shear = { alt: between(150, 300), high: -side * between(4, 10) };
     o.scene = { sky: pick(['day', 'day', 'sunset', 'night', 'fog']), terrain: sea ? 'sea' : 'desert' };
-    if (o.scene.sky === 'fog') o.scene.fog = { base: 0, top: between(200, 350) };
+    if (o.scene.sky === 'fog') o.scene.fog = { base: 0, top: between(120, 220) };
     if (sea) {
-      o.pad = { kind: 'barge', halfWidth: 13, drift: r() < 0.5 ? 0 : side * between(10, 25),
+      o.pad = { kind: 'barge', halfWidth: 13, drift: r() < 0.5 ? 0 : side * between(5, 12),
         waves: { heave: between(0.2, 1.6), pitch: between(0.3, 4.5), period: between(7, 9.5) } };
       if (r() < 0.25) Object.assign(o.scene, { sky: 'storm', rain: true, lightning: true });
     } else o.pad = { halfWidth: pick([12.5, 13, 14, 16]) };
-    o.start = hot ? { x: side * between(40, 220), alt: between(1400, 1800), vx: -side * between(0, 12), vy: -between(75, 90) }
-      : { x: side * between(40, 220), alt: between(550, 900), vx: -side * between(0, 10), vy: -between(22, 34) };
+    o.start = hot ? { x: side * between(30, 130), alt: between(500, 650), vx: -side * between(0, 12), vy: -between(60, 72) }
+      : { x: side * between(20, 110), alt: between(240, 380), vx: -side * between(0, 8), vy: -between(22, 34) };
     o.what = sea ? 'Loď na moři' + (o.pad.drift ? ', kterou unáší proud.' : '.') : 'Plošina v poušti.';
   }
   if (o.ignitions) o.what += ` Zážehy: ${o.ignitions}.`;
@@ -1087,7 +1087,7 @@ function outcomeText(f) {
 
 /* ---------- Pars: the fuel an expert uses (score: fuel left counts against this) ---------- */
 // (seconds of full thrust; PAR_SHARE of what the score autopilot uses, measured by tools/pristani-test.js --pars)
-Object.assign(PARS, { m01: 10.7, m02: 14.3, m03: 21.4, m04: 14.1, m05: 14.1, m06: 14.4, m07: 14.3, m08: 14.6, m09: 14.1, m10: 14.8, m11: 14.4, m12: 15.3, m13: 14.7, m14: 14.5, m15: 15.1, m16: 12.9, m17: 10, m18: 10.1, m19: 7, m20: 7, m21: 3.4, m22: 4, m23: 8.4, m24: 8.3 });
+Object.assign(PARS, { m01: 8.7, m02: 9.5, m03: 18.6, m04: 9.3, m05: 9.2, m06: 9.3, m07: 9.3, m08: 9.6, m09: 9.3, m10: 9.5, m11: 10.1, m12: 9, m13: 9.8, m14: 9.7, m15: 10.1, m16: 9.9, m17: 7.6, m18: 7.7, m19: 6.2, m20: 6.1, m21: 2.6, m22: 3.4, m23: 6, m24: 6.3 });
 
 return {
   DT, DEG, ROCKET, LIMITS, CTRL, AIR, DECK, PLANETS, STARS, FUEL_SPAN, PAR_SHARE, PILOTS, PARS, MISSIONS, CHAPTERS,
@@ -1135,7 +1135,7 @@ function freshProgress() { return { stars: {}, bests: {}, ghosts: {}, daily: { d
 function load() { try { return JSON.parse(localStorage.getItem(KEY)); } catch (e) { return null; } }
 function save() {
   try {
-    localStorage.setItem(KEY, JSON.stringify({ v: 1, settings: S, stars: P.stars, bests: P.bests, ghosts: P.ghosts, daily: P.daily, last: P.last }));
+    localStorage.setItem(KEY, JSON.stringify({ v: 2, settings: S, stars: P.stars, bests: P.bests, ghosts: P.ghosts, daily: P.daily, last: P.last }));
     localStorage.removeItem(BADGE); // a flight is short and never saved, so there is never a "Rozehráno" badge
   } catch (e) {} // rule: storage may be full or blocked; the game goes on
 }
@@ -1152,7 +1152,8 @@ function validProgress(s) {
   if (!isObj(s)) return p;
   if (isObj(s.stars)) for (const id of MIDS) { const v = s.stars[id]; if (Number.isInteger(v) && v >= 1 && v <= 3) p.stars[id] = v; }
   if (isObj(s.bests)) for (const id of MIDS) for (const k of [id, id + '+a']) { const v = s.bests[k]; if (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1000) p.bests[k] = Math.round(v); }
-  if (isObj(s.ghosts)) for (const id of MIDS) { const g = validGhost(s.ghosts[id]); if (g) p.ghosts[id] = g; }
+  // v 2 (2026-11-14) made the missions shorter: an older ghost would fly a start that no longer exists
+  if (s.v === 2 && isObj(s.ghosts)) for (const id of MIDS) { const g = validGhost(s.ghosts[id]); if (g) p.ghosts[id] = g; }
   if (isObj(s.daily)) {
     const d = s.daily, q = p.daily;
     if (typeof d.date === 'string' && DATE_RE.test(d.date)) q.date = d.date;
@@ -3517,7 +3518,7 @@ function renderHelp() {
     <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Přistání<small>Jak hrát</small></h2></div>
     <section class="card help"><h3>Cíl</h3>
       <p>Raketa padá k zemi. Motorem ji zbrzdi, nakláněním dovez nad plošinu (nebo loď) a dosedni na obě nohy: pomalu, rovně a co nejblíž středu.</p>
-      <p>Mimo plošinu raketa vybuchne, na moři spadne do vody. Let trvá zhruba půl minuty a <b>Znovu</b> ho hned začne znovu.</p>
+      <p>Mimo plošinu raketa vybuchne, na moři spadne do vody. Let trvá kolem dvaceti sekund a <b>Znovu</b> ho hned začne znovu.</p>
     </section>
     <section class="card help"><h3>Ovládání</h3>
       <ul>

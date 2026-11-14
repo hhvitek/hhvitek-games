@@ -72,12 +72,13 @@ Settings section "Ovládání" first. Never inverted: left means the nose (and t
 
 ## 3. Rules of a flight
 
-- A flight starts high (mission-defined) with downward and sideways speed, engine off. It lasts 15–45 s.
+- A flight starts high (mission-defined) with downward and sideways speed, engine off. It lasts 10–35 s (shortened on the user's wish 2026-11-14: the autopilot that
+  goes for points lands most missions in 14–19 s, Z výšky and Kráter in about 27 s).
 - Limited **fuel** (a bar). Some missions limit **ignitions** ("Zážehy: 3"): every new burn after the engine was off
   for more than 0.3 s uses one; with none left the engine will not light (a click and a toast-like flash on the HUD).
   From chapter 5 the engine's thrust is well above the weight (≈ 2.4 g even when nearly empty), so hovering is
   impossible and the burn must be timed (hoverslam). Chapter 6 keeps the ordinary Earth engine (1.3 × 9.81 m/s²): on
-  the Moon that is ≈ 7.9 local g, on Mars ≈ 3.4, with 2–4 ignitions, so every burn is a hard short kick.
+  the Moon that is ≈ 7.9 local g, on Mars ≈ 3.4, with 2–3 ignitions, so every burn is a hard short kick.
 - Legs deploy by themselves below the mission's leg height (≈ 120 m game altitude); touchdown without legs = crash.
 - **Touchdown succeeds** when: vertical speed ≤ 4 m/s, horizontal speed (relative to the pad) ≤ 2 m/s, tilt ≤ 8°
   (relative to the deck on the barge), legs deployed and both feet on the pad. Otherwise:
@@ -110,9 +111,9 @@ Settings section "Ovládání" first. Never inverted: left means the nose (and t
    Mlha (low cloud deck, pad visible late) · Bouře na moři (night, rain, lightning, waves, gusts).
 5. **Zážehy** (hoverslam, no hover): 3 zážehy · 2 zážehy · Jediný zážeh (land) · Jediný zážeh na lodi.
 6. **Jiné světy** (the Earth engine on a light world is far too strong: short precise burns, limited ignitions):
-   Měsíc (1.62 m/s², no air: no drag, no smoke, ballistic dust, black sky with Earth; 2 ignitions) ·
-   Kráter (pad in a crater between rims; 4) · Mars (3.71 m/s², thin air, red sky; 2) · Prachová bouře (Mars, gusts, dust
-   haze).
+   Měsíc (1.62 m/s², no air: no drag, no smoke, ballistic dust, black sky with Earth; 3 ignitions) ·
+   Kráter (pad in a crater between rims; 2) · Mars (3.71 m/s², thin air, red sky; 2) · Prachová bouře (Mars, gusts, dust
+   haze; 2).
 
 Besides the missions: **"Výzva dne"**: a mission generated from the date (same for everybody that day), with its own
 best score and a **streak** of days in a row with a landing (a missed day resets it, nothing worse).
@@ -178,7 +179,7 @@ sea**. Angles inside a flight are **radians, positive = nose to the right** (clo
   coordinates into world ones; `E.feet(f)` = both feet in the world now.
 - `E.LIMITS` = `{ vDown: 4, vSide: 2, tilt: 8, tipMax: 25 }` (the touchdown limits for the help and the HUD colours).
 - `E.CTRL` (turn 70 °/s, levelling 25 °/s, ±40°, spool-up 0.25 s, spool-down 0.1 s, relight grace 0.3 s), `E.AIR`,
-  `E.DECK` (`height` 2.5 m of the deck top above the water, `drift` period 60 s), `E.PLANETS`, `E.STARS` = [600, 850].
+  `E.DECK` (`height` 2.5 m of the deck top above the water, `drift` period 90 s), `E.PLANETS`, `E.STARS` = [600, 850].
 
 ### Missions
 - `E.CHAPTERS` = `[{ id: 1..6, name, what }]` (Czech).
@@ -188,13 +189,13 @@ sea**. Angles inside a flight are **radians, positive = nose to the right** (clo
   empties), fuel (seconds of full thrust), ignitions (null = unlimited, else 1–3), wind { steady, gusts, shear: null |
   { alt, high } } (m/s, + = to the right; above `shear.alt` the wind blends to `shear.high`), surface: 'land'|'sea'|
   'moon'|'mars', pad { kind: 'pad'|'barge', x, halfWidth, waves: null | { heave (m), pitch (°), period (s) }, drift
-  (m, signed amplitude of a 60 s sideways sway) }, start { x (from the pad centre), alt (base above the pad), vx, vy,
+  (m, signed amplitude of a 90 s sideways sway) }, start { x (from the pad centre), alt (base above the pad), vx, vy,
   angle }, legAlt (m), area (half-width of the allowed area, m), crater: null | { floor, rim, out, h } (use
   `E.ground`), scene { sky: 'day'|'sunset'|'night'|'storm'|'fog'|'moon'|'mars'|'dust', clouds: null | { base, top },
   fog: null | { base, top }, rain, lightning, haze 0–1, terrain: 'desert'|'sea'|'moon'|'crater'|'mars' }, seed, par }`.
   **Start a mission's flight with `mission.seed`** (fixed gusts and waves every attempt, so ghosts and bests are fair).
 - `E.dailyMission('YYYY-MM-DD')` → a mission like the above with `id: 'daily-YYYY-MM-DD'`, `chapter: 0`,
-  `name: 'Výzva dne'`, its own `seed` and `par`. It is checked by flying it with the autopilot (15–45 s), so it is
+  `name: 'Výzva dne'`, its own `seed` and `par`. It is checked by flying it with the autopilot (10–35 s), so it is
   always landable; it takes about 60 ms, so build it once per day, not every frame.
 
 ### Flight
@@ -285,3 +286,13 @@ sea**. Angles inside a flight are **radians, positive = nose to the right** (clo
   Mars 2 (dailies ≈ 34 % for the bot, Moon/Mars ≈ 20 %). Bot landing rate (150 tries each): ch1 42 % (m04 32 %),
   ch2 37 %, ch3 35 %, ch4 28 %, ch5 27 %, ch6 17 % (Měsíc 28, Kráter 19, Mars 10, Prachová bouře 12). The test asserts
   m01 in 30–70 %, each chapter at most 5 points above the one before and ch6 at least 15 points below ch1.
+- **Shorter missions** (user's wish 2026-11-14, "mise jsou moc dlouhé"): the starts moved down and closer (Earth
+  missions from 250–360 m instead of 450–900 m, Zážehy from 550–600 m instead of 1500–1800 m, Moon/Mars from 280–700 m,
+  Z výšky from 2000 m at −360 m/s), the tanks and the pars were scaled to them, the dailies the same way. The sideways
+  offsets shrank with the square of the time (the same steering effort) and the start speeds with the time. Shorter
+  flights changed the difficulty, so it was measured again and retuned: the barge's drift is slower (period 90 s,
+  amplitude 12 / −10 / 7 m: the beginner cannot match a deck moving at 1.5 m/s in the shorter time), Jediný zážeh
+  starts further aside, Měsíc got 3 ignitions (2 was 10 %), Kráter 2 and Prachová bouře 2 (they had become the easy
+  ones). The braking itself (thrust/weight 1.3) was not changed: about 10 s of every Earth flight is the burn. Bot
+  landing rate (80 tries): ch1 39 %, ch2 33 %, ch3 27 %, ch4 28 %, ch5 28 %, ch6 20 % (Měsíc 25, Kráter 13, Mars 20,
+  Prachová bouře 23). The autopilot times in total: safe 760 → 513 s, score 642 → 403 s.

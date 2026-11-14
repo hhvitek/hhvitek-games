@@ -313,7 +313,7 @@ console.log('Wind and waves');
   ok(lo >= 3 - 9 - 1e-9 && hi <= 3 + 9 + 1e-9 && hi - lo > 6, `gusts vary within steady ± gusts (${lo.toFixed(1)} … ${hi.toFixed(1)})`);
   ok(Math.abs(sum / 600 - 3) < 1.5 && jump < 0.1, 'gusts are smooth and average to the steady wind');
   const f11 = E.createFlight(byId('m11'));
-  ok(near(E.windAt(f11, 0, 0), -9, 0.1) && near(E.windAt(f11, 0, 1200), 12, 0.1), 'wind shear: another wind high up');
+  ok(near(E.windAt(f11, 0, 0), -9, 1.2) && near(E.windAt(f11, 0, 1200), 12, 0.1) && E.windAt(f11, 0, 360) > 8, 'wind shear: another wind high up');
   const moon = E.createFlight(byId('m21'));
   ok(E.windAt(moon, 0, 0) === 0 && E.density(moon, 0) === 0, 'the Moon: no wind, no air');
   const vx0 = moon.vx; run(moon, NONE, 5);
@@ -338,7 +338,7 @@ console.log('Wind and waves');
   ok(amax <= W.pitch * DEG + 1e-9 && amax > W.pitch * 0.75 * DEG, `deck pitch up to ${W.pitch}° (${(amax / DEG).toFixed(1)}°)`);
   ok(same, 'the deck rides the same wave function as the water');
   const w7 = E.createFlight(byId('m07'));
-  ok(E.deckAt(w7, 0).x === 0 && near(E.deckAt(w7, E.DECK.drift / 4).x, 30, 1e-9) && near(E.deckAt(w7, E.DECK.drift / 4).vx, 0, 0.01) && near(E.deckAt(w7, 0).vx, 30 * 2 * Math.PI / E.DECK.drift, 0.01), 'drift: the barge moves slowly sideways (±30 m, about 3 m/s at most)');
+  ok(E.deckAt(w7, 0).x === 0 && near(E.deckAt(w7, E.DECK.drift / 4).x, 12, 1e-9) && near(E.deckAt(w7, E.DECK.drift / 4).vx, 0, 0.01) && near(E.deckAt(w7, 0).vx, 12 * 2 * Math.PI / E.DECK.drift, 0.01), 'drift: the barge moves slowly sideways (±12 m, under 1 m/s)');
   ok(E.deckAt(w6, 33.3).y === E.deckAt(E.createFlight(byId('m06'), 4), 33.3).y, 'waves are predictable from the seed');
   // the aid: where the rocket hits with the engine off
   const g = E.createFlight(byId('m02')), im = E.impact(g);
@@ -398,7 +398,7 @@ for (const m of E.MISSIONS) {
   }
   ok(landed === SEEDS && !worst, `${m.id} ${m.name}: both autopilots land every seed, the safe one with margin (${landed}/${SEEDS}${worst ? ', ' + worst : ''})`);
   const f = E.fly(m, m.seed, 'safe'), safe = E.score(f);
-  ok(f.outcome.t >= 15 && f.outcome.t <= 45, `${m.id}: a flight takes 15–45 s (${f.outcome.t.toFixed(1)} s)`);
+  ok(f.outcome.t >= 10 && f.outcome.t <= 35, `${m.id}: a flight takes 10–35 s (${f.outcome.t.toFixed(1)} s)`);
   const best = E.fly(m, m.seed, 'score'), bs = E.score(best);
   ok(best.outcome.ok, `${m.id}: the score autopilot lands`);
   const avg = E.fly(m, m.seed, AVERAGE(m)), as = E.score(avg);

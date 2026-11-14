@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Přistání: mise jsou kratší, raketa začíná níž a blíž plošiny (let trvá zhruba o třetinu méně); loď na moři unáší proud pomaleji a Měsíc a Mars mají jiný počet zážehů.
+
 ## 1.0.23 – 2026-11-14
 
 - Nadpisy v nastavení, nápovědě a dialozích mají ve všech hrách i ve výběru her stejné písmo jako název hry nahoře.
