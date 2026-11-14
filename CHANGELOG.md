@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.24 – 2026-11-14
+
 - Přistání: nápověda je přepsaná srozumitelně a nově radí, jak přistát (kdy brzdit a jak rychle smí raketa padat).
 - Přistání: nové „Rady během letu“ (zapnuté, jdou vypnout v nastavení): nahoře se objeví, co teď udělat („Brzdi! Drž motor“, „Stoupáš – pusť motor“, „Narovnej raketu“…), a karta před startem řekne, jak v misi přistát.
 - Přistání: mise jsou kratší, raketa začíná níž a blíž plošiny (let trvá zhruba o třetinu méně); loď na moři unáší proud pomaleji a Měsíc a Mars mají jiný počet zážehů.

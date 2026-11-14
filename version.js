@@ -1,7 +1,16 @@
 // The app version, shown in the launcher's Nastavení and used by sw.js to name its cache.
 // Written by tools/release.js from CHANGELOG.md: never edit by hand.
-globalThis.APP_VERSION = { version: '1.0.23', date: '2026-11-14' };
+globalThis.APP_VERSION = { version: '1.0.24', date: '2026-11-14' };
 globalThis.APP_CHANGES = [
+  {
+    "version": "1.0.24",
+    "date": "2026-11-14",
+    "items": [
+      "Přistání: nápověda je přepsaná srozumitelně a nově radí, jak přistát (kdy brzdit a jak rychle smí raketa padat).",
+      "Přistání: nové „Rady během letu“ (zapnuté, jdou vypnout v nastavení): nahoře se objeví, co teď udělat („Brzdi! Drž motor“, „Stoupáš – pusť motor“, „Narovnej raketu“…), a karta před startem řekne, jak v misi přistát.",
+      "Přistání: mise jsou kratší, raketa začíná níž a blíž plošiny (let trvá zhruba o třetinu méně); loď na moři unáší proud pomaleji a Měsíc a Mars mají jiný počet zážehů."
+    ]
+  },
   {
     "version": "1.0.23",
     "date": "2026-11-14",
