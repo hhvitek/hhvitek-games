@@ -1,7 +1,15 @@
 // The app version, shown in the launcher's Nastavení and used by sw.js to name its cache.
 // Written by tools/release.js from CHANGELOG.md: never edit by hand.
-globalThis.APP_VERSION = { version: '1.0.26', date: '2026-11-17' };
+globalThis.APP_VERSION = { version: '1.0.27', date: '2026-11-17' };
 globalThis.APP_CHANGES = [
+  {
+    "version": "1.0.27",
+    "date": "2026-11-17",
+    "items": [
+      "Solitér, FreeCell, Pyramida a Pavouk: když hra ohlásí „Dál to nejde“ a ty se tlačítkem Zpět vrátíš a hru stejně vyhraješ, výhra se teď do statistiky započítá. Starší čísla ve statistice, ve kterých jsou i nedohrané hry, jsou v Nastavení označená.",
+      "Kočka: výběr her ukazuje, jak na tom Koxa je, spolehlivěji i ve chvíli, kdy hra zůstala otevřená na pozadí, a odchod ze hry je rychlejší. Štítek „Rozehráno“ u Kočky se obnoví hned po návratu do výběru her."
+    ]
+  },
   {
     "version": "1.0.26",
     "date": "2026-11-17",

@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.27 – 2026-11-17
+
 - Solitér, FreeCell, Pyramida a Pavouk: když hra ohlásí „Dál to nejde“ a ty se tlačítkem Zpět vrátíš a hru stejně vyhraješ, výhra se teď do statistiky započítá. Starší čísla ve statistice, ve kterých jsou i nedohrané hry, jsou v Nastavení označená.
 - Kočka: výběr her ukazuje, jak na tom Koxa je, spolehlivěji i ve chvíli, kdy hra zůstala otevřená na pozadí, a odchod ze hry je rychlejší. Štítek „Rozehráno“ u Kočky se obnoví hned po návratu do výběru her.
 
