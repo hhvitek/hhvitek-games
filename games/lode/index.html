@@ -753,8 +753,10 @@ function endDrag(e, cancel) {
   const s = G.mine[d.j];
   if (cancel) { renderBoards(); return; }
   if (!d.moved) { rotate(d.j, s.v ? d.dr : d.dc); return; }
-  if (d.pos && d.ok && (d.pos.r !== s.r || d.pos.c !== s.c)) { pushHist(); G.mine[d.j] = d.pos; buzz(); save(); }
-  else if (d.pos && !d.ok) toast('Sem ne: lodě se nesmí dotýkat, ani rohem');
+  // checked again at the drop: the fleet may have changed under a held finger (Zamíchat or Zpět with another finger)
+  const ok = !!d.pos && E.fits(G.mine, d.pos, d.j);
+  if (ok && (d.pos.r !== s.r || d.pos.c !== s.c)) { pushHist(); G.mine[d.j] = d.pos; buzz(); save(); }
+  else if (d.pos && !ok) toast('Sem ne: lodě se nesmí dotýkat, ani rohem');
   render();
 }
 $('#grid').addEventListener('pointerup', e => endDrag(e, false));
@@ -929,11 +931,13 @@ $('#grid').addEventListener('click', e => {
 $('#btnUndo').addEventListener('click', () => {
   if (G.started) return;
   if (!G.hist.length) { toast('Zatím není co vrátit'); return; }
+  drag = null; // a ship held by another finger is dropped where it was
   G.mine = G.hist.pop();
   buzz(); save(); render();
 });
 $('#btnShuffle').addEventListener('click', () => {
   if (G.started) return;
+  drag = null; // a ship held by another finger is dropped where it was
   pushHist(); G.mine = E.randomFleet(E.FLEETS[G.rules.fleet], randUnit);
   buzz(); save(); render();
 });
@@ -958,6 +962,8 @@ $('#btnHint').addEventListener('click', () => {
 $('#btnNew').addEventListener('click', () => {
   if (hasProgress()) showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
   else if (!G.started && G.hist.length) showModal('<h2>Začít novou hru?</h2><p>Tvoje lodě se rozmístí znovu náhodně.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  // the battle started before your first shot: the fleet you arranged would be lost too
+  else if (G.started && G.status === 'playing') showModal('<h2>Začít novou hru?</h2><p>Bitva už začala. Tvoje lodě se rozmístí znovu náhodně.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
   else newGame();
 });
 // rule: an end dialog only for the game that ended, never over Settings or Help (whenFree)

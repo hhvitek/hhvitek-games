@@ -462,9 +462,9 @@ const busyToast = () => moving ? toast('Chvilku, matky se ještě přesouvají')
 const L = () => levelOf(G.level);
 const cap = () => L().cap;
 // rule: only a finished game counts in the statistics, once (G.counted): at the win, or when the game first says it
-// cannot be solved from here; a game with Poradit (G.hinted) is not counted at all. A game is untouched while no move
-// is on the board (also after Od začátku or undoing every move), so it may be replaced and needs no confirmation
-const isFresh = () => G.moves === 0 && !G.history.length && G.status === 'playing';
+// cannot be solved from here; a game with Poradit (G.hinted) is not counted at all. A game is untouched until its first
+// move (G.touched, kept by Undo and Od začátku): only then may it be replaced without asking, e.g. by a new difficulty
+const isFresh = () => !G.touched && G.moves === 0 && !G.history.length && G.status === 'playing';
 const inProgress = () => G && G.status === 'playing' && !isFresh();
 const stat = id => bests[id] || (bests[id] = { played: 0, won: 0, best: null });
 
@@ -496,6 +496,7 @@ function validGame(g) {
     if (g.history.length > HISTORY_MAX) g.history = g.history.slice(-HISTORY_MAX);
     if (!Number.isInteger(g.moves) || g.moves < 0) g.moves = g.history.length;
     g.hinted = g.hinted === true;
+    g.touched = g.touched === true || g.moves > 0 || g.history.length > 0 || g.counted === true || g.hinted;
     // a save from before the flag existed was counted as played at its first move: never count it twice
     g.counted = g.counted === true || (typeof g.counted !== 'boolean' && (g.moves > 0 || g.history.length > 0));
     g.wonCounted = g.wonCounted === true;
@@ -522,7 +523,7 @@ async function newGame(msg) {
   const lv = levelOf(S.level), seed = newSeed();
   const bolts = await generate(lv, seed);
   clearTimeout(slow);
-  G = { level: lv.id, seed, start: cloneB(bolts), bolts, history: [], moves: 0, status: 'playing', counted: false, wonCounted: false, hinted: false };
+  G = { level: lv.id, seed, start: cloneB(bolts), bolts, history: [], moves: 0, status: 'playing', counted: false, wonCounted: false, hinted: false, touched: false };
   busy = false;
   hideToast(); save(); render(true);
   if (msg) toast(msg);
@@ -776,7 +777,7 @@ function finishMove(a, b) {
   G.history.push({ b: cloneB(G.bolts), m: G.moves });
   if (G.history.length > HISTORY_MAX) G.history.shift();
   applyMove(G.bolts, cap(), a, b);
-  G.moves++;
+  G.moves++; G.touched = true;
   sel = null; busy = false; moving = false;
   if (isDone(G.bolts[b], cap())) popCap = b;
   if (isWon(G.bolts, cap())) {

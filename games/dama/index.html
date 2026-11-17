@@ -811,6 +811,8 @@ function validGame(g) {
     const j = judge(g); g.status = j.status; g.why = j.why;
     g.counted = g.counted === true || g.status !== 'playing';
     g.hinted = g.hinted === true;
+    // inStats: the end went into the statistics (counted before any Poradit); older saves: counted without a hint
+    g.inStats = g.inStats === true || (typeof g.inStats !== 'boolean' && g.counted === true && !g.hinted);
     return true;
   } catch (e) { return false; }
 }
@@ -832,6 +834,7 @@ function count() {
   if (G.counted || G.status === 'playing') return;
   G.counted = true;
   if (G.hinted) return;
+  G.inStats = true;
   const st = ST[G.level]; st.played++;
   if (G.status === 'won') st.won++;
   if (G.status === 'draw') st.draw++;
@@ -841,7 +844,7 @@ function newGame(msg) {
   stopThinking();
   const starter = !G ? 0 : isFresh() ? G.starter : 1 - G.starter;
   G = { level: S.level, foe: O.create(rnd, G && G.foe ? [G.foe.name] : []), seed: rnd(2 ** 31), starter, you: starter === 0 ? 0 : 1,
-        line: [E.START + '0'], quiets: [0], last: null, status: 'playing', why: '', counted: false, hinted: false };
+        line: [E.START + '0'], quiets: [0], last: null, status: 'playing', why: '', counted: false, hinted: false, inStats: false };
   sel = null; hintMv = null;
   save(); render();
   if (msg) toast(msg);
@@ -1250,7 +1253,7 @@ function endDialog() {
     const btns = [{ text: 'Nová hra', fn: () => newGame() }];
     if (G.status !== 'won') btns.push({ text: 'Vrátit tah', cls: 'alt', fn: () => $('#btnUndo').click() });
     btns.push({ text: 'Prohlédnout', cls: 'alt' });
-    showModal(`<h2>${head}</h2><p>${why}</p>${G.hinted ? '<p>Hra s radou se do statistik nepočítá.</p>' : ''}`, btns);
+    showModal(`<h2>${head}</h2><p>${why}</p>${G.hinted && !G.inStats ? '<p>Hra s radou se do statistik nepočítá.</p>' : ''}`, btns);
   });
 }
 

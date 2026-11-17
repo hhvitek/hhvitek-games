@@ -795,6 +795,8 @@ function validGame(g) {
     g.status = judge(g);
     g.counted = g.counted === true || g.status !== 'playing';
     g.hinted = g.hinted === true;
+    // inStats: the end went into the statistics (counted before any Poradit); older saves: counted without a hint
+    g.inStats = g.inStats === true || (typeof g.inStats !== 'boolean' && g.counted === true && !g.hinted);
     return true;
   } catch (e) { return false; }
 }
@@ -820,6 +822,7 @@ function count() {
   if (G.counted || G.status === 'playing') return;
   G.counted = true;
   if (G.hinted) return;
+  G.inStats = true;
   const st = ST[G.level][G.n]; st.played++;
   if (G.status === 'won') st.won++;
   if (G.status === 'draw') st.draw++;
@@ -829,7 +832,7 @@ function newGame(msg) {
   stopThinking();
   const starter = !G ? 0 : isFresh() ? G.starter : 1 - G.starter;
   G = { n: S.size, level: S.level, foe: O.create(rnd, G && G.foe ? [G.foe.name] : []), seed: rnd(2 ** 31), starter, you: starter,
-        moves: [], status: 'playing', counted: false, hinted: false };
+        moves: [], status: 'playing', counted: false, hinted: false, inStats: false };
   pending = -1; hintCell = -1; resetZoom();
   save(); render();
   if (msg) toast(msg);
@@ -1175,7 +1178,7 @@ function endDialog() {
     const btns = [{ text: 'Nová hra', fn: () => newGame() }];
     if (G.status !== 'won') btns.push({ text: 'Vrátit tah', cls: 'alt', fn: () => $('#btnUndo').click() });
     btns.push({ text: 'Prohlédnout', cls: 'alt' });
-    showModal(`<h2>${head}</h2><p>${why}</p>${G.hinted ? '<p>Hra s radou se do statistik nepočítá.</p>' : ''}`, btns);
+    showModal(`<h2>${head}</h2><p>${why}</p>${G.hinted && !G.inStats ? '<p>Hra s radou se do statistik nepočítá.</p>' : ''}`, btns);
   });
 }
 
@@ -1241,7 +1244,7 @@ function closeSettings() {
   if (changed() && isFresh()) {
     stopThinking();
     const g = G, foe = S.level !== g.level ? O.create(rnd, [g.foe.name]) : g.foe;
-    G = Object.assign({}, g, { n: S.size, level: S.level, foe, moves: [], status: 'playing', counted: false, hinted: false });
+    G = Object.assign({}, g, { n: S.size, level: S.level, foe, moves: [], status: 'playing', counted: false, hinted: false, inStats: false });
     pending = -1; hintCell = -1; resetZoom();
     save(); render(); cpuTurn();
     toast(S.level !== g.level ? `Hraješ proti soupeři: ${O.levelName(LEVELS, lvIdx(S.level))}` : `Nová hra na ploše ${S.size} × ${S.size}`);

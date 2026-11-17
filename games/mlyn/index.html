@@ -788,6 +788,8 @@ function validGame(g) {
     g.status = judge(g);
     g.counted = g.counted === true || g.status !== 'playing';
     g.hinted = g.hinted === true;
+    // inStats: the end went into the statistics (counted before any Poradit); older saves: counted without a hint
+    g.inStats = g.inStats === true || (typeof g.inStats !== 'boolean' && g.counted === true && !g.hinted);
     return true;
   } catch (e) { return false; }
 }
@@ -811,6 +813,7 @@ function count() {
   if (G.counted || G.status === 'playing') return;
   G.counted = true;
   if (G.hinted) return;
+  G.inStats = true;
   const st = ST[statKey(G)]; st.played++;
   if (G.status === 'won') st.won++;
   if (G.status === 'draw') st.draw++;
@@ -820,7 +823,7 @@ function newGame(msg) {
   stopThinking();
   const starter = !G ? 0 : isFresh() ? G.starter : 1 - G.starter;
   G = { level: S.level, jump: S.jump, foe: O.create(rnd, G && G.foe ? [G.foe.name] : []), seed: rnd(2 ** 31), starter, you: starter === 0 ? 0 : 1,
-        line: [E.START], last: null, status: 'playing', why: '', counted: false, hinted: false };
+        line: [E.START], last: null, status: 'playing', why: '', counted: false, hinted: false, inStats: false };
   sel = -1; pend = null; hintM = -1;
   save(); render();
   if (msg) toast(msg);
@@ -1156,8 +1159,9 @@ function tapPoint(i) {
     return;
   }
   const list = E.moves(t, G.jump), [hand, board] = stones(t, G.you);
-  // the advice: a tap on its point plays it, a tap on its stone keeps that stone chosen
-  if (hintM >= 0 && list.includes(hintM)) {
+  // the advice: a tap on its point plays it, a tap on its stone keeps that stone chosen (another stone chosen by the
+  // player goes its own way: the advice never moves a stone the player did not choose)
+  if (hintM >= 0 && list.includes(hintM) && (sel < 0 || sel === E.mFrom(hintM))) {
     if (i === E.mTo(hintM) && t[i] === '.') { tryMove(list.filter(m => E.mFrom(m) === E.mFrom(hintM) && E.mTo(m) === i)); return; }
     if (i === E.mFrom(hintM)) { sel = i; render(); return; }
   }
@@ -1177,7 +1181,7 @@ function tapPoint(i) {
     if (l.length) { tryMove(l); return; }
   }
   const froms = new Set(list.filter(m => E.mTo(m) === i).map(E.mFrom));
-  if (froms.size === 1) { tryMove(list.filter(m => E.mTo(m) === i)); return; }
+  if (sel < 0 && froms.size === 1) { tryMove(list.filter(m => E.mTo(m) === i)); return; } // never another stone than the chosen one
   const fly = G.jump && board === 3;
   if (sel < 0) toast(froms.size ? `Nejdřív ťukni na kámen, kterým ${fly ? 'skočíš' : 'táhneš'}` : 'Sem žádný tvůj kámen nedojde');
   else toast(fly ? 'Sem nejde' : 'Sem nejde: kámen táhne po čáře na sousední volný bod');
@@ -1261,7 +1265,7 @@ function endDialog() {
     const btns = [{ text: 'Nová hra', fn: () => newGame() }];
     if (G.status !== 'won') btns.push({ text: 'Vrátit tah', cls: 'alt', fn: () => $('#btnUndo').click() });
     btns.push({ text: 'Prohlédnout', cls: 'alt' });
-    showModal(`<h2>${head}</h2><p>${whyText()}</p>${G.hinted ? '<p>Hra s radou se do statistik nepočítá.</p>' : ''}`, btns);
+    showModal(`<h2>${head}</h2><p>${whyText()}</p>${G.hinted && !G.inStats ? '<p>Hra s radou se do statistik nepočítá.</p>' : ''}`, btns);
   });
 }
 

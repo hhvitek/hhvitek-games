@@ -989,7 +989,8 @@ function validProg(o) {
   const out = {};
   if (o && typeof o === 'object') for (const [id, v] of Object.entries(o)) {
     const b = BYID.get(id);
-    if (b && typeof v === 'string' && /^[012]+!?$/.test(v) && v.replace('!', '').length === b.p.w * b.p.h && /[12]/.test(v)) out[id] = v;
+    // marks, or only the "no ★" flag (Poradit or the warnings were used on a puzzle that has no marks now)
+    if (b && typeof v === 'string' && /^[012]+!?$/.test(v) && v.replace('!', '').length === b.p.w * b.p.h && (/[12]/.test(v) || v.endsWith('!'))) out[id] = v;
   }
   return out;
 }
@@ -1003,17 +1004,18 @@ function normalize(s) {
   if (!MODES.includes(s.mode)) s.mode = DEFAULTS.mode;
   s.mistakes = !!s.mistakes; s.autoCross = !!s.autoCross; s.vibrate = !!s.vibrate;
 }
-// the open puzzle goes to prog when it has marks and is not solved (no Undo history is kept there)
+// the open puzzle goes to prog when it has marks or used help (the "no ★" flag stays with it also on an empty grid)
+// and is not solved (no Undo history is kept there)
 function stash() {
   if (!G) return;
-  if (G.status === 'playing' && hasMarks(G)) D.prog[G.id] = G.cells.join('') + (G.hints || G.warned ? '!' : '');
+  if (G.status === 'playing' && (hasMarks(G) || G.hints || G.warned)) D.prog[G.id] = G.cells.join('') + (G.hints || G.warned ? '!' : '');
   else delete D.prog[G.id];
 }
 // open a puzzle: continue its progress, or start it empty (fresh, or a solved one)
 function openPuzzle(id, fresh) {
   stash();
   const p = BYID.get(id).p, N = p.w * p.h, pr = !fresh && D.prog[id];
-  G = { id, cells: pr ? pr.slice(0, N).split('').map(Number) : new Array(N).fill(0), history: [], hints: pr && pr.endsWith('!') ? 1 : 0, warned: S.mistakes, counted: false, status: 'playing' };
+  G = { id, cells: pr ? pr.slice(0, N).split('').map(Number) : new Array(N).fill(0), history: [], hints: pr && pr.endsWith('!') ? 1 : 0, warned: false, counted: false, status: 'playing' }; // warned: once a mark is drawn with the warnings on (commit)
   delete D.prog[id];
   hint = null; zoom = 1; tx = 0; ty = 0;
   save(); buildBoard(); render();
@@ -1384,7 +1386,8 @@ $('#btnNew').addEventListener('click', openList);
 /* ---------- The puzzle list (Nová hra): nothing is lost when switching, so no question ---------- */
 function tileHTML(p) {
   const cur = G.id === p.id, done = D.done[p.id];
-  const cells = cur ? (G.status === 'playing' && hasMarks(G) ? G.cells : null) : D.prog[p.id] ? D.prog[p.id].replace('!', '').split('').map(Number) : null;
+  const saved = !cur && D.prog[p.id] ? D.prog[p.id].replace('!', '').split('').map(Number) : null;
+  const cells = cur ? (G.status === 'playing' && hasMarks(G) ? G.cells : null) : saved && saved.some(v => v) ? saved : null;
   const n = numOf(p);
   let kind, th, nm;
   if (done) { kind = 'done'; th = picSVG(p) + (done.clean ? '<span class="s" aria-hidden="true">★</span>' : ''); nm = esc(p.name); }
@@ -1412,7 +1415,7 @@ $('#listIn').addEventListener('click', e => {
   if (b.dataset.act === 'restart') {
     showModal('<h2>Začít znovu?</h2><p>Všechny značky v této křížovce se smažou.</p>', [
       // rule: a hint stays with the puzzle when it starts over (no ★); only a new game (another or a solved puzzle) resets it
-      { text: 'Ano, začít znovu', fn: () => { const h = G.hints; $('#screenList').hidden = true; openPuzzle(G.id, true); if (h) { G.hints = h; save(); } toast('Křížovka začíná znovu'); } },
+      { text: 'Ano, začít znovu', fn: () => { const h = G.hints, w = G.warned; $('#screenList').hidden = true; openPuzzle(G.id, true); if (h || w) { G.hints = h; G.warned = w; save(); } toast('Křížovka začíná znovu'); } },
       { text: 'Ne', cls: 'alt' },
     ]);
     return;
@@ -1458,7 +1461,7 @@ function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hi
 // no setting needs a new puzzle: every change applies at once
 function closeSettings() {
   $('#screenSettings').hidden = true;
-  if (S.mistakes && G.status === 'playing') G.warned = true; // the warnings can be seen on this puzzle now: no star
+  if (S.mistakes && G.status === 'playing' && hasMarks(G)) G.warned = true; // the warnings can be seen on this puzzle now: no star
   save();
   render();
 }
@@ -1532,7 +1535,7 @@ if (saved && validGame(saved.game)) {
   G = saved.game;
   delete D.prog[G.id];
   if (G.status === 'won' && !G.counted) { G.counted = true; D.done[G.id] = { clean: (G.hints === 0 && !G.warned) || !!(D.done[G.id] && D.done[G.id].clean) }; }
-  if (S.mistakes && G.status === 'playing') G.warned = true;
+  if (S.mistakes && G.status === 'playing' && hasMarks(G)) G.warned = true; // an empty grid shows no warning yet
   buildBoard(); render(); save();
 }
 else openPuzzle(firstOpen());

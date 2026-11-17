@@ -868,7 +868,9 @@ $('#btnNew').addEventListener('click', () => {
 /* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
 const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
 const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
-const LIVES_TEXT = { 3: ['3 životy', 'Po třetím nárazu začíná úroveň znovu.'], 1: ['1 život', 'Jediný náraz a úroveň začíná znovu.'], 0: ['Bez omezení', 'Nárazy se jen počítají jako chyby.'] };
+const LIVES_TEXT = { 3: ['3 životy', 'Po třetím nárazu úroveň končí a můžeš ji zkusit znovu.'], 1: ['1 život', 'Jediný náraz a úroveň končí, můžeš ji zkusit znovu.'], 0: ['Bez omezení', 'Nárazy se jen počítají jako chyby.'] };
+// the help's line about lives, for the lives set now
+const LIVES_HELP = { 3: 'Máš <b>3 životy</b>: po třetím nárazu úroveň končí a můžeš ji zkusit znovu.', 1: 'Máš <b>1 život</b>: po prvním nárazu úroveň končí a můžeš ji zkusit znovu.', 0: 'Hraješ <b>bez omezení</b>: nárazy se jen počítají jako chyby.' };
 function renderSettings() {
   const solved = Object.keys(bests).length, b = bests[level];
   const stars = Object.values(bests).reduce((s, v) => s + starsOf(v), 0);
@@ -949,7 +951,7 @@ function renderHelp() {
       <li>Vyveď ven <b>všechny šipky</b>. Každá úroveň jde vyřešit a pořadí je na tobě: šipka, která jednou může ven, může i později.</li>
       <li>Za vyřešenou úroveň dostaneš hvězdy: <b>★★★</b> bez chyby, <b>★★☆</b> nejvýš se dvěma chybami, jinak <b>★☆☆</b>. Hvězdy a rekord dostane jen úroveň dohraná bez Poradit.</li>
       <li><b>Poradit</b> ukáže v rámečku šipku, která může ven; ťukni na ni. <b>Zpět</b> vrátí poslední šipku na plochu, chyby zůstávají.</li>
-      <li>Máš <b>3 životy</b>: po třetím nárazu začíná úroveň znovu. V Nastavení si můžeš vybrat jeden život, nebo hrát bez omezení.</li>
+      <li>${LIVES_HELP[S.lives]} Počet životů změníš v Nastavení.</li>
       <li>Úrovně jsou postupně větší a těžší: víc šipek, delší šipky a plochy různých tvarů. <b>Nová hra</b> začne úroveň znovu od začátku, po vyřešení přejde na další. Vyřešené úrovně si můžeš znovu zahrát v Nastavení.</li>
     </ol></section>
     <button class="big" data-act="close">Rozumím, hrát</button>`;

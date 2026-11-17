@@ -7,6 +7,13 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Mlýn: táhne vždycky ten kámen, který máš vybraný. Ťuknutí na bod, kam vybraný kámen nedojde, už nepohne jiným kamenem a ani rada nepřesune jiný kámen, než který máš vybraný.
+- Lodě: Nová hra po začátku bitvy, ještě než vystřelíš, se teď nejdřív zeptá, protože tvoje rozmístěné lodě by se ztratily. Loď držená prstem se už nemůže překrýt s jinou, když druhým prstem ťukneš na Zamíchat nebo Zpět.
+- Malované křížovky: rada zůstane u obrázku i po přepnutí na jiný, když v něm zrovna nic není, takže hvězdičku nedostane. Zapnuté upozorňování na chyby bere hvězdičku až od prvního políčka, ne už prázdnému obrázku.
+- Šroubky: hra vrácená na začátek (Od začátku nebo Zpět) se už potichu nevymění za novou, když čeká nová obtížnost.
+- Reversi, Dáma, Piškvorky, Mlýn: když hru po konci vrátíš a použiješ radu, konec už nepíše, že se hra nepočítá – započítaná zůstává. Reversi při otevření řekne, že nově zvolený soupeř začne od příští hry.
+- Šipky ven a Věžičky: přesnější nápověda (životy podle nastavení; zmizí jen horních deset a více dílků, co je pod nimi, zůstane).
+
 ## 1.0.27 – 2026-11-17
 
 - Solitér, FreeCell, Pyramida a Pavouk: když hra ohlásí „Dál to nejde“ a ty se tlačítkem Zpět vrátíš a hru stejně vyhraješ, výhra se teď do statistiky započítá. Starší čísla ve statistice, ve kterých jsou i nedohrané hry, jsou v Nastavení označená.
