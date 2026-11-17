@@ -37,9 +37,9 @@ const NOT_TEXTS = ['languages.js', 'i18n.js', 'flags.js'];
 // shared scripts checked like a page once they use I18N (later steps convert them)
 const SHARED_SCRIPTS = ['games/_cards/cards.js', 'games/_cards/marias.js', 'games/_opponents/opponents.js'];
 // a translation may be the same as cs (names, symbols): these texts
-const SAME_OK = ['Koxa', 'Líza', 'Čiperka', 'Pacička', 'Šedivka', 'Mourek', 'Bivoj', 'Rambo', 'Fousek', 'Mrrp!', 'Laser', 'laser', '{kg} kg', 'Sudoku', 'Mahjong', 'FreeCell', 'Reversi', 'OK', 'Prší', 'Start', 'Mars', 'Brno', 'Ostrava'];
+const SAME_OK = ['Koxa', 'Líza', 'Čiperka', 'Pacička', 'Šedivka', 'Mourek', 'Bivoj', 'Rambo', 'Fousek', 'Mrrp!', 'Laser', 'laser', '{kg} kg', 'Sudoku', 'Mahjong', 'FreeCell', 'Reversi', 'OK', 'Prší', 'Start', 'Mars', 'Brno', 'Ostrava', 'oko', 'Náchod', 'Hradec Králové', '<b>{name}</b> · {w} × {h}{clean, select, true { ★} other {}}'];
 // words with Czech letters that may stay in an English text (names of places, cats, the author, Czech games and cards)
-const NAMES_OK = ['Šedivka', 'Nováková', 'Náchod', 'Náchodsko', 'Vítek', 'Vítkovy', 'Líza', 'Čiperka', 'Pacička', 'Prší', 'Mariáš', 'mariáš'];
+const NAMES_OK = ['Šedivka', 'Nováková', 'Náchod', 'Náchodsko', 'Hradec Králové', 'Vítek', 'Vítkovy', 'Líza', 'Čiperka', 'Pacička', 'Prší', 'Mariáš', 'mariáš'];
 // languages whose texts must not contain Czech diacritics
 const NO_DIACRITICS = ['en'];
 const DIACRITICS = /[ěščřžýáíéůúňťďĚŠČŘŽÝÁÍÉŮÚŇŤĎ]/;

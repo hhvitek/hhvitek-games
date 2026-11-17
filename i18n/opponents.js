@@ -12,7 +12,7 @@ I18N.add({
                              note: 'female first names, short and friendly as among neighbours, comma-separated' },
   // aria-label of the level stars: "Zkušený hráč, 2 hvězdičky ze 3"
   'opponents.levelSpoken': { cs: '{title}, {n, plural, one {# hvězdička} few {# hvězdičky} many {# hvězdičky} other {# hvězdiček}} {total, select, 2 {ze 2} 3 {ze 3} 4 {ze 4} other {z {total}}}',
-                             en: '{title}, {n, plural, one {# star} other {# stars}} of {total}',
+                             en: '{title}, {n} of {total} stars',
                              note: 'title = the name of the level, n = its stars, total = all stars' },
   'opponents.heading':     { cs: 'Soupeř', en: 'Opponent', note: 'heading of the settings card and of the help section about the opponent' },
   'opponents.speed':       { cs: 'Rychlost soupeře', en: 'Opponent speed' },

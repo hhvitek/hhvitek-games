@@ -24,6 +24,15 @@ Main target devices: Xiaomi 13T / 14T / 15T in portrait (CSS viewport about 393�
 Every text the player sees is a message in a texts file, never a string in a page's code (`node tools/check.js` fails on a hard-coded text). User's decisions 2026-11-17: the language follows the phone by default; a flag button in the launcher's header and a "Jazyk / Language" card in Nastavení; English is anglicized (English opponent names, "Vítek's Games" in the launcher, Under/Over/King/Ace, Hearts/Bells/Leaves/Acorns); the manifest stays Czech.
 
 **Workflow**
+- **A translation must sound natural** (user's decision 2026-11-17): what a native speaker would have written, not
+  the Czech sentence word for word. Natural wording wins over a literal translation that keeps every word: rebuild
+  sentences, drop Czech filler, use the genre's own terms; keep the meaning and every param. The style, set phrases
+  and terms are in `i18n/glossary.md` (English: British spelling, contractions, "they" for an opponent, "Best / New
+  best!"); the `translate` skill uses the strongest model and an independent native-editor review of every pass.
+  The user's decisions of 2026-11-17 after a native review of the first English: British English everywhere (dates
+  `d/m/y`), "Best / New best!" (not "Record"), Kočka's neighbour cats and paní Nováková get English names (Stripey,
+  Lisa, Hercules, Zippy, Mittens, Rambo, Silver, Whiskers, Mrs Novak; Koxa stays), place names keep their diacritics
+  (Náchod, Hradec Králové).
 - Development writes **only `cs`**. `en` and other languages are filled by the translation pass (skill `translate`, `node tools/i18n.js --todo <lang>`), never by hand while developing a game; the pass never touches a `cs` text.
 - `node tools/check.js` fails on errors: a hard-coded text, a missing key, a message that does not parse, a plural without every category, params that differ between languages. Missing or stale translations are **debt**: reported by `node tools/i18n.js` and by the stop hook, never blocking development. Once a language is `ready`, debt blocks a release (`node tools/i18n.js --strict`; the gate in `tools/release.js` is not built yet, TODO.md).
 - Changing a `cs` text makes its translations stale (`i18n/translated.json` keeps a hash of the `cs` each translation was made from; written only by `node tools/i18n.js --mark-translated <lang> [ids]` after the pass).
