@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,16 +34,24 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="../../i18n/cards.js"></script>
+<script src="../../images/sets.js"></script>
+<script src="../_cards/cards.js"></script>
+<script src="texts.js"></script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#1e7135">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Pyramida">
-<title>Pyramida</title>
+<title data-t="game.pyramida.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e7135'/%3E%3Cg fill='%23fff' stroke='%23333' stroke-width='1.5'%3E%3Crect x='23' y='6' width='18' height='25' rx='3'/%3E%3Crect x='13' y='19' width='18' height='25' rx='3'/%3E%3Crect x='33' y='19' width='18' height='25' rx='3'/%3E%3Crect x='3' y='32' width='18' height='25' rx='3'/%3E%3Crect x='23' y='32' width='18' height='25' rx='3'/%3E%3Crect x='43' y='32' width='18' height='25' rx='3'/%3E%3C/g%3E%3C/svg%3E">
 <style>
 
@@ -197,15 +205,15 @@ a.round{text-decoration:none}
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app">
   <header class="topbar">
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Pyramida</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.pyramida.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
   <main id="table"></main>
@@ -217,8 +225,6 @@ a.round{text-decoration:none}
 <div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
 <div id="toast" class="hide"></div>
 
-<script src="../../images/sets.js"></script>
-<script src="../_cards/cards.js"></script>
 <script>
 /* ---------- Visible height ---------- */
 // The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
@@ -254,6 +260,8 @@ a.round{text-decoration:none}
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 const root = document.documentElement;
 const table = $('#table');
 
@@ -444,7 +452,7 @@ async function solvableDeck(passes, ms = 10000) {
 /* ---------- State and saving ---------- */
 let S, G = null, ST, busy = false, SEL = null;
 // rule: while something runs, a tap explains itself instead of doing nothing
-const busyToast = () => toast('Chvilku, míchám karty…', 60000);
+const busyToast = () => toast(t('pyramida.toast.busy'), 60000);
 const playing = () => G && G.status === 'playing';
 // the deal the game was asked for: a "solvable" deal that could not be verified in time is played as random
 // (deal: 'rand'), but it is not a change of the setting
@@ -485,9 +493,7 @@ function validSnap(g, str) {
   try { const s = JSON.parse(str); return !!s && typeof s === 'object' && validState(Object.assign({}, g, s)); } catch (e) { return false; }
 }
 // Statistics per variant (rule: the rules that change difficulty, as records per variant)
-const VARIANTS = [['0-solv', 'Balíček neomezeně, vždy řešitelné'], ['0-rand', 'Balíček neomezeně, náhodné'],
-  ['3-solv', 'Balíček třikrát, vždy řešitelné'], ['3-rand', 'Balíček třikrát, náhodné'],
-  ['1-solv', 'Balíček jen jednou, vždy řešitelné'], ['1-rand', 'Balíček jen jednou, náhodné']];
+const VARIANTS = [['0-solv'], ['0-rand'], ['3-solv'], ['3-rand'], ['1-solv'], ['1-rand']]; // their names: pyramida.variant.<key>
 const statKey = g => `${g.passes}-${g.deal}`;
 const st = () => ST[statKey(G)] || (ST[statKey(G)] = { played: 0, won: 0 });
 function validStats(v, oldKey) {
@@ -500,8 +506,8 @@ function validStats(v, oldKey) {
   return out;
 }
 const statsHTML = () => {
-  const rows = VARIANTS.filter(([k]) => ST[k].played).map(([k, label]) => `${label}: vyhráno <b>${ST[k].won}</b> z ${ST[k].played}`);
-  return rows.length ? rows.join('<br>') : 'Zatím žádná dohraná hra.';
+  const rows = VARIANTS.filter(([k]) => ST[k].played).map(([k]) => th('pyramida.stats.row', { variant: t(`pyramida.variant.${k}`), won: ST[k].won, played: ST[k].played }));
+  return rows.length ? rows.join('<br>') : th('pyramida.stats.none');
 };
 function validGame(g) {
   try {
@@ -531,7 +537,7 @@ function restore(str) { Object.assign(G, JSON.parse(str)); }
 function newGame(msg) {
   if (busy) return; // a deal is already being prepared
   busy = true; SEL = null; clearHint();
-  toast('Míchám karty…', 60000);
+  toast(t('pyramida.toast.shuffling'), 60000);
   setTimeout(async () => {
     const r = S.deal === 'solv' ? await solvableDeck(S.passes) : { deck: shuffle([...Array(52).keys()]), ok: true };
     // a deal that could not be verified in time counts as random, and the player is told
@@ -540,7 +546,7 @@ function newGame(msg) {
     busy = false;
     hideToast();
     save(); render({ deal: true });
-    if (!r.ok) toast('Tentokrát se nepodařilo ověřit, že hra jde vyhrát. Karty jsou zamíchané náhodně.', 5000);
+    if (!r.ok) toast(t('pyramida.toast.notVerified'), 5000);
     else if (msg) toast(msg);
   }, 60);
 }
@@ -555,8 +561,8 @@ function restart() {
 function buzz(ms = 12) { if (S.vibrate && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
 let toastT;
 function toast(msg, ms = 3000) {
-  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
-  t.style.bottom = (innerHeight - $('#tray').getBoundingClientRect().top + 12) + 'px';
+  const el = $('#toast'); el.textContent = msg; el.classList.remove('hide');
+  el.style.bottom = (innerHeight - $('#tray').getBoundingClientRect().top + 12) + 'px';
   clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
 }
 function hideToast() { $('#toast').classList.add('hide'); }
@@ -601,24 +607,24 @@ function tryPair(a, b) {
   const ca = cardOf(a), cb = cardOf(b), sum = rank(ca) + rank(cb);
   if (sum === 13) { SEL = null; removeCards([a, b]); return; }
   shake([cb]);
-  toast(`${lbl(ca)} + ${lbl(cb)} je ${sum}, potřeba je 13`);
+  toast(t('pyramida.toast.notThirteen', { a: lbl(ca), b: lbl(cb), sum }));
 }
 function draw() {
   if (busy) { busyToast(); return; }
-  if (!playing()) { toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
+  if (!playing()) { toast(t('pyramida.toast.won')); return; }
   SEL = null; clearHint();
   if (G.stock.length) { pushHist(); G.waste.push(G.stock.pop()); after(); return; }
-  if (!G.waste.length) { render(); toast('Balíček je prázdný'); return; }
+  if (!G.waste.length) { render(); toast(t('pyramida.toast.deckEmpty')); return; }
   const l = left();
   if (l <= 0) {
     render();
-    toast(G.passes === 1 ? 'Balíčkem jde projít jen jednou, znovu už otočit nejde' : 'Balíček už otočit nejde, všechna otočení jsou využitá');
+    toast(t(G.passes === 1 ? 'pyramida.toast.noMoreOnce' : 'pyramida.toast.noMore'));
     return;
   }
   pushHist();
   G.stock = G.waste.reverse(); G.waste = []; G.red++;
   after();
-  if (G.passes && playing() && G.stuckAt !== G.moves) toast(l > 1 ? `Karty jsou zase v balíčku. Otočit jde ještě ${l - 1}×.` : 'Karty jsou zase v balíčku. Tohle je poslední průchod.', 3500);
+  if (G.passes && playing() && G.stuckAt !== G.moves) toast(l > 1 ? t('pyramida.toast.backInDeck', { n: l - 1 }) : t('pyramida.toast.lastPass'), 3500);
 }
 function after() {
   G.moves++;
@@ -628,8 +634,8 @@ function after() {
 }
 function undo() {
   if (busy) { busyToast(); return; }
-  if (!playing()) { toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
-  if (!G.hist.length) { toast('Není co vrátit'); return; }
+  if (!playing()) { toast(t('pyramida.toast.won')); return; }
+  if (!G.hist.length) { toast(t('pyramida.toast.nothingToUndo')); return; }
   restore(G.hist.pop());
   SEL = null; clearHint();
   buzz(); save(); render();
@@ -668,8 +674,8 @@ function checkEnd() {
     const wonGame = G;
     whenFree(wonGame, 900, () => {
       if (busy) return;
-      showModal(`<h2>Vyhráno! 🎉</h2><p>Pyramida je celá pryč.</p>${wonGame.hinted ? '<p>Hra s radou se do statistiky nepočítá.</p>' : `<p>Vyhrané hry: <b>${st().won}</b> z ${st().played}</p>`}`,
-      [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout stůl', cls: 'alt' }]);
+      showModal(`<h2>${th('pyramida.won.title')}</h2><p>${th('pyramida.won.text')}</p><p>${wonGame.hinted ? th('pyramida.won.hinted') : th('pyramida.won.count', { won: st().won, played: st().played })}</p>`,
+      [{ text: th('common.newGame'), fn: () => newGame() }, { text: th('pyramida.won.view'), cls: 'alt' }]);
     });
     return;
   }
@@ -681,8 +687,8 @@ function checkEnd() {
     whenFree(g0, 500, () => {
       if (G.hist.length !== h0 || busy || !playing()) return;
       countEnd(false); save(); // the stuck end counts the game as played, not won
-      showModal('<h2>Dál to nejde</h2><p>Žádnou další dvojici už odebrat nejde.</p>',
-        [{ text: 'Vrátit tah zpět', fn: undo }, { text: 'Nová hra', fn: () => newGame() }, { text: 'Ještě se podívám', cls: 'alt' }]);
+      showModal(`<h2>${th('pyramida.stuck.title')}</h2><p>${th('pyramida.stuck.text')}</p>`,
+        [{ text: th('pyramida.stuck.undo'), fn: undo }, { text: th('common.newGame'), fn: () => newGame() }, { text: th('pyramida.stuck.look'), cls: 'alt' }]);
     });
   }
 }
@@ -711,10 +717,10 @@ function anyMove() {
 }
 function hint() {
   if (busy) { busyToast(); return; }
-  if (!playing()) { toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
+  if (!playing()) { toast(t('pyramida.toast.won')); return; }
   SEL = null; clearHint();
   // the search can take a moment on a phone: show a message first, then think
-  busy = true; toast('Přemýšlím…', 60000);
+  busy = true; toast(t('pyramida.toast.thinking'), 60000);
   setTimeout(() => { busy = false; hideToast(); showHint(); }, 30);
 }
 function showHint() {
@@ -725,22 +731,22 @@ function showHint() {
     m = w === m.v ? { k: 'W', a: m.a } : { k: G.stock.length ? 'D' : 'R' };
   }
   if (!m) m = anyMove();
-  if (!m) { render(); toast('Žádný užitečný tah už nevidím. Zkus Zpět nebo novou hru.'); return; }
+  if (!m) { render(); toast(t('pyramida.toast.noUseful')); return; }
   const top = G.waste[G.waste.length - 1];
   let els, msg;
-  if (m.k === 'K') { els = [EL[G.pyr[m.i]]]; msg = `Ťukni na krále ${nm(G.pyr[m.i])}, odebere se sám`; }
-  else if (m.k === 'WK') { els = [EL[top]]; msg = `Ťukni na krále ${nm(top)}, odebere se sám`; }
+  if (m.k === 'K') { els = [EL[G.pyr[m.i]]]; msg = t('pyramida.hint.king', { card: nm(G.pyr[m.i]) }); }
+  else if (m.k === 'WK') { els = [EL[top]]; msg = t('pyramida.hint.king', { card: nm(top) }); }
   else if (m.k === 'P' || m.k === 'W') {
     const a = G.pyr[m.a], b = m.k === 'P' ? G.pyr[m.b] : top;
     els = [EL[a], EL[b]];
     HINT_PAIR = [{ t: 'pyr', i: m.a }, m.k === 'P' ? { t: 'pyr', i: m.b } : { t: 'waste' }];
-    msg = `Odeber ${nm(a)} a ${nm(b)}: ${rank(a)} + ${rank(b)} = 13`;
+    msg = t('pyramida.hint.pair', { a: nm(a), b: nm(b), ra: rank(a), rb: rank(b) });
   } else if (m.k === 'D') {
     els = [G.stock.length ? EL[G.stock[G.stock.length - 1]] : SLOT.stock];
-    msg = 'Ťukni na balíček a lízni si další kartu';
+    msg = t('pyramida.hint.draw');
   } else {
     els = [SLOT.stock];
-    msg = 'Ťukni na prázdný balíček, karty se otočí znovu';
+    msg = t('pyramida.hint.redeal');
   }
   render();
   els.forEach(e => e.classList.add('hint'));
@@ -824,8 +830,8 @@ function render(o = {}) {
   INFO.style.transform = `translate(${L.x[2]}px,${L.yS}px)`;
   INFO.style.width = (L.x[5] + L.w - L.x[2]) + 'px';
   INFO.style.height = L.h + 'px';
-  INFO.innerHTML = `<div>V balíčku: <b>${G.stock.length}</b></div>`
-    + (G.passes ? `<div>${l > 0 ? `Otočit jde ještě <b>${l}×</b>` : G.stock.length ? 'Poslední průchod' : 'Otočit už nejde'}</div>` : '');
+  INFO.innerHTML = `<div>${th('pyramida.info.stock', { n: G.stock.length })}</div>`
+    + (G.passes ? `<div>${l > 0 ? th('pyramida.info.turns', { n: l }) : th(G.stock.length ? 'pyramida.info.lastPass' : 'pyramida.info.noTurn')}</div>` : '');
 
   // dealing: cards fly out of the stock one by one
   if (deal) {
@@ -867,9 +873,9 @@ function render(o = {}) {
 function renderTray() {
   const canRe = G && !G.stock.length && G.waste.length && left() > 0;
   const acts = [
-    { id: 'undo', icon: 'undo', label: 'Zpět', cls: !playing() || !G.hist.length ? ' dim' : '' },
-    { id: 'hint', icon: 'hint', label: 'Poradit', cls: !playing() ? ' dim' : '' },
-    { id: 'draw', icon: canRe ? 'redo' : 'draw', label: canRe ? 'Otočit' : 'Líznout', cls: !playing() || !(G.stock.length || canRe) ? ' dim' : '' },
+    { id: 'undo', icon: 'undo', label: th('common.undo'), cls: !playing() || !G.hist.length ? ' dim' : '' },
+    { id: 'hint', icon: 'hint', label: th('common.hint'), cls: !playing() ? ' dim' : '' },
+    { id: 'draw', icon: canRe ? 'redo' : 'draw', label: th(canRe ? 'pyramida.btn.turn' : 'pyramida.btn.draw'), cls: !playing() || !(G.stock.length || canRe) ? ' dim' : '' },
   ];
   $('#tray').innerHTML = acts.map(a => `<button class="act${a.cls}" data-a="${a.id}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.icon]}</svg>${a.label}</button>`).join('');
 }
@@ -887,15 +893,15 @@ function hitAt(e) {
 function tap(hit) {
   const hinted = HINT_PAIR;
   clearHint();
-  if (!playing()) { if (G.status === 'won') toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
+  if (!playing()) { if (G.status === 'won') toast(t('pyramida.toast.won')); return; }
   if (!hit) { if (SEL) { SEL = null; render(); } return; }
   if (hit.kind === 'stock') { draw(); return; }
-  if (hit.kind === 'out') { if (SEL) { SEL = null; render(); } toast('Sem se odkládají odebrané karty'); return; }
+  if (hit.kind === 'out') { if (SEL) { SEL = null; render(); } toast(t('pyramida.toast.outPile')); return; }
   const l = locate(hit.c);
   if (l.t === 'stock') { draw(); return; }
-  if (l.t === 'out') { toast('Tady jsou odebrané karty'); return; }
+  if (l.t === 'out') { toast(t('pyramida.toast.outHere')); return; }
   if (l.t === 'waste' && !l.top) return;
-  if (l.t === 'pyr' && !l.free) { shake([hit.c]); toast('Tahle karta je přikrytá. Hrát jde jen s kartami, které jsou celé vidět.'); return; }
+  if (l.t === 'pyr' && !l.free) { shake([hit.c]); toast(t('pyramida.toast.covered')); return; }
   const src = l.t === 'pyr' ? { t: 'pyr', i: l.i } : { t: 'waste' };
   if (rank(hit.c) === 13) { SEL = null; removeCards([src]); return; }
   // a tap on a card of the hinted pair takes the pair
@@ -910,7 +916,7 @@ let dealUntil = 0;
 table.addEventListener('pointerdown', e => {
   if (busy && G) { busyToast(); return; }
   if (busy || PD || !G || (e.button !== undefined && e.button > 0)) return;
-  if (Date.now() < dealUntil) { toast('Chvilku, karty se ještě rozdávají'); return; }
+  if (Date.now() < dealUntil) { toast(t('pyramida.toast.dealing')); return; }
   const hit = hitAt(e);
   PD = { id: e.pointerId, x0: e.clientX, y0: e.clientY, hit, drag: false };
   if (hit && hit.kind === 'card' && playing()) {
@@ -946,7 +952,7 @@ function endPointer(e, cancel) {
     if (a > bestA) { bestA = a; best = s; }
   }
   if (best && bestA > L.w * L.h * .15) {
-    if (rank(cardOf(pd.src)) === 13) { SEL = null; render(); toast('Král se odebírá sám, stačí na něj ťuknout'); return; }
+    if (rank(cardOf(pd.src)) === 13) { SEL = null; render(); toast(t('pyramida.toast.kingAlone')); return; }
     SEL = null;
     render();
     tryPair(pd.src, best);
@@ -981,14 +987,14 @@ function showModal(html, buttons) {
 $('#btnNew').addEventListener('click', () => {
   if (busy) { busyToast(); return; }
   if (hasProgress()) {
-    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>',
-      [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Začít tuto znovu', fn: restart }, { text: 'Hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('common.confirmNew.text')}</p>`,
+      [{ text: th('common.newGame'), fn: () => newGame() }, { text: th('pyramida.confirm.restart'), fn: restart }, { text: th('pyramida.confirm.keep'), cls: 'alt' }]);
   } else newGame();
 });
 
 /* ---------- Settings ---------- */
 const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
-const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
 // sample cards: ace ♥, 7 ♠, king ♦ (face colour, pictures and back follow the settings)
 const SAMPLE = [13 + 0, 6, 39 + 12];
 const minis = (pic, withBack) => `<span class="mini">${SAMPLE.slice(0, withBack ? 2 : 3).map(c => cardHTML(c, true, pic)).join('')}${withBack ? '<div class="cd"></div>' : ''}</span>`;
@@ -996,31 +1002,31 @@ const minis = (pic, withBack) => `<span class="mini">${SAMPLE.slice(0, withBack 
 function renderSettings() {
   const tile = (act, on, inner, name) => `<button class="tile" data-act="${act}" aria-pressed="${on}">${inner}${name}</button>`;
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Pyramida<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Hra</h3>
-      <div class="field"><div class="flabel">Otáčení balíčku</div>
-        ${opt('set:passes:0', S.passes === 0, 'Neomezeně', 'Když balíček dojde, jde ho otočit znovu, kolikrát je potřeba. Nejsnazší.')}
-        ${opt('set:passes:3', S.passes === 3, 'Třikrát', 'Balíčkem jde projít třikrát. Těžší.')}
-        ${opt('set:passes:1', S.passes === 1, 'Jen jednou', 'Balíček se neotáčí, každá karta přijde jen jednou. Nejtěžší.')}
-        ${G && S.passes !== G.passes ? (G.moves ? `<div class="notice">Otáčení balíčku se změní od <b>příští hry</b>.${playing() ? ' Rozehraná hra zůstává.' : ''}</div>` : '<div class="notice">Po návratu do hry se rozdá <b>nová hra</b>.</div>') : ''}
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.pyramida.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('common.game')}</h3>
+      <div class="field"><div class="flabel">${th('pyramida.passes')}</div>
+        ${opt('set:passes:0', S.passes === 0, th('pyramida.passes.0'), th('pyramida.passes.0.desc'))}
+        ${opt('set:passes:3', S.passes === 3, th('pyramida.passes.3'), th('pyramida.passes.3.desc'))}
+        ${opt('set:passes:1', S.passes === 1, th('pyramida.passes.1'), th('pyramida.passes.1.desc'))}
+        ${G && S.passes !== G.passes ? `<div class="notice">${G.moves ? th('pyramida.passes.next', { progress: playing() }) : th('pyramida.newDeal')}</div>` : ''}
       </div>
-      <div class="field"><div class="flabel">Rozdání karet</div>
-        ${opt('set:deal:solv', S.deal === 'solv', 'Vždy řešitelné', 'Každá hra jde vyhrát, hra to před rozdáním ověří. Přemýšlet je ale pořád potřeba.')}
-        ${opt('set:deal:rand', S.deal === 'rand', 'Úplně náhodné', 'Karty se zamíchají jen tak. Mnoho her vyhrát nejde.')}
-        ${G && S.deal !== dealOf(G) ? (G.moves ? `<div class="notice">Rozdání se změní od <b>příští hry</b>.${playing() ? ' Rozehraná hra zůstává.' : ''}</div>` : '<div class="notice">Po návratu do hry se rozdá <b>nová hra</b>.</div>') : ''}
+      <div class="field"><div class="flabel">${th('pyramida.deal')}</div>
+        ${opt('set:deal:solv', S.deal === 'solv', th('pyramida.deal.solv'), th('pyramida.deal.solv.desc'))}
+        ${opt('set:deal:rand', S.deal === 'rand', th('pyramida.deal.rand'), th('pyramida.deal.rand.desc'))}
+        ${G && S.deal !== dealOf(G) ? `<div class="notice">${G.moves ? th('pyramida.deal.next', { progress: playing() }) : th('pyramida.newDeal')}</div>` : ''}
       </div>
     </section>
-    <section class="card"><h3>Pomůcky</h3>
-      ${toggleRow('free', 'Ztmavit přikryté karty', 'Karty, se kterými zatím hrát nejde, jsou tmavší. Volné karty jsou tak dobře vidět.')}
-      ${toggleRow('pairs', 'Ukázat, co se hodí', 'Po ťuknutí na kartu se čárkovaně orámují volné karty, které s ní dají dohromady 13.')}
+    <section class="card"><h3>${th('pyramida.aids')}</h3>
+      ${toggleRow('free', th('pyramida.free'), th('pyramida.free.note'))}
+      ${toggleRow('pairs', th('pyramida.pairs'), th('pyramida.pairs.note'))}
     </section>
-    ${CARDS.appearanceHTML(S, tile, minis, '--cw:56px;--ch:78px', toggleRow('vibrate', 'Vibrace'))}
-    <section class="card"><h3>Statistika</h3>
+    ${CARDS.appearanceHTML(S, tile, minis, '--cw:56px;--ch:78px', toggleRow('vibrate', th('common.vibrate')))}
+    <section class="card"><h3>${th('common.stats')}</h3>
       <p class="stats">${statsHTML()}</p>
       ${CARDS.statsNote(ST.mixed)}
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1029,7 +1035,7 @@ $('#settingsIn').addEventListener('click', e => {
   if (act === 'set') S[key] = key === 'passes' ? +val : val;
   else if (act === 'toggle') S[key] = !S[key];
   else if (['table', 'back', 'face', 'pic'].includes(act)) S[act] = key;
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('common.settingsReset')); }
   normalize(S);
   buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop;
@@ -1052,28 +1058,27 @@ $('#btnSettings').addEventListener('click', openSettings);
 const PAIRS = [[13, 11], [27, 49], [2, 22], [42, 34], [17, 7], [31, 45], [51]];
 function renderHelp() {
   const ico = id => `<span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[id]}</svg></span>`;
-  const pairs = PAIRS.map(p => `<div class="pair"><span class="mini">${p.map(c => cardHTML(c, true, S.pic)).join('')}</span>${p.length > 1 ? `${rank(p[0])} + ${rank(p[1])}` : 'K sám'}</div>`).join('');
-  const passTxt = G.passes === 0 ? 'Když balíček dojde, ťukni na prázdné místo se šipkou a karty se otočí znovu. Otáčet ho jde pořád dokola.' : G.passes === 3 ? 'Když balíček dojde, ťukni na prázdné místo se šipkou a karty se otočí znovu. Otočit ho jde dvakrát, celkem jím jde projít třikrát.' : 'Balíček se znovu neotáčí, každá karta přijde jen jednou.';
+  const pairs = PAIRS.map(p => `<div class="pair"><span class="mini">${p.map(c => cardHTML(c, true, S.pic)).join('')}</span>${p.length > 1 ? `${rank(p[0])} + ${rank(p[1])}` : th('pyramida.help.pairKing')}</div>`).join('');
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Pyramida<small>Jak hrát</small></h2></div>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.pyramida.name')}<small>${th('common.help')}</small></h2></div>
     <section class="card help">
       <ol>
-        <li><b>Cíl:</b> odebrat všechny karty z pyramidy.</li>
-        <li>Odebírají se <b>dvojice karet, které dají dohromady 13</b>. Eso je 1, J je 11, Q je 12. <b>Král</b> (13) se odebírá <b>sám</b>.
+        <li>${th('pyramida.help.1')}</li>
+        <li>${th('pyramida.help.2')}
           <div class="demo-felt"><div class="pairs">${pairs}</div></div></li>
-        <li>Hrát jde jen s kartami, které jsou <b>celé vidět</b>, nic na nich neleží.${S.free ? ' Přikryté karty jsou tmavší.' : ''}</li>
-        <li>Ťukni na první kartu, zvýrazní se. Pak ťukni na druhou. Když dají 13, obě zmizí. Kartu jde také přetáhnout na druhou. Další ťuknutí na stejnou kartu výběr zruší.</li>
-        <li><b>Balíček</b> je vlevo dole. Ťukni na něj a otočí se další karta vedle. Tu horní jde spárovat s kartou z pyramidy. ${passTxt}</li>
-        <li>Odebrané karty se skládají vpravo dole.</li>
+        <li>${th('pyramida.help.3', { free: S.free })}</li>
+        <li>${th('pyramida.help.4')}</li>
+        <li>${th('pyramida.help.5', { passes: G.passes })}</li>
+        <li>${th('pyramida.help.6')}</li>
       </ol>
     </section>
-    <section class="card help"><h3>Tlačítka</h3>
-      <div class="legend">${ico('undo')}<span><b>Zpět</b> vrátí poslední tah. Dá se ťukat opakovaně.</span></div>
-      <div class="legend">${ico('hint')}<span><b>Poradit</b> ukáže dobrý tah: karty, které patří k sobě, zablikají. Hra s radou se nepočítá do statistiky.</span></div>
-      <div class="legend">${ico('draw')}<span><b>Líznout</b> otočí další kartu z balíčku, stejně jako ťuknutí na balíček.</span></div>
-      <p class="fnote">Na čas se nehraje. Vzhled stolu, karet a obrázky jdou změnit v nastavení ⚙.</p>
+    <section class="card help"><h3>${th('pyramida.help.buttons')}</h3>
+      <div class="legend">${ico('undo')}<span>${th('pyramida.help.undo')}</span></div>
+      <div class="legend">${ico('hint')}<span>${th('pyramida.help.hint')}</span></div>
+      <div class="legend">${ico('draw')}<span>${th('pyramida.help.draw')}</span></div>
+      <p class="fnote">${th('pyramida.help.note')}</p>
     </section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { if (busy) { busyToast(); return; } hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -1105,6 +1110,7 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+I18N.apply(); // the static texts (data-t*), <title> and <html lang> in the player's language
 // Persistent storage: the browser won't evict settings or the saved game on its own
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 const saved = load();

@@ -10,6 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const i18n = require('./i18n.js'); // the texts and translations (CLAUDE.md, Texts and languages)
 
 const ROOT = path.join(__dirname, '..');
 const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
@@ -26,11 +27,41 @@ const ONLY = process.argv[2] || null;
 const ids = [...new Set([...games, ...folders]), '_template'].filter(id => !ONLY || id === ONLY);
 if (ONLY && ONLY !== 'launcher' && !ids.length) { console.log(`no game "${ONLY}" (games/${ONLY}/ is not a game folder)`); process.exit(1); }
 const readme = read('README.md');
+// the names and descriptions of the games are texts (i18n/games.js): game.<id>.name and game.<id>.desc
+const MESSAGES = i18n.messages();
+const csText = key => { const d = MESSAGES.get(key); return d && d.msg && typeof d.msg.cs === 'string' ? d.msg.cs : ''; };
 const cardsCss = exists('games/_cards/cards.js') ? (read('games/_cards/cards.js').match(/textContent = `([\s\S]*?)`;/) || [, ''])[1] : '';
 
 // Settings, help and dialogs look the same in every game (user's decision): this exact rule in every game
 const PAPER = '.paper{--pp:#f4ebdf;--pink:#2b1a0e;--pcard:#faf4eb;--popt:#fcf8f2;--popt-on:#f6e9d7;--psoft:#6f5a48;--pline:#e6d8c6;--psw:#e7d9c6;--pbtn:#7a4520;--pbtn-ink:#fff;--pbtn-sh:#3f220e;--pon:#7a4520;--pon-ink:#fff}';
 const ERRLOG = (read('games/_template/index.html').match(/<script>\n\/\* ---------- Error log ---------- \*\/[\s\S]*?<\/script>/) || [])[0] || '';
+// a game whose texts are in texts.js loads these right after the Error log block, in this order
+const I18N_TAGS = ['../../i18n/languages.js', '../../i18n/i18n.js', '../../i18n/common.js', '../../i18n/games.js', 'texts.js'].map(f => `<script src="${f}"></script>`).join('\n');
+const I18N_FILES = ['i18n/languages.js', 'i18n/i18n.js', 'i18n/common.js', 'i18n/games.js', 'i18n/flags.js', 'i18n/launcher.js', 'i18n/cards.js', 'i18n/opponents.js'].filter(f => exists(f));
+// The shared scripts a game may load, in this order; texts = their messages in i18n/<texts>.js once the script uses I18N.
+// The texts scripts come right after the Error log block: i18n/languages.js, i18n.js, common.js, games.js, then the texts
+// of the shared scripts the game uses (i18n/cards.js, i18n/opponents.js). A converted game then loads the shared
+// scripts it uses (in this order) and its texts.js, all in <head>; a game not converted yet loads only the texts scripts
+// there (its shared scripts stay where they were) and keeps its Czech in the code.
+const SHARED_SCRIPTS = [
+  { src: '../../images/sets.js' },
+  { src: '../_cards/cards.js', file: 'games/_cards/cards.js', texts: 'cards' },
+  { src: '../_cards/marias.js', file: 'games/_cards/marias.js', texts: 'cards' },
+  { src: '../_opponents/opponents.js', file: 'games/_opponents/opponents.js', texts: 'opponents' },
+];
+const sharedUsesI18n = s => !!s.file && exists(s.file) && /\bI18N\./.test(read(s.file));
+// the expected script tags right after the Error log block (null: the game needs none)
+function textTags(html, converted) {
+  const tag = f => `<script src="${f}"></script>`;
+  const used = SHARED_SCRIPTS.filter(s => html.includes(tag(s.src)));
+  const texts = [...new Set(used.filter(sharedUsesI18n).map(s => s.texts))].sort().map(n => `../../i18n/${n}.js`);
+  if (!converted && !texts.length) return null;
+  const files = ['../../i18n/languages.js', '../../i18n/i18n.js', '../../i18n/common.js', '../../i18n/games.js', ...texts];
+  if (converted) files.push(...used.map(s => s.src), 'texts.js');
+  return files.map(tag).join('\n');
+}
+// the launcher loads these right after its Error log block, in this order
+const LAUNCHER_TAGS = ['languages', 'i18n', 'common', 'games', 'flags', 'launcher'].map(f => `<script src="i18n/${f}.js"></script>`).join('\n');
 
 // All rules of a CSS text as { sel, body, media } (nested @media blocks handled, comments removed)
 function cssRules(css, media = '') {
@@ -93,6 +124,8 @@ for (const id of ids) {
   if (!exists(file)) { report(id, [`${file} is missing`]); continue; }
   const html = read(file);
   const isTemplate = id === '_template';
+  // converted = its texts are in games/<id>/texts.js (keys, I18N.t); the others still have Czech in the code
+  const converted = html.includes('<script src="texts.js"></script>');
   need(!!ERRLOG && html.includes(ERRLOG), 'the shared Error log block from games/_template');
   need(html.search(/<script\b/) === html.indexOf(ERRLOG), 'the Error log block is the first <script>');
   need(Buffer.from(html).indexOf('<meta charset="utf-8">') >= 0 && Buffer.from(html).indexOf('<meta charset="utf-8">') < 1024 && html.indexOf('<meta charset') < html.search(/<script\b/), '<meta charset="utf-8"> in the first 1024 bytes, before the Error log block');
@@ -105,15 +138,30 @@ for (const id of ids) {
   need(/^[a-z0-9]+(-[a-z0-9]+)*$/.test(id) || isTemplate, 'folder name must be kebab-case ASCII (the Czech name without diacritics)');
   if (!isTemplate) {
     need(!!entry, `games/${id}/ is not listed in games/registry.js`);
-    if (entry) need(entry.name && entry.description, 'registry entry needs a Czech name and description');
+    if (entry) need(!('name' in entry) && !('description' in entry), 'games/registry.js keeps only { id } (and texts: true): the name and the description are texts in i18n/games.js');
+    const gName = csText(`game.${id}.name`);
+    need(gName && csText(`game.${id}.desc`), `i18n/games.js needs 'game.${id}.name' and 'game.${id}.desc' (the Czech name and description of the game's row)`);
     need(exists(`games/${id}/icon.svg`), `games/${id}/icon.svg is missing`);
     if (exists(`games/${id}/icon.svg`)) need(/viewBox="0 0 512 512"/.test(read(`games/${id}/icon.svg`)), 'icon.svg must be square with viewBox="0 0 512 512"');
-    need(readme.includes(`games/${id}/`), `README.md has no row for games/${id}/`);
+    // README.md: a row "| <Czech name> | `games/<id>/` | … |"
+    const row = readme.split('\n').find(l => l.includes('`games/' + id + '/`'));
+    need(!!row, `README.md has no row for games/${id}/`);
+    if (row && gName) need(row.split('|')[1].trim() === gName, `README.md: the row of games/${id}/ must start with the game's Czech name "${gName}" (game.${id}.name in i18n/games.js)`);
+    // texts: true in the registry <=> the game loads its texts.js (sw.js caches it for offline mode)
+    if (entry) need(!!entry.texts === converted, converted ? `games/registry.js: add texts: true to the entry of ${id} (it loads texts.js; sw.js caches it)` : `games/registry.js: texts: true but games/${id}/index.html does not load texts.js`);
   }
+  need(!exists(`games/${id}/texts.js`) || converted, `games/${id}/texts.js exists but index.html does not load it`);
+  const tags = textTags(html, converted);
+  if (tags) need(!!ERRLOG && html.includes(ERRLOG + '\n' + tags), `right after the Error log block, the texts scripts in this order${converted ? '' : ' (the game is not converted yet, but a shared script it loads uses the texts)'}:\n          ${tags.split('\n').join('\n          ')}`);
+  for (const s of SHARED_SCRIPTS) if (html.split(`<script src="${s.src}"></script>`).length > 2) P.push(`${s.src} is loaded twice`);
+  // a second i18n.js would start an empty catalog and lose the texts loaded before it (e.g. i18n/cards.js)
+  for (const f of new Set(html.match(/<script src="\.\.\/\.\.\/i18n\/[^"]+"><\/script>/g) || [])) if (html.split(f).length > 2) P.push(`${f} is loaded twice`);
+  if (converted) for (const p of i18n.checkGame(id)) P.push(`texts: ${p}`);
 
   // launcher contract
   need(/<html lang="cs"/.test(html), '<html lang="cs">');
-  need(/<h1>[^<]+<\/h1>/.test(html), 'a visible <h1> with the game name in the top bar');
+  if (converted) need(html.includes(`<h1 data-t="game.${id}.name"></h1>`), `a visible <h1 data-t="game.${id}.name"></h1> with the game name in the top bar`);
+  else need(/<h1>[^<]+<\/h1>/.test(html), 'a visible <h1> with the game name in the top bar');
   need(/id="btnHome"[^>]*href="\.\.\/\.\.\/index\.html"[^>]*hidden/.test(html), 'home button: <a id="btnHome" href="../../index.html" … hidden>');
   need(/\[\?&\]menu/.test(html) && /btnHome'?\)?\.hidden = false/.test(html), 'home button shown only with ?menu');
   need(hasKey('inProgress'), `"Rozehráno" badge key games.${id}.inProgress`);
@@ -150,23 +198,27 @@ for (const id of ids) {
     if (bg && !/var\(|color-mix\(/.test(bg)) P.push('the toast colour comes from the theme, not a fixed colour');
   }
   // a phone turned sideways shows the notice "Otoč telefon na výšku" (copy the #rotate block from the template)
-  need(/<div id="rotate" class="paper"[^>]*>[\s\S]*?Otoč telefon na výšku/.test(html) && rules.some(r => r.sel === '#rotate' && /orientation:\s*landscape/.test(r.media)), 'the rotate notice for a phone turned sideways (#rotate from the template)');
+  need((converted ? /<div id="rotate" class="paper"[^>]*>[^\n]*?data-t="common\.rotate\.title"/ : /<div id="rotate" class="paper"[^>]*>[\s\S]*?Otoč telefon na výšku/).test(html) && rules.some(r => r.sel === '#rotate' && /orientation:\s*landscape/.test(r.media)), 'the rotate notice for a phone turned sideways (#rotate from the template)');
   // every game offers the theme "Papír" with the launcher's colours (card games: the paper table in cards.js)
   const themeSrc = usesCards ? read('games/_cards/cards.js') : html;
   const attr = usesCards ? 'data-table' : 'data-theme';
-  need(/\{\s*id:\s*'paper',\s*name:\s*'Papír',\s*meta:\s*'#f4ebdf'/.test(themeSrc), `a theme { id: 'paper', name: 'Papír', meta: '#f4ebdf' } (the launcher's look)`);
+  // the name comes from the messages once the texts are converted (cards.js: once it uses I18N)
+  const keyed = usesCards ? /\bI18N\./.test(themeSrc) : converted;
+  if (keyed) need(/\{\s*id:\s*'paper',\s*nameKey:\s*'common\.theme\.paper',\s*meta:\s*'#f4ebdf'/.test(themeSrc), `a theme { id: 'paper', nameKey: 'common.theme.paper', meta: '#f4ebdf' } (the launcher's look)`);
+  else need(/\{\s*id:\s*'paper',\s*name:\s*'Papír',\s*meta:\s*'#f4ebdf'/.test(themeSrc), `a theme { id: 'paper', name: 'Papír', meta: '#f4ebdf' } (the launcher's look)`);
   need(rules.some(r => r.sel.split(',').some(s => s.trim() === `[${attr}="paper"]`) && /#f4ebdf/.test(r.body) && /#2b1a0e/.test(r.body)), `[${attr}="paper"] uses the launcher's colours (#f4ebdf, ink #2b1a0e)`);
 
-  // one self-contained file: only images/, the shared card look, the mariáš cards and the computer opponents may be loaded
+  // one self-contained file: only images/, the shared card look, the mariáš cards, the computer opponents and the texts may be loaded
   for (const m of html.matchAll(/<(?:script|link|img|iframe|audio|video|source)\b[^>]*\s(?:src|href)=["']([^"']+)["']/g)) {
     const u = m[1];
     if (/^(https?:)?\/\//.test(u)) P.push(`external resource: ${u}`);
-    else if (!/^(\.\.\/\.\.\/images\/sets\.js|\.\.\/_cards\/cards\.js|\.\.\/_cards\/marias\.js|\.\.\/_opponents\/opponents\.js|\.\.\/\.\.\/index\.html|data:)/.test(u)) P.push(`unexpected file: ${u}`);
+    else if (!/^(\.\.\/\.\.\/images\/sets\.js|\.\.\/_cards\/cards\.js|\.\.\/_cards\/marias\.js|\.\.\/_opponents\/opponents\.js|\.\.\/\.\.\/index\.html|\.\.\/\.\.\/i18n\/[a-z0-9]+\.js$|texts\.js$|data:)/.test(u)) P.push(`unexpected file: ${u}`);
   }
   need(!/url\(\s*['"]?(https?:)?\/\//.test(styles) && !/@import/.test(styles), 'no external CSS (url(http…) or @import)');
   need(!/fetch\(|XMLHttpRequest|import\(/.test(html.replace(/<style[\s\S]*?<\/style>/g, '')), 'no fetch()/XMLHttpRequest/import(): the game must work from file://');
   if (/\bCARDS\b/.test(html)) need(usesCards, 'uses CARDS but does not load ../_cards/cards.js');
   if (/\bMARIAS\b/.test(html)) need(usesCards && html.includes('<script src="../_cards/marias.js"></script>') && html.indexOf('../_cards/marias.js') > html.indexOf('../_cards/cards.js'), 'uses MARIAS but does not load ../_cards/marias.js after ../_cards/cards.js');
+  if (/\bI18N\b/.test(html.replace(ERRLOG, ''))) need(converted, 'uses I18N but does not load the texts scripts and texts.js (copy them from the template)');
   if (/\bOPPONENTS\b/.test(html)) need(html.includes('<script src="../_opponents/opponents.js"></script>'), 'uses OPPONENTS but does not load ../_opponents/opponents.js');
 
   // "Patterns every game follows" (CLAUDE.md) that went wrong in real games
@@ -185,10 +237,11 @@ for (const id of ids) {
   // opening a screen hides the toast
   for (const f of ['openSettings', 'openHelp']) need(/hideToast\(\)/.test(funcBody(scripts, f)), `function ${f}() must call hideToast() (as in the template)`);
   // a settings change that needs a new game says so also after a finished game
-  // (only the extra words "a rozehraná hra se ztratí" belong to a game in progress)
+  // (only the extra words "a rozehraná hra se ztratí" belong to a game in progress: in a converted game the condition
+  // is a param of the message, e.g. th('x.pending', { lost: G.status === 'playing' && !isFresh() }))
   for (const f of ['renderSettings', 'closeSettings']) {
     // "a game in progress" written as status === 'playing' && <has moves> (isFresh, a move counter…)
-    const bad = funcBody(scripts, f).split('\n').filter(l => /status === 'playing' && (!isFresh\(\)|[\w.]+ > 0|[\w.]+\.length)/.test(l) && !/ztratí/.test(l));
+    const bad = funcBody(scripts, f).split('\n').filter(l => /status === 'playing' && (!isFresh\(\)|[\w.]+ > 0|[\w.]+\.length)/.test(l) && !/ztratí/.test(l) && !/\b\w+:\s*[\w.]*status === 'playing'/.test(l));
     if (bad.length) P.push(`${f}(): the "new game" notice and toast must use !isFresh() alone, not status === 'playing' && !isFresh() (a finished game can still be revived by Undo; see patnactka)`);
   }
   // a % padding or margin is taken from the parent's width, not from the element (the tiny dice pips of Zavři čísla)
@@ -212,10 +265,22 @@ if (!ONLY || ONLY === 'launcher') {
   if (!/`games\.\$\{id\}\.mood`, `games\.\$\{id\}\.treats`/.test(idx)) P.push('launcher: "Smazat uložená data" must also remove games.<id>.mood and games.<id>.treats');
   if (/viewport-fit=cover/.test(idx)) P.push('launcher: no viewport-fit=cover in the viewport meta (the installed app would draw under the navigation bar)');
   if (!ERRLOG || !idx.includes(ERRLOG) || idx.search(/<script\b/) !== idx.indexOf(ERRLOG)) P.push('launcher: the shared Error log block must be the first <script>');
+  // texts: nothing written in the launcher's code (its keys are launcher.*, common.* and game.* in i18n/),
+  // the static texts filled by I18N.apply(), the game names from i18n/games.js, the language kept by the reset
+  if (!ERRLOG || !idx.includes(ERRLOG + '\n' + LAUNCHER_TAGS)) P.push(`launcher: right after the Error log block, the texts scripts in this order:\n          ${LAUNCHER_TAGS.split('\n').join('\n          ')}`);
+  if (!idx.includes('<title data-t="launcher.appName"></title>')) P.push('launcher: <title data-t="launcher.appName"></title> (the app name in the player\'s language)');
+  if (!/I18N\.apply\(\)/.test(idx)) P.push('launcher: I18N.apply() fills the static texts (data-t*) and <html lang>');
+  if (!idx.includes('t(`game.${g.id}.name`)')) P.push('launcher: the game names come from the texts: t(`game.${g.id}.name`) (i18n/games.js)');
+  const ownKeySrc = (idx.match(/const ownKey = [\s\S]*?\n\};/) || [''])[0];
+  if (!ownKeySrc) P.push('launcher: const ownKey = k => { … }; decides which keys "Smazat uložená data" removes');
+  else if (/games\.lang|startsWith\('games\.'\)/.test(ownKeySrc)) P.push('launcher: "Smazat uložená data" must keep games.lang (the player\'s language)');
+  for (const p of i18n.checkLauncher()) P.push(`texts: ${p}`);
   if (!(Buffer.from(idx).indexOf('<meta charset="utf-8">') >= 0 && Buffer.from(idx).indexOf('<meta charset="utf-8">') < 1024)) P.push('launcher: <meta charset="utf-8"> in the first 1024 bytes');
   if (!/games\/_cards\/cards\.js/.test(sw)) P.push('sw.js must cache games/_cards/cards.js');
   if (!/games\/_cards\/marias\.js/.test(sw)) P.push('sw.js must cache games/_cards/marias.js');
   if (!/games\/_opponents\/opponents\.js/.test(sw)) P.push('sw.js must cache games/_opponents/opponents.js');
+  for (const f of I18N_FILES) if (!sw.includes(`'${f}'`)) P.push(`sw.js must cache ${f}`);
+  if (!/texts\.js/.test(sw)) P.push("sw.js must cache games/<id>/texts.js of every registry entry with texts: true");
   // versioning: version.js (written by tools/release.js) names the release; sw.js caches one version at a time
   const ver = exists('version.js') ? read('version.js') : '';
   if (!/^globalThis\.APP_VERSION = \{ version: '\d+\.\d+\.\d+', date: '\d{4}-\d{2}-\d{2}' \};\r?$/m.test(ver)) P.push("version.js: globalThis.APP_VERSION = { version: 'X.Y.Z', date: 'YYYY-MM-DD' }; (written by tools/release.js)");
@@ -235,6 +300,8 @@ if (!ONLY || ONLY === 'launcher') {
   if (!exists('CHANGELOG.md') || !/^## Nevydáno\r?$/m.test(read('CHANGELOG.md'))) P.push('CHANGELOG.md with a "## Nevydáno" section (tools/release.js turns it into the next version)');
   if (/importScripts\([^)]*images\/sets\.js/.test(sw.replace(/try \{ importScripts\('images\/sets\.js'\); \} catch/, ''))) P.push('sw.js: images/sets.js must be optional (try/catch)');
   report('launcher + sw.js', P);
+  // the shared texts (i18n/), the languages and flags
+  report('texts (i18n/)', i18n.checkShared());
 }
 
 console.log(failed ? `\n${failed} with problems` : '\nall checks passed');

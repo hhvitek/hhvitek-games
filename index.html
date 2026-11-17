@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,15 +34,22 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
+<script src="i18n/languages.js"></script>
+<script src="i18n/i18n.js"></script>
+<script src="i18n/common.js"></script>
+<script src="i18n/games.js"></script>
+<script src="i18n/flags.js"></script>
+<script src="i18n/launcher.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f4ebdf">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<!-- the name under the home-screen icon stays Czech in every language, like the manifest (it cannot switch) -->
 <meta name="apple-mobile-web-app-title" content="Vítkovy hry">
-<title>Vítkovy hry</title>
+<title data-t="launcher.appName"></title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -55,6 +62,14 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
 .date{font-size:22px;line-height:1.25;color:#6f5a48;margin-top:2px}
 /* The app icon on the right, as tall as the weekday and the date together (42 + 2 + 28 px) */
 .logo{flex:none;width:72px;height:72px;border-radius:18px;display:block}
+header .when{flex:1;min-width:0}
+/* The language: a small flag between the date and the app icon, about as tall as the date line (only when there is a choice) */
+.flagBtn{flex:none;width:46px;height:32px;padding:0;border:2px solid #e6d8c6;border-radius:9px;background:#fff;overflow:hidden;cursor:pointer;display:block}
+.flagBtn svg{width:100%;height:100%;display:block}
+.flagBtn:active{transform:scale(.94)}
+/* with the flag there is less room: the weekday and the date shrink a little on narrow phones */
+header.with-lang h1{font-size:min(38px,9.6vw)}
+header.with-lang .date{font-size:min(22px,5.6vw)}
 /* Games: one column of rows (icon, name, description), two columns on wide screens */
 .list{display:grid;gap:10px}
 /* a hidden element stays hidden whatever display its class sets (the empty Koxa box of 2026-11-12) */
@@ -68,7 +83,7 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
 .game:active{transform:scale(.98);border-color:#7a4520;background:#fbf5ec}
 .icon{flex:none;width:62px;height:62px;border-radius:15px;overflow:hidden;display:grid;place-items:center;background:#7a4520;color:#fff;font:800 32px Georgia,serif}
 .icon img{width:100%;height:100%;display:block}
-.text{flex:1;min-width:0}
+.text{flex:1;min-width:0;overflow-wrap:anywhere} /* a word too long for the row (another language) breaks instead of widening the page */
 .top{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px}
 .name{font-size:22px;font-weight:800;line-height:1.2}
 .badge{font-size:18px;font-weight:800;line-height:1.3;padding:1px 10px;border-radius:12px;background:#e8a317;color:#2b1a0e}
@@ -151,69 +166,81 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
 .errors-table th{color:var(--psoft)}
 .errors-table th:first-child,.errors-table td:first-child{width:34%}
 .errors-table strong{font-weight:800}
+/* the languages (the dialog of the flag and the card in Nastavení): flag, own name, a tick at the current one */
+.langs{display:grid;gap:10px;margin-top:10px;text-align:left}
+.mcard .langs{margin:0 0 16px}
+button.lang{display:flex;align-items:center;gap:14px;width:100%;min-height:58px;padding:8px 16px;border-radius:16px;background:#fcf8f2;border:2px solid #e6d8c6;font:inherit;font-size:20px;font-weight:700;color:#2b1a0e;cursor:pointer;text-align:left}
+button.lang[aria-pressed="true"]{background:#f6e9d7;border-color:#7a4520}
+button.lang svg{flex:none;width:39px;height:26px;border-radius:4px;box-shadow:0 0 0 1px rgba(0,0,0,.18)}
+button.lang .lcheck{margin-left:auto;font-weight:800;color:#7a4520}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header><div><h1 id="day">Vítkovy hry</h1><p class="date" id="date">Vyber si hru</p></div><img class="logo" src="icon.svg" alt=""></header>
+  <!-- texts: data-t (text), data-t-aria (aria-label), data-t-html; I18N.apply() fills them (again after a change of language) -->
+  <header id="head"><div class="when"><h1 id="day"></h1><p class="date" id="date"></p></div><button class="flagBtn" id="btnLang" data-t-aria="launcher.lang.title" hidden></button><img class="logo" src="icon.svg" alt=""></header>
   <a class="cat" id="catLine" href="games/kocka/index.html?menu" hidden></a>
   <main class="list" id="grid"></main>
-  <button class="install" id="btnInstall" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11M7 9.5l5 5 5-5M4.5 16v3.5h15V16"/></svg>Nainstalovat do zařízení</button>
-  <button class="toSettings" id="btnSettings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg>Nastavení</button>
+  <button class="install" id="btnInstall" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v11M7 9.5l5 5 5-5M4.5 16v3.5h15V16"/></svg><span data-t="launcher.install"></span></button>
+  <button class="toSettings" id="btnSettings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg><span data-t="common.settings"></span></button>
 </div>
 <!-- Settings of the whole app: everything that is not a game lives here (more actions can be added as sections) -->
 <div id="screenSettings" class="screen paper" hidden><div class="screen-in">
-  <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Vítkovy hry<small>Nastavení</small></h2></div>
-  <section class="card"><h3>Výběr her</h3>
-    <p>Hry, které se hrají nejčastěji, se posouvají nahoru.</p>
-    <div class="field trow"><div class="flabel">Ukazovat počet hraní</div><button class="sw" id="swPlays" aria-pressed="false">Vypnuto</button></div>
-    <div class="field trow" id="rowCat" hidden><div class="flabel">Koxa a ostatní hry</div><button class="sw" id="swCat" aria-pressed="false">Vypnuto</button></div>
-    <div class="fnote" id="noteCat" hidden>Za každou jinou hru, kterou odsud spustíš, dostane kočka Koxa pamlsek (nejvýš 5 za den), a nahoře uvidíš, jak se má.</div>
+  <div class="screen-head"><button class="back" data-act="close" data-t="common.back"></button><h2><span data-t="launcher.appName"></span><small data-t="common.settings"></small></h2></div>
+  <!-- the language, first: whoever cannot read the current one finds it at once (only when there is a choice) -->
+  <section class="card" id="cardLang" hidden><h3 data-t="launcher.lang.title"></h3>
+    <div class="langs" id="langList"></div>
   </section>
-  <section class="card"><h3>Uložená data</h3>
-    <p>Rozehrané hry, nastavení her, rekordy a počty hraní jsou uložené jen v tomto zařízení.</p>
-    <button class="big danger" id="btnReset">Smazat uložená data</button>
-    <div class="fnote">Před smazáním přijde ještě otázka, jestli opravdu smazat. Hry půjdou hrát dál i bez internetu.</div>
+  <section class="card"><h3 data-t="launcher.games.title"></h3>
+    <p data-t="launcher.games.text"></p>
+    <div class="field trow"><div class="flabel" data-t="launcher.games.showPlays"></div><button class="sw" id="swPlays" aria-pressed="false"></button></div>
+    <div class="field trow" id="rowCat" hidden><div class="flabel" data-t="launcher.games.catLink"></div><button class="sw" id="swCat" aria-pressed="false"></button></div>
+    <div class="fnote" id="noteCat" data-t="launcher.games.catNote" hidden></div>
   </section>
-  <section class="card"><h3>Hlášení chyb</h3>
-    <p id="errorsCount">Zatím žádná chyba</p>
-    <button class="big soft" id="btnErrors" hidden>Prohlédnout chyby</button>
-    <div class="fnote">Chyby zůstávají jen v tomto zařízení. Odeslání proběhne až po tvém potvrzení ve vybrané aplikaci.</div>
+  <section class="card"><h3 data-t="launcher.data.title"></h3>
+    <p data-t="launcher.data.text"></p>
+    <button class="big danger" id="btnReset" data-t="launcher.data.reset"></button>
+    <div class="fnote" data-t="launcher.data.note"></div>
   </section>
-  <section class="card"><h3>Verze aplikace</h3>
-    <p class="ver" id="verName">Verze není známá</p>
-    <div class="vrow"><span>Vydáno</span><b id="verDate">–</b></div>
-    <div class="vrow"><span>Aktualizováno v tomto zařízení</span><b id="verUpdated">–</b></div>
-    <div class="vrow"><span>Poprvé spuštěno v tomto zařízení</span><b id="verFirst">–</b></div>
-    <button class="big soft" id="btnChanges" hidden>Co je nového</button>
-    <button class="big soft" id="btnUpdate" hidden>Zkontrolovat aktualizace</button>
+  <section class="card"><h3 data-t="launcher.errors.title"></h3>
+    <p id="errorsCount"></p>
+    <button class="big soft" id="btnErrors" data-t="launcher.errors.view" hidden></button>
+    <div class="fnote" data-t="launcher.errors.note"></div>
+  </section>
+  <section class="card"><h3 data-t="launcher.ver.title"></h3>
+    <p class="ver" id="verName"></p>
+    <div class="vrow"><span data-t="launcher.ver.released"></span><b id="verDate">–</b></div>
+    <div class="vrow"><span data-t="launcher.ver.updated"></span><b id="verUpdated">–</b></div>
+    <div class="vrow"><span data-t="launcher.ver.first"></span><b id="verFirst">–</b></div>
+    <button class="big soft" id="btnChanges" data-t="launcher.ver.changes" hidden></button>
+    <button class="big soft" id="btnUpdate" data-t="launcher.ver.check" hidden></button>
     <div class="fnote" id="updState" role="status" aria-live="polite"></div>
-    <button class="big" id="btnReload" hidden>Načíst novou verzi</button>
+    <button class="big" id="btnReload" data-t="launcher.ver.reload" hidden></button>
   </section>
   <!-- TEMPORARY (2026-11-08): screen measurements for the bottom cut off in the app installed by Brave; remove after the fix -->
-  <section class="card"><h3>Údaje o obrazovce</h3>
-    <div class="fnote">Dočasně, pro opravu zobrazení. Vyfoť tuhle část a pošli ji autorovi.</div>
+  <section class="card"><h3 data-t="launcher.diag.title"></h3>
+    <div class="fnote" data-t="launcher.diag.note"></div>
     <div class="diag" id="diag"></div>
   </section>
-  <section class="card"><h3>O aplikaci</h3>
-    <p>Jednoduché hry pro radost, bez reklam. Fungují i bez internetu. Fotky a znaky jsou z Wikimedia Commons.</p>
-    <div class="fnote">Hry jsou i na internetu. Tuhle adresu můžeš poslat dalším lidem:</div>
+  <section class="card"><h3 data-t="launcher.about.title"></h3>
+    <p data-t="launcher.about.text"></p>
+    <div class="fnote" data-t="launcher.about.site"></div>
     <a class="contact" id="siteLink" target="_blank" rel="noopener"></a>
-    <button class="copy" id="btnCopySite"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2"/></svg><span id="copyTxt">Kopírovat adresu</span></button>
-    <div class="fnote">Zdrojové kódy her jsou volně na GitHubu:</div>
+    <button class="copy" id="btnCopySite"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2"/></svg><span id="copyTxt" data-t="launcher.about.copy"></span></button>
+    <div class="fnote" data-t="launcher.about.source"></div>
     <a class="contact" id="contact" target="_blank" rel="noopener"></a>
   </section>
-  <button class="big" data-act="close">Zpět k hrám</button>
+  <button class="big" data-act="close" data-t="launcher.backToGames"></button>
 </div></div>
 <div id="screenErrors" class="screen paper" hidden><div class="screen-in">
-  <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Vítkovy hry<small>Hlášení chyb</small></h2></div>
-  <section class="card"><p id="errorsEmpty">Zatím žádná chyba</p>
-    <table class="errors-table" id="errorsTable" hidden><thead><tr><th>Kdy</th><th>Hra</th><th>Chyba a místo</th></tr></thead><tbody id="errorsRows"></tbody></table>
+  <div class="screen-head"><button class="back" data-act="close" data-t="common.back"></button><h2><span data-t="launcher.appName"></span><small data-t="launcher.errors.title"></small></h2></div>
+  <section class="card"><p id="errorsEmpty" data-t="launcher.errors.none"></p>
+    <table class="errors-table" id="errorsTable" hidden><thead><tr><th data-t="launcher.errors.when"></th><th data-t="launcher.errors.game"></th><th data-t="launcher.errors.what"></th></tr></thead><tbody id="errorsRows"></tbody></table>
   </section>
-  <button class="big" id="btnSendErrors" hidden>Poslat autorovi</button>
-  <button class="big soft" id="btnSaveErrors" hidden>Uložit jako soubor</button>
-  <button class="big danger" id="btnClearErrors" hidden>Smazat seznam chyb</button>
-  <button class="big" data-act="close">Zpět do nastavení</button>
+  <button class="big" id="btnSendErrors" data-t="launcher.errors.send" hidden></button>
+  <button class="big soft" id="btnSaveErrors" data-t="launcher.errors.save" hidden></button>
+  <button class="big danger" id="btnClearErrors" data-t="launcher.errors.clear" hidden></button>
+  <button class="big" data-act="close" data-t="launcher.errors.backToSettings"></button>
 </div></div>
 <div class="modal" id="modal" hidden><div class="mcard" id="modalCard"></div></div>
 <script src="games/registry.js"></script>
@@ -223,6 +250,13 @@ h1{font-family:Georgia,"Times New Roman",serif;font-size:38px;line-height:1.1;co
 'use strict';
 const grid = document.getElementById('grid');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// Texts: t() plain text, th() HTML with escaped params (i18n/launcher.js, i18n/common.js, i18n/games.js)
+const t = I18N.t, th = I18N.th;
+// dates and times written by the browser (the error list and report) in the player's language
+const LOCALES = { cs: 'cs-CZ', en: 'en-GB', pseudo: 'cs-CZ' };
+const locale = () => LOCALES[I18N.lang] || I18N.lang;
+// a date in words ("17. listopadu 2026", "17 November 2026"): own month names, not the browser's locale data
+const fmtDate = (d, m, y) => t('launcher.date', { day: String(d), month: t(`launcher.month.${m}`), year: String(y) });
 // The source code (GitHub), shown in the "O aplikaci" section; keep in sync with README.md
 const CONTACT_URL = 'https://github.com/hhvitek/hhvitek-games';
 // The games on the web (GitHub Pages), shown in "O aplikaci" so it can be passed on; keep in sync with README.md
@@ -243,13 +277,13 @@ document.getElementById('btnCopySite').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(SITE_URL); ok = true; } catch (e) {}
   if (!ok) {
     try {
-      const t = document.createElement('textarea');
-      t.value = SITE_URL; t.setAttribute('readonly', ''); t.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
-      document.body.appendChild(t); t.select(); ok = document.execCommand('copy'); t.remove();
+      const ta = document.createElement('textarea');
+      ta.value = SITE_URL; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); ta.remove();
     } catch (e) {}
   }
-  copyTxt.textContent = ok ? 'Zkopírováno ✓' : 'Kopírování nejde';
-  clearTimeout(copyT); copyT = setTimeout(() => { copyTxt.textContent = 'Kopírovat adresu'; }, 2500);
+  copyTxt.textContent = t(ok ? 'launcher.about.copied' : 'launcher.about.copyFailed');
+  clearTimeout(copyT); copyT = setTimeout(() => { copyTxt.textContent = t('launcher.about.copy'); }, 2500);
 });
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -272,8 +306,20 @@ try {
 
 // Launcher contract: a game sets 'games.<id>.inProgress' = '1' while it has an unfinished game.
 const inProgress = id => store.get(`games.${id}.inProgress`) === '1';
-// A game with levels may set 'games.<id>.progress' to a short Czech text ("Úroveň 12"); shown on its row
-const progress = id => { const v = store.get(`games.${id}.progress`); return typeof v === 'string' && v.length <= 30 ? v : ''; };
+// A game with levels sets 'games.<id>.progress' (contract 3a) to JSON { k, n, of? } shown on its row in the player's
+// language: k = 'level' ("Úroveň 12") or 'solved' ("Vyřešeno 8 z 36"). An older plain text (not JSON) is shown as it
+// is; anything else is ignored.
+const PROGRESS_KEYS = { level: 'launcher.progress.level', solved: 'launcher.progress.solved' };
+const progress = id => {
+  const v = store.get(`games.${id}.progress`);
+  if (typeof v !== 'string' || !v) return '';
+  if (v[0] !== '{') return v.length <= 30 ? v : ''; // an older save: the game's own text
+  try {
+    const p = JSON.parse(v), key = p && PROGRESS_KEYS[p.k], n = p && Number(p.n), of = p && Number(p.of);
+    if (!key || !Number.isInteger(n) || n < 0 || (p.k === 'solved' && !(Number.isInteger(of) && of > 0))) return '';
+    return t(key, { n, of });
+  } catch (e) { return ''; }
+};
 // The launcher counts how many times each game was started; tiles are sorted by it.
 const plays = id => parseInt(store.get(`games.${id}.plays`), 10) || 0;
 // A game moves ahead of the registry.js order only after it was opened at least this many times
@@ -294,9 +340,9 @@ const swPlays = document.getElementById('swPlays');
 const swCat = document.getElementById('swCat');
 const hasCat = () => (globalThis.GAMES || []).some(g => g.id === 'kocka');
 function renderSwitch() {
-  swPlays.setAttribute('aria-pressed', String(L.showPlays)); swPlays.textContent = L.showPlays ? 'Zapnuto' : 'Vypnuto';
+  swPlays.setAttribute('aria-pressed', String(L.showPlays)); swPlays.textContent = t(L.showPlays ? 'common.on' : 'common.off');
   document.getElementById('rowCat').hidden = document.getElementById('noteCat').hidden = !hasCat();
-  swCat.setAttribute('aria-pressed', String(L.catLink)); swCat.textContent = L.catLink ? 'Zapnuto' : 'Vypnuto';
+  swCat.setAttribute('aria-pressed', String(L.catLink)); swCat.textContent = t(L.catLink ? 'common.on' : 'common.off');
 }
 swPlays.addEventListener('click', () => {
   L.showPlays = !L.showPlays;
@@ -324,18 +370,19 @@ function giveCatTreat() {
   if (n + taken >= CAT_TREATS) return;
   store.set('games.kocka.treats', JSON.stringify({ n: n + 1, day: today, taken }));
 }
-const CAT_WANTS = { food: 'má hlad', water: 'chce pít', litter: 'potřebuje uklidit záchod', coat: 'chce učesat', love: 'chce pomazlit', fun: 'se nudí' };
-const CAT_MOODS = { happy: 'je šťastná', calm: 'je spokojená', grumpy: 'je mrzutá', sad: 'je smutná' };
+// what she wants and how she is: each one a whole sentence with her name, launcher.cat.<code> in i18n/launcher.js
+const CAT_WANTS = ['food', 'water', 'litter', 'coat', 'love', 'fun'];
+const CAT_MOODS = ['happy', 'calm', 'grumpy', 'sad'];
 // How she is now: the state at Kočka's last save, moved on by its forecast (ahead = [[time, mood, wants, ill], …],
 // written when Kočka is left: her needs go on while the game is closed). null = no valid data.
 function catNow() {
   let M = null;
   try { M = JSON.parse(store.get('games.kocka.mood')); } catch (e) {}
   if (!M || typeof M !== 'object') return null;
-  const c = { name: M.name, mood: M.mood, wants: M.wants, ill: M.ill }, t = Date.now();
+  const c = { name: M.name, mood: M.mood, wants: M.wants, ill: M.ill }, now = Date.now();
   if (Array.isArray(M.ahead)) for (const a of M.ahead) {
     if (!Array.isArray(a) || a.length !== 4 || !Number.isFinite(a[0])) continue;
-    if (a[0] > t) break;
+    if (a[0] > now) break;
     [c.mood, c.wants, c.ill] = a.slice(1);
   }
   return c;
@@ -346,15 +393,16 @@ const hasBadge = (id, cat) => id === 'kocka' && cat ? !!(cat.wants || cat.ill) :
 function syncCatBadge() {
   const top = grid.querySelector('.game[data-id="kocka"] .top'); if (!top) return;
   const on = hasBadge('kocka', catNow()), el = top.querySelector('.badge');
-  if (on && !el) top.querySelector('.name').insertAdjacentHTML('afterend', '<span class="badge">Rozehráno</span>');
+  if (on && !el) top.querySelector('.name').insertAdjacentHTML('afterend', `<span class="badge">${th('launcher.inProgress')}</span>`);
   else if (!on && el) el.remove();
 }
 function renderCat() {
   const el = document.getElementById('catLine'), M = catNow();
   if (!L.catLink || !hasCat() || !M) { el.hidden = true; return; }
-  const name = typeof M.name === 'string' && M.name.trim() ? M.name.trim().slice(0, 20) : 'Koxa';
-  const what = M.ill ? 'je nemocná' : CAT_WANTS[M.wants] || CAT_MOODS[M.mood] || 'je doma';
-  el.innerHTML = `<img src="games/kocka/icon.svg" alt=""><span><b>${esc(name)}</b> ${what}</span>`;
+  const name = typeof M.name === 'string' && M.name.trim() ? M.name.trim().slice(0, 20) : t('launcher.cat.name');
+  const what = M.ill ? 'ill' : CAT_WANTS.includes(M.wants) ? M.wants : CAT_MOODS.includes(M.mood) ? M.mood : 'home';
+  el.innerHTML = `<img src="games/kocka/icon.svg" alt=""><span>${th(`launcher.cat.${what}`, { name })}</span>`;
+  el.href = 'games/kocka/index.html?menu' + langQuery();
   el.hidden = false;
 }
 document.getElementById('catLine').addEventListener('click', () => store.set('games.kocka.plays', String(plays('kocka') + 1)));
@@ -373,52 +421,55 @@ function readErrors() {
 }
 function renderErrors() {
   const errors = readErrors(), count = errors.reduce((n, e) => { const repeated = Number(e.n); return n + (Number.isFinite(repeated) && repeated > 1 ? repeated : 1); }, 0);
-  errorsCount.textContent = count ? `${count} ${count === 1 ? 'zaznamenaná chyba' : count < 5 ? 'zaznamenané chyby' : 'zaznamenaných chyb'}` : 'Zatím žádná chyba';
+  errorsCount.textContent = count ? t('launcher.errors.count', { n: count }) : t('launcher.errors.none');
   btnErrors.hidden = !count;
   errorsEmpty.hidden = !!count;
   errorsTable.hidden = !count;
   btnSendErrors.hidden = !count;
   btnSaveErrors.hidden = !count;
   btnClearErrors.hidden = !count;
-  const names = new Map((globalThis.GAMES || []).map(g => [g.id, g.name]));
+  const ids = new Set((globalThis.GAMES || []).map(g => g.id));
   errorsRows.innerHTML = errors.slice().reverse().map(e => {
-    const date = new Date(e.t || ''), when = Number.isNaN(date.getTime()) ? '–' : date.toLocaleString('cs-CZ');
-    const game = names.get(String(e.game || '')) || String(e.game || 'Neznámá hra');
-    const type = e.type === 'unhandledrejection' ? 'Nezachycená výjimka' : 'Chyba';
-    return `<tr><td>${esc(when)}${e.n > 1 ? `<br>opakováno ${esc(e.n)}×` : ''}</td><td>${esc(game)}</td><td><strong>${esc(type)}: ${esc(e.msg || 'Neznámá chyba')}</strong><br>${esc(e.where || '')}</td></tr>`;
+    const date = new Date(e.t || ''), when = Number.isNaN(date.getTime()) ? '–' : date.toLocaleString(locale());
+    const id = String(e.game || ''), game = ids.has(id) ? t(`game.${id}.name`) : id || t('launcher.errors.unknownGame');
+    const what = th(e.type === 'unhandledrejection' ? 'launcher.errors.rejection' : 'launcher.errors.error', { msg: e.msg || t('launcher.errors.unknown') });
+    return `<tr><td>${esc(when)}${e.n > 1 ? `<br>${th('launcher.errors.repeated', { n: Number(e.n) })}` : ''}</td><td>${esc(game)}</td><td><strong>${what}</strong><br>${esc(e.where || '')}</td></tr>`;
   }).join('');
 }
+// the whole report as text, in the player's language (the error messages and stacks stay as the browser wrote them)
 function buildErrorReport() {
   const errors = readErrors();
   const device = [errorDeviceModel, navigator.userAgent].filter(Boolean).join(' · ');
+  const unknownVersion = t('launcher.report.unknownVersion'), unknownDevice = t('launcher.report.unknownDevice');
   const lines = [
-    'Hlášení chyb – Vítkovy hry',
-    `Verze aplikace: ${APP ? APP.version : install.version || 'neznámá'}`,
-    `Zařízení: ${device || 'neznámé'}`,
-    `Obrazovka: ${screen.width} × ${screen.height}`,
-    `Vytvořeno: ${new Date().toLocaleString('cs-CZ')}`,
-    `Počet záznamů: ${errors.length}`,
+    t('launcher.report.title'),
+    t('launcher.report.version', { v: APP ? APP.version : install.version || unknownVersion }),
+    t('launcher.report.device', { d: device || unknownDevice }),
+    t('launcher.report.screen', { w: String(screen.width), h: String(screen.height) }),
+    t('launcher.report.created', { when: new Date().toLocaleString(locale()) }),
+    t('launcher.report.entries', { n: String(errors.length) }),
     ''
   ];
   errors.forEach((e, i) => {
-    lines.push(`${i + 1}. ${e.t || 'neznámý čas'} | ${e.game || 'neznámá hra'} | ${e.type || 'chyba'}${e.n > 1 ? ` | opakováno ${e.n}×` : ''}`);
-    lines.push(`Verze: ${e.v || 'neznámá'} · Zařízení: ${e.device || 'neznámé'}`);
-    lines.push(`Chyba: ${e.msg || 'Neznámá chyba'}`);
-    lines.push(`Kde: ${e.where || 'neznámé místo'}`);
-    if (e.stack) lines.push(`Zásobník: ${e.stack}`);
-    if (e.state) lines.push(`Stav hry před chybou: ${e.state}`);
+    const time = e.t || t('launcher.report.unknownTime'), game = e.game || t('launcher.report.unknownGame'), type = e.type || t('launcher.report.unknownType');
+    lines.push(e.n > 1 ? t('launcher.report.entryRepeated', { i: String(i + 1), time, game, type, n: String(e.n) }) : `${i + 1}. ${time} | ${game} | ${type}`);
+    lines.push(t('launcher.report.entryVersion', { v: e.v || unknownVersion, d: e.device || unknownDevice }));
+    lines.push(t('launcher.report.error', { msg: e.msg || t('launcher.errors.unknown') }));
+    lines.push(t('launcher.report.where', { where: e.where || t('launcher.report.unknownPlace') }));
+    if (e.stack) lines.push(t('launcher.report.stack', { stack: e.stack }));
+    if (e.state) lines.push(t('launcher.report.state', { state: e.state }));
     lines.push('');
   });
   return lines.join('\n');
 }
 btnErrors.addEventListener('click', () => { renderErrors(); screenErrors.hidden = false; screenErrors.scrollTop = 0; });
 screenErrors.addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) screenErrors.hidden = true; });
-const errorFileName = () => `chyby-vitkovy-hry-${new Date().toISOString().slice(0, 10)}.txt`;
+const errorFileName = () => t('launcher.report.file', { date: new Date().toISOString().slice(0, 10) });
 // Send: the whole report as a .txt attachment (a mail body or a chat message would cut it),
 // else as shared text, else a mailto: link, which cannot carry an attachment and has to be shortened
 btnSendErrors.addEventListener('click', async () => {
-  const subject = 'Hlášení chyb – Vítkovy hry', text = buildErrorReport();
-  const note = 'Hlášení chyb z Vítkových her je v příloze.';
+  const subject = t('launcher.report.title'), text = buildErrorReport();
+  const note = t('launcher.report.note');
   let file = null;
   try { file = new File([text], errorFileName(), { type: 'text/plain' }); } catch (e) {}
   if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -429,7 +480,7 @@ btnSendErrors.addEventListener('click', async () => {
     try { await navigator.share({ title: subject, text }); return; }
     catch (e) { if (e && e.name === 'AbortError') return; }
   }
-  const MAX = 1800, cut = '\n… (zkráceno; celé hlášení ulož tlačítkem „Uložit jako soubor“ a pošli ho jako přílohu)';
+  const MAX = 1800, cut = '\n' + t('launcher.report.cut');
   const body = text.length > MAX ? text.slice(0, MAX - cut.length) + cut : text;
   location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 });
@@ -439,7 +490,7 @@ btnSaveErrors.addEventListener('click', async () => {
   const blob = new Blob([buildErrorReport()], { type: 'text/plain;charset=utf-8' });
   if (window.showSaveFilePicker) {
     try {
-      const handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'Textový soubor', accept: { 'text/plain': ['.txt'] } }] });
+      const handle = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: t('launcher.report.fileType'), accept: { 'text/plain': ['.txt'] } }] });
       const w = await handle.createWritable(); await w.write(blob); await w.close(); return;
     } catch (e) { if (e && e.name === 'AbortError') return; }
   }
@@ -448,16 +499,14 @@ btnSaveErrors.addEventListener('click', async () => {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 btnClearErrors.addEventListener('click', () => showModal(
-  '<h2>Smazat seznam chyb?</h2><p>Všechny uložené záznamy chyb se smažou.</p>',
-  [{ text: 'Nechat být', cls: 'keep' }, { text: 'Ano, smazat', cls: 'danger', fn: () => { store.remove(ERROR_KEY); renderErrors(); } }]));
+  th('launcher.errors.clearConfirm'),
+  [{ text: th('launcher.keep'), cls: 'keep' }, { text: th('launcher.yesDelete'), cls: 'danger', fn: () => { store.remove(ERROR_KEY); renderErrors(); } }]));
 
-// Header: today's weekday and date in Czech (own names, so it does not depend on the browser's locale data)
-const DAYS = ['Neděle', 'Pondělí', 'Úterý', 'Středa', 'Čtvrtek', 'Pátek', 'Sobota'];
-const MONTHS = ['ledna', 'února', 'března', 'dubna', 'května', 'června', 'července', 'srpna', 'září', 'října', 'listopadu', 'prosince'];
+// Header: today's weekday and date (own names in i18n/launcher.js, so it does not depend on the browser's locale data)
 function renderDate() {
   const d = new Date();
-  document.getElementById('day').textContent = DAYS[d.getDay()];
-  document.getElementById('date').textContent = `${d.getDate()}. ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  document.getElementById('day').textContent = t(`launcher.day.${d.getDay()}`);
+  document.getElementById('date').textContent = fmtDate(d.getDate(), d.getMonth(), d.getFullYear());
 }
 
 /* ---------- Version of the app (Nastavení → Verze aplikace) ---------- */
@@ -465,7 +514,7 @@ function renderDate() {
 const APP = globalThis.APP_VERSION && typeof globalThis.APP_VERSION.version === 'string' ? globalThis.APP_VERSION : null;
 const isDay = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 const dayKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const fmtDay = s => { if (!isDay(s)) return '–'; const [y, m, d] = s.split('-').map(Number); return `${d}. ${MONTHS[m - 1]} ${y}`; };
+const fmtDay = s => { if (!isDay(s)) return '–'; const [y, m, d] = s.split('-').map(Number); return fmtDate(d, m - 1, y); };
 // When this version first ran on this device, and when the app ran here for the first time. Not game data:
 // "Smazat uložená data" keeps it (ownKey below does not list it). Invalid data starts a new record.
 const INSTALL_KEY = 'games.launcher.install';
@@ -479,27 +528,29 @@ const install = (() => {
   if (!ok || rec.updated === today) store.set(INSTALL_KEY, JSON.stringify(rec));
   return rec;
 })();
-if (APP) {
-  document.getElementById('verName').textContent = `Verze ${APP.version}`;
-  document.getElementById('verDate').textContent = fmtDay(APP.date);
+function renderVersion() {
+  document.getElementById('verName').textContent = APP ? t('launcher.ver.name', { v: APP.version }) : t('launcher.ver.unknown');
+  if (APP) document.getElementById('verDate').textContent = fmtDay(APP.date);
+  document.getElementById('verUpdated').textContent = fmtDay(install.updated);
+  document.getElementById('verFirst').textContent = fmtDay(install.first);
 }
-document.getElementById('verUpdated').textContent = fmtDay(install.updated);
-document.getElementById('verFirst').textContent = fmtDay(install.first);
-// "Co je nového": every release from CHANGELOG.md, newest first (tools/release.js copies them into version.js)
+// "Co je nového": every release from CHANGELOG.md, newest first (tools/release.js copies them into version.js);
+// the history is in Czech only for now, so another language says so above it
 const CHANGES = (Array.isArray(globalThis.APP_CHANGES) ? globalThis.APP_CHANGES : [])
   .filter(c => c && typeof c.version === 'string' && Array.isArray(c.items));
 const btnChanges = document.getElementById('btnChanges');
 btnChanges.hidden = !CHANGES.length;
-btnChanges.addEventListener('click', () => showModal('<h2>Co je nového</h2><div class="changes">' + CHANGES.map(c =>
-  `<h3>Verze ${esc(c.version)} · ${fmtDay(c.date)}</h3><ul>${c.items.map(it => `<li>${esc(it)}</li>`).join('')}</ul>`).join('') + '</div>',
-  [{ text: 'Zavřít', cls: 'keep' }], true));
+btnChanges.addEventListener('click', () => showModal(`<h2>${th('launcher.ver.changes')}</h2>` +
+  (I18N.lang !== I18N.source ? `<p>${th('launcher.lang.onlyCs')}</p>` : '') + '<div class="changes">' + CHANGES.map(c =>
+  `<h3>${th('launcher.ver.changesHead', { v: c.version, date: fmtDay(c.date) })}</h3><ul>${c.items.map(it => `<li>${esc(it)}</li>`).join('')}</ul>`).join('') + '</div>',
+  [{ text: th('launcher.close'), cls: 'keep' }], true));
 // "Zkontrolovat aktualizace": asks for a new version at once. sw.js downloads it whole and takes over;
 // this page still shows the old one until it is loaded again ("Načíst novou verzi").
 const canUpdate = /^https?:$/.test(location.protocol) && 'serviceWorker' in navigator;
 const btnUpdate = document.getElementById('btnUpdate'), btnReload = document.getElementById('btnReload');
 const updState = document.getElementById('updState');
 btnUpdate.hidden = !canUpdate;
-const say = t => { updState.textContent = t; };
+const say = msg => { updState.textContent = msg; };
 // the version the service worker serves now (newer than this page after an update in the background)
 async function servedVersion() {
   const res = await fetch('version.js', { cache: 'no-store' });
@@ -508,32 +559,32 @@ async function servedVersion() {
 }
 async function compareVersions(silent) {
   const v = await servedVersion();
-  if (APP && v && v !== APP.version) { say(`Stáhla se nová verze ${v}. Ukáže se po načtení.`); btnReload.hidden = false; return; }
-  if (!silent) say(APP ? `Máš nejnovější verzi ${APP.version}.` : 'Máš nejnovější verzi.');
+  if (APP && v && v !== APP.version) { say(t('launcher.ver.downloaded', { v })); btnReload.hidden = false; return; }
+  if (!silent) say(APP ? t('launcher.ver.latest', { v: APP.version }) : t('launcher.ver.latestNoNumber'));
 }
 // waits until a new worker found by update() has finished: 'activated', 'redundant' (its download failed) or 'timeout'
 function settled(reg, ms) {
   const w = reg.installing || reg.waiting;
   if (!w) return Promise.resolve('none');
   return new Promise(resolve => {
-    const t = setTimeout(() => { w.removeEventListener('statechange', on); resolve('timeout'); }, ms);
-    function on() { if (w.state === 'activated' || w.state === 'redundant') { clearTimeout(t); w.removeEventListener('statechange', on); resolve(w.state); } }
+    const timer = setTimeout(() => { w.removeEventListener('statechange', on); resolve('timeout'); }, ms);
+    function on() { if (w.state === 'activated' || w.state === 'redundant') { clearTimeout(timer); w.removeEventListener('statechange', on); resolve(w.state); } }
     w.addEventListener('statechange', on); on();
   });
 }
 let checking = false;
 btnUpdate.addEventListener('click', async () => {
-  if (checking) { say('Chvilku, hledám novou verzi…'); return; }
-  checking = true; btnReload.hidden = true; say('Hledám novou verzi…');
+  if (checking) { say(t('launcher.ver.busy')); return; }
+  checking = true; btnReload.hidden = true; say(t('launcher.ver.looking'));
   try {
     if (navigator.onLine === false) throw new Error('offline'); // update() does not always fail without a network
     const reg = await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' });
     await reg.update();
     const state = await settled(reg, 60000);
-    if (state === 'timeout') say('Nová verze se ještě stahuje a dokončí se sama. Zkus to za chvíli znovu.');
-    else if (state === 'redundant') say('Novou verzi se nepodařilo stáhnout celou. Zkus to později, hry fungují dál.');
+    if (state === 'timeout') say(t('launcher.ver.stillLoading'));
+    else if (state === 'redundant') say(t('launcher.ver.failed'));
     else await compareVersions(false);
-  } catch (e) { say('Nepodařilo se spojit s internetem. Zkus to později, hry fungují dál.'); }
+  } catch (e) { say(t('launcher.ver.offline')); }
   checking = false;
 });
 btnReload.addEventListener('click', () => location.reload());
@@ -541,19 +592,20 @@ btnReload.addEventListener('click', () => location.reload());
 function render() {
   renderDate(); renderCat();
   const games = (globalThis.GAMES || []).map((g, i) => ({ ...g, order: i, plays: plays(g.id) }));
-  if (!games.length) { grid.outerHTML = '<p class="empty">Zatím tu nejsou žádné hry.</p>'; return; }
+  if (!games.length) { grid.outerHTML = `<p class="empty">${th('launcher.empty')}</p>`; return; }
   const cat = catNow(), badge = id => hasBadge(id, cat);
   // Most played first (counting only games opened MIN_PLAYS_TO_RISE+ times); ties keep the order from registry.js
   games.sort((a, b) => rank(b) - rank(a) || a.order - b.order);
-  grid.innerHTML = games.map(g => `
-    <a class="game" href="games/${encodeURIComponent(g.id)}/index.html?menu" data-id="${esc(g.id)}">
-      <span class="icon"><img src="games/${encodeURIComponent(g.id)}/icon.svg" alt="" onerror="this.replaceWith(document.createTextNode('${esc(g.name).charAt(0)}'))"></span>
+  // the name and the description of each game are texts (i18n/games.js), in the player's language
+  grid.innerHTML = games.map(g => { const name = t(`game.${g.id}.name`), desc = I18N.has(`game.${g.id}.desc`) ? t(`game.${g.id}.desc`) : ''; return `
+    <a class="game" href="games/${encodeURIComponent(g.id)}/index.html?menu${langQuery()}" data-id="${esc(g.id)}">
+      <span class="icon"><img src="games/${encodeURIComponent(g.id)}/icon.svg" alt="" onerror="this.replaceWith(document.createTextNode('${esc(name).charAt(0)}'))"></span>
       <span class="text">
-        <span class="top"><span class="name">${esc(g.name)}</span>${badge(g.id) ? '<span class="badge">Rozehráno</span>' : ''}${progress(g.id) ? `<span class="prog">${esc(progress(g.id))}</span>` : ''}${L.showPlays && g.plays ? `<span class="plays">hráno ${g.plays}×</span>` : ''}</span>
-        ${g.description ? `<span class="desc">${esc(g.description)}</span>` : ''}
+        <span class="top"><span class="name">${esc(name)}</span>${badge(g.id) ? `<span class="badge">${th('launcher.inProgress')}</span>` : ''}${progress(g.id) ? `<span class="prog">${esc(progress(g.id))}</span>` : ''}${L.showPlays && g.plays ? `<span class="plays">${th('launcher.plays', { n: g.plays })}</span>` : ''}</span>
+        ${desc ? `<span class="desc">${esc(desc)}</span>` : ''}
       </span>
       <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg>
-    </a>`).join('');
+    </a>`; }).join('');
 }
 // Count a start; the order changes only on the next visit, so rows never jump under the finger
 grid.addEventListener('click', e => {
@@ -567,13 +619,14 @@ grid.addEventListener('click', e => {
 // (and file:// is shared too), so localStorage.clear() would wipe other projects' data.
 // Exactly our keys, for each game of the registry: games.<id>.state / .inProgress / .progress / .plays (and Kočka's .mood / .treats), the old Czech
 // badge hry.<id>.rozehrano and the older per-game key '<id>.v1' (still read once by the games, see OLD_KEY).
+// The player's language (games.lang) is not game data: it stays.
 // Older keys whose name differs from the game id:
 const OTHER_KEY_NAMES = ['solitaire', 'pyramid', 'spider', 'skladaniKostek'];
 const ownKey = k => {
   if (k === LAUNCHER_KEY) return true;
   const ids = (globalThis.GAMES || []).map(g => g.id);
-  return ids.some(id => [`games.${id}.state`, `games.${id}.inProgress`, `games.${id}.progress`, `games.${id}.plays`, `games.${id}.mood`, `games.${id}.treats`, `hry.${id}.rozehrano`, `${id}.v1`].includes(k))
-    || OTHER_KEY_NAMES.some(n => k === `${n}.v1` || k === `hry.${n}.rozehrano`);
+  return ids.some(id => [`games.${id}.state`, `games.${id}.inProgress`, `games.${id}.progress`, `games.${id}.plays`, `games.${id}.mood`, `games.${id}.treats`, `hry.${id}.rozehrano`, `${id}.v1`].includes(k)) // i18n-ignore: storage keys
+    || OTHER_KEY_NAMES.some(n => k === `${n}.v1` || k === `hry.${n}.rozehrano`); // i18n-ignore: storage keys
 };
 // Settings screen: opened by the button below the tiles, closed by Zpět (or the phone's Back)
 const settings = document.getElementById('screenSettings');
@@ -600,13 +653,62 @@ function showModal(html, buttons, wide) {
   modal.hidden = false;
 }
 document.getElementById('btnReset').addEventListener('click', () => showModal(
-  '<h2>Smazat uložená data?</h2><p>Smažou se rozehrané hry, nastavení všech her, rekordy i počty hraní. Vrátit to nepůjde.</p>',
-  [{ text: 'Nechat být', cls: 'keep' }, { text: 'Ano, smazat', cls: 'danger', fn: resetAll }]));
+  th('launcher.data.confirm'),
+  [{ text: th('launcher.keep'), cls: 'keep' }, { text: th('launcher.yesDelete'), cls: 'danger', fn: resetAll }]));
 function resetAll() {
   try { for (const k of Object.keys(localStorage)) if (ownKey(k)) store.remove(k); } catch (e) {}
   L = loadLauncher(); renderSwitch();
   render();
-  showModal('<h2>Uložená data jsou smazaná</h2><p>Hry začnou od začátku s výchozím nastavením.</p>', [{ text: 'Zavřít', cls: 'keep' }]);
+  showModal(th('launcher.data.done'), [{ text: th('launcher.close'), cls: 'keep' }]);
+}
+
+/* ---------- Language (the flag in the header, the card "Jazyk / Language" in Nastavení) ---------- */
+// The switch shows only when there is a choice: more than one language ready (I18N.langs; a language is ready
+// once everything is translated, i18n/languages.js). To try a language that is not ready yet, the address may
+// carry ?lang=<code> (I18N.js then shows that language without saving it): the switch shows too and lists every
+// language of LANGS. A choice there is never saved (I18N.setLang would refuse a language that is not ready anyway),
+// lasts while this page is open, and the games opened from here get the same ?lang=. A real choice is saved in games.lang
+// (not game data: "Smazat uložená data" keeps it) and the launcher is drawn again at once, without a reload.
+const ALL_LANGS = (Array.isArray(globalThis.LANGS) ? globalThis.LANGS : []).filter(l => l && typeof l.code === 'string');
+const testLang = /[?&]lang=[\w-]+/.test(location.search);
+const langChoice = () => testLang ? ALL_LANGS : I18N.langs;
+const langShown = () => ALL_LANGS.length > 1 && (I18N.langs.length > 1 || testLang);
+const langQuery = () => testLang ? '&lang=' + encodeURIComponent(I18N.lang) : '';
+// a flag of i18n/flags.js; its ids get a number, so the same flag can be on the page more than once
+let flagCount = 0;
+const flag = code => { const svg = String((globalThis.FLAGS || {})[code] || ''), n = ++flagCount; return svg.replace(/flag-[\w-]+/g, m => `${m}-${n}`); };
+const langButtons = () => langChoice().map(l => `<button class="lang" data-lang="${esc(l.code)}" aria-pressed="${l.code === I18N.lang}">${flag(l.code)}<span>${esc(l.name)}</span>${l.code === I18N.lang ? '<span class="lcheck" aria-hidden="true">✓</span>' : ''}</button>`).join('');
+const btnLang = document.getElementById('btnLang'), cardLang = document.getElementById('cardLang'), langList = document.getElementById('langList');
+function renderLang() {
+  const on = langShown();
+  btnLang.hidden = cardLang.hidden = !on;
+  document.getElementById('head').classList.toggle('with-lang', on);
+  if (!on) return;
+  btnLang.innerHTML = flag(I18N.lang) || flag(I18N.source);
+  langList.innerHTML = langButtons();
+}
+// everything that shows a text, drawn again in the current language
+function renderTexts() {
+  I18N.apply(); // the static texts (data-t*), <title> and <html lang>
+  renderLang(); renderSwitch(); renderVersion(); renderErrors(); render();
+  clearTimeout(copyT); copyTxt.textContent = t('launcher.about.copy');
+  say('');
+  if (!settings.hidden) renderDiag();
+}
+function chooseLang(code) {
+  if (code === I18N.lang || !ALL_LANGS.some(l => l.code === code)) return;
+  if (testLang) I18N.lang = code; // ?lang= test mode: any language of LANGS, only for this page, never saved
+  else if (!I18N.setLang(code)) return; // saved in games.lang; a language that is not ready is refused
+  renderTexts();
+}
+btnLang.addEventListener('click', () => showModal(`<h2>${th('launcher.lang.title')}</h2><div class="langs">${langButtons()}</div>`, [{ text: th('launcher.close'), cls: 'keep' }]));
+card.addEventListener('click', e => { const b = e.target.closest('[data-lang]'); if (!b) return; modal.hidden = true; chooseLang(b.dataset.lang); });
+langList.addEventListener('click', e => { const b = e.target.closest('[data-lang]'); if (b) chooseLang(b.dataset.lang); });
+// the language chosen meanwhile in another page of the launcher (this one kept in memory or in the background)
+function rereadLang() {
+  if (testLang) return false;
+  const s = store.get('games.lang');
+  return !!s && s !== I18N.lang && I18N.setLang(s);
 }
 
 /* ---------- Back button ---------- */
@@ -634,13 +736,17 @@ function resetAll() {
   if (history.state && history.state.layer) { skip++; history.go(-history.state.layer); }
 })();
 
-renderSwitch();
-render();
+renderTexts();
 // Coming back from a game with the browser Back button when the page was kept in memory
-// (back-forward cache): refresh badges and order. A normal load has already rendered above.
-window.addEventListener('pageshow', e => { if (e.persisted) render(); });
+// (back-forward cache): refresh badges and order, and the language if it was changed meanwhile.
+// A normal load has already rendered above.
+window.addEventListener('pageshow', e => { if (rereadLang()) renderTexts(); else if (e.persisted) render(); });
 // The launcher left open overnight: the date is right again when it is shown
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { renderDate(); renderCat(); syncCatBadge(); } });
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) return;
+  if (rereadLang()) { renderTexts(); return; }
+  renderDate(); renderCat(); syncCatBadge();
+});
 
 // Hosted version: install to home screen and offline mode for all games
 if (/^https?:$/.test(location.protocol)) {
@@ -657,16 +763,17 @@ async function renderDiag() {
   const out = document.getElementById('diag'); if (!out) return;
   const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   const probe = h => { const d = document.createElement('div'); d.style.cssText = `position:absolute;left:-50px;top:0;width:1px;height:${h}`; document.body.appendChild(d); const v = d.getBoundingClientRect().height; d.remove(); return Math.round(v); };
-  const insets = () => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:-50px;top:0;width:1px;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)'; document.body.appendChild(d); const s = getComputedStyle(d), v = [s.paddingTop, s.paddingBottom, s.paddingLeft, s.paddingRight].map(x => Math.round(parseFloat(x))); d.remove(); return v.join(' ') + ' (nahoře dole vlevo vpravo)'; };
+  const insets = () => { const d = document.createElement('div'); d.style.cssText = 'position:fixed;left:-50px;top:0;width:1px;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)'; document.body.appendChild(d); const s = getComputedStyle(d), v = [s.paddingTop, s.paddingBottom, s.paddingLeft, s.paddingRight].map(x => Math.round(parseFloat(x))); d.remove(); return t('launcher.diag.insets', { v: v.join(' ') }); };
   const mode = ['fullscreen', 'standalone', 'minimal-ui', 'browser'].find(m => matchMedia(`(display-mode: ${m})`).matches) || '?';
   const vv = window.visualViewport;
+  // every number as a string: the values are copied as the browser reports them (no "2,75" for a dpr of 2.75)
   const lines = () => [
-    `režim: ${mode}${navigator.brave ? ', Brave' : ''}`,
-    `prohlížeč: ${(navigator.userAgent.match(/(Chrome|Firefox|Version)\/[\d.]+/) || ['?'])[0]}`,
-    `obrazovka: ${screen.width} × ${screen.height}, dostupná ${screen.availWidth} × ${screen.availHeight}, dpr ${devicePixelRatio}`,
-    `okno inner: ${innerWidth} × ${innerHeight}`,
-    `okno outer: ${outerWidth} × ${outerHeight}`,
-    `visualViewport: ${vv ? Math.round(vv.width) + ' × ' + Math.round(vv.height) + ', posun ' + Math.round(vv.offsetTop) : '–'}`,
+    t('launcher.diag.mode', { v: mode + (navigator.brave ? ', Brave' : '') }),
+    t('launcher.diag.browser', { v: (navigator.userAgent.match(/(Chrome|Firefox|Version)\/[\d.]+/) || ['?'])[0] }),
+    t('launcher.diag.screen', { w: String(screen.width), h: String(screen.height), aw: String(screen.availWidth), ah: String(screen.availHeight), dpr: String(devicePixelRatio) }),
+    t('launcher.diag.inner', { v: `${innerWidth} × ${innerHeight}` }),
+    t('launcher.diag.outer', { v: `${outerWidth} × ${outerHeight}` }),
+    vv ? t('launcher.diag.vv', { w: String(Math.round(vv.width)), h: String(Math.round(vv.height)), top: String(Math.round(vv.offsetTop)) }) : 'visualViewport: –',
     `clientHeight: ${document.documentElement.clientHeight}`,
     `100vh ${probe('100vh')} · 100dvh ${probe('100dvh')} · 100svh ${probe('100svh')} · 100lvh ${probe('100lvh')}`,
   ];
@@ -674,11 +781,11 @@ async function renderDiag() {
   // the same insets with "cover" in the viewport meta for a moment (the games no longer use it)
   const meta = document.querySelector('meta[name=viewport]'), was = meta.content;
   meta.content = was + ', viewport-fit' + '=cover'; await frame(); // split: tools/check.js rejects it in the meta
-  a.push(`safe-area s cover: ${insets()}`, `inner s cover: ${innerWidth} × ${innerHeight}, 100dvh ${probe('100dvh')}`);
+  a.push(t('launcher.diag.coverSafe', { v: insets() }), t('launcher.diag.coverInner', { v: `${innerWidth} × ${innerHeight}`, dvh: String(probe('100dvh')) }));
   meta.content = was; await frame();
   // the last game opened: what it measured 2 s after loading (written by its "Visible height" block)
   try { const g = JSON.parse(localStorage.getItem('games.launcher.diag') || 'null');
-    if (g) a.push(`hra ${g.page}: visualViewport ${g.vv}, inner ${g.inner}, client ${g.client}, 100dvh ${g.dvh}, okraj dole ${g.sb}, výška hry ${g.appH} → ${g.app}`); } catch (e) {}
+    if (g) a.push(t('launcher.diag.game', { page: String(g.page), vv: String(g.vv), inner: String(g.inner), client: String(g.client), dvh: String(g.dvh), sb: String(g.sb), appH: String(g.appH), app: String(g.app) })); } catch (e) {}
   out.textContent = a.join('\n');
 }
 
@@ -704,9 +811,7 @@ btnInstall.addEventListener('click', async () => {
 // message does not promise the icon and says what to do when it is missing.
 window.addEventListener('appinstalled', () => {
   installPrompt = null; btnInstall.hidden = true;
-  showModal('<h2>Hotovo</h2><p>Na ploše by teď měla být ikona „Vítkovy hry“. Příště hry otevři rovnou z ní, fungují i bez internetu.</p>' +
-    '<p>Pokud tam ikona není (stává se u telefonů Xiaomi, Redmi a POCO), povol v Nastavení telefonu → Aplikace → Chrome → Další oprávnění položku „Zástupci na ploše“ a zkus to znovu.</p>',
-    [{ text: 'Rozumím', cls: 'keep' }]);
+  showModal(th('launcher.installed'), [{ text: th('launcher.gotIt'), cls: 'keep' }]);
 });
 
 // Persistent storage: the browser then won't delete saved settings and games on its own.

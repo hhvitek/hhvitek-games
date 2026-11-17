@@ -25,6 +25,20 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 - [ ] Code is English: `tools/reversi-test.js` and `tools/mlyn-test.js` print Czech headings and results (the other engine tests print English, Czech only for level names).
 - [ ] Hanojské věže: a tap on the hinted target rod (with no disc selected) should play the hint, as in Pavouk; now only a tap on the hinted disc does.
 
+## Texts and languages (the localization of 2026-11-17)
+
+- [ ] Release gate: `tools/release.js` should refuse a release when a ready language has debt (`node tools/i18n.js --strict`); not wired yet.
+- [ ] "Co je nového" (`CHANGELOG.md`, `APP_CHANGES`) is Czech only; make it bilingual from now on (English players see a note that the changes are in Czech).
+- [ ] Image names in `images/sets.js` are Czech: move them to `i18n/images.js`.
+- [ ] `tools/kocka-dev/SPEC.md` still describes the engine's old text fields (`name`, Czech case forms, `text`); the engine now returns ids and codes and the page builds the messages (`games/kocka/texts.js`).
+- [ ] `tools/kocka-dev/SPEC.md` still describes the engine's old text fields (`name`, case forms, `text`); the engine now returns ids and codes and the page builds the messages (see `games/kocka/texts.js`).
+- [ ] The `apple-mobile-web-app-title` meta and the manifest stay Czech (user's decision); revisit only if a language needs them.
+- [ ] Shared texts that several games repeat could move to `i18n/common.js`: the credits screen, "Smazat statistiku", level stepping, "Hrát dál", "Prohlédnout stůl".
+- [ ] Generál: "Nechám si pět jedničky" should be "pět jedniček" (grammar).
+- [ ] Kostky and Generál save the opponent's bubble text (`G.say`): after a language switch it stays in the old language until the next line.
+- [ ] Re-check the pseudo-language layout warnings (titles and tray buttons about 40 % longer) with real English.
+- [ ] A few Czech texts changed slightly through correct plurals (Věžičky "1 bod / 2 body", Hledání min): look at them once.
+
 ## Open questions for the user
 
 - [ ] Spojování obrázků: being stuck is never an end (Zamíchat always goes on), so "played" always equals "won" and Settings show "vyhráno N z N". Show only "vyhráno N" (and "bez Zamíchat"), or count a game as played at its first pair?

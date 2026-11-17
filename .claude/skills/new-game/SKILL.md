@@ -22,9 +22,11 @@ sheet), and step 7 is always last and done by a fresh, independent agent. Before
 
 ## 2. Create the game
 - `<id>` = the game's Czech name without diacritics in kebab-case (`games/zavri-cisla/`).
-- Copy `games/_template/` to `games/<id>/`, then replace only the parts marked as game logic. Keep everything marked "rule" or "contract".
-- Add `games/<id>/icon.svg` (`viewBox="0 0 512 512"`), one line in `games/registry.js` right before `kostky`
-  (after the other new games; the user's rule, see CLAUDE.md), a Czech row in `README.md` right before the Kostky row.
+- Copy `games/_template/` (it is converted: `index.html` and `texts.js`) to `games/<id>/`, then replace only the parts marked as game logic. Keep everything marked "rule" or "contract".
+- Add `games/<id>/icon.svg` (`viewBox="0 0 512 512"`), one line `{ id: '<id>', texts: true }` in `games/registry.js`
+  right before `kostky` (after the other new games; the user's rule, see CLAUDE.md), the game's Czech name and
+  one-line description as `game.<id>.name` / `game.<id>.desc` in `i18n/games.js` (only `cs`; the registry holds no
+  texts), and a Czech row in `README.md` right before the Kostky row, starting with that same name (checked).
 - After every edit the hook runs `node tools/check.js <id>`; fix what it reports before going on.
 
 ## 3. Write the game: copy each pattern from the game that does it best
@@ -42,12 +44,13 @@ sheet), and step 7 is always last and done by a fresh, independent agent. Before
 | `#app` as tall as the visible window (`height:var(--app-h,100dvh)` + the "Visible height" block, checked; see "Visible height" in CLAUDE.md) | template |
 | a computer opponent: own AI and `LEVELS`, the name, face, stars and head from `games/_opponents/opponents.js` (never drawn again in the game) | `games/oko-bere/` (small head), `games/kostky/` (big panel), `games/prsi/` (play styles, two opponents) |
 
-Keep in mind while writing: Czech player texts (informal "ty", gender-neutral), help behind "?", settings applied at
+Keep in mind while writing: every player text is a message in `games/<id>/texts.js` (only `cs`, informal "ty", gender-neutral; `t()`/`th()`/`data-t*`, whole sentences, all four plural forms, engines return codes; CLAUDE.md "Texts and languages"; copy `games/dama/texts.js`), never a string in the code; help behind "?", settings applied at
 once. Any controls are allowed (gestures, long presses, multi-touch, time pressure; the senior rules were dropped on
 2026-11-12); explain them in the help.
 
 ## 4. Teach the screenshot pass the game
 Add an entry for `<id>` to `play` in `tools/shots.js`: a move, the hint (if any), a tap on the hinted piece and on its place.
+Take the pass also with `"langs": ["cs", "pseudo"]` in `shots.json`: text that stays plain in the pseudo sheet is hard-coded, long text shows layout problems.
 
 ## 5. Check
 - `node tools/check.js <id>` must pass, and `node tools/saves-test.js --ids <id>` (broken saves never crash the game).

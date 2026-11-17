@@ -19,7 +19,7 @@ const m = src.match(/\/\* -{10} Engine -{10} \*\/([\s\S]*?)\/\* -{10} Engine end
 if (!m) { console.error('No Engine block in ' + file); process.exit(1); }
 const E = new Function(m[1] + '\nreturn VezickyEngine();')();
 // the difficulties as the game defines them (start colours)
-const DIFFS = [...src.matchAll(/\{ id: '(\w+)',\s+name: '([^']+)',\s+start: (\d+)/g)].map(x => ({ id: x[1], name: x[2], start: +x[3] }));
+const DIFFS = [...src.matchAll(/\{ id: '(\w+)',\s+nameKey: '[^']+',\s+start: (\d+)/g)].map(x => ({ id: x[1], name: x[1], start: +x[2] }));
 
 let failed = 0;
 const ok = (cond, msg) => { if (!cond) { failed++; console.log('  FAIL ' + msg); } };

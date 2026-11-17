@@ -33,7 +33,8 @@
 //   held / put { place }            picked up / put down
 //   played { toy, gain, fav }       a toy worked
 //   ignore { reason }               she ignored a toy or a call (sad, tired, asleep; a call also now and then when grumpy
-//                                   or sad: "dělá, že neslyší" / "jen smutně koukne"; alone in the garden: "je na zahradě")
+//                                   or sad), reason: playCross | tired | hiding | noPlay | inGarden | outside | asleepCall |
+//                                   scaredDown | crossCall | sadCall ("jen smutně koukne") | deaf ("dělá, že neslyší")
 //   brushed { gain } / flea         brushing; flea: she has fleas (coat +10 only)
 //   clean                           the litter box was cleaned
 //   litter { garden? }              she used the litter box (watching only; awake and free only, else 15–30 min later);
@@ -63,7 +64,7 @@
 //                                   meal time with an empty bowl (mealTime())
 //   ill { kind } / cured { kind, by: 'vet' | 'time', paid?, short? }
 //   weighed { kg, delta }           once a local day
-//   levelUp { level, name }         a new bond level
+//   levelUp { level }               a new bond level (0–4; its name is the UI's)
 //   birthday { age }                adoption anniversary (bond +10)
 //   offended { days }               back from paní Nováková after more than 72 h away
 //   lapOn / lapOff { dozing }       she settled on the lap / the player stood up (she gets down calmly)
@@ -82,7 +83,7 @@
 //   (back gets { walk, postcard, present } after a walk: postcard = index 0–41 into IMAGE_SETS.nachod)
 //   bought { id, kind } / placed { id, room } / sold { crop, n, earned }   the shop (Obchůdek) and furniture
 //   earned { n, game?, trick? } / capReached / record { game, best, prev }  minigame and trick rewards
-//   perform { trick, ok, shown?, understood?, reason? } / learned { trick } / trickLearned { trick } / trickRefused { trick, reason }
+//   perform { trick, ok, shown?, understood?, reason? } / learned { trick } / trickLearned { trick } / trickRefused { trick, reason: bond (+ bond) | noTreat | notLearned }
 //                                   Výcvik: a wrong cue = understood false; a refused right cue = understood true with
 //                                   reason 'tired' | 'grumpy' | 'notNow'; trickLearned = training an already learned trick
 //   visitor { id, reaction, noticed } / visitorLeave { id, reason: 'time'|'shy'|'night'|'rain' } / visitorFed / visitorPurr /
@@ -117,10 +118,12 @@
 //   kitGrown { id }                 a kitten's first visit on its own (from 21 days)
 //   photo { n } / photoDeleted { n }   the album
 //   gift { n }                      pamlsky from the launcher link
-//   found { id, text }              a new Deníček entry
+//   found { id, info }              a new Deníček entry; info = its facts (entryInfo), the UI writes the sentence
 //   quirk { id }                    her quirk was seen (wakesEarly: the player's first act of the day within 2 h after
 //                                   she really woke early; box: only while she sleeps in her box)
-//   refused { reason }              the action is not possible now (Czech reason)
+//   refused { reason, …params }     the action is not possible now: reason is a code (cantNow, onTree, asleep, foodFunds
+//                                   { food, price }, price { item, price }, notHere { vis }, …: see refusal() calls), the
+//                                   params name ids and numbers; the UI writes the message
 // Phase B actions (act): strokeVisitor { id, region?, along?, speed? } (without region: the menu's Pohladit),
 //   treatVisitor { id }, playVisitor { id, caught: 'koxa' | 'visitor' }, invite { id }; photo also takes
 //   { vpose, vx, vflip, nokoxa } (where the visitor stood; nokoxa: Koxa is not in the picture)
@@ -174,12 +177,15 @@ function KockaEngine() {
   const TARGET_W = 4.2, FED_W = 4.5;   // a thin cat recovers to 4.2; plain food alone never makes her heavier than 4.5
 
   /* --- constants --- */
+  // the engine has no texts (CLAUDE.md, Texts and languages): the constants carry no names, and a refusal is a code with
+  // its params, { reason, …params } (in an event: { type: 'refused', reason, … }); the UI turns them into messages
+  const refusal = (reason, p) => Object.assign({}, p, { reason });
   const NEEDS = deep(['food', 'water', 'energy', 'fun', 'love', 'clean']);
   const FOODS = deep({
-    kibble: { name: 'granule', acc: 'granule', gain: 35, price: 0 },
-    pouch: { name: 'kapsička', acc: 'kapsičku', gain: 45, price: 2 },
-    chicken: { name: 'kuře', acc: 'kuře', gain: 50, price: 3 },
-    tuna: { name: 'tuňák', acc: 'tuňáka', gain: 55, price: 4 },
+    kibble: { gain: 35, price: 0 },
+    pouch: { gain: 45, price: 2 },
+    chicken: { gain: 50, price: 3 },
+    tuna: { gain: 55, price: 4 },
   });
   const CHARGE_FOOD = true;        // special food: a serving from st.stock, else FOODS[k].price pamlsky (granule free)
   const CHARGE_SEEDS = true;       // seeds: from st.stock ('seed_<crop>'), else CROPS[k].seed pamlsky
@@ -187,16 +193,16 @@ function KockaEngine() {
   const CROPS = deep({
     // yield = pieces per harvest; a pack of 3 seeds sells for 1.5× its price, a single seed for 1.2–1.33× (gardening pays a
     // little, about 0.5–0.7 pamlsku a bed a day: far less than the minigames)
-    radish: { name: 'ředkvička', acc: 'ředkvičku', unripe: 'Ředkvička ještě není zralá.', days: 2, seed: 3, sell: 2, yield: 2 },
-    carrot: { name: 'mrkev', acc: 'mrkev', unripe: 'Mrkev ještě není zralá.', days: 4, seed: 5, sell: 3, yield: 2 },
-    strawberry: { name: 'jahody', acc: 'jahody', unripe: 'Jahody ještě nejsou zralé.', days: 5, seed: 8, sell: 5, yield: 2 },
-    tomato: { name: 'rajče', acc: 'rajče', unripe: 'Rajče ještě není zralé.', days: 6, seed: 9, sell: 4, yield: 3 },
-    catnip: { name: 'šanta kočičí', acc: 'šantu', unripe: 'Šanta kočičí ještě není zralá.', days: 3, seed: 7, sell: 0, yield: 1 },
+    radish: { days: 2, seed: 3, sell: 2, yield: 2 },
+    carrot: { days: 4, seed: 5, sell: 3, yield: 2 },
+    strawberry: { days: 5, seed: 8, sell: 5, yield: 2 },
+    tomato: { days: 6, seed: 9, sell: 4, yield: 3 },
+    catnip: { days: 3, seed: 7, sell: 0, yield: 1 },
   });
   const BEDS = 6;                  // 4 usable, 6 from bond level Parťačka (600)
-  const PRESENTS = deep({ feather: { name: 'pírko', acc: 'pírko' }, leaf: { name: 'lísteček', acc: 'lísteček' }, cone: { name: 'šiška', acc: 'šišku' } });
+  const PRESENTS = deep({ feather: {}, leaf: {}, cone: {} });
   const POSTCARDS = 42;            // IMAGE_SETS.nachod has 42 photos
-  const WEATHERS = deep({ clear: { name: 'jasno' }, cloudy: { name: 'zataženo' }, rain: { name: 'déšť' }, snow: { name: 'sníh' } });
+  const WEATHERS = deep({ clear: {}, cloudy: {}, rain: {}, snow: {} });
   // the garden with the player, per hour: fun rises, the coat suffers; chances of a dárek and of getting stuck on the tree
   const GARDEN = deep({ fun: 10, coat: 1.5, rainCoat: 4, wetFor: 2 * 60, present: 0.2, tree: 0.15, treeMax: 30, alone: [60, 180] });
   // the food bowl and the water dish (user's wish 2026-11-17: satisfaction comes from eating, not from a full bowl)
@@ -240,87 +246,82 @@ function KockaEngine() {
   const WALK_BOND = 2;             // toulky (letOut) from bond level Kamarádka (300)
   // toys: the four she has from the start (one is her favourite), and shop toys (bought: 'owned'); base = its kind
   const TOYS = deep({
-    mouse: { name: 'myška', ins: 's myškou' }, feather: { name: 'peříčko', ins: 's peříčkem' },
-    ball: { name: 'klubíčko', ins: 's klubíčkem' }, laser: { name: 'laser', ins: 's laserem' },
-    catnipMouse: { name: 'myška se šantou', ins: 's myškou se šantou', base: 'mouse', shop: true, bonus: 15 },
-    bellBall: { name: 'míček s rolničkou', ins: 's míčkem s rolničkou', base: 'ball', shop: true, bonus: 10 },
-    featherWand: { name: 'udice s peříčkem', ins: 's udicí s peříčkem', base: 'feather', shop: true, bonus: 10 },
-    tunnel: { name: 'tunel', ins: 's tunelem', base: 'tunnel', shop: true, bonus: 10 },
-    box: { name: 'krabice', ins: 's krabicí', base: 'box', shop: true, bonus: 5 },
+    mouse: {}, feather: {},
+    ball: {}, laser: {},
+    catnipMouse: { base: 'mouse', shop: true, bonus: 15 },
+    bellBall: { base: 'ball', shop: true, bonus: 10 },
+    featherWand: { base: 'feather', shop: true, bonus: 10 },
+    tunnel: { base: 'tunnel', shop: true, bonus: 10 },
+    box: { base: 'box', shop: true, bonus: 5 },
   });
   const BASE_TOYS = deep(['mouse', 'feather', 'ball', 'laser']);
   const ROOMS = deep(['living', 'kitchen', 'hall', 'garden']);
   // the shop (Obchůdek); bond = the bond level (0–4) from which it is offered; room: where furniture goes (fixed: only there;
   // install: put there at once when bought, the player never places it)
   const SHOP = deep([
-    { id: 'pouch5', kind: 'food', name: 'Kapsičky (5 porcí)', price: 8, bond: 0, room: null, stock: 'pouch', n: 5 },
-    { id: 'chicken5', kind: 'food', name: 'Kuře (5 porcí)', price: 12, bond: 0, room: null, stock: 'chicken', n: 5 },
-    { id: 'tuna5', kind: 'food', name: 'Tuňák (5 porcí)', price: 16, bond: 1, room: null, stock: 'tuna', n: 5 },
-    { id: 'sticks5', kind: 'treat', name: 'Kočičí tyčinky (5 kusů)', price: 6, bond: 0, room: null, stock: 'stick', n: 5 },
-    { id: 'catnipMouse', kind: 'toy', name: 'Myška se šantou', price: 10, bond: 0, room: null },
-    { id: 'bellBall', kind: 'toy', name: 'Míček s rolničkou', price: 12, bond: 0, room: null },
-    { id: 'box', kind: 'toy', name: 'Krabice', price: 10, bond: 0, room: 'living' },
-    { id: 'featherWand', kind: 'toy', name: 'Udice s peříčkem', price: 15, bond: 1, room: null },
-    { id: 'tunnel', kind: 'toy', name: 'Tunel', price: 20, bond: 1, room: 'living' },
-    { id: 'scratcher', kind: 'furniture', name: 'Škrabadlo', price: 30, bond: 0, room: 'living' },
-    { id: 'rug', kind: 'furniture', name: 'Koberec', price: 35, bond: 0, room: 'living' },
-    { id: 'lamp', kind: 'furniture', name: 'Lampa', price: 30, bond: 0, room: 'living' },
-    { id: 'birdFeeder', kind: 'furniture', name: 'Krmítko pro ptáky', price: 25, bond: 0, room: 'garden', fixed: true },
-    { id: 'sillCushion', kind: 'furniture', name: 'Parapet s polštářem', price: 40, bond: 1, room: 'living' },
-    { id: 'bedDeluxe', kind: 'furniture', name: 'Pelíšek deluxe', price: 60, bond: 1, room: 'living' },
-    { id: 'catTree', kind: 'furniture', name: 'Kočičí strom', price: 120, bond: 2, room: 'living' },
-    { id: 'catFlap', kind: 'furniture', name: 'Kočičí dvířka', price: 80, bond: 2, room: 'hall', fixed: true, install: true },
-    { id: 'visitorBowl', kind: 'furniture', name: 'Miska pro návštěvy', price: 15, bond: 0, room: 'garden', fixed: true },
-    { id: 'seedsRadish', kind: 'seed', name: 'Semínka ředkvičky (3 sáčky)', price: 8, bond: 0, room: null, stock: 'seed_radish', n: 3 },
-    { id: 'seedsCarrot', kind: 'seed', name: 'Semínka mrkve (3 sáčky)', price: 12, bond: 0, room: null, stock: 'seed_carrot', n: 3 },
-    { id: 'seedsStrawberry', kind: 'seed', name: 'Sazenice jahod (3 kusy)', price: 20, bond: 0, room: null, stock: 'seed_strawberry', n: 3 },
-    { id: 'seedsTomato', kind: 'seed', name: 'Sazenice rajčat (3 kusy)', price: 24, bond: 1, room: null, stock: 'seed_tomato', n: 3 },
-    { id: 'seedsCatnip', kind: 'seed', name: 'Semínka šanty (3 sáčky)', price: 18, bond: 1, room: null, stock: 'seed_catnip', n: 3 },
+    { id: 'pouch5', kind: 'food', price: 8, bond: 0, room: null, stock: 'pouch', n: 5 },
+    { id: 'chicken5', kind: 'food', price: 12, bond: 0, room: null, stock: 'chicken', n: 5 },
+    { id: 'tuna5', kind: 'food', price: 16, bond: 1, room: null, stock: 'tuna', n: 5 },
+    { id: 'sticks5', kind: 'treat', price: 6, bond: 0, room: null, stock: 'stick', n: 5 },
+    { id: 'catnipMouse', kind: 'toy', price: 10, bond: 0, room: null },
+    { id: 'bellBall', kind: 'toy', price: 12, bond: 0, room: null },
+    { id: 'box', kind: 'toy', price: 10, bond: 0, room: 'living' },
+    { id: 'featherWand', kind: 'toy', price: 15, bond: 1, room: null },
+    { id: 'tunnel', kind: 'toy', price: 20, bond: 1, room: 'living' },
+    { id: 'scratcher', kind: 'furniture', price: 30, bond: 0, room: 'living' },
+    { id: 'rug', kind: 'furniture', price: 35, bond: 0, room: 'living' },
+    { id: 'lamp', kind: 'furniture', price: 30, bond: 0, room: 'living' },
+    { id: 'birdFeeder', kind: 'furniture', price: 25, bond: 0, room: 'garden', fixed: true },
+    { id: 'sillCushion', kind: 'furniture', price: 40, bond: 1, room: 'living' },
+    { id: 'bedDeluxe', kind: 'furniture', price: 60, bond: 1, room: 'living' },
+    { id: 'catTree', kind: 'furniture', price: 120, bond: 2, room: 'living' },
+    { id: 'catFlap', kind: 'furniture', price: 80, bond: 2, room: 'hall', fixed: true, install: true },
+    { id: 'visitorBowl', kind: 'furniture', price: 15, bond: 0, room: 'garden', fixed: true },
+    { id: 'seedsRadish', kind: 'seed', price: 8, bond: 0, room: null, stock: 'seed_radish', n: 3 },
+    { id: 'seedsCarrot', kind: 'seed', price: 12, bond: 0, room: null, stock: 'seed_carrot', n: 3 },
+    { id: 'seedsStrawberry', kind: 'seed', price: 20, bond: 0, room: null, stock: 'seed_strawberry', n: 3 },
+    { id: 'seedsTomato', kind: 'seed', price: 24, bond: 1, room: null, stock: 'seed_tomato', n: 3 },
+    { id: 'seedsCatnip', kind: 'seed', price: 18, bond: 1, room: null, stock: 'seed_catnip', n: 3 },
   ]);
   const SHOP_BY = {}; for (const it of SHOP) SHOP_BY[it.id] = it;
   const STOCK_KEYS = ['pouch', 'chicken', 'tuna', 'stick'].concat(Object.keys(CROPS).map(c => 'seed_' + c));
   // minigames (the UI plays them; the engine rewards): pamlsky = min(max, floor(score / per)); 30 a day from all of them
   const GAMES = deep({
-    mouse: { name: 'Chyť myšku', per: 3, max: 10 }, laserRun: { name: 'Laserová honička', per: 1, max: 8 },
-    feather: { name: 'Peříčko', per: 2, max: 10 }, fishing: { name: 'Rybaření', per: 1, max: 8 }, pill: { name: 'Pilulka', per: 1, max: 3 },
+    mouse: { per: 3, max: 10 }, laserRun: { per: 1, max: 8 },
+    feather: { per: 2, max: 10 }, fishing: { per: 1, max: 8 }, pill: { per: 1, max: 3 },
   });
   const EARN_CAP = 30;
   // Výcvik: bond needed (the value), the cue gesture the Input sends; 5 rewarded performances = learned
   const TRICKS = deep({
-    sedni: { name: 'Sedni', bond: 100, cue: 'swipeUp' }, dejPac: { name: 'Dej pac', bond: 300, cue: 'tapPaw' },
-    otocSe: { name: 'Otoč se', bond: 500, cue: 'circle' }, panacek: { name: 'Panáček', bond: 750, cue: 'swipeUp2' },
+    sedni: { bond: 100, cue: 'swipeUp' }, dejPac: { bond: 300, cue: 'tapPaw' },
+    otocSe: { bond: 500, cue: 'circle' }, panacek: { bond: 750, cue: 'swipeUp2' },
   });
   const TRICK_N = 5, TREAT_WINDOW = 1500;
-  // Czech: 1 pamlsek, 2–4 pamlsky, 5+ pamlsků
-  const pml = n => (n === 1 ? '1 pamlsek' : n >= 2 && n <= 4 ? `${n} pamlsky` : `${n} pamlsků`);
   // body regions (Input/Art use the same ids); spot: may be one of her favourite spots
   const REGIONS = deep({
-    chin: { name: 'brada', loc: 'na bradě', spot: true, scratch: true },
-    ears: { name: 'za ušima', loc: 'za ušima', spot: true, scratch: true },
-    head: { name: 'hlava', loc: 'na hlavě', spot: true, scratch: true },
-    back: { name: 'záda', loc: 'na zádech', spot: true },
-    tailBase: { name: 'kořen ocasu', loc: 'u kořene ocasu', spot: true },
-    belly: { name: 'bříško', loc: 'na bříšku' },
-    tail: { name: 'ocas', loc: 'na ocase' }, paws: { name: 'tlapky', loc: 'na tlapkách' },
+    chin: { spot: true, scratch: true },
+    ears: { spot: true, scratch: true },
+    head: { spot: true, scratch: true },
+    back: { spot: true },
+    tailBase: { spot: true },
+    belly: {},
+    tail: {}, paws: {},
   });
   const REGION_ALIAS = deep({ paw: 'paws', side: 'back', nose: 'head' });   // older or other spellings of the same region (the nose is the head)
   const regionOf = (r, def) => typeof r !== 'string' ? def : Object.prototype.hasOwnProperty.call(REGIONS, r) ? r : Object.prototype.hasOwnProperty.call(REGION_ALIAS, r) ? REGION_ALIAS[r] : def;
   const SPOTS = deep(Object.keys(REGIONS).filter(k => REGIONS[k].spot));
-  const FEARS = deep({ vacuum: { name: 'vysavač', gen: 'vysavače' }, storm: { name: 'bouřka', gen: 'bouřky' }, fireworks: { name: 'ohňostroj', gen: 'ohňostroje' } });
+  const FEARS = deep({ vacuum: {}, storm: {}, fireworks: {} });
   const QUIRKS = deep({
-    wakesEarly: { name: 'budí ráno', text: n => `${n} ráno budí celý dům.` },
-    box: { name: 'spí v krabici', text: n => `${n} nejraději spí v krabici.` },
-    socks: { name: 'krade ponožky', text: n => `${n} krade ponožky.` },
-    tap: { name: 'pije z kohoutku', text: n => `${n} nejraději pije z kohoutku.` },
+    wakesEarly: {}, box: {}, socks: {}, tap: {},
   });
-  const ILLS = deep({ fleas: { name: 'blechy' }, tummy: { name: 'bolavé bříško' }, cold: { name: 'rýma' } });
-  const LEVELS = deep([{ min: 0, name: 'Nová' }, { min: 100, name: 'Známá' }, { min: 300, name: 'Kamarádka' }, { min: 600, name: 'Parťačka' }, { min: 900, name: 'Nejlepší kamarádka' }]);
+  const ILLS = deep({ fleas: {}, tummy: {}, cold: {} });
+  const LEVELS = deep([{ min: 0 }, { min: 100 }, { min: 300 }, { min: 600 }, { min: 900 }]);
   const HOLIDAYS = deep({
-    advent: { name: 'Advent', prop: 'wreath' }, mikulas: { name: 'Mikuláš', prop: 'stocking' },
-    vanoce: { name: 'Vánoce', prop: 'tree' }, silvestr: { name: 'Silvestr', prop: 'fireworks' },
-    masopust: { name: 'Masopust', prop: 'mask' }, velikonoce: { name: 'Velikonoce', prop: 'eggs' },
-    carodejnice: { name: 'Čarodějnice', prop: 'witchHat' }, dusicky: { name: 'Dušičky', prop: 'candle' },
-    birthday: { name: 'Narozeniny', prop: 'cake' },
+    advent: { prop: 'wreath' }, mikulas: { prop: 'stocking' },
+    vanoce: { prop: 'tree' }, silvestr: { prop: 'fireworks' },
+    masopust: { prop: 'mask' }, velikonoce: { prop: 'eggs' },
+    carodejnice: { prop: 'witchHat' }, dusicky: { prop: 'candle' },
+    birthday: { prop: 'cake' },
   });
   const ACTIONS = deep(['feed', 'water', 'stroke', 'scratch', 'pickUp', 'putDown', 'play', 'brush', 'cleanLitter', 'letOut', 'letIn', 'treat', 'vetCure', 'pill', 'call', 'vacuum', 'lapOn', 'lapOff',
     'goGarden', 'goHouse', 'fetchDown', 'sow', 'waterBeds', 'harvest', 'catnip', 'buy', 'place', 'sell', 'train', 'showTrick',
@@ -761,12 +762,12 @@ function KockaEngine() {
   function levelOf(bond) { let l = 0; for (let i = 0; i < LEVELS.length; i++) if (bond >= LEVELS[i].min) l = i; return l; }
   function bondLevel(st) {
     const l = st.lvl;
-    return { level: l, name: LEVELS[l].name, bond: Math.round(st.bond), min: LEVELS[l].min, next: l + 1 < LEVELS.length ? LEVELS[l + 1].min : null };
+    return { level: l, bond: Math.round(st.bond), min: LEVELS[l].min, next: l + 1 < LEVELS.length ? LEVELS[l + 1].min : null };
   }
   function health(st) {
     const t = st.t;
     return {
-      ill: st.ill ? st.ill.kind : null, illName: st.ill ? ILLS[st.ill.kind].name : null, illSince: st.ill ? st.ill.since : null,
+      ill: st.ill ? st.ill.kind : null, illSince: st.ill ? st.ill.since : null,
       illDaysLeft: st.ill ? Math.max(0, Math.ceil((st.ill.since + 4 * DAY - t) / DAY)) : 0,
       weight: r2(st.weight), thin: st.weight < 3.6, chubby: st.weight > 5.0,
       offended: !!(st.off && t < st.off.until), scared: st.scared > t, asleep: st.asleep, out: !!st.out, held: st.held,
@@ -791,67 +792,47 @@ function KockaEngine() {
   function addBond(st, d, ev) {
     st.bond = clamp(st.bond + d, LEVELS[st.lvl].min, 1000);
     const l = levelOf(st.bond);
-    if (l > st.lvl) { st.lvl = l; ev.push({ type: 'levelUp', level: l, name: LEVELS[l].name }); }
+    if (l > st.lvl) { st.lvl = l; ev.push({ type: 'levelUp', level: l }); }
   }
   function find(st, id, t, ev) {
     if (st.diary[id]) return;
     st.diary[id] = t;
-    ev.push({ type: 'found', id, text: entryText(st, id, st.name) });
+    ev.push({ type: 'found', id, info: entryInfo(st, id) });
   }
-  function fmtDur(ms) { const m = Math.round(ms / MIN), h = Math.floor(m / 60); return h ? `${h} h ${m % 60} min` : `${m} min`; }
-  function entryText(st, id, name) {
+  // the facts of a found Deníček entry, for the UI's message (codes and numbers, no text):
+  //   favFood { food } | spot_<region> { region } | belly {} | toy { toy } | fear { fear } | quirk { quirk } |
+  //   weight { kg } | walk { h, min } | birthday { y, m, d } (m 1–12) | bliss { brisk } | boop, reconcile, splash, payback {} |
+  //   the cat entries { cat (visitor id or null), fem } and for kittens also { mother (when a young cat came alone first),
+  //   kits: [kitten ids of the mother's first litter seen] }
+  function entryInfo(st, id) {
     const T = st.traits;
-    if (id === 'favFood') return `${name} nejraději papá ${FOODS[T.favFood].acc}.`;
-    if (id.startsWith('spot_')) return `${name} se moc ráda nechá hladit ${REGIONS[id.slice(5)].loc}.`;
-    if (id === 'belly') return `${name} si někdy nechá podrbat bříško. Ale jen někdy!`;
-    if (id === 'toy') return `${name} si nejraději hraje ${TOYS[T.toy].ins}.`;
-    if (id === 'fear') return `${name} se bojí ${FEARS[T.fear].gen}.`;
-    if (id === 'quirk') return QUIRKS[T.quirk].text(name);
-    if (id === 'weight') return `${name} váží ${st.weight.toFixed(1).replace('.', ',')} kg.`;
-    if (id === 'walk') return `Nejdelší toulka trvala ${fmtDur(st.walkMax)}.`;
-    if (id === 'birthday') { const [y, m, d] = ymd(st.born); return `${name} k nám přišla ${d}. ${m + 1}. ${y}.`; }
-    if (id === 'bliss') return `${name} má ráda, když ji poplácáváš u kořene ocasu – ${patTempo(st) <= 520 ? 'svižně' : 'pomalu a pravidelně'}. Zvedne zadeček jako výtah a přešlapuje.`;
-    if (id === 'boop') return `Když jí ťukneš do nosu, ${name} zašilhá a kýchne.`;
-    if (id === 'reconcile') return `${name} se po škádlení usmířila: otřela se ti o ruku.`;
-    if (id === 'splash') return `${name} dostala sprchu z konve. Otřepala se a hodnou chvíli se zlobila.`;
-    if (id === 'payback') return `${name} ti to vrátila. Co se škádlívá, to se rádo mívá!`;
+    if (id === 'favFood') return { food: T.favFood };
+    if (id.startsWith('spot_')) return { region: id.slice(5) };
+    if (id === 'toy') return { toy: T.toy };
+    if (id === 'fear') return { fear: T.fear };
+    if (id === 'quirk') return { quirk: T.quirk };
+    if (id === 'weight') return { kg: Math.round(st.weight * 10) / 10 };
+    if (id === 'walk') { const m = Math.round(st.walkMax / MIN); return { h: Math.floor(m / 60), min: m % 60 }; }
+    if (id === 'birthday') { const [y, m, d] = ymd(st.born); return { y, m: m + 1, d }; }
+    if (id === 'bliss') return { brisk: patTempo(st) <= 520 };
     if (CAT_DIARY.includes(id)) {
       const c = st.diaryCat ? visitor(st, st.diaryCat[id]) : null;
-      const f = c && c.fem;   // Koxa is a she: the plural is feminine only with a female cat
-      if (id === 'kittens') {
-        if (!c) return 'Kočka od sousedů přivedla na zahradu koťátka.';
-        // a young cat nobody saw while small came alone first
-        if (c.mother) return `Na zahradu poprvé ${f ? 'přišla' : 'přišel'} ${c.name}, koťátko ${VISITORS[c.mother].name.replace(/a$/, 'y')}.`;
-        // the mother's first litter seen
-        const first = st.kits.filter(k => k.mother === c.id && kitSeen(st, k)), L = first.length ? first.filter(k => kitLit(k.id) === kitLit(first[0].id)).map(k => k.name) : [];
-        return L.length ? `${c.name} přivedla na zahradu koťátka: ${L.length > 1 ? L.slice(0, -1).join(', ') + ' a ' + L[L.length - 1] : L[0]}.` : `${c.name} přivedla na zahradu koťátka.`;
+      const info = { cat: c ? c.id : null, fem: !!(c && c.fem) };   // Koxa is a she: the plural is feminine only with a female cat
+      if (id === 'kittens' && c) {
+        // a young cat nobody saw while small came alone first; else the mother's first litter seen
+        if (c.mother) info.mother = c.mother;
+        else { const first = st.kits.filter(k => k.mother === c.id && kitSeen(st, k)); info.kits = first.length ? first.filter(k => kitLit(k.id) === kitLit(first[0].id)).map(k => k.id) : []; }
       }
-      if (id === 'kitGrown') return c ? `${c.name} už chodí na návštěvu ${f ? 'sama' : 'sám'}.` : 'Koťátko od sousedů už chodí na návštěvu samo.';
-      if (id === 'sleepover') return c ? `${name} měla poprvé návštěvu na noc: ${c.name}.` : `${name} měla poprvé návštěvu na noc.`;
-      if (id === 'palFirst') return c ? (f ? `${name} má první kamarádku: ${c.name}.` : `${name} má prvního kamaráda: ${c.name}.`) : `${name} má prvního kočičího kamaráda.`;
-      if (id === 'palGroom') return c ? `${name} a ${c.name} si poprvé navzájem ${f ? 'umyly' : 'umyli'} kožíšky.` : `${name} a kamarád si poprvé navzájem umyli kožíšky.`;
-      return c ? `${name} a ${c.name} si poprvé ${f ? 'zdřímly' : 'zdřímli'} schoulen${f ? 'é' : 'í'} u sebe.` : `${name} si poprvé zdřímla schoulená u kamaráda.`;
+      return info;
     }
-    return '';
+    return {};
   }
-  const HINTS = {
-    favFood: 'Co nejraději papá? Zkoušej různé dobroty.', belly: 'Nechá si podrbat bříško?',
-    toy: 'S čím si nejraději hraje?', fear: 'Čeho se bojí?', quirk: 'Jaký má zvláštní zvyk?',
-    weight: 'Kolik váží? Uvidíš zítra.', walk: 'Ještě nebyla venku.', birthday: '',
-    bliss: 'Co jí udělá radost u kořene ocasu?', boop: 'Co udělá, když jí ťukneš do nosu?', reconcile: 'Jak se usmíříte, když ji naštveš?',
-    splash: 'Možná se jednou dozvíš…', payback: 'Kdo ví, co ji jednou napadne…',
-    palFirst: 'Najde si kamaráda mezi kočkami od sousedů? Choď s ní na zahradu, když přijde návštěva.',
-    palGroom: 'Budou si s kamarádem navzájem mýt kožíšek?', palSnuggle: 'Zdřímne si někdy schoulená u kamaráda?',
-    sleepover: 'Přespí u nás někdy kočka od sousedů? Když se s vámi oběma moc skamarádí, můžeš ji večer pozvat dovnitř.',
-    kittens: 'Budou mít kočky od sousedů koťátka? Kamaráď se s kočkami, které k nám chodí.',
-    kitGrown: 'Kdy začne koťátko chodit na návštěvu samo?',
-  };
-  // Deníček: her two spots only; text = the fact when found, else a question
-  function diary(st, name) {
-    const nm = cleanName(name || st.name), ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY);
+  // Deníček: her two spots only; found = when it was found (the UI shows the fact from info), else the UI shows a question
+  function diary(st) {
+    const ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY);
     return ids.map(id => {
       const found = st.diary[id] || null;
-      return { id, found, text: found ? entryText(st, id, nm) : (id.startsWith('spot_') ? 'Kde se ráda nechá hladit? Hlaď ji po srsti.' : HINTS[id]) };
+      return { id, found, info: found ? entryInfo(st, id) : null };
     });
   }
   function seenQuirk(st, id, t, ev) {
@@ -1489,8 +1470,8 @@ function KockaEngine() {
   function act(st, action, arg, now) {
     const ev = advance(st, now).events;
     const t = st.t, N = st.needs, name = st.name, nm = moodName(moodValue(st));
-    const no = reason => { ev.push({ type: 'refused', reason }); return { st, events: ev }; };
-    if (typeof action !== 'string' || !ACTIONS.includes(action)) return no('Tohle teď nejde.');
+    const no = (reason, p) => { ev.push(Object.assign({ type: 'refused' }, typeof reason === 'string' ? refusal(reason, p) : reason)); return { st, events: ev }; };
+    if (typeof action !== 'string' || !ACTIONS.includes(action)) return no('cantNow');
     const before = wants(st), beforeV = before ? needs(st)[before] : 100, a = arg && typeof arg === 'object' ? arg : {};
     if (action === 'nameKitten') {   // anywhere, whatever Koxa does (she stays on the lap or up the tree)
       const why = nameKitten(st, a, ev);
@@ -1501,7 +1482,7 @@ function KockaEngine() {
     // up the tree: only calling her, fetching her down, the garden, the shop and the camera
     const TREE_OK = ['call', 'fetchDown', 'vetCure', 'goHouse', 'sow', 'waterBeds', 'harvest', 'buy', 'sell', 'place', 'photo', 'feedVisitor', 'strokeVisitor', 'deletePhoto',
       'treatVisitor', 'playVisitor'];   // not invite: she would stay stuck up there (canInvite says so)
-    if (st.yard && st.yard.tree && !TREE_OK.includes(action)) return no(`${name} je na stromě.`);
+    if (st.yard && st.yard.tree && !TREE_OK.includes(action)) return no('onTree');
     // on the lap: stroking, scratching, a treat from the hand, calling, a photo, patting and a nose tap keep her there;
     // anything else = standing up
     if (st.lap && !['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff', 'photo', 'pat', 'boop'].includes(action)) {
@@ -1514,9 +1495,9 @@ function KockaEngine() {
     // jealous: stroking or scratching her within 2 min makes it all right again
     const soothe = () => { if (!st.jealous) return; N.love = Math.min(100, N.love + JEALOUS.love); ev.push({ type: 'jealousOk', id: st.jealous.id }); st.jealous = null; };
     // alone in the garden she is not away: the player can go out to her (goGarden), or let her in (letIn)
-    if (st.out && !home.includes(action) && !(action === 'goGarden' && gardenAlone(st))) return no(gardenAlone(st) ? `${name} je na zahradě.` : `${name} je venku.`);
+    if (st.out && !home.includes(action) && !(action === 'goGarden' && gardenAlone(st))) return no(gardenAlone(st) ? 'inGarden' : 'outside');
     const wakeUp = () => { if (st.asleep) { rouse(st, t); ev.push({ type: 'wake', early: false }); } };
-    const sleeping = () => { if (st.asleep) { boxSeen(st, t, ev); no(`${name} spí, nebuď ji.`); return true; } return false; };
+    const sleeping = () => { if (st.asleep) { boxSeen(st, t, ev); no('asleep'); return true; } return false; };
     // teasing (SPEC §13.3): while she is cross a touch gets a swat (no claws); a sulk is made up by a stroke along the fur,
     // a scratch or a treat while she is awake
     const cross = () => teaseKind(st, t) === 'cross';
@@ -1564,15 +1545,15 @@ function KockaEngine() {
     switch (action) {
       case 'feed': {   // fills the bowl; she eats it over time (bowlStep), the need rises only as she eats
         const kind = typeof arg === 'string' && Object.prototype.hasOwnProperty.call(FOODS, arg) ? arg : 'kibble';
-        if (st.bowl && st.bowl.amt > BOWL.full) return no('V misce ještě je jídlo.');
+        if (st.bowl && st.bowl.amt > BOWL.full) return no('bowlNotEmpty');
         const price = CHARGE_FOOD ? FOODS[kind].price : 0;
-        if (price && !(st.stock[kind] > 0) && st.pamlsky < price) return no(`Na ${FOODS[kind].acc} nemáš dost pamlsků (${price}).`);
+        if (price && !(st.stock[kind] > 0) && st.pamlsky < price) return no('foodFunds', { food: kind, price });
         if (price && st.stock[kind] > 0) useStock(kind); else st.pamlsky -= price;
         pour(st, kind, t, ev);
         break;
       }
       case 'water': {   // fills the dish; she drinks by herself in short sessions (bowlStep)
-        if (st.dish >= DISH.full) return no('Miska s vodou je plná.');
+        if (st.dish >= DISH.full) return no('dishFull');
         st.dish = 100;
         // her tap quirk: she jumps up and drinks from the running tap instead (at home, awake, free)
         const tap = st.traits.quirk === 'tap' && free(st, t) && rnd(st) < 0.5;
@@ -1638,19 +1619,19 @@ function KockaEngine() {
         break;
       }
       case 'putDown': {
-        if (!st.held) return no(`${name} není v náruči.`);
+        if (!st.held) return no('notHeld');
         st.held = false; st.place = typeof arg === 'string' && arg.length <= 20 ? arg : null;
         ev.push({ type: 'put', place: st.place });
         break;
       }
       case 'play': {
         if (sleeping()) return { st, events: ev };
-        if (cross()) { ev.push({ type: 'ignore', reason: `${name} si s tebou teď hrát nechce. Zlobí se.` }); break; }
+        if (cross()) { ev.push({ type: 'ignore', reason: 'playCross' }); break; }
         const toy = typeof arg === 'string' && Object.prototype.hasOwnProperty.call(TOYS, arg) ? arg : 'mouse';
-        if (TOYS[toy].shop && !st.owned[toy]) return no('Tuhle hračku nemáš. Je v obchůdku.');
-        if (N.energy < 10) { ev.push({ type: 'ignore', reason: `${name} je moc unavená.` }); break; }
-        if (st.scared > t) { ev.push({ type: 'ignore', reason: `${name} se schovává.` }); break; }
-        if (sad && rnd(st) < 0.5) { ev.push({ type: 'ignore', reason: `${name} si teď nechce hrát.` }); break; }
+        if (TOYS[toy].shop && !st.owned[toy]) return no('toyNotOwned');
+        if (N.energy < 10) { ev.push({ type: 'ignore', reason: 'tired' }); break; }
+        if (st.scared > t) { ev.push({ type: 'ignore', reason: 'hiding' }); break; }
+        if (sad && rnd(st) < 0.5) { ev.push({ type: 'ignore', reason: 'noPlay' }); break; }
         const fav = (TOYS[toy].base || toy) === st.traits.toy;
         let gain = 20 + Math.floor(rnd(st) * 21) + (fav ? 10 : 0) + (TOYS[toy].bonus || 0);
         if (dayPhase(t) === 'evening') gain = Math.round(gain * 1.25);
@@ -1662,21 +1643,21 @@ function KockaEngine() {
       }
       case 'brush': {
         if (sleeping()) return { st, events: ev };
-        if (N.coat >= 98 && !(st.ill && st.ill.kind === 'fleas')) return no(`${name} je krásně učesaná.`);
+        if (N.coat >= 98 && !(st.ill && st.ill.kind === 'fleas')) return no('combed');
         const fleas = st.ill && st.ill.kind === 'fleas', gain = Math.min(fleas ? 10 : 25, 100 - N.coat);
         N.coat += gain; N.love = Math.min(100, N.love + 1);
         ev.push(fleas ? { type: 'flea' } : { type: 'brushed', gain });
         break;
       }
       case 'cleanLitter': {
-        if (N.litter >= 100) return no('Kočičí záchod je čistý.');
+        if (N.litter >= 100) return no('litterClean');
         N.litter = 100; ev.push({ type: 'clean' });
         break;
       }
       case 'letOut': {   // toulky: a walk of 2–8 h beyond the garden gate
-        if (st.lvl < WALK_BOND) return no(`Na toulky může ${name} až od přátelství ${LEVELS[WALK_BOND].name} (${LEVELS[WALK_BOND].min}).`);
-        if (st.ill) return no(`${name} je nemocná, zůstane doma.`);
-        if (st.yard && st.yard.tree) return no(`${name} je na stromě.`);
+        if (st.lvl < WALK_BOND) return no('walkBond', { level: WALK_BOND, min: LEVELS[WALK_BOND].min });
+        if (st.ill) return no('illStays');
+        if (st.yard && st.yard.tree) return no('onTree');
         if (sleeping()) return { st, events: ev };
         st.held = false; leaveYard(st, ev, null);
         st.out = { since: t, until: t + 2 * HOUR + Math.floor(rnd(st) * 6 * HOUR), walk: true, byPlayer: true };
@@ -1691,7 +1672,7 @@ function KockaEngine() {
           ev.push({ type: 'garden', weather: weather(t, st), joined: true });
           break;
         }
-        if (st.ill && st.ill.kind === 'cold') return no(`${name} má rýmu, zůstane doma.`);
+        if (st.ill && st.ill.kind === 'cold') return no('coldStays');
         if (sleeping()) return { st, events: ev };
         st.held = false;
         st.yard = { since: t, snow: false, tree: null };
@@ -1700,44 +1681,44 @@ function KockaEngine() {
         break;
       }
       case 'goHouse': {
-        if (!st.yard) return no(`${name} není na zahradě.`);
-        if (st.yard.tree) return no(`${name} je na stromě – zavolej ji, nebo ji sundej.`);
+        if (!st.yard) return no('notInGarden');
+        if (st.yard.tree) return no('onTreeFetch');
         leaveYard(st, ev, 'house');
         break;
       }
       case 'fetchDown': {
-        if (!st.yard || !st.yard.tree) return no(`${name} není na stromě.`);
+        if (!st.yard || !st.yard.tree) return no('notOnTree');
         st.yard.tree = null; N.love = Math.min(100, N.love + 2);
         ev.push({ type: 'climbDown', by: 'fetch' }, { type: 'purr' });
         break;
       }
       case 'sow': {
         const i = a.bed, crop = a.crop;
-        if (!Number.isInteger(i) || i < 0 || i >= BEDS) return no('Takový záhon tu není.');
-        if (i >= bedCount(st)) return no(`Další záhony budou od přátelství ${LEVELS[3].name}.`);
-        if (typeof crop !== 'string' || !Object.prototype.hasOwnProperty.call(CROPS, crop)) return no('Taková semínka nemáme.');
-        if (bedSleeps(t)) return no('Záhony spí pod sněhem.');
-        if (st.beds[i]) return no('Na záhonu už něco roste.');
+        if (!Number.isInteger(i) || i < 0 || i >= BEDS) return no('noBed');
+        if (i >= bedCount(st)) return no('bedLevel', { level: 3 });
+        if (typeof crop !== 'string' || !Object.prototype.hasOwnProperty.call(CROPS, crop)) return no('noSeeds');
+        if (bedSleeps(t)) return no('bedsSnow');
+        if (st.beds[i]) return no('bedTaken');
         const sp = CHARGE_SEEDS ? CROPS[crop].seed : 0, sk = 'seed_' + crop;
-        if (sp && !(st.stock[sk] > 0) && st.pamlsky < sp) return no(`Na ${CROPS[crop].acc} nemáš dost pamlsků (${sp}).`);
+        if (sp && !(st.stock[sk] > 0) && st.pamlsky < sp) return no('seedFunds', { crop, price: sp });
         if (sp && st.stock[sk] > 0) useStock(sk); else st.pamlsky -= sp;
         st.beds[i] = { crop, sown: t, days: 0, watered: 0 };
         ev.push({ type: 'sown', bed: i, crop });
         break;
       }
       case 'waterBeds': {
-        if (bedSleeps(t)) return no('Záhony spí pod sněhem.');
+        if (bedSleeps(t)) return no('bedsSnow');
         const k = dkey(t), todo = st.beds.filter(b => b && b.days < CROPS[b.crop].days);
-        if (!todo.length) return no('Není co zalévat.');
-        if (todo.every(b => b.watered === k)) return no('Dnes už je zalito.');
+        if (!todo.length) return no('nothingToWater');
+        if (todo.every(b => b.watered === k)) return no('watered');
         for (const b of todo) b.watered = k;
         ev.push({ type: 'watered', n: todo.length });
         break;
       }
       case 'harvest': {
         const i = a.bed, b = Number.isInteger(i) && i >= 0 && i < BEDS ? st.beds[i] : null;
-        if (!b) return no('Na záhonu nic neroste.');
-        if (b.days < CROPS[b.crop].days) return no(CROPS[b.crop].unripe);
+        if (!b) return no('bedEmpty');
+        if (b.days < CROPS[b.crop].days) return no('unripe', { crop: b.crop });
         st.beds[i] = null;
         const yld = CROPS[b.crop].yield;
         ev.push({ type: 'harvested', bed: i, crop: b.crop, n: yld });
@@ -1746,7 +1727,7 @@ function KockaEngine() {
         break;
       }
       case 'catnip': {
-        if (!st.pantry.catnip) return no('Nemáš žádnou šantu.');
+        if (!st.pantry.catnip) return no('noCatnip');
         if (sleeping()) return { st, events: ev };
         if (--st.pantry.catnip === 0) delete st.pantry.catnip;
         catnip();
@@ -1765,19 +1746,19 @@ function KockaEngine() {
         break;
       }
       case 'lapOff': {
-        if (!st.lap) return no(`${name} ti nesedí na klíně.`);
+        if (!st.lap) return no('notOnLap');
         ev.push({ type: 'lapOff', dozing: st.lap.doze });
         lapNapDone(st, t); st.lap = null;
         break;
       }
       case 'letIn': {
-        if (!st.out) return no(`${name} je doma.`);
+        if (!st.out) return no('atHome');
         comeBack(st, t, ev, false, true);
         break;
       }
       case 'treat': {   // a pamlsek from the hand, or arg 'stick': a kočičí tyčinka from the stock (love +5)
         const stick = arg === 'stick';
-        if (stick ? !(st.stock.stick > 0) : st.pamlsky < 1) return no(stick ? 'Nemáš žádné tyčinky.' : 'Nemáš žádné pamlsky.');
+        if (stick ? !(st.stock.stick > 0) : st.pamlsky < 1) return no(stick ? 'noSticks' : 'noTreats');
         giveTreat(stick, !!st.train && t - st.train.at <= TREAT_WINDOW && t >= st.train.at);
         if (st.train) rewardTrick(st, t, ev);       // the treat right after a trick: a training success
         reconcile('treat');                          // a sulk is made up (a cross is not: she eats it and stays cross)
@@ -1785,10 +1766,10 @@ function KockaEngine() {
       }
       case 'buy': {
         const id = typeof arg === 'string' ? arg : a.id, it = typeof id === 'string' && Object.prototype.hasOwnProperty.call(SHOP_BY, id) ? SHOP_BY[id] : null;
-        if (!it) return no('Tohle v obchůdku nemají.');
-        if (st.lvl < it.bond) return no(`Tohle bude k mání od přátelství ${LEVELS[it.bond].name}.`);
-        if (!it.stock && st.owned[it.id]) return no('Tohle už máš.');
-        if (st.pamlsky < it.price) return no(`${it.name} stojí ${pml(it.price)}, tolik nemáš.`);
+        if (!it) return no('notInShop');
+        if (st.lvl < it.bond) return no('shopLevel', { level: it.bond });
+        if (!it.stock && st.owned[it.id]) return no('owned');
+        if (st.pamlsky < it.price) return no('price', { item: it.id, price: it.price });
         st.pamlsky -= it.price;
         if (it.stock) st.stock[it.stock] = Math.min(CMAX, (st.stock[it.stock] || 0) + it.n); else st.owned[it.id] = true;
         ev.push({ type: 'bought', id: it.id, kind: it.kind });
@@ -1797,10 +1778,10 @@ function KockaEngine() {
       }
       case 'place': {
         const it = typeof a.id === 'string' && Object.prototype.hasOwnProperty.call(SHOP_BY, a.id) ? SHOP_BY[a.id] : null;
-        if (!it || !st.owned[it.id]) return no('Tohle nemáš.');
-        if (!it.room) return no('Tohle se nikam nestaví.');
-        if (!ROOMS.includes(a.room)) return no('Takové místo v domě není.');
-        if (it.fixed && a.room !== it.room) return no(`${it.name}: patří ${ROOM_TO[it.room]}.`);
+        if (!it || !st.owned[it.id]) return no('notOwned');
+        if (!it.room) return no('notPlaceable');
+        if (!ROOMS.includes(a.room)) return no('noRoom');
+        if (it.fixed && a.room !== it.room) return no('fixedRoom', { item: it.id, room: it.room });
         const c = v => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, 0, 1) : 0.5);
         st.furniture[it.id] = { room: a.room, x: c(a.x), y: c(a.y) };
         ev.push({ type: 'placed', id: it.id, room: a.room });
@@ -1808,8 +1789,8 @@ function KockaEngine() {
       }
       case 'sell': {
         const crop = typeof a.crop === 'string' && Object.prototype.hasOwnProperty.call(CROPS, a.crop) ? a.crop : null;
-        if (!crop || !(st.pantry[crop] > 0)) return no('Tohle ve spíži nemáš.');
-        if (!CROPS[crop].sell) return no('Šantu nikdo nekoupí, ta je pro kočku.');
+        if (!crop || !(st.pantry[crop] > 0)) return no('notInPantry');
+        if (!CROPS[crop].sell) return no('catnipNoSale');
         const n = Math.min(st.pantry[crop], Number.isInteger(a.n) && a.n >= 1 ? a.n : 1), got = n * CROPS[crop].sell;
         st.pantry[crop] -= n; if (!st.pantry[crop]) delete st.pantry[crop];
         st.pamlsky = Math.min(99999, st.pamlsky + got);
@@ -1818,8 +1799,8 @@ function KockaEngine() {
       }
       case 'train': {
         const tr = typeof a.trick === 'string' && Object.prototype.hasOwnProperty.call(TRICKS, a.trick) ? a.trick : null;
-        if (!tr) return no('Takový trik neznáme.');
-        if (st.bond < TRICKS[tr].bond) { ev.push({ type: 'trickRefused', trick: tr, reason: `Na tenhle trik je potřeba přátelství ${TRICKS[tr].bond}.` }); break; }
+        if (!tr) return no('noTrick');
+        if (st.bond < TRICKS[tr].bond) { ev.push({ type: 'trickRefused', trick: tr, reason: 'bond', bond: TRICKS[tr].bond }); break; }
         if (sleeping()) return { st, events: ev };
         const P = trickRec(tr);
         st.train = null;
@@ -1830,7 +1811,7 @@ function KockaEngine() {
         if (!okp) break;
         st.train = { trick: tr, at: t };
         if (typeof a.treatAt === 'number' && Number.isFinite(a.treatAt)) {    // the UI tells when the treat came
-          if (st.pamlsky < 1) { ev.push({ type: 'trickRefused', trick: tr, reason: 'Nemáš pamlsek na odměnu.' }); break; }
+          if (st.pamlsky < 1) { ev.push({ type: 'trickRefused', trick: tr, reason: 'noTreat' }); break; }
           giveTreat(false, true);
           rewardTrick(st, a.treatAt, ev);
         }
@@ -1854,9 +1835,9 @@ function KockaEngine() {
       }
       case 'showTrick': {
         const tr = typeof a.trick === 'string' && Object.prototype.hasOwnProperty.call(TRICKS, a.trick) ? a.trick : null;
-        if (!tr) return no('Takový trik neznáme.');
+        if (!tr) return no('noTrick');
         const P = st.tricks[tr];
-        if (!P || !P.learned) { ev.push({ type: 'trickRefused', trick: tr, reason: `Tenhle trik ${name} ještě neumí.` }); break; }
+        if (!P || !P.learned) { ev.push({ type: 'trickRefused', trick: tr, reason: 'notLearned' }); break; }
         if (sleeping()) return { st, events: ev };
         const okp = performs(st, P);
         ev.push(okp ? { type: 'perform', trick: tr, ok: true, shown: true } : { type: 'perform', trick: tr, ok: false, shown: true, understood: true, reason: notNowReason(st) });
@@ -1869,7 +1850,7 @@ function KockaEngine() {
         break;
       }
       case 'vetCure': {
-        if (!st.ill) return no(`${name} je zdravá.`);
+        if (!st.ill) return no('healthy');
         const paid = Math.min(15, st.pamlsky);
         st.pamlsky -= paid;
         cure(st, 'vet', ev, { paid, short: paid < 15 });
@@ -1878,22 +1859,22 @@ function KockaEngine() {
         break;
       }
       case 'pill': {
-        if (!st.pill) return no(`${name} žádnou pilulku nepotřebuje.`);
-        if (dkey(t) < st.pill) return no('Pilulka je až na zítra.');
+        if (!st.pill) return no('noPill');
+        if (dkey(t) < st.pill) return no('pillTomorrow');
         st.pill = 0; N.love = Math.max(0, N.love - 1);
         ev.push({ type: 'pill' });
         break;
       }
       case 'call': {   // user's wish 2026-11-17: whether she comes depends on her mood and the bond (CALL)
-        if (st.out) { ev.push({ type: 'ignore', reason: gardenAlone(st) ? `${name} je na zahradě.` : `${name} je venku.` }); break; }
-        if (st.asleep) { ev.push({ type: 'ignore', reason: `${name} spí.` }); break; }
+        if (st.out) { ev.push({ type: 'ignore', reason: gardenAlone(st) ? 'inGarden' : 'outside' }); break; }
+        if (st.asleep) { ev.push({ type: 'ignore', reason: 'asleepCall' }); break; }
         if (st.yard && st.yard.tree) {
           const T = st.yard.tree;
           if (++T.calls >= 3 || rnd(st) < 0.5) { st.yard.tree = null; ev.push({ type: 'climbDown', by: 'call' }); }
-          else ev.push({ type: 'ignore', reason: `${name} se bojí slézt. Zkus to znovu.` });
+          else ev.push({ type: 'ignore', reason: 'scaredDown' });
           break;
         }
-        if (cross()) { ev.push({ type: 'ignore', reason: `${name} tě teď schválně neposlouchá.` }); break; }
+        if (cross()) { ev.push({ type: 'ignore', reason: 'crossCall' }); break; }
         if (st.off && t < st.off.until && !st.off.turned) { st.off.turned = true; ev.push({ type: 'turnBack' }); break; }
         if (st.lap || st.held) { ev.push({ type: 'come' }); break; }   // she is with you already
         if (st.meal) {   // eating (or on her way to the bowl): she finishes first, then comes
@@ -1907,7 +1888,7 @@ function KockaEngine() {
         if (rnd(st) < p) { st.callAt = 0; ev.push({ type: 'come' }); break; }
         if ((nm === 'grumpy' || sad) && rnd(st) < CALL.ignore) {
           st.callAt = 0;
-          ev.push({ type: 'ignore', reason: sad ? `${name} na tebe jen smutně koukne a zůstane, kde je.` : `${name} dělá, že neslyší.` });
+          ev.push({ type: 'ignore', reason: sad ? 'sadCall' : 'deaf' });
           break;
         }
         // she heard it (an ear, the tail) and comes on her own a little later; a second call never makes it later
@@ -1941,14 +1922,14 @@ function KockaEngine() {
   }
 
   /* --- Škádlení: teasing out of love (SPEC §13.3) --- */
-  // pat / boop / splash; returns a Czech refusal or null. No rnd(st): the payback draws are keyed on the moment (salts 53–55)
+  // pat / boop / splash; returns a refusal (refusal()) or null. No rnd(st): the payback draws are keyed on the moment (salts 53–55)
   function teaseAct(st, action, a, t, nm, ev) {
     const T = st.tease, N = st.needs, today = dkey(t), lap = !!st.lap;
     const touch = () => { T.heat = Math.round(heatNow(T, t) * 1e6) / 1e6; T.at = t; };   // heat brought up to date at t
     const addHeat = k => { T.heat = Math.min(TEASE.heatMax, T.heat + k); };
     const love = d => { N.love = clamp(N.love + d, 0, 100); };
     if (action === 'boop') {
-      if (st.asleep || (st.lap && st.lap.doze)) return `${st.name} spí, nebuď ji.`;
+      if (st.asleep || (st.lap && st.lap.doze)) return refusal('asleep');
       if (teaseKind(st, t) === 'cross') { ev.push({ type: 'swat', why: 'boop' }); return null; }
       T.boops = T.boops.filter(b => b > t - TEASE.boopWin);
       T.boops.push(t); touch();
@@ -1957,9 +1938,9 @@ function KockaEngine() {
       return null;
     }
     if (action === 'splash') {
-      if (!st.yard) return 'Konví se zalévá na zahradě.';
-      if (season(t) === 'winter') return 'V zimě ne – byla by jí zima.';
-      if (st.asleep) return `${st.name} spí. Nech ji spát.`;
+      if (!st.yard) return refusal('splashGarden');
+      if (season(t) === 'winter') return refusal('splashWinter');
+      if (st.asleep) return refusal('splashAsleep');
       st.held = false;
       const w = t + TEASE.wetMin * MIN;
       if (w > (st.wet > t ? st.wet : 0)) { st.wet = w; T.splash = w; }   // else she is wetter from the rain already
@@ -2067,7 +2048,6 @@ function KockaEngine() {
     T.pay = { kind: rndSeed(st.seed, k, 55) < 0.5 ? 'shelf' : 'ambush', at: T.until + (P.min + Math.floor(rndSeed(st.seed, k, 54) * (P.max - P.min + 1))) * MIN };
   }
 
-  const ROOM_TO = { living: 'do obýváku', kitchen: 'do kuchyně', hall: 'do předsíně', garden: 'na zahradu' };
   // the chance she performs a trick: by progress (learned 0.9), mood, energy, offence
   function performChance(st, P) {
     const m = mood(st), mk = m === 'happy' ? 1 : m === 'calm' ? 0.85 : m === 'grumpy' ? 0.5 : 0;   // sad: tricks fail (§4)
@@ -2100,10 +2080,10 @@ function KockaEngine() {
   // minigame rewards and records (§8): the UI plays the game and reports the score
   function minigameResult(st, game, score, now) {
     const ev = advance(st, now).events, t = st.t;
-    const no = reason => { ev.push({ type: 'refused', reason }); return { st, events: ev }; };
-    if (typeof game !== 'string' || !Object.prototype.hasOwnProperty.call(GAMES, game)) return no('Takovou hru neznáme.');
-    if (st.out) return no(`${st.name} je venku.`);
-    if (st.yard && st.yard.tree) return no(`${st.name} je na stromě.`);
+    const no = reason => { ev.push(Object.assign({ type: 'refused' }, refusal(reason))); return { st, events: ev }; };
+    if (typeof game !== 'string' || !Object.prototype.hasOwnProperty.call(GAMES, game)) return no('noGame');
+    if (st.out) return no('outside');
+    if (st.yard && st.yard.tree) return no('onTree');
     if (st.lap) { ev.push({ type: 'lapOff', dozing: st.lap.doze }); lapNapDone(st, t); st.lap = null; }
     if (st.meal) endMeal(st, t, true, ev);    // she leaves the bowl to play
     if (st.drink) endDrink(st, t, true, ev);
@@ -2124,22 +2104,23 @@ function KockaEngine() {
   }
   // the shop for the UI: items offered at her bond level, with owned / affordable
   function shop(st) {
-    return SHOP.filter(it => st.lvl >= it.bond).map(it => ({ id: it.id, kind: it.kind, name: it.name, price: it.price, room: it.room,
+    return SHOP.filter(it => st.lvl >= it.bond).map(it => ({ id: it.id, kind: it.kind, price: it.price, room: it.room,
       owned: !it.stock && !!st.owned[it.id], have: it.stock ? st.stock[it.stock] || 0 : null, affordable: st.pamlsky >= it.price }));
   }
   // Výcvik for the UI
   function tricks(st) {
     return Object.keys(TRICKS).map(id => { const P = st.tricks[id] || { progress: 0, learned: 0 };
-      return { id, name: TRICKS[id].name, cue: TRICKS[id].cue, bond: TRICKS[id].bond, available: st.bond >= TRICKS[id].bond, progress: P.progress, of: TRICK_N, learned: P.learned || null }; });
+      return { id, cue: TRICKS[id].cue, bond: TRICKS[id].bond, available: st.bond >= TRICKS[id].bond, progress: P.progress, of: TRICK_N, learned: P.learned || null }; });
   }
 
   /* --- Phase 5: neighbour cats over the fence and the album (SPEC §8 Visitors, Album, §12e) --- */
-  // trait: how they take a stroke and food; fem: Czech forms (dostal / dostala)
+  // trait: how they take a stroke and food; fem: the grammatical gender of the messages (dostal / dostala); their names are
+  // the UI's messages (visitor() gives name: null for them)
   const VISITORS = deep({
-    mourek: { name: 'Mourek', trait: 'curious', fem: false }, liza: { name: 'Líza', trait: 'shy', fem: true },
-    bivoj: { name: 'Bivoj', trait: 'bold', fem: false }, ciperka: { name: 'Čiperka', trait: 'playful', fem: true },
-    pacicka: { name: 'Pacička', trait: 'greedy', fem: true }, rambo: { name: 'Rambo', trait: 'grumpy', fem: false },
-    sedivka: { name: 'Šedivka', trait: 'old', fem: true }, fousek: { name: 'Fousek', trait: 'sleepy', fem: false },
+    mourek: { trait: 'curious', fem: false }, liza: { trait: 'shy', fem: true },
+    bivoj: { trait: 'bold', fem: false }, ciperka: { trait: 'playful', fem: true },
+    pacicka: { trait: 'greedy', fem: true }, rambo: { trait: 'grumpy', fem: false },
+    sedivka: { trait: 'old', fem: true }, fousek: { trait: 'sleepy', fem: false },
   });
   const VISITOR_IDS = Object.keys(VISITORS);
   /* --- Phase C: kittens visiting (SPEC §8b Phase C; they only visit, never a second cat at home) --- */
@@ -2150,22 +2131,24 @@ function KockaEngine() {
   // alone: from this age (days) a kitten visits on its own; grown: adult size (can be invited); the visit pick: a mother
   // with small kittens weighs motherW (1 for the others), a young cat kitW, all young cats together at most kitsW
   const KIT = deep({ after: 7, gap: 120, max: 3, p: 0.1, per: 4, friend: 3, alone: 21, grown: 60, motherW: 3, kitW: 0.6, kitsW: 3 });
-  // suggested names (until the player names the kitten), none the same as a neighbour's
+  // suggested names (until the player names the kitten), none the same as a neighbour's. They are stored in the save as the
+  // kitten's name (like the player's name for Koxa: data, not a text of the game; the player renames it)
   const KIT_NAMES = deep({
-    f: ['Micinka', 'Packa', 'Kulička', 'Mourinka', 'Bětka', 'Fifinka', 'Ťapka', 'Žofka', 'Kapička', 'Lilinka', 'Mína', 'Čiča'],
-    m: ['Tygřík', 'Čertík', 'Mikeš', 'Šmudla', 'Drobek', 'Bobík', 'Fíla', 'Ťapík', 'Uhlík', 'Pepík', 'Mourínek', 'Kulíšek'],
+    f: ['Micinka', 'Packa', 'Kulička', 'Mourinka', 'Bětka', 'Fifinka', 'Ťapka', 'Žofka', 'Kapička', 'Lilinka', 'Mína', 'Čiča'],   // i18n-ignore: stored names
+    m: ['Tygřík', 'Čertík', 'Mikeš', 'Šmudla', 'Drobek', 'Bobík', 'Fíla', 'Ťapík', 'Uhlík', 'Pepík', 'Mourínek', 'Kulíšek'],   // i18n-ignore: stored names
   });
   // a kitten's trait when not the mother's (30 %): playful ones are the most common, never old
   const KIT_TRAITS = deep({ curious: 2, shy: 1, bold: 1, playful: 3, greedy: 1, grumpy: 0.5, sleepy: 1 });
-  // where a young cat (from 21 days) likes a stroke, by its trait (a small kitten likes it everywhere); text(name, fem)
+  // where a young cat (from 21 days) likes a stroke, by its trait (a small kitten likes it everywhere); the UI's help line
+  // comes from the trait
   const KIT_LIKES = deep({
-    curious: { likes: ['head', 'ears'], dislikes: ['belly'], max: 900, text: (n, f) => `${n} má ${f ? 'ráda' : 'rád'} hlazení na hlavě a za ušima. Na bříško ${f ? 'jí' : 'mu'} nesahej.` },
-    shy: { likes: ['head', 'chin'], dislikes: ['belly', 'tail', 'paws'], max: 600, text: n => `${n} se nechá hladit jen pomalu a jemně, na hlavě a na bradě.` },
-    bold: { likes: ['back'], dislikes: ['belly', 'paws'], max: 900, text: (n, f) => `${n} má ${f ? 'ráda' : 'rád'} hlazení na zádech. Bříško a tlapky si hlídá.` },
-    playful: { likes: ['head', 'ears', 'chin', 'back', 'tailBase'], dislikes: ['tail'], max: 900, text: n => `${n} se nechá hladit skoro všude, jen ne na ocase.` },
-    greedy: { likes: ['chin'], dislikes: ['tail'], max: 900, text: n => `${n} má nejradši drbání na bradě. Ocas nech být.` },
-    grumpy: { likes: ['tailBase'], dislikes: ['belly', 'tail', 'paws'], max: 900, text: (n, f) => `${n} má ${f ? 'ráda' : 'rád'} hlazení u kořene ocasu. Bříško, ocas a tlapky nech být.` },
-    sleepy: { likes: ['ears', 'chin'], dislikes: ['paws'], max: 900, text: (n, f) => `${n} má ${f ? 'ráda' : 'rád'} drbání za ušima a na bradě. Tlapky nech být.` },
+    curious: { likes: ['head', 'ears'], dislikes: ['belly'], max: 900 },
+    shy: { likes: ['head', 'chin'], dislikes: ['belly', 'tail', 'paws'], max: 600 },
+    bold: { likes: ['back'], dislikes: ['belly', 'paws'], max: 900 },
+    playful: { likes: ['head', 'ears', 'chin', 'back', 'tailBase'], dislikes: ['tail'], max: 900 },
+    greedy: { likes: ['chin'], dislikes: ['tail'], max: 900 },
+    grumpy: { likes: ['tailBase'], dislikes: ['belly', 'tail', 'paws'], max: 900 },
+    sleepy: { likes: ['ears', 'chin'], dislikes: ['paws'], max: 900 },
   });
   const isKitId = id => typeof id === 'string' && /^k([1-9]|1[0-2])$/.test(id);
   const kitOf = (st, id) => (isKitId(id) && Array.isArray(st.kits) ? st.kits.find(k => k.id === id) || null : null);
@@ -2180,11 +2163,12 @@ function KockaEngine() {
     const v = age <= 2 ? 1 : age < KIT.alone ? 1 - 0.65 * (age - 2) / (KIT.alone - 2) : age < KIT.grown ? 0.35 * (KIT.grown - age) / (KIT.grown - KIT.alone) : 0;
     return r2(v);
   }
-  // { id, name, trait, fem, coat, kit, mother, ageDays, small } for any visitor id (null when unknown); coat = whose coat the
+  // { id, name, trait, fem, coat, kit, mother, ageDays, small } for any visitor id (null when unknown; name: a kitten's, null
+  // for the eight: the UI has their names); coat = whose coat the
   // art draws (a kitten: the mother's or a tom's); small = under 21 days, comes only with its mother
   function visitor(st, id) {
     if (typeof id !== 'string') return null;
-    if (Object.prototype.hasOwnProperty.call(VISITORS, id)) { const V = VISITORS[id]; return { id, name: V.name, trait: V.trait, fem: V.fem, coat: id, kit: 0, mother: null, ageDays: null, small: false }; }
+    if (Object.prototype.hasOwnProperty.call(VISITORS, id)) { const V = VISITORS[id]; return { id, name: null, trait: V.trait, fem: V.fem, coat: id, kit: 0, mother: null, ageDays: null, small: false }; }
     const K = st && kitOf(st, id);
     if (!K) return null;
     const age = Math.max(0, ((Number.isFinite(st.t) ? st.t : K.born) - K.born) / DAY);
@@ -2198,10 +2182,10 @@ function KockaEngine() {
   // the unnamed kittens that have been seen (the UI's "Koťátka!" dialog), as visitor() records
   function kitsNew(st) { return (Array.isArray(st.kits) ? st.kits : []).filter(k => !k.named && kitSeen(st, k)).map(k => visitor(st, k.id)); }
   function kitName(st, fem, r) {
-    const used = new Set([st.name].concat(VISITOR_IDS.map(id => VISITORS[id].name), st.kits.map(k => k.name)).map(s => s.toLowerCase()));
+    const used = new Set([st.name].concat(st.kits.map(k => k.name)).map(s => s.toLowerCase()));   // KIT_NAMES has no neighbour's name
     const L = KIT_NAMES[fem ? 'f' : 'm'], s = Math.floor(r * L.length);
     for (let i = 0; i < L.length; i++) { const nm = L[(s + i) % L.length]; if (!used.has(nm.toLowerCase())) return nm; }
-    return fem ? 'Kočička' : 'Kocourek';
+    return fem ? 'Kočička' : 'Kocourek';   // i18n-ignore: a kitten name stored in the save (see KIT_NAMES)
   }
   // a new local day: a mother the player has 3 hearts with may have kittens (seeded by the day, salts 40–49); she stays
   // away 2–3 days and then comes with them; the kittens are born at the day's midnight
@@ -2230,11 +2214,11 @@ function KockaEngine() {
   }
   // the small kittens that come with their mother now
   const smallKits = (st, id, t) => st.kits.filter(k => k.mother === id && k.born <= t && t - k.born < KIT.alone * DAY).map(k => k.id);
-  // nameKitten: a Czech refusal or null
+  // nameKitten: a refusal or null
   function nameKitten(st, a, ev) {
     const K = kitOf(st, a.id);
-    if (!K || !kitSeen(st, K)) return 'Takové koťátko neznáme.';
-    if (typeof a.name !== 'string' || !a.name.trim()) return 'Napiš koťátku jméno.';
+    if (!K || !kitSeen(st, K)) return refusal('noKitten');
+    if (typeof a.name !== 'string' || !a.name.trim()) return refusal('kitNameEmpty');
     K.name = cleanName(a.name); K.named = true;
     const R = vrec(st, K.id); if (!R.met) R.met = st.t;   // named = met: it stays in the album when grown
     ev.push({ type: 'kitNamed', id: K.id, name: K.name });
@@ -2300,16 +2284,16 @@ function KockaEngine() {
   });
   // Phase B: where each cat likes a finger stroke (REGIONS ids; liked = +¼ heart and the higher cap), where it does not
   // (no friendship: visitorDislike; shy Líza runs off under 2 hearts, Rambo swipes under 3), the fastest stroke it takes
-  // (px/s; faster = disliked) and a Czech line for the help and the visitor's menu
+  // (px/s; faster = disliked); the help line for the help and the visitor's menu is the UI's message per cat
   const VISITOR_LIKES = deep({
-    mourek: { likes: ['head', 'ears'], dislikes: ['belly'], max: 900, text: 'Mourek má rád hlazení na hlavě a za ušima. Na bříško mu nesahej.' },
-    liza: { likes: ['head', 'chin'], dislikes: ['ears', 'back', 'tailBase', 'belly', 'tail', 'paws'], max: 500, text: 'Líza se nechá hladit jen pomalu a jemně, na hlavě a na bradě. Jinde se lekne.' },
-    bivoj: { likes: ['back'], dislikes: ['belly', 'paws'], max: 900, text: 'Bivoj má rád hlazení na zádech. Bříško a tlapky si hlídá.' },
-    ciperka: { likes: ['head', 'ears', 'chin', 'back', 'tailBase', 'belly', 'paws'], dislikes: ['tail'], max: 900, text: 'Čiperka se nechá hladit skoro všude, jen ne na ocase.' },
-    pacicka: { likes: ['chin'], dislikes: ['tail'], max: 900, text: 'Pacička má nejradši drbání na bradě. Ocas nech být.' },
-    rambo: { likes: ['tailBase'], dislikes: ['belly', 'tail', 'paws'], max: 900, text: 'Rambo má rád hlazení u kořene ocasu. Na bříško mu nesahej, dokud tě dobře nezná – ohání se.' },
-    sedivka: { likes: ['back'], dislikes: ['paws', 'tail'], max: 900, text: 'Šedivka má moc ráda hlazení na zádech. Tlapky a ocas nech být.' },
-    fousek: { likes: ['ears', 'chin'], dislikes: ['paws'], max: 900, text: 'Fousek má rád drbání za ušima a na bradě. Tlapky nech být.' },
+    mourek: { likes: ['head', 'ears'], dislikes: ['belly'], max: 900 },
+    liza: { likes: ['head', 'chin'], dislikes: ['ears', 'back', 'tailBase', 'belly', 'tail', 'paws'], max: 500 },
+    bivoj: { likes: ['back'], dislikes: ['belly', 'paws'], max: 900 },
+    ciperka: { likes: ['head', 'ears', 'chin', 'back', 'tailBase', 'belly', 'paws'], dislikes: ['tail'], max: 900 },
+    pacicka: { likes: ['chin'], dislikes: ['tail'], max: 900 },
+    rambo: { likes: ['tailBase'], dislikes: ['belly', 'tail', 'paws'], max: 900 },
+    sedivka: { likes: ['back'], dislikes: ['paws', 'tail'], max: 900 },
+    fousek: { likes: ['ears', 'chin'], dislikes: ['paws'], max: 900 },
   });
   const PLAY_VISIT = 0.5;   // the feather for two: +¼ heart a game, at most +½ a visit, one game a minute
   // jealousy: the chance (her hearts for that cat: under 1 / 1–3 / 3+), at most once every 20 min, 2 min to make it right
@@ -2565,10 +2549,10 @@ function KockaEngine() {
     R.friend = Math.round(clamp(R.friend + d, 0, 5) * 4) / 4;
     if (Math.floor(R.friend) > before) ev.push({ type: 'visitorFriend', id, hearts: Math.floor(R.friend) });
   }
-  // feedVisitor / strokeVisitor / treatVisitor / playVisitor / photo / deletePhoto; returns a Czech refusal or null
+  // feedVisitor / strokeVisitor / treatVisitor / playVisitor / photo / deletePhoto; returns a refusal or null
   function socialAct(st, action, a, t, ev) {
     if (action === 'photo') {
-      if (st.album.length >= ALBUM_MAX) return `Album je plné (${ALBUM_MAX} fotek). Nějakou fotku smaž.`;
+      if (st.album.length >= ALBUM_MAX) return refusal('albumFull', { max: ALBUM_MAX });
       const str = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
       const room = PHOTO_ROOMS.includes(a.room) ? a.room : st.yard ? 'garden' : st.lap ? 'lap' : 'living';
       // who else is in the photographed place: the visitor in the garden (also on the bench lap), the guest in the living
@@ -2576,7 +2560,7 @@ function KockaEngine() {
       const outside = room === 'garden' || (room === 'lap' && !!st.yard), inside = room === 'living';
       const vis = outside && st.visit ? st.visit.id : inside && st.guest ? st.guest.id : null;
       const nokoxa = !!st.out || a.nokoxa === true;
-      if (nokoxa && !vis) return st.out ? `${st.name} je venku.` : 'Na fotce nikdo není.';
+      if (nokoxa && !vis) return refusal(st.out ? 'outside' : 'photoEmpty');
       const p = {
         t, pose: str(a.pose, 20) || (st.asleep ? 'sleep' : 'sit'), room,
         mood: ['happy', 'calm', 'grumpy', 'sad'].includes(a.mood) ? a.mood : mood(st),
@@ -2593,17 +2577,17 @@ function KockaEngine() {
     }
     if (action === 'deletePhoto') {
       const i = st.album.findIndex(p => p.t === a.t);
-      if (i < 0) return 'Takovou fotku v albu nemáš.';
+      if (i < 0) return refusal('noPhoto');
       st.album.splice(i, 1);
       ev.push({ type: 'photoDeleted', n: st.album.length });
       return null;
     }
     if (st.visit) st.visit = fixVisit(st.visit, t, st);
     const id = isVisitor(st, a.id) ? a.id : null;
-    if (!id) return 'Takovou kočku neznáme.';
+    if (!id) return refusal('noCat');
     const V = visitor(st, id);
     if (st.guest && st.guest.id === id) {   // the guest in the living room: strokes only, they change no hearts
-      if (action !== 'strokeVisitor') return `${V.name} je u nás na noc. To počká do rána.`;
+      if (action !== 'strokeVisitor') return refusal('guestWaits', { vis: id });
       const k = strokeKind(st, id, a);
       if (k.slow) return null;
       ev.push(k.why ? { type: 'visitorDislike', id, region: k.region, why: k.why, away: V.trait === 'shy' } : Object.assign({ type: 'visitorPurr', id }, k.region ? { region: k.region, liked: k.liked } : {}));
@@ -2611,13 +2595,13 @@ function KockaEngine() {
     }
     // a small kitten is here with its mother: it has its own strokes, treat and games of this visit (st.visit.kp)
     const inKits = !!(st.visit && st.visit.kits && st.visit.kits.includes(id));
-    if (!st.visit || (st.visit.id !== id && !inKits)) return `${V.name} tu teď není.`;
+    if (!st.visit || (st.visit.id !== id && !inKits)) return refusal('notHere', { vis: id });
     const R = vrec(st, id), S = inKits ? kitPlayer(st, id) : st.visit, wild = !V.small && !inKits;   // a small kitten never runs off or swipes
     if (!R.met) R.met = t;
     const [strokeGain, foodGain] = BY_TRAIT[V.trait];
     if (action === 'feedVisitor') {
       const today = dkey(t);
-      if (R.fed === today) return `${V.name} už dnes ${V.fem ? 'dostala' : 'dostal'}.`;
+      if (R.fed === today) return refusal('fedToday', { vis: id });
       R.fed = today;
       if (!inKits && (V.trait === 'greedy' || V.trait === 'sleepy')) S.until += VISIT.fedStay * MIN;   // stays longer
       ev.push({ type: 'visitorFed', id });
@@ -2626,8 +2610,8 @@ function KockaEngine() {
       return null;
     }
     if (action === 'treatVisitor') {   // a pamlsek from the hand: once a visit, friendship as food; it counts as fed today
-      if (S.treat) return `${V.name} už pamlsek ${V.fem ? 'dostala' : 'dostal'}.`;
-      if (st.pamlsky < 1) return 'Nemáš žádné pamlsky.';
+      if (S.treat) return refusal('treatGiven', { vis: id });
+      if (st.pamlsky < 1) return refusal('noTreats');
       st.pamlsky -= 1; S.treat = true; R.fed = dkey(t);
       ev.push({ type: 'visitorTreat', id });
       addFriend(st, id, foodGain, ev);
@@ -2636,7 +2620,7 @@ function KockaEngine() {
       return null;
     }
     if (action === 'playVisitor') {   // the feather for two: one game a minute; Koxa plays along when she is with them
-      if (S.play && t - S.play < MIN) return `${V.name} si chvilku oddechne.`;
+      if (S.play && t - S.play < MIN) return refusal('resting', { vis: id });
       S.play = t;
       const koxa = palAwake(st), caught = koxa && a.caught === 'koxa' ? 'koxa' : 'visitor';
       ev.push({ type: 'visitorPlay', id, caught, koxa });
@@ -2710,27 +2694,27 @@ function KockaEngine() {
     if (d.getTime() <= t) { d.setDate(d.getDate() + 1); d.setHours(7, 0, 0, 0); }
     return d.getTime();
   }
-  // why the visitor cannot be invited in for the night now (Czech), or null
+  // why the visitor cannot be invited in for the night now (a refusal), or null
   function inviteWhy(st, id, t) {
-    if (!isVisitor(st, id)) return 'Takovou kočku neznáme.';
+    if (!isVisitor(st, id)) return refusal('noCat');
     const V = visitor(st, id), R = st.visitors[id];
-    if (st.guest) return st.guest.id === id ? `${V.name} už u nás na noc je.` : `Na noc už u nás je ${visitor(st, st.guest.id).name}.`;
-    if (V.kit > 0) return `${V.name} je ještě moc ${V.fem ? 'malá' : 'malý'}.`;   // a kitten under 60 days
-    if (!st.visit || st.visit.id !== id || st.visit.until <= t) return `${V.name} tu teď není.`;
-    if (smallKits(st, id, t).length) return `${V.name} má malá koťátka, musí být s nimi.`;
-    if (st.out) return `${st.name} je venku.`;
-    if (st.yard && st.yard.tree) return `${st.name} je na stromě.`;
-    if (!R || R.friend < 5) return `${V.name} ještě není tak ${V.fem ? 'velká kamarádka' : 'velký kamarád'}.`;
-    if (palOf(R) < 3) return `${st.name} a ${V.name} ještě nejsou ${V.fem ? 'kamarádky' : 'kamarádi'}.`;
+    if (st.guest) return st.guest.id === id ? refusal('guestHere', { vis: id }) : refusal('guestOther', { vis: st.guest.id });
+    if (V.kit > 0) return refusal('tooSmall', { vis: id });   // a kitten under 60 days
+    if (!st.visit || st.visit.id !== id || st.visit.until <= t) return refusal('notHere', { vis: id });
+    if (smallKits(st, id, t).length) return refusal('hasKits', { vis: id });
+    if (st.out) return refusal('outside');
+    if (st.yard && st.yard.tree) return refusal('onTree');
+    if (!R || R.friend < 5) return refusal('notFriend', { vis: id });
+    if (palOf(R) < 3) return refusal('notPals', { vis: id });
     const h = new Date(t).getHours();
-    if (h < 18 || h >= 22) return 'Pozvat na noc jde jen večer (od 18 do 22 h).';
-    if (st.invDay === dkey(t)) return 'Dnes už u nás jedna návštěva spala.';
+    if (h < 18 || h >= 22) return refusal('inviteHours', { from: 18, to: 22 });
+    if (st.invDay === dkey(t)) return refusal('guestToday');
     return null;
   }
   // for the UI (the button and its reason); does not change st
   function canInvite(st, id, now) {
     const why = inviteWhy(st, id, typeof now === 'number' && Number.isFinite(now) ? Math.max(now, st.t) : st.t);
-    return { ok: !why, reason: why };
+    return Object.assign({ ok: !why, reason: null }, why);
   }
   // the guest: sleeping together at night when Koxa sleeps in the house and has 4+ hearts for it; goes home at `until`
   function guestStep(st, t, dt, ev) {
@@ -2749,21 +2733,22 @@ function KockaEngine() {
     addFriend(st, G.id, PAL_STEP, ev);       // a good night: +¼ heart from the cat, +¼ of Koxa's
     bumpPal(st, G.id, PAL_STEP, t, ev);
   }
-  // help texts: where the cat likes to be stroked (null for an unknown id)
+  // where the cat likes to be stroked (null for an unknown id); line = which help line the UI shows: the cat's id for the
+  // eight, 'small' for a small kitten, else the young cat's trait
   // st: needed for a kitten ('k1'…)
   function visitorLikes(id, st) {
     const L = st ? likesOf(st, id) : typeof id === 'string' && Object.prototype.hasOwnProperty.call(VISITOR_LIKES, id) ? VISITOR_LIKES[id] : null;
     if (!L) return null;
-    return { likes: L.likes.slice(), dislikes: L.dislikes.slice(), gentle: L.max < 900, max: L.max, text: L.text };
+    return { likes: L.likes.slice(), dislikes: L.dislikes.slice(), gentle: L.max < 900, max: L.max, line: L.line || id };
   }
   // the likes of any visitor: the table for the eight; a small kitten likes it everywhere; a young cat by its trait
   function likesOf(st, id) {
-    if (typeof id === 'string' && Object.prototype.hasOwnProperty.call(VISITOR_LIKES, id)) return VISITOR_LIKES[id];
+    if (typeof id === 'string' && Object.prototype.hasOwnProperty.call(VISITOR_LIKES, id)) return Object.assign({ line: id }, VISITOR_LIKES[id]);
     const V = visitor(st, id);
     if (!V) return null;
-    if (V.small) return { likes: Object.keys(REGIONS), dislikes: [], max: 900, text: `${V.name} je ještě koťátko a nechá se pohladit všude.` };
+    if (V.small) return { likes: Object.keys(REGIONS), dislikes: [], max: 900, line: 'small' };
     const L = KIT_LIKES[V.trait] || KIT_LIKES.playful;
-    return { likes: L.likes, dislikes: L.dislikes, max: L.max, text: L.text(V.name, V.fem) };
+    return { likes: L.likes, dislikes: L.dislikes, max: L.max, line: KIT_LIKES[V.trait] ? V.trait : 'playful' };
   }
   function repairSocial(st, t) {
     const okT = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
@@ -2826,7 +2811,8 @@ function KockaEngine() {
       ids.add(k.id);
       const born = head ? head.born : k.born, named = typeof k.name === 'string' && !!k.name.trim();
       st.kits.push({
-        id: k.id, mother: k.mother, name: named ? cleanName(k.name) : 'Koťátko', named: named && k.named === true, fem: k.fem === true,
+        id: k.id, mother: k.mother, name: named ? cleanName(k.name) : 'Koťátko',   // i18n-ignore: a kitten name stored in the save (see KIT_NAMES)
+        named: named && k.named === true, fem: k.fem === true,
         coat: k.coat === k.mother || TOMS.includes(k.coat) ? k.coat : k.mother, born,
         trait: Object.prototype.hasOwnProperty.call(KIT_TRAITS, k.trait) ? k.trait : 'playful',
         solo: okT(k.solo) && k.solo >= born + KIT.alone * DAY && k.solo <= t ? k.solo : 0,
@@ -2875,7 +2861,7 @@ function KockaEngine() {
       })),
       kittens: st.kits.filter(k => kitSeen(st, k)).map(k => {
         const V = visitor(st, k.id), R = st.visitors[k.id];
-        return { id: k.id, name: k.name, named: k.named, mother: k.mother, motherName: VISITORS[k.mother].name, ageDays: V.ageDays, kit: V.kit, coat: k.coat, fem: k.fem,
+        return { id: k.id, name: k.name, named: k.named, mother: k.mother, ageDays: V.ageDays, kit: V.kit, coat: k.coat, fem: k.fem,
           trait: k.trait, hearts: Math.floor(R.friend), pal: Math.floor(palOf(R)) };
       }),
       presents: Object.assign({}, st.presents),

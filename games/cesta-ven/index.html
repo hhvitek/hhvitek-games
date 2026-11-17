@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,16 +34,21 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="texts.js"></script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#16233f">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Cesta ven">
-<title>Cesta ven</title>
+<title data-t="game.cesta-ven.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2316233f'/%3E%3Crect x='10' y='24' width='34' height='16' rx='5' fill='%23e0302a'/%3E%3Cpath d='M48 22l10 10-10 10z' fill='%23ffd166'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
@@ -191,16 +196,16 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app">
   <header class="topbar">
     <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Cesta ven</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.cesta-ven.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
   <div class="stats" id="stats">&nbsp;</div>
@@ -208,7 +213,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
   <footer class="tray">
     <div id="hint"></div>
     <div class="row">
-      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span data-t="common.undo"></span></button>
       <button id="btnGo" class="go"></button>
     </div>
   </footer>
@@ -254,21 +259,23 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 'use strict';
 const $ = s => document.querySelector(s);
 const root = document.documentElement;
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 
 /* ---------- Settings and storage ---------- */
 const ID = 'cesta-ven';                                   // = the folder name
 const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
-const PROGRESS = `games.${ID}.progress`; // contract: a short Czech progress text the launcher shows on the game's row
+const PROGRESS = `games.${ID}.progress`; // contract 3a: { k: 'level', n } the launcher shows on the game's row ("Úroveň 12")
 const THEMES = [
-  { id: 'night', name: 'Noc',         meta: '#16233f' },
-  { id: 'slate', name: 'Břidlice',    meta: '#2e363e' },
-  { id: 'green', name: 'Zelená',      meta: '#1d5236' },
-  { id: 'paper', name: 'Papír',       meta: '#f4ebdf' },
-  { id: 'white', name: 'Bílá',        meta: '#ffffff' },
+  { id: 'night', nameKey: 'cesta-ven.theme.night', meta: '#16233f' },
+  { id: 'slate', nameKey: 'cesta-ven.theme.slate', meta: '#2e363e' },
+  { id: 'green', nameKey: 'cesta-ven.theme.green', meta: '#1d5236' },
+  { id: 'paper', nameKey: 'common.theme.paper', meta: '#f4ebdf' },
+  { id: 'white', nameKey: 'cesta-ven.theme.white', meta: '#ffffff' },
 ];
 const LOOKS = [
-  { id: 'cars',   name: 'Autíčka' },
-  { id: 'blocks', name: 'Kostky' },
+  { id: 'cars',   nameKey: 'cesta-ven.look.cars' },
+  { id: 'blocks', nameKey: 'cesta-ven.look.blocks' },
 ];
 const DEFAULTS = { look: 'cars', arrows: true, theme: 'night', vibrate: true };
 
@@ -497,7 +504,7 @@ function save() {
     if (inProgress()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
     // the level the player is at (after a win the next one), from level 2 on: "Úroveň 12" in the launcher
     const at = G ? (G.status === 'won' ? level : G.level) : 1;
-    if (at > 1) localStorage.setItem(PROGRESS, `Úroveň ${at}`); else localStorage.removeItem(PROGRESS);
+    if (at > 1) localStorage.setItem(PROGRESS, JSON.stringify({ k: 'level', n: at })); else localStorage.removeItem(PROGRESS);
   } catch (e) {} // rule: storage may be full or blocked; the game goes on
 }
 function validPos(pieces, pos) {
@@ -530,7 +537,7 @@ function validGame(g) {
 function normalize(s) {
   if (!LOOKS.some(l => l.id === s.look)) s.look = DEFAULTS.look;
   if (s.theme === 'cream') s.theme = 'paper'; // renamed
-  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  if (!THEMES.some(m => m.id === s.theme)) s.theme = DEFAULTS.theme;
   s.arrows = !!s.arrows; s.vibrate = !!s.vibrate;
 }
 const clampLevel = v => Math.max(1, Math.min(MAX_LEVEL, v));
@@ -539,7 +546,7 @@ const clampLevel = v => Math.max(1, Math.min(MAX_LEVEL, v));
 async function newGame(msg) {
   if (busy) return; // a game is being prepared: a second "Nová hra" is ignored
   busy = true; sel = null; hint = null;
-  const slow = setTimeout(() => toast('Připravuji hru…', 60000), 250);
+  const slow = setTimeout(() => toast(t('cesta-ven.preparing'), 60000), 250);
   if (G) render(); else renderHint(); // Zpět and Poradit dim while busy
   const r = await generate(level);
   clearTimeout(slow);
@@ -551,7 +558,7 @@ async function newGame(msg) {
 function restart() {
   G.pos = G.start.slice(); G.history = []; G.status = 'playing';
   sel = null; hint = null; buzz(); save(); render();
-  toast('Úloha je zase na začátku');
+  toast(t('cesta-ven.toast.restarted'));
 }
 
 /* ---------- Helpers ---------- */
@@ -562,7 +569,7 @@ function buzz(ms = 12) {
 }
 let toastT;
 function toast(msg, ms = 2600) {
-  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  const el = $('#toast'); el.textContent = msg; el.classList.remove('hide');
   clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
 }
 function hideToast() { $('#toast').classList.add('hide'); }
@@ -586,14 +593,10 @@ function showModal(html, buttons) {
   };
   $('#modal').hidden = false;
 }
-const plural = (n, one, few, many) => n === 1 ? one : n >= 2 && n <= 4 ? few : many;
-const movesWord = n => `${n} ${plural(n, 'tah', 'tahy', 'tahů')}`;
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
-const busyToast = () => toast('Chvilku, připravuji hru');
-// words for the chosen look
-const W = () => S.look === 'cars'
-  ? { it: 'auto', It: 'Auto', red: 'červené auto', this: 'Tohle auto', hinted: 'zvýrazněné auto', them: 'auta' }
-  : { it: 'kostku', It: 'Kostka', red: 'červenou kostku', this: 'Tahle kostka', hinted: 'zvýrazněnou kostku', them: 'kostky' };
+const busyToast = () => toast(t('cesta-ven.busy'));
+// the texts choose their words by the look ({cars, select, true {…} other {…}})
+const cars = () => S.look === 'cars';
 
 /* ---------- Drawing the pieces ---------- */
 // calm, distinct car colours (the red one is only for the car that has to get out)
@@ -627,8 +630,8 @@ function pieceInner(p, i, look) {
   return carSVG(p.len, p.h, i === 0 ? 'var(--target)' : CAR_COLORS[(i - 1) % CAR_COLORS.length]) + ARROW;
 }
 function pieceLabel(p, i) {
-  const w = S.look === 'cars' ? (i === 0 ? 'Červené auto' : p.len === 3 ? 'Nákladní auto' : 'Auto') : (i === 0 ? 'Červená kostka' : 'Kostka');
-  return `${w}, ${p.h ? 'vodorovně' : 'svisle'}`;
+  const kind = cars() ? (i === 0 ? 'redCar' : p.len === 3 ? 'truck' : 'car') : (i === 0 ? 'redBlock' : 'block');
+  return th('cesta-ven.piece', { kind, h: p.h });
 }
 
 /* ---------- Rendering ---------- */
@@ -638,7 +641,7 @@ let built = null;                   // what the pieces were built for: { pieces,
 function applyLook() {
   root.dataset.theme = S.theme;
   root.classList.toggle('show-arrows', S.arrows);
-  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(m => m.id === S.theme).meta;
 }
 // where piece i is drawn (cells: the out position of the red piece is past the right edge)
 function pieceXY(i, v) {
@@ -686,22 +689,21 @@ function place() {
   $('#marks').innerHTML = marks;
 }
 function renderHint() {
-  const w = S && W();
-  $('#hint').textContent = busy || !G ? 'Připravuji hru…'
-    : G.status === 'won' ? 'Vyřešeno! 🎉 Cesta je volná.'
-    : hint && (sel === null || sel === hint.i) ? `Posuň ${w.hinted}`
-    : sel !== null ? `Ťukni na tečku, kam ${S.look === 'cars' ? 'má jet' : 'se má posunout'}`
-    : `Dostaň ${w.red} ven vpravo`;
+  $('#hint').textContent = busy || !G ? t('cesta-ven.preparing')
+    : G.status === 'won' ? t('cesta-ven.hint.won')
+    : hint && (sel === null || sel === hint.i) ? t('cesta-ven.hint.hinted', { cars: cars() })
+    : sel !== null ? t('cesta-ven.hint.sel', { cars: cars() })
+    : t('cesta-ven.hint.play', { cars: cars() });
 }
 function render() {
   applyLook();
   renderHint();
   if (!G) return;
   const won = G.status === 'won';
-  $('#stats').innerHTML = `Úroveň <b>${G.level}</b> · Tahy: <b>${G.history.length}</b>${G.min ? ` · Nejméně: <b>${G.min}</b>` : ''}`;
+  $('#stats').innerHTML = th('cesta-ven.stats', { level: G.level, moves: G.history.length, min: G.min, hasMin: !!G.min });
   $('#btnUndo').classList.toggle('dim', busy || won || !G.history.length);
-  $('#btnGo').innerHTML = won ? nextLabel()
-    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2zm-3 18h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/></svg>Poradit';
+  $('#btnGo').innerHTML = won ? I18N.esc(nextLabel())
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2zm-3 18h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/></svg>' + th('common.hint');
   $('#btnGo').classList.toggle('dim', busy);
   layout();
 }
@@ -750,13 +752,13 @@ function doMove(i, v) {
 }
 function showWin() {
   const m = G.history.length, best = G.min && m <= G.min;
-  showModal(`<h2>Výborně! 🎉</h2><p>Úroveň ${G.level} je vyřešená za <b>${movesWord(m)}</b>.</p>`
-    + (best ? '<p>Rychleji to nejde!</p>' : G.min ? `<p>Nejméně to jde za ${movesWord(G.min)}.</p>` : ''),
-    [{ text: nextLabel(), fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]);
+  showModal(`<h2>${th('cesta-ven.win.title')}</h2><p>${th('cesta-ven.win.text', { level: G.level, n: m })}</p>`
+    + (best ? `<p>${th('cesta-ven.win.fastest')}</p>` : G.min ? `<p>${th('cesta-ven.win.fewest', { n: G.min })}</p>` : ''),
+    [{ text: I18N.esc(nextLabel()), fn: () => newGame() }, { text: th('common.inspect'), cls: 'alt' }]);
 }
 // after a win: the next level, or at the hardest level another puzzle of it
-const nextLabel = () => G.level < MAX_LEVEL ? 'Další úroveň' : 'Další úloha';
-const wonToast = () => toast(`Vyřešeno – ťukni na ${nextLabel()}`);
+const nextLabel = () => t(G.level < MAX_LEVEL ? 'cesta-ven.next' : 'cesta-ven.nextPuzzle');
+const wonToast = () => toast(t('cesta-ven.toast.won', { last: G.level >= MAX_LEVEL }));
 
 function tapPiece(i) {
   if (hint && hint.i === i) { doMove(i, hint.to); return; }     // a tap on the hinted piece does the hinted move
@@ -764,7 +766,7 @@ function tapPiece(i) {
   const [lo, hi] = range(G.pieces, G.pos, i);
   if (lo === hi) {
     sel = null; render();
-    toast(`${i === 0 ? (S.look === 'cars' ? 'Červené auto' : 'Červená kostka') : W().this} se teď nemůže pohnout`);
+    toast(t('cesta-ven.toast.stuck', { kind: (i === 0 ? 'red' : 'this') + (cars() ? 'Car' : 'Block') }));
     return;
   }
   sel = i; buzz(8); render();
@@ -777,8 +779,8 @@ function tapCell(c) {
   if (sel === null) return;
   const p = G.pieces[sel], v0 = G.pos[sel];
   if (reachable(sel).includes(c)) {
-    const t = p.h ? c % N : (c / N | 0);
-    doMove(sel, t < v0 ? t : t - p.len + 1);   // slide just so far that it covers the tapped cell
+    const at = p.h ? c % N : (c / N | 0);
+    doMove(sel, at < v0 ? at : at - p.len + 1);   // slide just so far that it covers the tapped cell
   } else { sel = null; render(); }
 }
 
@@ -833,7 +835,7 @@ $('#board').addEventListener('click', e => {
 $('#btnUndo').addEventListener('click', () => {
   if (busy) { busyToast(); return; }
   if (G.status !== 'playing') { wonToast(); return; }
-  if (!G.history.length) { toast('Zatím není co vrátit'); return; }
+  if (!G.history.length) { toast(t('common.nothingToUndo')); return; }
   G.pos = G.history.pop(); sel = null; hint = null;
   buzz(); save(); render();
 });
@@ -841,24 +843,24 @@ $('#btnGo').addEventListener('click', () => {
   if (busy) { busyToast(); return; }
   if (G.status === 'won') { newGame(); return; }
   const m = nextMove(G.pieces, G.pos);
-  if (!m) { toast('Poradit se teď nepovedlo, zkus Zpět'); return; }
+  if (!m) { toast(t('cesta-ven.toast.hintFailed')); return; }
   hint = { i: m.i, to: m.to }; sel = null;
   buzz(8); render();
-  toast(`Ven to jde ještě nejméně za ${movesWord(m.left)}`);
+  toast(t('cesta-ven.toast.left', { n: m.left }));
 });
 // rule: a new game in the middle of one asks first
 $('#btnNew').addEventListener('click', () => {
   if (busy) return;
   if (inProgress()) {
-    showModal('<h2>Začít novou hru?</h2><p>Rozehraná úloha se ztratí.</p>', [
-      { text: 'Nová úloha', fn: () => newGame() },
-      { text: 'Tuhle znovu od začátku', cls: 'alt', fn: restart },
-      { text: 'Ne, hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('cesta-ven.confirmNew.text')}</p>`, [
+      { text: th('cesta-ven.confirmNew.new'), fn: () => newGame() },
+      { text: th('cesta-ven.confirmNew.restart'), cls: 'alt', fn: restart },
+      { text: th('common.confirmNew.no'), cls: 'alt' }]);
   } else newGame();
 });
 
 /* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
-const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>`;
 // a small lot with a red piece and two others, in the given theme and look
 function mini(theme, look) {
   const cs = 26, gp = 2;   // = .mini --cs; four cells wide, so it fits the narrowest tile
@@ -869,30 +871,30 @@ function mini(theme, look) {
 function renderSettings() {
   const w = movesFor(level);
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Cesta ven<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Obtížnost</h3>
-      <div class="field"><div class="flabel">Úroveň</div><div class="stepper">
-        <button class="sbtn${level > 1 ? '' : ' dim'}" data-act="dec" aria-label="Nižší úroveň">−</button>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.cesta-ven.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('cesta-ven.set.difficulty')}</h3>
+      <div class="field"><div class="flabel">${th('cesta-ven.set.level')}</div><div class="stepper">
+        <button class="sbtn${level > 1 ? '' : ' dim'}" data-act="dec" aria-label="${th('cesta-ven.set.lower')}">−</button>
         <div class="sval">${level}</div>
-        <button class="sbtn${level < MAX_LEVEL ? '' : ' dim'}" data-act="inc" aria-label="Vyšší úroveň">+</button>
+        <button class="sbtn${level < MAX_LEVEL ? '' : ' dim'}" data-act="inc" aria-label="${th('cesta-ven.set.higher')}">+</button>
       </div>
-      <div class="fnote">Úloha na této úrovni jde vyřešit nejméně za ${movesWord(w)}. ${level >= MAX_LEVEL ? 'Tohle je nejtěžší úroveň, další úlohy jsou stejně těžké.' : 'Po každé vyřešené úloze se úroveň zvýší o jednu.'}</div>
-      ${openLevel !== null && level !== openLevel ? `<div class="notice">Po návratu do hry začne <b>nová úloha</b> s novou úrovní${inProgress() ? ' a rozehraná úloha se ztratí' : ''}.</div>` : ''}
+      <div class="fnote">${th('cesta-ven.set.note', { n: w, last: level >= MAX_LEVEL })}</div>
+      ${openLevel !== null && level !== openLevel ? `<div class="notice">${th('cesta-ven.set.notice', { lost: inProgress() })}</div>` : ''}
       </div>
     </section>
-    <section class="card"><h3>Vzhled</h3>
-      <div class="field"><div class="flabel">Kousky</div>
-        <div class="tiles">${LOOKS.map(l => `<button class="tile" data-act="look:${l.id}" aria-pressed="${S.look === l.id}">${mini(S.theme, l.id)}${l.name}</button>`).join('')}</div>
+    <section class="card"><h3>${th('common.look')}</h3>
+      <div class="field"><div class="flabel">${th('cesta-ven.set.pieces')}</div>
+        <div class="tiles">${LOOKS.map(l => `<button class="tile" data-act="look:${l.id}" aria-pressed="${S.look === l.id}">${mini(S.theme, l.id)}${th(l.nameKey)}</button>`).join('')}</div>
       </div>
-      <div class="field"><div class="flabel">Barvy</div>
-        <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}">${mini(t.id, S.look)}${t.name}</button>`).join('')}</div>
+      <div class="field"><div class="flabel">${th('cesta-ven.set.colors')}</div>
+        <div class="tiles">${THEMES.map(m => `<button class="tile" data-act="theme:${m.id}" aria-pressed="${S.theme === m.id}">${mini(m.id, S.look)}${th(m.nameKey)}</button>`).join('')}</div>
       </div>
-      ${toggleRow('arrows', 'Šipky na kouscích')}
-      <div class="fnote" style="margin-top:-6px">Ukazují, kterým směrem se dá kousek posunout.</div>
-      ${toggleRow('vibrate', 'Vibrace')}
+      ${toggleRow('arrows', th('cesta-ven.set.arrows'))}
+      <div class="fnote" style="margin-top:-6px">${th('cesta-ven.set.arrows.note')}</div>
+      ${toggleRow('vibrate', th('common.vibrate'))}
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -900,14 +902,14 @@ $('#settingsIn').addEventListener('click', e => {
   if (act === 'close') { closeSettings(); return; }
   if (act === 'dec' || act === 'inc') {
     const v = level + (act === 'inc' ? 1 : -1);
-    if (v < 1) { toast('Nižší úroveň už není'); return; }
-    if (v > MAX_LEVEL) { toast('Vyšší úroveň už není'); return; }
+    if (v < 1) { toast(t('cesta-ven.toast.noLower')); return; }
+    if (v > MAX_LEVEL) { toast(t('cesta-ven.toast.noHigher')); return; }
     level = v;
   }
   else if (act === 'look') S.look = arg;
   else if (act === 'theme') S.theme = arg;
   else if (act === 'toggle') S[arg] = !S[arg];
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('common.settingsReset')); }
   normalize(S); buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
 });
@@ -921,26 +923,20 @@ function closeSettings() {
   $('#screenSettings').hidden = true;
   const changed = openLevel !== null && level !== openLevel, had = inProgress();
   openLevel = null;
-  if (changed) newGame(had ? 'Začala nová úloha s novou úrovní' : `Úroveň ${level}`);
+  if (changed) newGame(t('cesta-ven.toast.started', { level, lost: had }));
   else render();
 }
 $('#btnSettings').addEventListener('click', openSettings);
 
 /* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
 function renderHelp() {
-  const cars = S.look === 'cars';
+  const p = { cars: cars(), arrows: S.arrows, max: MAX_LEVEL };
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Cesta ven<small>Jak hrát</small></h2></div>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.cesta-ven.name')}<small>${th('common.help')}</small></h2></div>
     <section class="card help"><ol>
-      <li>${cars ? 'Na parkovišti stojí auta.' : 'Na desce leží kostky.'} Dostaň <b>${cars ? 'červené auto' : 'červenou kostku'}</b> ven otvorem vpravo.</li>
-      <li>${cars ? 'Auta jezdí' : 'Kostky se posouvají'} jen po délce: vodorovné doleva a doprava, svislé nahoru a dolů.${S.arrows ? ' Ukazují to šipky.' : ''}</li>
-      <li>Chyť ${cars ? 'auto' : 'kostku'} prstem a táhni. Nebo na ${cars ? 'něj' : 'ni'} ťukni a potom ťukni na tečku, kam ${cars ? 'má jet' : 'se má posunout'}.</li>
-      <li>Jedno posunutí, klidně o několik políček, je jeden tah. Nahoře je vidět, za kolik tahů to jde nejméně.</li>
-      <li><b>Zpět</b> vrátí poslední tah, dá se ťukat opakovaně.</li>
-      <li><b>Poradit</b> ukáže, ${cars ? 'kterým autem' : 'kterou kostkou'} pohnout a kam. Ťukni na ${cars ? 'zvýrazněné auto' : 'zvýrazněnou kostku'} a posune se ${cars ? 'samo' : 'sama'}.</li>
-      <li>Každá úloha jde vyřešit a nikam se nespěchá. Po vyřešení přijde další úroveň, o trochu těžší, až po nejtěžší úroveň ${MAX_LEVEL}. <b>Nová hra</b> připraví jinou úlohu stejné úrovně (po vyřešené úloze už úlohu další úrovně).</li>
+      ${Array.from({ length: 7 }, (_, i) => `<li>${th(`cesta-ven.help.${i + 1}`, p)}</li>`).join('')}
     </ol></section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -972,6 +968,7 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+I18N.apply(); // the static texts (data-t*), <title> and <html lang> in the player's language
 // rule: ask for persistent storage so the browser does not delete the saved game by itself
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 const saved = load();
@@ -987,7 +984,7 @@ if (saved && validGame(saved.game)) {
   G = saved.game;
   // the level was changed in Settings and the page closed before returning: apply it now, as closing Settings would
   // (after a win the expected level is the next one, so only a real change in Settings starts another level)
-  if (level !== (G.status === 'won' ? clampLevel(G.level + 1) : G.level)) newGame(inProgress() ? 'Začala nová úloha s novou úrovní' : `Úroveň ${level}`);
+  if (level !== (G.status === 'won' ? clampLevel(G.level + 1) : G.level)) newGame(t('cesta-ven.toast.started', { level, lost: inProgress() }));
   else render();
 }
 else newGame();

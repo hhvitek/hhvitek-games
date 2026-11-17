@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,16 +34,26 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="../../i18n/cards.js"></script>
+<script src="../../i18n/opponents.js"></script>
+<script src="../../images/sets.js"></script>
+<script src="../_cards/cards.js"></script>
+<script src="../_opponents/opponents.js"></script>
+<script src="texts.js"></script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f4ebdf">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Plus mínus">
-<title>Oko bere plus mínus</title>
+<title data-t="game.oko-bere-plus-minus.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e7135'/%3E%3Crect x='8' y='12' width='26' height='38' rx='4' fill='%23fff'/%3E%3Ccircle cx='44' cy='30' r='14' fill='%23ffd54a'/%3E%3Cpath d='M37 30h14M44 23v14' stroke='%232a2000' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 
@@ -222,15 +232,15 @@ a.round{text-decoration:none}
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app">
   <header class="topbar">
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Oko bere plus mínus</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.oko-bere-plus-minus.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
   <main id="table">
@@ -245,7 +255,7 @@ a.round{text-decoration:none}
       <div class="sumrow"><span class="sum" id="sumYou"></span></div>
       <div class="hand" id="handYou"></div>
       <div class="chips" id="chipsYou"></div>
-      <div class="who"><span class="me">Ty</span><span class="pts" id="ptsYou"></span></div>
+      <div class="who"><span class="me" data-t="oko-bere-plus-minus.you"></span><span class="pts" id="ptsYou"></span></div>
     </section>
   </main>
   <footer class="tray" id="tray"></footer>
@@ -256,9 +266,6 @@ a.round{text-decoration:none}
 <div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
 <div id="toast" class="hide"></div>
 
-<script src="../../images/sets.js"></script>
-<script src="../_cards/cards.js"></script>
-<script src="../_opponents/opponents.js"></script>
 <script>
 /* ---------- Visible height ---------- */
 // The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
@@ -294,23 +301,24 @@ a.round{text-decoration:none}
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 
 /* ---------- Cards ----------
    main deck: card = number 0–39; suit = c / 10 (0 ♠, 1 ♥, 2 ♣, 3 ♦; odd = red), value = c % 10 + 1 (ace = 1).
    plus/minus cards: whole numbers −5…−1 and +1…+5. */
 const suit = c => (c / 10) | 0, val = c => c % 10 + 1, red = c => suit(c) & 1;
-const SNAME = ['piky', 'srdce', 'kříže', 'káry'];
 const sgn = v => v > 0 ? `+${v}` : `−${-v}`;
 const cardHTML = (c, up, cls = '') => up
-  ? `<div class="cd up${red(c) ? ' r' : ''}${cls}" role="img" aria-label="${val(c) === 1 ? 'eso' : val(c)} ${SNAME[suit(c)]}">${CARDS.faceHTML(suit(c), val(c), S.pic)}</div>`
-  : `<div class="cd${cls}" role="img" aria-label="karta rubem nahoru"></div>`;
-const tokHTML = (v, cls = '') => `<div class="tok${v < 0 ? ' minus' : ''}${cls}" role="img" aria-label="karta ${sgn(v)}">${sgn(v)}</div>`;
+  ? `<div class="cd up${red(c) ? ' r' : ''}${cls}" role="img" aria-label="${t('oko-bere-plus-minus.cardName', { v: val(c), suit: suit(c) })}">${CARDS.faceHTML(suit(c), val(c), S.pic)}</div>`
+  : `<div class="cd${cls}" role="img" aria-label="${t('cards.faceDown')}"></div>`;
+const tokHTML = (v, cls = '') => `<div class="tok${v < 0 ? ' minus' : ''}${cls}" role="img" aria-label="${t('oko-bere-plus-minus.tokName', { card: sgn(v) })}">${sgn(v)}</div>`;
 
 /* ---------- Settings and storage ---------- */
 const { TABLES, BACKS, FACES } = CARDS;
 const LEVELS = [
-  { id: 'easy', title: 'Mírný', desc: 'Soupeř hraje jednoduše a občas chybuje. Dobré na začátek.' },
-  { id: 'smart', title: 'Chytrý', desc: 'Soupeř dobře počítá šance a šetří si karty plus a mínus. Tvoje karty nevidí, odhaduje je podle toho, kolik jich máš.' },
+  { id: 'easy', titleKey: 'oko-bere-plus-minus.level.easy', descKey: 'oko-bere-plus-minus.level.easy.desc' },
+  { id: 'smart', titleKey: 'oko-bere-plus-minus.level.smart', descKey: 'oko-bere-plus-minus.level.smart.desc' },
 ];
 // The opponent: a random name and face every match (games/_opponents/opponents.js), the level shown as stars
 const O = OPPONENTS;
@@ -567,10 +575,11 @@ function showEnd() {
   if (endDue !== G) return;
   endDue = null;
   const youWon = G.result.win === 0;
+  const score = { a: G.score[0], b: G.score[1] };
   showModal(youWon
-    ? `<h2>Zápas je tvůj! 🎉</h2><p>Vyhráváš <b>${G.score[0]} : ${G.score[1]}</b>.</p>`
-    : `<h2>Zápas ${O.past(G.foe, 'vyhrál', 'vyhrála')} ${nm()}</h2><p>Skončilo to <b>${G.score[0]} : ${G.score[1]}</b>. Zkus to znovu.</p>`,
-    [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]);
+    ? `<h2>${th('oko-bere-plus-minus.end.youWon')}</h2><p>${th('oko-bere-plus-minus.end.youWonText', score)}</p>`
+    : `<h2>${th('oko-bere-plus-minus.end.foeWon', { fem: G.foe.fem, name: nm() })}</h2><p>${th('oko-bere-plus-minus.end.foeWonText', score)}</p>`,
+    [{ text: th('common.newGame'), fn: () => newGame() }, { text: th('common.inspect'), cls: 'alt' }]);
 }
 
 /* ---------- Your moves ---------- */
@@ -609,7 +618,7 @@ function autoStand() {
 function undo() {
   const v = G.mods[0].pop(); G.undo.pop();
   G.side[0].push(v); G.side[0].sort((a, b) => b - a);
-  toast(`Karta ${sgn(v)} je zpátky v ruce.`);
+  toast(t('oko-bere-plus-minus.toast.cardBack', { card: sgn(v) }));
   buzz(); save(); render();
 }
 function goOn() {
@@ -651,12 +660,12 @@ function buzz(ms = 12) {
 }
 let toastT;
 function toast(msg, ms = 3000) {
-  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
-  t.style.bottom = (innerHeight - $('#tray').getBoundingClientRect().top + 12) + 'px';
+  const el = $('#toast'); el.textContent = msg; el.classList.remove('hide');
+  el.style.bottom = (innerHeight - $('#tray').getBoundingClientRect().top + 12) + 'px';
   clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
 }
 function hideToast() { $('#toast').classList.add('hide'); }
-const busyToast = () => toast(`Chvilku, hraje ${nm()}…`);
+const busyToast = () => toast(t('oko-bere-plus-minus.toast.busy', { name: nm() }));
 // rule: an end dialog belongs to the game that ended and never opens over Settings, Help or another dialog:
 // whenFree waits until they are closed, then runs fn - if the game is still the same (not a new one meanwhile)
 const nothingOpen = () => ['#modal', '#screenSettings', '#screenHelp', '#screenCredits'].every(s => { const el = document.querySelector(s); return !el || el.hidden; });
@@ -677,7 +686,6 @@ function showModal(html, buttons) {
     const fn = buttons[+b.dataset.i].fn; if (fn) fn();
   };
 }
-const plural = (n, one, few, many) => `${n} ${n === 1 ? one : n >= 2 && n <= 4 ? few : many}`;
 
 /* ---------- Rendering ---------- */
 const ICONS = {
@@ -712,19 +720,19 @@ function render() {
   // your plus/minus cards (tap to play); the computer's lie face down
   const myTurn = G.phase === 'you' && playing();
   $('#chipsYou').innerHTML = G.side[0].length
-    ? G.side[0].map((v, i) => `<button class="chip${v < 0 ? ' minus' : ''}${myTurn ? '' : ' dim'}" data-i="${i}" aria-label="Zahrát kartu ${sgn(v)}">${sgn(v)}</button>`).join('')
-    : '<span class="none">Karty plus a mínus jsou všechny zahrané</span>';
-  $('#chipsCpu').innerHTML = G.side[1].length ? G.side[1].map(() => '<span class="back" role="img" aria-label="soupeřova karta plus nebo mínus"></span>').join('') : '';
+    ? G.side[0].map((v, i) => `<button class="chip${v < 0 ? ' minus' : ''}${myTurn ? '' : ' dim'}" data-i="${i}" aria-label="${t('oko-bere-plus-minus.chipPlay', { card: sgn(v) })}">${sgn(v)}</button>`).join('')
+    : `<span class="none">${th('oko-bere-plus-minus.noChips')}</span>`;
+  $('#chipsCpu').innerHTML = G.side[1].length ? G.side[1].map(() => `<span class="back" role="img" aria-label="${t('oko-bere-plus-minus.cardBackFoeMod')}"></span>`).join('') : '';
   // the goal is always written next to the sum, so nobody has to remember it (user's wish)
-  const sumText = n => n > TOP ? `Součet ${n}, přes ${TOP}` : `Součet ${n} z ${TOP}`;
+  const sumText = n => t(n > TOP ? 'oko-bere-plus-minus.sumOver' : 'oko-bere-plus-minus.sum', { n, top: TOP });
   const ty = total(G, 0), sy = $('#sumYou');
   sy.textContent = sumText(ty);
   sy.classList.toggle('hi', ty === TOP); sy.classList.toggle('over', ty > TOP);
   const sc = $('#sumCpu'), tc = total(G, 1);
-  sc.textContent = done ? sumText(tc) : plural(G.hands[1].length, 'karta', 'karty', 'karet');
+  sc.textContent = done ? sumText(tc) : t('oko-bere-plus-minus.cardsCount', { n: G.hands[1].length });
   sc.classList.toggle('hi', done && tc === TOP); sc.classList.toggle('over', done && tc > TOP);
-  $('#ptsYou').innerHTML = ptsHTML(G.score[0]); $('#ptsYou').setAttribute('aria-label', `Tvoje vyhraná kola: ${G.score[0]} z ${WIN}`);
-  $('#ptsCpu').innerHTML = ptsHTML(G.score[1]); $('#ptsCpu').setAttribute('aria-label', `Vyhraná kola: ${G.score[1]} z ${WIN}`);
+  $('#ptsYou').innerHTML = ptsHTML(G.score[0]); $('#ptsYou').setAttribute('aria-label', t('oko-bere-plus-minus.pointsYou', { n: G.score[0], win: WIN }));
+  $('#ptsCpu').innerHTML = ptsHTML(G.score[1]); $('#ptsCpu').setAttribute('aria-label', t('oko-bere-plus-minus.pointsFoe', { n: G.score[1], win: WIN }));
   $('#foeCpu').innerHTML = O.head(G.foe, { mood: foeMood(), badge: O.levelBadge(LEVELS, lvIdx(G.level)) });
   $('#msg').innerHTML = message();
   renderTray();
@@ -737,38 +745,38 @@ function foeMood() {
   return !r || r.win < 0 ? 'calm' : r.win === 1 ? 'happy' : 'sad';
 }
 function message() {
-  const t = total(G, 0);
-  const info = `<small>Kolo ${G.round} · hraje se na ${WIN} vyhraná kola</small>`;
+  const tot = total(G, 0);
+  const info = `<small>${th('oko-bere-plus-minus.round', { round: G.round, win: WIN })}</small>`;
   if (G.phase === 'you') {
-    const ln = t > TOP ? `Máš ${t}, to je přes. ${rescue(G, 0) !== null ? 'Zahraj kartu <b>mínus</b>.' : 'Zpět kartu vrátí.'}`
-      : t === TOP ? 'Máš <b>21</b>!'
-      : G.cpuDone ? `${nm()} má ${plural(G.hands[1].length, 'kartu', 'karty', 'karet')} a stačí ${O.past(G.foe, 'mu', 'jí')}.`
-      : 'Ber karty, nebo ťukni na <b>Stačí</b>.';
-    return `<div class="hd">Tvůj tah</div><div class="ln">${ln}</div>${info}`;
+    const ln = tot > TOP ? th('oko-bere-plus-minus.msg.over', { n: tot, rescue: rescue(G, 0) !== null })
+      : tot === TOP ? th('oko-bere-plus-minus.msg.you21')
+      : G.cpuDone ? th('oko-bere-plus-minus.msg.foeHas', { name: nm(), n: G.hands[1].length, fem: G.foe.fem })
+      : th('oko-bere-plus-minus.msg.takeOrStand');
+    return `<div class="hd">${th('oko-bere-plus-minus.msg.yourTurn')}</div><div class="ln">${ln}</div>${info}`;
   }
   if (G.phase !== 'done') {
-    const m = G.mods[1], ln = m.length ? `${O.past(G.foe, 'Zahrál', 'Zahrála')} kartu <b>${sgn(m[m.length - 1])}</b>…` : 'Bere karty…';
-    return `<div class="hd">Hraje ${nm()}</div><div class="ln">${ln}</div>${info}`;
+    const m = G.mods[1], ln = m.length ? th('oko-bere-plus-minus.msg.foeMod', { fem: G.foe.fem, card: sgn(m[m.length - 1]) }) : th('oko-bere-plus-minus.msg.foeTaking');
+    return `<div class="hd">${th('oko-bere-plus-minus.msg.foePlays', { name: nm() })}</div><div class="ln">${ln}</div>${info}`;
   }
   // the end of the round: a big banner says who won it and why
   const r = G.result, tc = total(G, 1);
-  const why = r.why === 'bust' ? (r.win === 1 ? `Máš ${t}, to je přes.` : `${nm()} má ${tc}, to je přes.`) : `Ty ${t} : ${nm()} ${tc}`;
-  let hd = r.win === 0 ? 'Kolo je tvoje!' : r.win === 1 ? `Kolo bere ${nm()}` : 'Remíza, kolo nikdo';
-  if (G.status === 'over') hd = r.win === 0 ? `Vyhráváš zápas ${G.score[0]} : ${G.score[1]}!` : `Zápas ${O.past(G.foe, 'vyhrál', 'vyhrála')} ${nm()}`;
+  const why = r.why === 'bust' ? (r.win === 1 ? th('oko-bere-plus-minus.why.youBust', { n: tot }) : th('oko-bere-plus-minus.why.foeBust', { name: nm(), n: tc })) : th('oko-bere-plus-minus.why.compare', { you: tot, name: nm(), foe: tc });
+  let hd = r.win === 0 ? th('oko-bere-plus-minus.hd.youRound') : r.win === 1 ? th('oko-bere-plus-minus.hd.foeRound', { name: nm() }) : th('oko-bere-plus-minus.hd.tie');
+  if (G.status === 'over') hd = r.win === 0 ? th('oko-bere-plus-minus.hd.youMatch', { a: G.score[0], b: G.score[1] }) : th('oko-bere-plus-minus.hd.foeMatch', { fem: G.foe.fem, name: nm() });
   return `<div class="banner ${r.win === 0 ? 'win' : r.win === 1 ? 'lose' : 'tie'}"><div class="hd">${hd}</div><div class="ln">${why}</div></div>`;
 }
 function renderTray() {
   const ph = G.phase, over = G.status === 'over';
   const a = (id, icon, label, cls = '') => `<button class="act${cls}" data-a="${id}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[icon]}</svg>${label}</button>`;
-  const undo = `<button class="act${G.undo.length && !over ? '' : ' dim'}" data-a="undo"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.undo}</svg>Zpět</button>`;
+  const undo = `<button class="act${G.undo.length && !over ? '' : ' dim'}" data-a="undo"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS.undo}</svg>${th('common.undo')}</button>`;
   let html;
-  if (over) html = undo + a('again', 'again', 'Hrát znovu', ' go');
+  if (over) html = undo + a('again', 'again', th('oko-bere-plus-minus.btn.again'), ' go');
   else if (ph === 'you') {
     const full = total(G, 0) >= TOP;
-    html = undo + a('stand', 'stand', 'Stačí', total(G, 0) === TOP ? ' go' : '') + a('take', 'take', 'Ještě kartu', full ? ' dim' : ' go');
+    html = undo + a('stand', 'stand', th('oko-bere-plus-minus.btn.stand'), total(G, 0) === TOP ? ' go' : '') + a('take', 'take', th('oko-bere-plus-minus.btn.take'), full ? ' dim' : ' go');
   }
-  else if (ph === 'cpu' || ph === 'stood') html = undo + a('wait', 'play', `Hraje ${nm()}`, ' dim');
-  else html = undo + a('next', 'next', 'Další kolo', ' go');
+  else if (ph === 'cpu' || ph === 'stood') html = undo + a('wait', 'play', th('oko-bere-plus-minus.btn.foePlays', { name: nm() }), ' dim');
+  else html = undo + a('next', 'next', th('oko-bere-plus-minus.btn.next'), ' go');
   $('#tray').innerHTML = html;
 }
 // rule: the card size comes from the room that is left, so both hands and the chips fit without scrolling
@@ -802,24 +810,24 @@ $('#tray').addEventListener('click', e => {
   if (a === 'again') { if (endDue === G) showEnd(); else newGame(); return; }
   if (busy || G.phase === 'cpu') { busyToast(); return; }
   if (a === 'undo') {
-    if (G.status === 'over') { toast('Zápas skončil. Ťukni na Hrát znovu.'); return; }
+    if (G.status === 'over') { toast(t('oko-bere-plus-minus.toast.matchOver')); return; }
     if (G.undo.length) { undo(); return; }
-    if (G.phase === 'done') { toast('Kolo už je vyhodnocené. Ťukni na Další kolo.'); return; }
-    toast(G.hands[0].length === 1 ? 'Zatím není co vrátit. Zpět vrátí kartu plus nebo mínus, dokud po ní nepřijde další karta.' : 'Vzatou kartu vrátit nejde, to by bylo nahlížení do balíčku.', 4500);
+    if (G.phase === 'done') { toast(t('oko-bere-plus-minus.toast.roundOver')); return; }
+    toast(t(G.hands[0].length === 1 ? 'oko-bere-plus-minus.toast.nothingToUndo' : 'oko-bere-plus-minus.toast.noUndoCard'), 4500);
     return;
   }
   if (a === 'take') {
     if (G.phase !== 'you') return;
-    const t = total(G, 0);
-    if (t > TOP) { toast(rescue(G, 0) !== null ? 'Máš přes 21. Zahraj kartu mínus, nebo ťukni na Stačí.' : `Máš přes 21. Zpět vrátí kartu ${sgn(G.mods[0][G.mods[0].length - 1])}.`); return; }
-    if (t === TOP) { toast('Máš 21, víc už nejde. Ťukni na Stačí.'); return; }
+    const tot = total(G, 0);
+    if (tot > TOP) { toast(rescue(G, 0) !== null ? t('oko-bere-plus-minus.toast.overRescue') : t('oko-bere-plus-minus.toast.overUndo', { card: sgn(G.mods[0][G.mods[0].length - 1]) })); return; }
+    if (tot === TOP) { toast(t('oko-bere-plus-minus.toast.have21')); return; }
     takeCard();
   }
   else if (a === 'stand') {
     if (G.phase !== 'you') return;
     if (total(G, 0) > TOP) {
-      showModal(`<h2>Vzdát kolo?</h2><p>Máš ${total(G, 0)}, to je přes. Když teď řekneš Stačí, kolo prohraješ.</p>`,
-        [{ text: 'Ano, vzdát kolo', fn: stand }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+      showModal(`<h2>${th('oko-bere-plus-minus.giveUp.title')}</h2><p>${th('oko-bere-plus-minus.giveUp.text', { n: total(G, 0) })}</p>`,
+        [{ text: th('oko-bere-plus-minus.giveUp.yes'), fn: stand }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
       return;
     }
     stand();
@@ -829,8 +837,8 @@ $('#tray').addEventListener('click', e => {
 $('#chipsYou').addEventListener('click', e => {
   const b = e.target.closest('.chip'); if (!b) return;
   if (busy || G.phase === 'cpu') { busyToast(); return; }
-  if (G.status === 'over') { toast('Zápas skončil. Ťukni na Hrát znovu.'); return; }
-  if (G.phase === 'done') { toast('Kolo skončilo. Karta plus nebo mínus ti zůstane na další kolo.'); return; }
+  if (G.status === 'over') { toast(t('oko-bere-plus-minus.toast.matchOver')); return; }
+  if (G.phase === 'done') { toast(t('oko-bere-plus-minus.toast.roundEnded')); return; }
   // a shaky double tap: the row of plus/minus cards is redrawn and centred again at once, so the second tap
   // would land on a neighbouring card and play it too (these cards are scarce for the whole match)
   if (Date.now() - lastChip < 450) return;
@@ -840,37 +848,37 @@ $('#chipsYou').addEventListener('click', e => {
 $('#table').addEventListener('click', e => {
   if (e.target.closest('#chipsYou')) return;
   if (busy || G.phase === 'cpu') { busyToast(); return; }
-  if (e.target.closest('#chipsCpu .back')) toast(`Karty plus a mínus uvidíš, až je ${nm()} zahraje.`);
-  else if (e.target.closest('#handCpu .cd') && G.phase !== 'done') toast(`${nm()} ukáže karty až na konci kola.`);
+  if (e.target.closest('#chipsCpu .back')) toast(t('oko-bere-plus-minus.toast.foeMods', { name: nm() }));
+  else if (e.target.closest('#handCpu .cd') && G.phase !== 'done') toast(t('oko-bere-plus-minus.toast.foeShows', { name: nm() }));
 });
 $('#btnNew').addEventListener('click', () => {
   if (hasProgress()) {
-    showModal('<h2>Začít novou hru?</h2><p>Rozehraný zápas se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('oko-bere-plus-minus.confirm.text')}</p>`, [{ text: th('common.confirmNew.yes'), fn: () => newGame() }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
   } else if (endDue === G) showEnd(); // the result dialog of the finished match has not been shown yet: it comes first
   else newGame();
 });
 
 /* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
 const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
-const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>`;
 const tile = (act, on, inner, name) => `<button class="tile" data-act="${act}" aria-pressed="${on}">${inner}${name}</button>`;
 // sample cards: ace ♥, 7 ♠, 10 ♦ (face colour, pictures and back follow the settings)
 const SAMPLE = [10, 6, 39];
 const minis = (pic, withBack) => `<span class="mini">${SAMPLE.slice(0, withBack ? 2 : 3).map(c => `<div class="cd up${red(c) ? ' r' : ''}">${CARDS.faceHTML(suit(c), val(c), pic)}</div>`).join('')}${withBack ? '<div class="cd"></div>' : ''}</span>`;
 function renderSettings() {
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Oko bere plus mínus<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Soupeř</h3>
-      ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, O.levelName(LEVELS, i), l.desc)).join('')}
-      <div class="fnote">Jméno soupeře je v každé hře jiné. Hvězdičky u jména ukazují, jak dobře hraje.</div>
-      ${S.level !== G.level && !isFresh() ? `<div class="notice">Síla soupeře se změní od <b>příští hry</b>.${playing() ? ' Rozehraný zápas zůstává.' : ''}</div>` : ''}
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.oko-bere-plus-minus.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('opponents.heading')}</h3>
+      ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, I18N.esc(O.levelName(LEVELS, i)), th(l.descKey))).join('')}
+      <div class="fnote">${th('oko-bere-plus-minus.foeNote')}</div>
+      ${S.level !== G.level && !isFresh() ? `<div class="notice">${th('oko-bere-plus-minus.level.next', { progress: playing() })}</div>` : ''}
     </section>
-    ${CARDS.appearanceHTML(S, tile, minis, '--cw:56px;--ch:78px', toggleRow('vibrate', 'Vibrace'))}
-    <section class="card"><h3>Statistika</h3>
-      <p class="stats">${LEVELS.map((l, i) => `Soupeř ${O.levelName(LEVELS, i).toLowerCase()}: vyhráno <b>${ST[l.id].won}</b> z ${plural(ST[l.id].played, 'zápasu', 'zápasů', 'zápasů')}`).join('<br>')}</p>
+    ${CARDS.appearanceHTML(S, tile, minis, '--cw:56px;--ch:78px', toggleRow('vibrate', th('common.vibrate')))}
+    <section class="card"><h3>${th('common.stats')}</h3>
+      <p class="stats">${LEVELS.map((l, i) => th('oko-bere-plus-minus.stats.row', { level: O.levelName(LEVELS, i).toLowerCase(), won: ST[l.id].won, played: ST[l.id].played })).join('<br>')}</p>
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -879,7 +887,7 @@ $('#settingsIn').addEventListener('click', e => {
   if (act === 'close') { closeSettings(); return; }
   if (['level', 'table', 'back', 'face', 'pic'].includes(act)) S[act] = arg;
   else if (act === 'toggle') S[arg] = !S[arg];
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('common.settingsReset')); }
   normalize(S); buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
 });
@@ -889,7 +897,7 @@ function closeSettings() {
   $('#screenSettings').hidden = true;
   if (S.level !== G.level) {
     if (isFresh()) { G.level = S.level; save(); }
-    else toast('Síla soupeře se změní od příští hry');
+    else toast(t('oko-bere-plus-minus.toast.nextMatch'));
   }
   render();
 }
@@ -899,30 +907,30 @@ $('#btnSettings').addEventListener('click', openSettings);
 function renderHelp() {
   const c = (n, s) => s * 10 + n - 1;
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Oko bere plus mínus<small>Jak hrát</small></h2></div>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.oko-bere-plus-minus.name')}<small>${th('common.help')}</small></h2></div>
     <section class="card help">
       <ol>
-        <li><b>Cíl:</b> mít součet co nejblíž <b>21</b>, ale ne víc. Hraješ proti počítači. Soupeř má v každé hře jiné jméno a hvězdičky u jména ukazují, jak dobře hraje.</li>
-        <li>Hraje se kartami od esa do desítky. Eso má 1 bod, ostatní karty tolik, kolik ukazují.</li>
-        <li>Na začátku kola dostanete každý jednu kartu. Ťukni na <b>Ještě kartu</b> a přibereš si další. Když ti součet stačí, ťukni na <b>Stačí</b>. Když máš přesně 21, řekne hra Stačí sama.</li>
-        <li>Pak hraje soupeř. Jeho karty jsou otočené rubem a uvidíš je až na konci kola. Ani soupeř tvoje karty nevidí, ví jen, kolik jich máš.</li>
-        <li>Kola začínáte střídavě: jednou ty, jednou soupeř. Když začíná soupeř, hraješ až po něm.</li>
-        <li>Kdo je blíž 21, vyhrává kolo. Při stejném součtu kolo nevyhraje nikdo. Zápas vyhraje, kdo první vyhraje <b>${WIN} kola</b>.</li>
+        <li>${th('oko-bere-plus-minus.help.1')}</li>
+        <li>${th('oko-bere-plus-minus.help.2')}</li>
+        <li>${th('oko-bere-plus-minus.help.3')}</li>
+        <li>${th('oko-bere-plus-minus.help.4')}</li>
+        <li>${th('oko-bere-plus-minus.help.5')}</li>
+        <li>${th('oko-bere-plus-minus.help.6', { win: WIN })}</li>
       </ol>
     </section>
-    <section class="card help"><h3>Karty plus a mínus</h3>
-      <p>Na začátku zápasu dostaneš <b>4 karty plus a mínus</b>: dvě plus a dvě mínus, každou od 1 do 5. Jsou pod tvými kartami.</p>
-      <p>Ťuknutím kartu zahraješ a přičte se nebo odečte od součtu. V jednom kole jich můžeš zahrát i víc, každá karta ale platí jen jednou za celý zápas. Rozmysli si, kdy ji použiješ.</p>
-      <div class="demo-felt">Máš 16 a vezmeš osmičku, to je 24, přes:
+    <section class="card help"><h3>${th('oko-bere-plus-minus.help.modsTitle')}</h3>
+      <p>${th('oko-bere-plus-minus.help.mods1')}</p>
+      <p>${th('oko-bere-plus-minus.help.mods2')}</p>
+      <div class="demo-felt">${th('oko-bere-plus-minus.help.demo1')}
         <span class="mini">${cardHTML(c(9, 0), true)}${cardHTML(c(7, 1), true)}${cardHTML(c(8, 2), true)}${tokHTML(-3)}</span>
-        Karta −3 udělá z 24 přesně 21.</div>
-      <p>Soupeř má karty plus a mínus taky. Když nějakou zahraje, uvidíš ji. A on zase uvidí ty tvoje zahrané.</p>
+        ${th('oko-bere-plus-minus.help.demo2')}</div>
+      <p>${th('oko-bere-plus-minus.help.mods3')}</p>
     </section>
-    <section class="card help"><h3>Zpět</h3>
-      <p>Zpět vrátí kartu plus nebo mínus zahranou v tomto kole, ale jen dokud po ní nepřišla další karta. Po ťuknutí na <b>Stačí</b> hned hraje soupeř. Vzatou kartu vrátit nejde, to by bylo nahlížení do balíčku.</p>
-      <p class="fnote">Na čas se nehraje. Sílu soupeře, stůl a vzhled karet změníš v nastavení ⚙.</p>
+    <section class="card help"><h3>${th('oko-bere-plus-minus.help.undoTitle')}</h3>
+      <p>${th('oko-bere-plus-minus.help.undo')}</p>
+      <p class="fnote">${th('oko-bere-plus-minus.help.note')}</p>
     </section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -954,6 +962,7 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+I18N.apply(); // the static texts (data-t*), <title> and <html lang> in the player's language
 // rule: ask for persistent storage so the browser does not delete the saved game by itself
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 const saved = load();

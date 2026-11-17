@@ -65,8 +65,8 @@ ok(E.CHAPTERS.length === 6, '6 chapters');
 ok(new Set(E.MISSIONS.map(m => m.id)).size === 24, 'unique mission ids');
 for (const c of E.CHAPTERS) ok(E.MISSIONS.filter(m => m.chapter === c.id).length === 4, `chapter ${c.id} has 4 missions`);
 for (const m of E.MISSIONS) {
-  const p = `${m.id} ${m.name}:`;
-  ok(m.name && m.what && /[a-zá-ž]/i.test(m.what), `${p} a Czech name and a sentence`);
+  const p = `${m.id}:`;
+  ok(!('name' in m) && !('what' in m), `${p} the engine holds no text (names and descriptions are the page's messages)`);
   ok(m.g > 0 && m.air >= 0 && m.twr > 1 && m.fuel > 0, `${p} gravity, air, thrust, fuel`);
   ok(m.ignitions === null || (Number.isInteger(m.ignitions) && m.ignitions >= 1), `${p} ignitions null or ≥ 1`);
   ok((m.pad.kind === 'barge') === (m.surface === 'sea'), `${p} a barge exactly on the sea`);
@@ -261,10 +261,10 @@ function outcome(f, seconds = 15) { until(f, NONE, x => x.over, seconds); return
   ok(near(f.outcome.vDown, 2.1, 0.1) && E.score(f).total > 0, `landed: vDown measured (${f.outcome.vDown.toFixed(2)}, 2 m/s plus two steps of gravity) and scored`);
   f = outcome(place(land, { vy: -7 }));
   ok(f.outcome.reason === 'fastDown' && f.phase === 'exploded' && types(f).includes('explode'), 'too fast: explodes on the pad');
-  const tx = E.outcomeText(f);
-  ok(/Dosednutí 7,\d m\/s, nejvýš 4 m\/s/.test(tx.detail) && tx.title, `fail text with the numbers ("${tx.title}: ${tx.detail}")`);
+  const tx = E.outcomeInfo(f);
+  ok(tx.reason === 'fastDown' && !tx.sea && near(tx.vDown, 7.1, 0.5) && tx.limits.vDown === 4, `fail info with the numbers (${tx.reason}, ${tx.vDown.toFixed(1)} m/s, limit ${tx.limits.vDown})`);
   f = outcome(place(land, { vx: 3, vy: -1 }));
-  ok(f.outcome.reason === 'fastSide' && /Do strany 3,0 m\/s, nejvýš 2 m\/s/.test(E.outcomeText(f).detail), 'too fast sideways');
+  ok(f.outcome.reason === 'fastSide' && near(E.outcomeInfo(f).vSide, 3, 0.05) && E.outcomeInfo(f).limits.vSide === 2, 'too fast sideways');
   f = place(land, { tilt: 14, vy: -1 });
   until(f, NONE, x => x.phase !== 'flying');
   ok(f.outcome.reason === 'tilt' && f.phase === 'tipping', `too tilted: tips over (${f.outcome.tilt.toFixed(1)}°)`);
@@ -274,19 +274,19 @@ function outcome(f, seconds = 15) { until(f, NONE, x => x.over, seconds); return
   ok(f.outcome.reason === 'tilt' && f.outcome.fate === 'explode', 'more than 25°: explodes at once');
   f = place(land, { legs: 0, vy: -2, gap: 0.05 });
   outcome(f);
-  ok(f.outcome.reason === 'noLegs' && /Nohy/.test(E.outcomeText(f).title), 'no legs: crash');
+  ok(f.outcome.reason === 'noLegs' && E.outcomeInfo(f).legAlt > 0, 'no legs: crash');
   f = place(narrow, { dx: narrow.pad.halfWidth - ROCKET.footX + 1.5, vy: -1 });
   until(f, NONE, x => x.phase !== 'flying');
   ok(f.outcome.reason === 'edge' && f.phase === 'tipping' && f.post.dir === 1, 'a foot off the narrow pad: tips over the edge');
   until(f, NONE, x => x.over, 15);
   ok(f.phase === 'exploded', 'over the edge on land: explodes');
   f = outcome(place(land, { dx: 60, vy: -3 }));
-  ok(f.outcome.reason === 'offPad' && f.outcome.where === 'ground' && f.phase === 'exploded' && /Dopad 60 m/.test(E.outcomeText(f).detail), 'off the pad on land: explodes on the ground');
+  ok(f.outcome.reason === 'offPad' && f.outcome.where === 'ground' && f.phase === 'exploded' && near(E.outcomeInfo(f).dist, 60, 1), 'off the pad on land: explodes on the ground');
   f = outcome(place(sea, { dx: 80, vy: -10 }));
   ev = types(f);
   const sink0 = f.sink; run(f, NONE, 2);
   ok(f.outcome.reason === 'offPad' && f.phase === 'sinking' && ev.includes('splash') && sink0 > 8 && f.sink > sink0 && Math.abs(f.a) > 45 * DEG, `off the barge: splash, it tips and sinks (${sink0.toFixed(1)} m when over, ${f.sink.toFixed(1)} m later)`);
-  ok(/Loď minuta o \d+ m/.test(E.outcomeText(f).detail), 'sea fail text');
+  ok(E.outcomeInfo(f).sea && E.outcomeInfo(f).miss > 0, 'sea fail text');
   f = place(sea, { dx: sea.pad.halfWidth - ROCKET.footX + 0.5, vy: -1 });
   until(f, NONE, x => x.phase !== 'flying');
   ok(f.outcome.reason === 'edge' && f.outcome.where === 'deck', 'a foot off the deck');
@@ -335,11 +335,11 @@ function outcome(f, seconds = 15) { until(f, NONE, x => x.over, seconds); return
   }
   // out of the area
   f = E.createFlight(land); f.x = land.area + 5; E.step(f, NONE, DT);
-  ok(f.outcome && f.outcome.reason === 'away' && f.phase === 'gone' && /mimo oblast/.test(E.outcomeText(f).detail), 'out of the area: failure');
+  ok(f.outcome && f.outcome.reason === 'away' && f.phase === 'gone' && E.outcomeInfo(f).reason === 'away', 'out of the area: failure');
   run(f, NONE, 1); ok(f.over, 'out of the area: over soon');
   // fuel out is part of the fail text
   f = place(land, { vy: -9, fuel: 0 }); f.fuel = 0; outcome(f);
-  ok(f.outcome.fuelOut && /Došlo palivo/.test(E.outcomeText(f).detail), 'fuel out is said in the fail text');
+  ok(f.outcome.fuelOut && E.outcomeInfo(f).fuelOut, 'fuel out is said in the fail text');
   // after the end nothing breaks
   run(f, BURN, 1); ok(f.phase === 'exploded', 'steps after the end are harmless');
 }
@@ -439,7 +439,7 @@ for (const m of E.MISSIONS) {
     const b = E.fly(m, seed, 'score').outcome;
     if (!b || !b.ok) worst = `the score autopilot, seed ${seed}: ${b ? b.reason : 'no outcome'}`;
   }
-  ok(landed === SEEDS && !worst, `${m.id} ${m.name}: both autopilots land every seed, the safe one with margin (${landed}/${SEEDS}${worst ? ', ' + worst : ''})`);
+  ok(landed === SEEDS && !worst, `${m.id}: both autopilots land every seed, the safe one with margin (${landed}/${SEEDS}${worst ? ', ' + worst : ''})`);
   const f = E.fly(m, m.seed, 'safe'), safe = E.score(f);
   ok(f.outcome.t >= 10 && f.outcome.t <= 35, `${m.id}: a flight takes 10–35 s (${f.outcome.t.toFixed(1)} s)`);
   const best = E.fly(m, m.seed, 'score'), bs = E.score(best);
@@ -448,7 +448,7 @@ for (const m of E.MISSIONS) {
   ok(avg.outcome.ok, `${m.id}: the average pilot lands`);
   scoreTotals.push(bs.total); avgStars.push(as.stars); avgTotals.push(as.total);
   const star = n => '★'.repeat(n).padEnd(3, '·');
-  console.log(`  ${(m.id + ' ' + m.name).padEnd(28)} ${(landed + '/' + SEEDS).padEnd(6)} ${f.outcome.t.toFixed(0).padStart(3)} s ${f.fuel.toFixed(1).padStart(5)}  ${String(safe.total).padStart(4)} ${star(safe.stars)}   ${String(bs.total).padStart(4)} ${star(bs.stars)}   ${String(as.total).padStart(4)} ${star(as.stars)}`);
+  console.log(`  ${m.id.padEnd(28)} ${(landed + '/' + SEEDS).padEnd(6)} ${f.outcome.t.toFixed(0).padStart(3)} s ${f.fuel.toFixed(1).padStart(5)}  ${String(safe.total).padStart(4)} ${star(safe.stars)}   ${String(bs.total).padStart(4)} ${star(bs.stars)}   ${String(as.total).padStart(4)} ${star(as.stars)}`);
 }
 {
   const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
@@ -517,7 +517,7 @@ function beginner(m, seed, brakeK) {
     for (const c of E.CHAPTERS) {
       const ms = E.MISSIONS.filter(m => m.chapter === c.id);
       means[c.id] = ms.reduce((s, m) => s + rate[m.id], 0) / ms.length;
-      console.log(`  ${c.id}. ${c.name.padEnd(12)} ${ms.map(m => `${m.id} ${pct(rate[m.id]).padStart(5)}`).join('   ')}   mean ${pct(means[c.id]).padStart(5)}   (${Object.entries(reasons[c.id]).map(([k, v]) => k + ' ' + v).join(', ')})`);
+      console.log(`  ${('chapter ' + c.id).padEnd(12)} ${ms.map(m => `${m.id} ${pct(rate[m.id]).padStart(5)}`).join('   ')}   mean ${pct(means[c.id]).padStart(5)}   (${Object.entries(reasons[c.id]).map(([k, v]) => k + ' ' + v).join(', ')})`);
     }
     return { rate, means };
   };
@@ -543,12 +543,12 @@ console.log(`Daily challenge (${DATES} dates)`);
     const date = new Date(day0 + i * 864e5).toISOString().slice(0, 10);
     const m = E.dailyMission(date), m2 = E.dailyMission(date);
     if (JSON.stringify(m) !== JSON.stringify(m2)) { bad++; console.log(`  ${date}: not the same twice`); continue; }
-    if (m.id !== 'daily-' + date || !m.name || !m.what || !(m.par > 0) || !(m.fuel > m.par)) { bad++; console.log(`  ${date}: invalid fields`); continue; }
+    if (m.id !== 'daily-' + date || !m.desc || !(m.par > 0) || !(m.fuel > m.par)) { bad++; console.log(`  ${date}: invalid fields`); continue; }
     kinds.add(`${m.world}/${m.pad.kind}/${m.ignitions || '∞'}/${m.scene.sky}`);
     seen.add(JSON.stringify([m.start, m.wind]));
     for (const seed of [m.seed, 77]) {
       const f = E.fly(m, seed, 'safe');
-      if (!f.outcome || !f.outcome.ok) { bad++; console.log(`  ${date} seed ${seed}: ${f.outcome ? f.outcome.reason : 'no outcome'} (${m.what})`); }
+      if (!f.outcome || !f.outcome.ok) { bad++; console.log(`  ${date} seed ${seed}: ${f.outcome ? f.outcome.reason : 'no outcome'} (${m.desc})`); }
       else if (seed === m.seed && (f.outcome.t < 12 || f.outcome.t > 50)) { slow++; console.log(`  ${date}: flight ${f.outcome.t.toFixed(0)} s`); }
     }
   }

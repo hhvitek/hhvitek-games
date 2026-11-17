@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,15 +34,22 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="../../i18n/opponents.js"></script>
+<script src="../_opponents/opponents.js"></script>
+<script src="texts.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f4ebdf">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Reversi">
-<title>Reversi</title>
+<title data-t="game.reversi.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232e7d4f'/%3E%3Ccircle cx='22' cy='22' r='11' fill='%23151515'/%3E%3Ccircle cx='42' cy='22' r='11' fill='%23f8f8f2'/%3E%3Ccircle cx='22' cy='42' r='11' fill='%23f8f8f2'/%3E%3Ccircle cx='42' cy='42' r='11' fill='%23151515'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes: a solid colour; everything below reads these variables (rule) ----------
@@ -202,16 +209,16 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app">
   <header class="topbar">
     <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Reversi</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.reversi.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
   <div id="mid">
@@ -222,8 +229,8 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
   <footer class="tray">
     <div id="hint"></div>
     <div class="row">
-      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
-      <button id="btnHint" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>Poradit</button>
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span data-t="common.undo"></span></button>
+      <button id="btnHint" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg><span data-t="common.hint"></span></button>
     </div>
   </footer>
 </div>
@@ -232,7 +239,6 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 <div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
 <div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
 <div id="toast" class="hide"></div>
-<script src="../_opponents/opponents.js"></script>
 <script>
 /* ---------- Visible height ---------- */
 // The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
@@ -736,6 +742,8 @@ return { START, parse, text, moves, canMove, flipped, play, next, count, think, 
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 const root = document.documentElement;
 const GUT = 12; // side margin in px, the same as --gut in the CSS
 const E = ReversiEngine();
@@ -744,23 +752,24 @@ const E = ReversiEngine();
 const ID = 'reversi';
 const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
 const THEMES = [
-  { id: 'paper', name: 'Papír',        meta: '#f4ebdf' },
-  { id: 'felt',  name: 'Zelené sukno', meta: '#1f4a30' },
-  { id: 'wood',  name: 'Dřevo',        meta: '#4a2f1b' },
+  { id: 'paper', nameKey: 'common.theme.paper', meta: '#f4ebdf' },
+  { id: 'felt',  nameKey: 'reversi.theme.felt', meta: '#1f4a30' },
+  { id: 'wood',  nameKey: 'reversi.theme.wood', meta: '#4a2f1b' },
 ];
 // The computer opponent: its own AI here (the engine), the name, face and stars from games/_opponents/opponents.js
 const O = OPPONENTS;
 const LEVELS = [
-  { id: 'normal', title: 'Běžný hráč', desc: 'Hraje jako běžný člověk: chce rohy a nerad je dává, vidí tah dopředu a občas se splete. Dobrý soupeř na každý den.' },
-  { id: 'master', title: 'Mistr', desc: 'Hraje nejlépe, jak umí: propočítá mnoho tahů dopředu a konec hry spočítá přesně. Porazit ho je opravdu těžké.' },
+  { id: 'normal', titleKey: 'reversi.level.normal', descKey: 'reversi.level.normal.desc' },
+  { id: 'master', titleKey: 'reversi.level.master', descKey: 'reversi.level.master.desc' },
 ];
+const lvName = i => I18N.esc(O.levelName(LEVELS, i)); // "Mistr ★★" for HTML
+const foeP = () => ({ name: G.foe.name, fem: G.foe.fem }); // the opponent as message params (name, fem)
 const lvIdx = id => Math.max(0, LEVELS.findIndex(l => l.id === id));
 const SPEEDS = [
-  { id: 'slow', name: 'Pomalu', desc: 'Soupeř chvíli přemýšlí a kameny se otáčejí pomalu, takže je dobře vidět, co se změnilo.', think: 900, flip: 460, gap: 70 },
-  { id: 'fast', name: 'Rychle', desc: 'Soupeř táhne hned.', think: 250, flip: 260, gap: 30 },
+  { id: 'slow', nameKey: 'opponents.speed.slow', descKey: 'reversi.speed.slow.desc', think: 900, flip: 460, gap: 70 },
+  { id: 'fast', nameKey: 'opponents.speed.fast', descKey: 'reversi.speed.fast.desc', think: 250, flip: 260, gap: 30 },
 ];
 const DEFAULTS = { level: 'normal', theme: 'paper', show: true, speed: 'slow', vibrate: true };
-const COLOR = ['černými', 'bílými'];
 const nm = () => G.foe.name;
 
 /* ---------- State ----------
@@ -951,7 +960,7 @@ let hintSq = -1;      // the advice: a square where you can play
 let view = null;      // what the board shows while the discs turn: { pre: the position before, sq, side, flips }
 let thinking = false, anim = false, hintBusy = false, cpuTimer = 0, animTimer = 0;
 const busy = () => thinking || anim;
-const busyMsg = () => thinking ? `Chvilku, ${nm()} přemýšlí` : view && view.side === G.you ? 'Chvilku, kameny se otáčejí' : `Chvilku, ${nm()} táhne`;
+const busyMsg = () => t(thinking ? 'reversi.toast.waitThinking' : view && view.side === G.you ? 'reversi.toast.waitFlipping' : 'reversi.toast.waitMoving', { name: nm() });
 // the square of the opponent's last disc in the line (for its red dot after Zpět), or null
 function foeLast() {
   for (let i = G.line.length - 2; i >= 0; i--) if (+G.line[i][64] !== G.you) {
@@ -985,7 +994,7 @@ function doMove(sq, flip, gap, after) {
 // after a move has been shown: the end, a pass, or the computer's turn
 function afterMove(side) {
   if (G.status !== 'playing') { endDialog(); return; }
-  if (stm() === side) toast(side === G.you ? `${nm()} nemá kam táhnout, hraješ znovu` : `Nemáš kam táhnout, ${nm()} hraje znovu`);
+  if (stm() === side) toast(t(side === G.you ? 'reversi.toast.foePassed' : 'reversi.toast.youPassed', { name: nm() }));
   cpuTurn();
 }
 function playYours(sq) {
@@ -1047,7 +1056,7 @@ function renderBoard() {
   }
   $('#grid').innerHTML = html;
 }
-const sqLabel = (s, ch, can) => `${'abcdefgh'[s & 7]}${8 - (s >> 3)}${ch === 'b' ? ', černý kámen' : ch === 'w' ? ', bílý kámen' : can ? ', sem můžeš táhnout' : ''}`;
+const sqLabel = (s, ch, can) => th('reversi.square', { sq: 'abcdefgh'[s & 7] + (8 - (s >> 3)), piece: ch === 'b' || ch === 'w' ? ch : can ? 'can' : '' });
 function foeMood() {
   if (thinking) return 'think';
   if (G.status === 'lost') return 'happy';
@@ -1057,28 +1066,28 @@ function foeMood() {
 function renderSides() {
   const cpu = 1 - G.you, [me, foe] = discs(view ? view.pre + '0' : cur());
   const foeTurn = G.status === 'playing' && stm() === cpu;
-  const tagFoe = thinking ? 'Přemýšlí…' : anim && view && view.side === cpu ? 'Táhne' : foeTurn ? 'Na tahu' : '';
+  const tagFoe = thinking ? th('reversi.tag.thinking') : anim && view && view.side === cpu ? th('reversi.tag.moving') : foeTurn ? th('reversi.tag.toMove') : '';
   $('#foeRow').classList.toggle('on', foeTurn || (anim && view && view.side === cpu));
   $('#foeRow').innerHTML = `<div class="left">${O.head(G.foe, { mood: foeMood(), badge: O.levelBadge(LEVELS, lvIdx(G.level)) })}</div>
-    <span class="cnt" aria-label="Soupeř má ${foe} kamenů"><i class="mini c${cpu}"></i>${foe}</span>${tagFoe ? `<span class="tag">${tagFoe}</span>` : ''}`;
+    <span class="cnt" aria-label="${th('reversi.left.foe', { n: foe })}"><i class="mini c${cpu}"></i>${foe}</span>${tagFoe ? `<span class="tag">${tagFoe}</span>` : ''}`;
   const meTurn = G.status === 'playing' && stm() === G.you && !(anim && view && view.side === cpu);
   $('#meRow').classList.toggle('on', meTurn);
-  $('#meRow').innerHTML = `<div class="left"><span class="me">Ty</span><span class="cnt" aria-label="Máš ${me} kamenů"><i class="mini c${G.you}"></i>${me}</span></div>
-    ${meTurn ? '<span class="tag">Na tahu</span>' : `<span class="tag off">hraješ ${COLOR[G.you]}</span>`}`;
+  $('#meRow').innerHTML = `<div class="left"><span class="me">${th('reversi.you')}</span><span class="cnt" aria-label="${th('reversi.left.you', { n: me })}"><i class="mini c${G.you}"></i>${me}</span></div>
+    ${meTurn ? `<span class="tag">${th('reversi.tag.toMove')}</span>` : `<span class="tag off">${th('reversi.tag.color', { color: G.you })}</span>`}`;
 }
 function renderHint() {
-  let t = '';
+  let k, par;
   const [me, foe] = discs(cur());
-  if (G.status === 'won') t = `Výhra ${me} : ${foe}! Ťukni na Nová hra.`;
-  else if (G.status === 'lost') t = `${O.past(G.foe, 'Vyhrál', 'Vyhrála')} ${nm()}, ty ${me} : ${foe}. Zpět vrátí tah.`;
-  else if (G.status === 'draw') t = `Remíza ${me} : ${foe}. Ťukni na Nová hra.`;
-  else if (thinking) t = `${nm()} přemýšlí…`;
-  else if (anim) t = view && view.side === G.you ? 'Kameny se otáčejí' : `${nm()} táhne`;
-  else if (hintBusy) t = 'Hledám dobrý tah…';
-  else if (hintSq >= 0) t = 'Rada: ťukni na modře označené pole';
-  else if (G.line.length > 1 && +G.line[G.line.length - 2][64] === G.you) t = `${nm()} nemá kam táhnout, hraješ znovu.`;
-  else t = `Hraješ ${COLOR[G.you]}. ${S.show ? 'Ťukni na pole s tečkou.' : 'Obklíč soupeřovy kameny.'}`;
-  $('#hint').textContent = t;
+  if (G.status === 'won') { k = 'reversi.hint.won'; par = { me, foe }; }
+  else if (G.status === 'lost') { k = 'reversi.hint.lost'; par = { ...foeP(), me, foe }; }
+  else if (G.status === 'draw') { k = 'reversi.hint.draw'; par = { me, foe }; }
+  else if (thinking) { k = 'reversi.hint.thinking'; par = foeP(); }
+  else if (anim) { if (view && view.side === G.you) k = 'reversi.hint.flipping'; else { k = 'reversi.hint.moving'; par = foeP(); } }
+  else if (hintBusy) k = 'reversi.hint.searching';
+  else if (hintSq >= 0) k = 'reversi.hint.advice';
+  else if (G.line.length > 1 && +G.line[G.line.length - 2][64] === G.you) { k = 'reversi.hint.foePassed'; par = foeP(); }
+  else { k = 'reversi.hint.play'; par = { color: G.you, show: S.show }; }
+  $('#hint').textContent = t(k, par);
 }
 // rule: the board size comes from the room that is left, so it fits without scrolling
 function layout() {
@@ -1100,12 +1109,12 @@ function layout() {
 $('#grid').addEventListener('click', e => {
   const b = e.target.closest('.sq[data-s]'); if (!b) return;
   const s = +b.dataset.s;
-  if (G.status !== 'playing') { toast(G.status === 'won' ? 'Hra skončila. Ťukni na Nová hra.' : 'Hra skončila. Zpět vrátí tvůj tah, nebo ťukni na Nová hra.'); return; }
+  if (G.status !== 'playing') { toast(t(G.status === 'won' ? 'reversi.toast.overWon' : 'reversi.toast.overLost')); return; }
   if (busy()) { toast(busyMsg()); return; }
   if (!yourTurn()) return;
-  if (cur()[s] !== '.') { toast('Tohle pole je už obsazené'); return; }
+  if (cur()[s] !== '.') { toast(t('reversi.toast.taken')); return; }
   if (E.flipped(curPos(), G.you, s).length) { playYours(s); return; }
-  toast(S.show ? 'Sem nejde: nic by se neotočilo. Kam můžeš, ukazují tečky.' : 'Sem nejde: kámen musí obklíčit aspoň jeden soupeřův kámen.');
+  toast(t(S.show ? 'reversi.toast.noFlipDots' : 'reversi.toast.noFlip'));
 });
 // Undo: back to before your last move, with the opponent's reply (also after the end of the game)
 function undoTarget() {
@@ -1115,7 +1124,7 @@ function undoTarget() {
 $('#btnUndo').addEventListener('click', () => {
   if (anim) { toast(busyMsg()); return; }
   const i = undoTarget();
-  if (i < 0) { toast('Zatím není co vrátit'); return; }
+  if (i < 0) { toast(t('common.nothingToUndo')); return; }
   stopThinking();
   G.line.length = i + 1;
   G.last = foeLast(); hintSq = -1;
@@ -1124,11 +1133,11 @@ $('#btnUndo').addEventListener('click', () => {
   buzz(); save(); render();
 });
 $('#btnHint').addEventListener('click', () => {
-  if (G.status !== 'playing') { toast('Hra skončila'); return; }
+  if (G.status !== 'playing') { toast(t('reversi.toast.overShort')); return; }
   if (busy()) { toast(busyMsg()); return; }
-  if (hintBusy) { toast('Chvilku, hledám dobrý tah'); return; }
+  if (hintBusy) { toast(t('reversi.toast.waitHint')); return; }
   const list = E.moves(curPos(), G.you);
-  if (list.length === 1) { hintSq = list[0]; const first = markHinted(); save(); render(); toast(first ? 'Jiný tah tu není. S radou se hra nepočítá do statistik.' : 'Jiný tah tu není', first ? 3600 : 2600); return; }
+  if (list.length === 1) { hintSq = list[0]; const first = markHinted(); save(); render(); toast(t(first ? 'reversi.toast.onlyMoveHinted' : 'reversi.toast.onlyMove'), first ? 3600 : 2600); return; }
   const g0 = G, n = G.line.length;
   hintBusy = true; render();
   ask(engineInput('hint'), r => {
@@ -1137,7 +1146,7 @@ $('#btnHint').addEventListener('click', () => {
     hintSq = list.includes(r.sq) ? r.sq : -1;
     const first = hintSq >= 0 && markHinted();
     save(); render();
-    if (first) toast('S radou se tahle hra nepočítá do statistik', 3200);
+    if (first) toast(t('reversi.toast.hinted'), 3200);
   });
 });
 // the first advice in a game that is not counted yet: true when the toast should say it
@@ -1149,7 +1158,7 @@ function markHinted() {
 // rule: a new game in the middle of one asks first
 $('#btnNew').addEventListener('click', () => {
   if (hasProgress()) {
-    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('common.confirmNew.text')}</p>`, [{ text: th('common.confirmNew.yes'), fn: () => newGame() }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
   } else newGame();
 });
 // rule: an end dialog only for the game that ended, never over Settings or Help (whenFree)
@@ -1158,47 +1167,46 @@ function endDialog() {
   whenFree(g0, 500, () => {
     if (G.line.length !== line || G.status === 'playing') return;
     const [me, foe] = discs(cur()), empty = 64 - me - foe;
-    const head = G.status === 'won' ? 'Výhra! 🎉' : G.status === 'lost' ? `${O.past(G.foe, 'Vyhrál', 'Vyhrála')} ${nm()}` : 'Remíza';
-    const why = `Ty <b>${me}</b> : <b>${foe}</b> ${nm()}.` + (empty ? ' Nikdo už nemohl táhnout, prázdná pole zůstala.' : '');
-    const btns = [{ text: 'Nová hra', fn: () => newGame() }];
-    if (G.status !== 'won') btns.push({ text: 'Vrátit tah', cls: 'alt', fn: () => $('#btnUndo').click() });
-    btns.push({ text: 'Prohlédnout', cls: 'alt' });
-    showModal(`<h2>${head}</h2><p>${why}</p>${G.hinted && !G.inStats ? '<p>Hra s radou se do statistik nepočítá.</p>' : ''}`, btns);
+    const head = th(G.status === 'won' ? 'reversi.end.won' : G.status === 'lost' ? 'reversi.end.lost' : 'reversi.end.draw', foeP());
+    const why = th('reversi.end.score', { me, foe, name: nm(), empty: empty > 0 });
+    const btns = [{ text: th('common.newGame'), fn: () => newGame() }];
+    if (G.status !== 'won') btns.push({ text: th('common.undoMove'), cls: 'alt', fn: () => $('#btnUndo').click() });
+    btns.push({ text: th('common.inspect'), cls: 'alt' });
+    showModal(`<h2>${head}</h2><p>${why}</p>${G.hinted && !G.inStats ? `<p>${th('reversi.end.hinted')}</p>` : ''}`, btns);
   });
 }
 
 /* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
 const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
-const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
 const swatch = id => `<span class="swatch" data-theme="${id}"><i><b class="c1"></b></i><i><b class="c0"></b></i><i><b class="c0"></b></i><i><b class="c1"></b></i></span>`;
-const plural = (n, a, b, c) => `${n} ${n === 1 ? a : n >= 2 && n <= 4 ? b : c}`;
 function renderSettings() {
   const changed = G && S.level !== G.level;
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Reversi<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Soupeř</h3>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.reversi.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('opponents.heading')}</h3>
       <div class="field">
-        ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, O.levelName(LEVELS, i), l.desc)).join('')}
-        <div class="fnote">Soupeř má každou hru jiné jméno. Kdo začíná, se střídá: kdo začíná, hraje černými.</div>
-        ${changed && !isFresh() ? `<div class="notice">Nový soupeř začne hrát od příští hry.${hasProgress() ? ' Rozehraná hra zůstává.' : ''}</div>` : ''}
+        ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, lvName(i), th(l.descKey))).join('')}
+        <div class="fnote">${th('reversi.foeNote')}</div>
+        ${changed && !isFresh() ? `<div class="notice">${th('reversi.notice.nextGame', { progress: hasProgress() })}</div>` : ''}
       </div>
-      <div class="field"><div class="flabel">Rychlost soupeře</div>
-        ${SPEEDS.map(s => opt('speed:' + s.id, S.speed === s.id, s.name, s.desc)).join('')}
+      <div class="field"><div class="flabel">${th('opponents.speed')}</div>
+        ${SPEEDS.map(s => opt('speed:' + s.id, S.speed === s.id, th(s.nameKey), th(s.descKey))).join('')}
       </div>
     </section>
-    <section class="card"><h3>Pomoc</h3>
-      ${toggleRow('show', 'Ukazovat možné tahy', 'Tečky ukážou, kam můžeš položit kámen.')}
+    <section class="card"><h3>${th('common.assist')}</h3>
+      ${toggleRow('show', th('reversi.show'), th('reversi.show.note'))}
     </section>
-    <section class="card"><h3>Vzhled</h3>
-      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}">${swatch(t.id)}${t.name}</button>`).join('')}</div>
-      ${toggleRow('vibrate', 'Vibrace')}
+    <section class="card"><h3>${th('common.look')}</h3>
+      <div class="tiles">${THEMES.map(m => `<button class="tile" data-act="theme:${m.id}" aria-pressed="${S.theme === m.id}">${swatch(m.id)}${th(m.nameKey)}</button>`).join('')}</div>
+      ${toggleRow('vibrate', th('common.vibrate'))}
     </section>
-    <section class="card"><h3>Statistika</h3>
-      ${LEVELS.map((l, i) => { const st = ST[l.id]; return `<p class="stats"><b>${O.levelName(LEVELS, i)}</b><br>Odehráno ${plural(st.played, 'hra', 'hry', 'her')}, výher ${st.won}, remíz ${st.draw}</p>`; }).join('')}
-      <p class="fnote">Počítají se jen dohrané hry bez Poradit.</p>
+    <section class="card"><h3>${th('common.stats')}</h3>
+      ${LEVELS.map((l, i) => { const st = ST[l.id]; return `<p class="stats"><b>${lvName(i)}</b><br>${th('reversi.stats', { played: st.played, won: st.won, draw: st.draw })}</p>`; }).join('')}
+      <p class="fnote">${th('common.statsNote')}</p>
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1208,7 +1216,7 @@ $('#settingsIn').addEventListener('click', e => {
   else if (act === 'speed') S.speed = arg;
   else if (act === 'theme') S.theme = arg;
   else if (act === 'toggle') S[arg] = !S[arg];
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('common.settingsReset')); }
   normalize(S); buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
 });
@@ -1216,8 +1224,8 @@ function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hi
 // a new opponent level applies from the next game; a game in which you have not moved yet is replaced at once
 function closeSettings() {
   $('#screenSettings').hidden = true;
-  if (S.level !== G.level && isFresh()) newGame(`Hraješ proti soupeři: ${O.levelName(LEVELS, lvIdx(S.level))}`); // keeps the starter, new seed, counted again
-  else if (S.level !== G.level) { render(); toast(`Nový soupeř začne hrát od příští hry${hasProgress() ? '. Rozehraná hra zůstává.' : ''}`); }
+  if (S.level !== G.level && isFresh()) newGame(t('opponents.playAgainst', { level: O.levelName(LEVELS, lvIdx(S.level)) })); // keeps the starter, new seed, counted again
+  else if (S.level !== G.level) { render(); toast(t('reversi.toast.nextGame', { progress: hasProgress() })); }
   else render();
 }
 $('#btnSettings').addEventListener('click', openSettings);
@@ -1225,30 +1233,21 @@ $('#btnSettings').addEventListener('click', openSettings);
 /* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
 function renderHelp() {
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Reversi<small>Jak hrát</small></h2></div>
-    <section class="card help"><h3>Pravidla</h3><ul>
-      <li>Hraje se na desce 8 × 8. Na začátku stojí uprostřed dva černé a dva bílé kameny. Začínají černé; kdo začíná, se každou hru střídá.</li>
-      <li><b>Tah:</b> polož svůj kámen na prázdné pole tak, aby mezi ním a jiným tvým kamenem ležela v jedné řadě (vodorovně, svisle nebo šikmo) souvislá řada soupeřových kamenů. Ty se otočí na tvou barvu.</li>
-      <li>Otáčí se ve všech směrech najednou, kde to jde. Tah, který nic neotočí, není dovolený.</li>
-      <li><b>Kdo nemůže táhnout, stojí</b> a hraje znovu soupeř. Když nemůže táhnout nikdo (obvykle je deska plná), hra končí.</li>
-      <li><b>Vyhrává, kdo má víc kamenů.</b> Při stejném počtu je remíza.</li>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.reversi.name')}<small>${th('common.help')}</small></h2></div>
+    <section class="card help"><h3>${th('reversi.help.rules')}</h3><ul>
+      ${[1, 2, 3, 4, 5].map(i => `<li>${th(`reversi.help.rule.${i}`)}</li>`).join('')}
     </ul></section>
-    <section class="card help"><h3>Rady</h3><ul>
-      <li><b>Rohy</b> jsou nejcennější: kámen v rohu už nikdo neotočí.</li>
-      <li>Pole hned vedle prázdného rohu, hlavně šikmo, bývají nebezpečná: soupeř pak často roh dostane.</li>
-      <li>Na začátku nehoň počet kamenů. Lepší je mít hodně možných tahů a soupeři jich nechat málo.</li>
+    <section class="card help"><h3>${th('reversi.help.tips')}</h3><ul>
+      ${[1, 2, 3].map(i => `<li>${th(`reversi.help.tip.${i}`)}</li>`).join('')}
     </ul></section>
-    <section class="card help"><h3>Ovládání</h3><ol>
-      <li>Ťukni na prázdné pole. Tečky ukazují, kam můžeš táhnout (dají se vypnout v Nastavení).</li>
-      <li>Soupeřův poslední kámen má uprostřed červenou tečku. Počet kamenů obou hráčů je vždy u jejich jména.</li>
-      <li><b>Zpět</b> vrátí tvůj poslední tah i soupeřovu odpověď. Dá se ťukat opakovaně, i po konci hry.</li>
-      <li><b>Poradit</b> ukáže modře dobré pole. Ťukni na něj a tah se zahraje. Hra, ve které použiješ Poradit, se do statistik nepočítá; počítají se jen dohrané hry.</li>
+    <section class="card help"><h3>${th('reversi.help.controls')}</h3><ol>
+      ${[1, 2, 3, 4].map(i => `<li>${th(`reversi.help.control.${i}`)}</li>`).join('')}
     </ol></section>
-    <section class="card help"><h3>Soupeř</h3>
-      <p>${LEVELS.map((l, i) => `<b>${O.levelName(LEVELS, i)}</b>: ${l.desc}`).join('<br><br>')}</p>
-      <p style="margin-top:12px">Soupeře vybereš v Nastavení. Každou hru má jiné jméno.</p>
+    <section class="card help"><h3>${th('opponents.heading')}</h3>
+      <p>${LEVELS.map((l, i) => `<b>${lvName(i)}</b>: ${th(l.descKey)}`).join('<br><br>')}</p>
+      <p style="margin-top:12px">${th('reversi.help.foe')}</p>
     </section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -1280,6 +1279,8 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+// the static texts (data-t*), <title> and <html lang> in the player's language
+I18N.apply();
 // rule: ask for persistent storage so the browser does not delete the saved game by itself
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 const saved = load();
@@ -1293,7 +1294,7 @@ ST = validStats(saved && saved.stats);
 if (saved && validGame(saved.game)) {
   G = saved.game;
   if (S.level !== G.level && isFresh()) closeSettings();
-  else { render(); if (S.level !== G.level) toast(`Nový soupeř začne hrát od příští hry${hasProgress() ? '. Rozehraná hra zůstává.' : ''}`); cpuTurn(); }
+  else { render(); if (S.level !== G.level) toast(t('reversi.toast.nextGame', { progress: hasProgress() })); cpuTurn(); }
 }
 else newGame();
 

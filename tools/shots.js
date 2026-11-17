@@ -4,6 +4,9 @@
 // at once: node tools/serve.js 8771): first navigate the Playwright page to http://localhost:8771/ and the pass uses it.
 // Only some games: first write .playwright-mcp/shots.json = {"ids": ["zavri-cisla"]} (the Write tool), then run this
 // file; without that file every game of games/registry.js is shot (about 3 minutes). Delete the file afterwards.
+// Other languages: "langs": ["cs", "en", "pseudo"] in the same file (default ["cs"]); a page is then opened with
+// ?lang=<l> and its pictures and sheet are named <id>-<l>-… and sheet-<id>-<l>.png (cs keeps sheet-<id>.png).
+// The play steps below tap some buttons by their Czech names, so another language may report "no button".
 // For each game, at 393×873: start, after a few real taps (`play` below), settings, help; at 393×760: start.
 // Then .playwright-mcp/sheet-<id>.png puts the five side by side (open it and look at it), and
 // .playwright-mcp/sheet-overview.png shows the start of every game shot. The result lists console errors,
@@ -228,9 +231,9 @@ async (page) => {
   // games: .playwright-mcp/shots.json {"ids": [...]} if it is there, otherwise every game of the registry
   const reg = await (await page.request.get(BASE + 'games/registry.js')).text();
   const all = [...reg.matchAll(/id: '([^']+)'/g)].map(m => m[1]);
-  let ids = all;
+  let ids = all, langs = ['cs'];
   const pick = await page.request.get(BASE + OUT + 'shots.json');
-  if (pick.ok()) { try { const j = await pick.json(); if (Array.isArray(j.ids) && j.ids.length) ids = j.ids; } catch (e) { errors.push('shots.json is not valid JSON: every game shot'); } }
+  if (pick.ok()) { try { const j = await pick.json(); if (Array.isArray(j.ids) && j.ids.length) ids = j.ids; if (Array.isArray(j.langs) && j.langs.length) langs = j.langs; } catch (e) { errors.push('shots.json is not valid JSON: every game shot'); } }
 
   // clean start: no service worker (it would serve old files from its cache), no caches, no saved games
   await page.setViewportSize({ width: 393, height: 873 });
@@ -240,44 +243,49 @@ async (page) => {
     for (const k of await caches.keys()) await caches.delete(k);
     localStorage.clear();
   });
+  let lang = 'cs'; // the language of the pages opened now (?lang= overrides the saved choice and is never saved)
   const open = async (id, w, h) => {
     await page.setViewportSize({ width: w, height: h });
-    await page.goto(`${BASE}games/${id}/index.html?menu&v=${Date.now()}`); // never the launcher: it installs the service worker
+    await page.goto(`${BASE}games/${id}/index.html?menu&lang=${lang}&v=${Date.now()}`); // never the launcher: it installs the service worker; ?lang= always, the headless browser's own language would pick English
     await page.evaluate(() => localStorage.clear()); await page.reload(); await wait(START_WAIT[id] || 1200);
   };
   // margins that differ on purpose (CLAUDE.md, "Decisions for single games"): Logik's colours sit under the holes
   const MARGIN_OK = { logik: ['trayL', 'trayR'] };
-  for (const id of ids) {
+  const shots = []; // picture names: <id> for cs, <id>-<lang> for another language
+  for (const l of langs) for (const id of ids) {
+    lang = l;
+    const name = l === 'cs' ? id : `${id}-${l}`;
+    shots.push(name);
     await open(id, 393, 873);
-    await page.screenshot({ path: `${OUT}${id}-1start.png` });
+    await page.screenshot({ path: `${OUT}${name}-1start.png` });
     // one side margin everywhere: top-bar buttons, the board and the bottom buttons start 12 px from the edges
     const m = await page.evaluate(GUTTER);
     const bad = Object.entries(m).filter(([k, v]) => !(MARGIN_OK[id] || []).includes(k) && v >= 0 && (k.startsWith('board') ? v < 11 : Math.abs(v - 12) > 1));
-    if (bad.length) errors.push(`${id}: side margins should be 12 px: ${bad.map(([k, v]) => `${k} ${v}`).join(', ')}`);
+    if (bad.length) errors.push(`${name}: side margins should be 12 px: ${bad.map(([k, v]) => `${k} ${v}`).join(', ')}`);
     await (play[id] ? play[id]() : fallback(id));
-    await page.screenshot({ path: `${OUT}${id}-2play.png` });
+    await page.screenshot({ path: `${OUT}${name}-2play.png` });
     await page.evaluate(() => { const m = document.getElementById('modal'); if (m) m.hidden = true; });
     await tap('#btnSettings', `${id} settings`); await wait(500);
-    await page.screenshot({ path: `${OUT}${id}-3settings.png` });
+    await page.screenshot({ path: `${OUT}${name}-3settings.png` });
     await page.evaluate(() => { document.getElementById('screenSettings').hidden = true; });
     await tap('#btnHelp', `${id} help`); await wait(500);
-    await page.screenshot({ path: `${OUT}${id}-4help.png` });
+    await page.screenshot({ path: `${OUT}${name}-4help.png` });
     await open(id, 393, 760);
-    await page.screenshot({ path: `${OUT}${id}-5short.png` });
+    await page.screenshot({ path: `${OUT}${name}-5short.png` });
     for (const [w, h] of [[393, 760], [360, 640], [745, 527], [1024, 768]]) {
       if (w !== 393) await open(id, w, h);
-      for (const p of await page.evaluate(FIT)) errors.push(`${id} ${w}×${h}: ${p}`);
+      for (const p of await page.evaluate(FIT)) errors.push(`${name} ${w}×${h}: ${p}`);
     }
   }
   // the sheets
   await page.setViewportSize({ width: 1400, height: 640 });
-  for (const id of ids) {
-    await page.goto(`${BASE}tools/sheet.html?id=${id}`); await wait(400);
-    await page.screenshot({ path: `${OUT}sheet-${id}.png`, fullPage: true });
+  for (const name of shots) {
+    await page.goto(`${BASE}tools/sheet.html?id=${name}`); await wait(400);
+    await page.screenshot({ path: `${OUT}sheet-${name}.png`, fullPage: true });
   }
-  await page.goto(`${BASE}tools/sheet.html?all=${ids.join(',')}`); await wait(600);
+  await page.goto(`${BASE}tools/sheet.html?all=${shots.join(',')}`); await wait(600);
   await page.screenshot({ path: `${OUT}sheet-overview.png`, fullPage: true });
   await page.evaluate(() => localStorage.clear());
-  return `shot: ${ids.join(', ')}\nlook at: ${ids.map(id => `${OUT}sheet-${id}.png`).join(', ')}, ${OUT}sheet-overview.png\n` +
+  return `shot: ${shots.join(', ')}\nlook at: ${shots.map(n => `${OUT}sheet-${n}.png`).join(', ')}, ${OUT}sheet-overview.png\n` +
     (errors.length ? `PROBLEMS:\n${errors.join('\n')}` : 'no console errors, every step found what to tap');
 }

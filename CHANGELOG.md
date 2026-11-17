@@ -7,6 +7,9 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Hry jsou nově i anglicky. Jazyk se řídí telefonem a přepíná se vlajkou nahoře ve výběru her nebo v Nastavení („Jazyk / Language“); čeština zůstává beze změny.
+- Drobné opravy češtiny: správné tvary čísel (např. „1 bod, 2 body“ ve Věžičkách).
+
 ## 1.0.28 – 2026-11-17
 
 - Mlýn: táhne vždycky ten kámen, který máš vybraný. Ťuknutí na bod, kam vybraný kámen nedojde, už nepohne jiným kamenem a ani rada nepřesune jiný kámen, než který máš vybraný.

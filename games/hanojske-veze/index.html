@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,16 +34,20 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
-
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="texts.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f4ebdf">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Hanojské věže">
-<title>Hanojské věže</title>
+<title data-t="game.hanojske-veze.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234a2e1a'/%3E%3Crect x='29' y='12' width='6' height='40' rx='3' fill='%23e2b77c'/%3E%3Crect x='22' y='24' width='20' height='8' rx='4' fill='%23ffd31a'/%3E%3Crect x='16' y='33' width='32' height='8' rx='4' fill='%23ff8a1c'/%3E%3Crect x='10' y='42' width='44' height='9' rx='4' fill='%23e0302a'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
@@ -173,24 +177,24 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app">
   <header class="topbar">
     <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Hanojské věže</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.hanojske-veze.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
-  <div class="stats">Tahy: <b id="moves">0</b> · Nejméně jde: <b id="min">7</b></div>
+  <div class="stats" id="stats"></div>
   <main id="board"><div id="rods"></div></main>
   <footer class="tray">
     <div id="hint"></div>
     <div class="row">
-      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span data-t="common.undo"></span></button>
       <button id="btnHint" class="act"></button>
     </div>
   </footer>
@@ -236,15 +240,17 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 'use strict';
 const $ = s => document.querySelector(s);
 const root = document.documentElement;
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 
 /* ---------- Settings and storage ---------- */
 const ID = 'hanojske-veze';                               // = the folder name
 const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
 const THEMES = [
-  { id: 'wood',  name: 'Dřevo',   meta: '#4a2e1a' },
-  { id: 'night', name: 'Noc',     meta: '#16233f' },
-  { id: 'green', name: 'Zelená',  meta: '#1d5236' },
-  { id: 'paper', name: 'Papír',   meta: '#f4ebdf' },
+  { id: 'wood',  nameKey: 'hanojske-veze.theme.wood',  meta: '#4a2e1a' },
+  { id: 'night', nameKey: 'hanojske-veze.theme.night', meta: '#16233f' },
+  { id: 'green', nameKey: 'hanojske-veze.theme.green', meta: '#1d5236' },
+  { id: 'paper', nameKey: 'common.theme.paper', meta: '#f4ebdf' },
 ];
 const DISCS = [3, 4, 5, 6, 7, 8];
 const DEFAULTS = { discs: 3, theme: 'paper', numbers: false, vibrate: true };
@@ -333,7 +339,7 @@ function validGame(g) {
 function normalize(s) {
   if (!DISCS.includes(+s.discs)) s.discs = DEFAULTS.discs; else s.discs = +s.discs;
   if (s.theme === 'cream') s.theme = 'paper'; // renamed
-  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  if (!THEMES.some(m => m.id === s.theme)) s.theme = DEFAULTS.theme;
   s.numbers = !!s.numbers; s.vibrate = !!s.vibrate;
 }
 function validBests(b) {
@@ -356,7 +362,7 @@ function buzz(ms = 12) {
 }
 let toastT;
 function toast(msg, ms = 2600) {
-  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  const el = $('#toast'); el.textContent = msg; el.classList.remove('hide');
   clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
 }
 function hideToast() { $('#toast').classList.add('hide'); }
@@ -380,30 +386,24 @@ function showModal(html, buttons) {
   };
   $('#modal').hidden = false;
 }
-const plural = (n, one, few, many) => n === 1 ? one : n >= 2 && n <= 4 ? few : many;
-const tahu = n => `${n} ${plural(n, 'tah', 'tahy', 'tahů')}`;
-const discWord = n => `${n} ${plural(n, 'disk', 'disky', 'disků')}`;
-// "se 3 disky", "s 5 disky" (se třemi, se čtyřmi, s pěti, se šesti, se sedmi, s osmi)
-const withDiscs = n => `${[3, 4, 6, 7].includes(n) ? 'se' : 's'} ${n} disky`;
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 /* ---------- Rendering ---------- */
 function applyLook() {
   root.dataset.theme = S.theme;
   root.classList.toggle('show-nums', S.numbers);
-  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(m => m.id === S.theme).meta;
 }
 function render(animate) {
   applyLook();
   const won = G.status === 'won';
-  $('#moves').textContent = G.history.length;
-  $('#min').textContent = minMoves(G.n);
-  $('#hint').textContent = won ? 'Věž je přenesená! 🎉'
-    : hint ? 'Ťukni na zvýrazněnou tyč'
-    : sel !== null ? 'Teď ťukni, kam disk položit'
-    : 'Vezmi disk – ťukni na jeho tyč';
-  $('#btnHint').innerHTML = won ? 'Nová hra'
-    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg>Poradit';
+  $('#stats').innerHTML = th('hanojske-veze.stats', { moves: G.history.length, min: minMoves(G.n) });
+  $('#hint').textContent = t(won ? 'hanojske-veze.hint.won'
+    : hint ? 'hanojske-veze.hint.hinted'
+    : sel !== null ? 'hanojske-veze.hint.lifted'
+    : 'hanojske-veze.hint.take');
+  $('#btnHint').innerHTML = won ? th('common.newGame')
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg>' + th('common.hint');
   $('#btnUndo').classList.toggle('dim', !G.history.length || won);
   $('#board').classList.toggle('won', won);
   draw(animate);
@@ -439,11 +439,11 @@ function draw(animate) {
   };
   let html = '';
   G.rods.forEach((r, i) => {
-    const label = `Tyč ${i + 1}${i === GOAL ? ' (cíl)' : ''}: ${r.length ? 'disky ' + r.join(', ') : 'prázdná'}`;
+    const label = th('hanojske-veze.rod', { n: i + 1, goal: i === GOAL, empty: !r.length, discs: r.join(', ') });
     html += `<button class="rod${hint && hint[1] === i ? ' dst' : ''}" data-r="${i}" aria-label="${label}">`
       + `<span class="pole" style="left:${Math.round((cw - pw) / 2)}px;width:${pw}px;height:${poleH}px;bottom:${LABEL + BASE - 2}px;border-radius:${pw / 2}px ${pw / 2}px 0 0"></span>`
       + `<span class="base" style="left:${inset}px;right:${inset}px;bottom:${LABEL}px;height:${BASE}px"></span>`
-      + (i === GOAL ? `<span class="goal" style="line-height:${LABEL}px">Cíl</span>` : '');
+      + (i === GOAL ? `<span class="goal" style="line-height:${LABEL}px">${th('hanojske-veze.goal')}</span>` : '');
     r.forEach((d, k) => {
       const up = sel === i && k === r.length - 1;
       html += discHTML(d, up ? LABEL + BASE + poleH + Math.round(dh * 0.35) : LABEL + BASE + k * dh, up);
@@ -463,9 +463,9 @@ function draw(animate) {
 const layout = () => draw(false);
 
 /* ---------- Controls ---------- */
-function move(f, t) {
-  G.rods[t].push(G.rods[f].pop());
-  G.history.push([f, t]);
+function move(f, to) {
+  G.rods[to].push(G.rods[f].pop());
+  G.history.push([f, to]);
   sel = null; hint = null;
   if (isWon(G)) {
     G.status = 'won';
@@ -480,27 +480,27 @@ function move(f, t) {
 }
 function showWin(prev) {
   const n = G.n, m = G.history.length, min = minMoves(n);
-  const best = m === min ? 'Rychleji to ani nejde!' : `Nejméně jde ${tahu(min)}.`;
-  const rec = G.hinted ? 'Hra s radou se do rekordů nepočítá.' : prev === undefined ? '' : m < prev ? 'Nový rekord! 🏆' : `Rekord ${withDiscs(n)}: ${tahu(bests[n])}`;
+  const best = m === min ? th('hanojske-veze.win.fastest') : th('hanojske-veze.win.fewest', { n: min });
+  const rec = G.hinted ? th('hanojske-veze.win.hinted') : prev === undefined ? '' : m < prev ? th('hanojske-veze.win.newRecord') : th('hanojske-veze.win.record', { n, best: bests[n] });
   const buttons = [];
-  if (n < DISCS[DISCS.length - 1]) buttons.push({ text: `Zkusit ${withDiscs(n + 1)}`, fn: () => { S.discs = n + 1; newGame(); } });
-  buttons.push({ text: `Znovu ${withDiscs(n)}`, cls: buttons.length ? 'alt' : '', fn: () => { S.discs = n; newGame(); } });
-  buttons.push({ text: 'Prohlédnout', cls: 'alt' });
+  if (n < DISCS[DISCS.length - 1]) buttons.push({ text: th('hanojske-veze.win.tryMore', { n: n + 1 }), fn: () => { S.discs = n + 1; newGame(); } });
+  buttons.push({ text: th('hanojske-veze.win.again', { n }), cls: buttons.length ? 'alt' : '', fn: () => { S.discs = n; newGame(); } });
+  buttons.push({ text: th('common.inspect'), cls: 'alt' });
   // after a damaged save the move count is unknown: no count, no record
-  const done = G.noRecord ? '<p>Věž je přenesená.</p>' : `<p>Věž je přenesená za <b>${tahu(m)}</b>.</p><p>${best}</p>`;
-  showModal(`<h2>Výborně! 🎉</h2>${done}${rec ? `<p>${rec}</p>` : ''}`, buttons);
+  const done = G.noRecord ? `<p>${th('hanojske-veze.win.doneShort')}</p>` : `<p>${th('hanojske-veze.win.done', { n: m })}</p><p>${best}</p>`;
+  showModal(`<h2>${th('hanojske-veze.win.title')}</h2>${done}${rec ? `<p>${rec}</p>` : ''}`, buttons);
 }
 function tapRod(r) {
-  if (G.status !== 'playing') { toast('Věž je přenesená – ťukni na Nová hra'); return; }
+  if (G.status !== 'playing') { toast(t('hanojske-veze.toast.over')); return; }
   // pattern: a tap on the hinted disc does the hinted move
   if (hint && r === hint[0]) { move(hint[0], hint[1]); return; }
   hint = null;
   if (sel === null) {
-    if (!G.rods[r].length) { toast('Na této tyči nic není'); render(); return; }
+    if (!G.rods[r].length) { toast(t('hanojske-veze.toast.empty')); render(); return; }
     sel = r; buzz(8); render(true); return;
   }
   if (sel === r) { sel = null; buzz(8); render(true); return; }
-  if (!canMove(G.rods, sel, r)) { toast('Větší disk nejde položit na menší'); render(); return; }
+  if (!canMove(G.rods, sel, r)) { toast(t('hanojske-veze.toast.bigger')); render(); return; }
   move(sel, r);
 }
 $('#rods').addEventListener('click', e => {
@@ -513,10 +513,10 @@ $('#board').addEventListener('click', e => {
 });
 // rule: Undo ("Zpět") wherever it makes sense; when unavailable it says why. Undo ends with the win (the tower is moved).
 $('#btnUndo').addEventListener('click', () => {
-  if (G.status !== 'playing') { toast('Věž je přenesená – ťukni na Nová hra'); return; }
-  if (!G.history.length) { toast('Zatím není co vrátit'); return; }
-  const [f, t] = G.history.pop();
-  G.rods[f].push(G.rods[t].pop());
+  if (G.status !== 'playing') { toast(t('hanojske-veze.toast.over')); return; }
+  if (!G.history.length) { toast(t('common.nothingToUndo')); return; }
+  const [f, to] = G.history.pop();
+  G.rods[f].push(G.rods[to].pop());
   sel = null; hint = null;
   buzz(); save(); render(true);
 });
@@ -527,41 +527,41 @@ $('#btnHint').addEventListener('click', () => {
   const first = !G.hinted;
   G.hinted = true; // rule: a game with a hint sets no record; Undo does not clear it
   buzz(8); save(); render(true);
-  if (first) toast('S radou se tahle hra nepočítá do rekordů');
+  if (first) toast(t('hanojske-veze.toast.hinted'));
 });
 // rule: a new game in the middle of one asks first
 $('#btnNew').addEventListener('click', () => {
   if (G.status === 'playing' && !isFresh()) {
-    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('common.confirmNew.text')}</p>`, [{ text: th('common.confirmNew.yes'), fn: () => newGame() }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
   } else newGame();
 });
 
 /* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
 const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
-const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
-const DISC_NOTES = { 3: 'snadné, na začátek', 7: 'na dlouho', 8: 'na hodně dlouho' };
+const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>`;
+const DISC_NOTES = { 3: 'easy', 7: 'long', 8: 'veryLong' }; // the note after an option (hanojske-veze.discs.desc)
 // a small picture of the board in the theme's colours
 const mini = `<svg viewBox="0 0 120 44" aria-hidden="true">${[20, 60, 100].map(x => `<rect x="${x - 2}" y="6" width="4" height="32" rx="2" style="fill:var(--rod)"/><rect x="${x - 18}" y="38" width="36" height="5" rx="2" style="fill:var(--base)"/>`).join('')}`
   + `<rect x="5" y="31" width="30" height="7" rx="3" fill="${COLORS[2].c}"/><rect x="9" y="24" width="22" height="7" rx="3" fill="${COLORS[1].c}"/><rect x="13" y="17" width="14" height="7" rx="3" fill="${COLORS[0].c}"/></svg>`;
 function renderSettings() {
   const pending = G && S.discs !== G.n
-    ? `<div class="notice">Po návratu do hry začne <b>nová hra</b> ${withDiscs(S.discs)}${G.status === 'playing' && !isFresh() ? ' a rozehraná hra se ztratí' : ''}.</div>` : '';
+    ? `<div class="notice">${th('hanojske-veze.discs.notice', { n: S.discs, lost: G.status === 'playing' && !isFresh() })}</div>` : ''; // only the extra words "a rozehraná hra se ztratí" depend on a game in progress
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Hanojské věže<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Hra</h3>
-      <div class="field"><div class="flabel">Počet disků</div>
-        ${DISCS.map(n => opt('discs:' + n, S.discs === n, discWord(n), `Nejméně ${tahu(minMoves(n))}${DISC_NOTES[n] ? ' – ' + DISC_NOTES[n] : ''}.`)).join('')}
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.hanojske-veze.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('common.game')}</h3>
+      <div class="field"><div class="flabel">${th('hanojske-veze.discs')}</div>
+        ${DISCS.map(n => opt('discs:' + n, S.discs === n, th('hanojske-veze.discs.n', { n }), th('hanojske-veze.discs.desc', { min: minMoves(n), note: DISC_NOTES[n] || '' }))).join('')}
         ${pending}
       </div>
-      <div class="fnote">Hra si pamatuje rekord (nejméně tahů) pro každý počet disků. Počítají se jen dohrané hry bez Poradit.</div>
+      <div class="fnote">${th('hanojske-veze.discs.records')}</div>
     </section>
-    <section class="card"><h3>Vzhled</h3>
-      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch" data-theme="${t.id}">${mini}</span>${t.name}</button>`).join('')}</div>
-      ${toggleRow('numbers', 'Čísla na discích')}
-      ${toggleRow('vibrate', 'Vibrace')}
+    <section class="card"><h3>${th('common.look')}</h3>
+      <div class="tiles">${THEMES.map(m => `<button class="tile" data-act="theme:${m.id}" aria-pressed="${S.theme === m.id}"><span class="swatch" data-theme="${m.id}">${mini}</span>${th(m.nameKey)}</button>`).join('')}</div>
+      ${toggleRow('numbers', th('hanojske-veze.numbers'))}
+      ${toggleRow('vibrate', th('common.vibrate'))}
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -570,7 +570,7 @@ $('#settingsIn').addEventListener('click', e => {
   if (act === 'discs') S.discs = +arg;
   else if (act === 'theme') S.theme = arg;
   else if (act === 'toggle') S[arg] = !S[arg];
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('common.settingsReset')); }
   normalize(S); buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
 });
@@ -578,7 +578,7 @@ function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hi
 // a change that needs a new game starts it after returning and says so (rule)
 function closeSettings() {
   $('#screenSettings').hidden = true;
-  if (S.discs !== G.n) newGame(`Začala nová hra ${withDiscs(S.discs)}`);
+  if (S.discs !== G.n) newGame(t('hanojske-veze.toast.newGame', { n: S.discs }));
   else render();
 }
 $('#btnSettings').addEventListener('click', openSettings);
@@ -586,18 +586,11 @@ $('#btnSettings').addEventListener('click', openSettings);
 /* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
 function renderHelp() {
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Hanojské věže<small>Jak hrát</small></h2></div>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.hanojske-veze.name')}<small>${th('common.help')}</small></h2></div>
     <section class="card help"><ol>
-      <li>Na levé tyči je věž z disků: dole největší, nahoře nejmenší. Přenes celou věž na pravou tyč označenou <b>Cíl</b>.</li>
-      <li>Ťukni na tyč – její horní disk se zvedne. Potom ťukni na tyč, kam má disk jít. Ťukni znovu na stejnou tyč a disk se vrátí zpátky.</li>
-      <li>Bere se vždy jen horní disk a <b>větší disk nesmí ležet na menším</b>. Prostřední tyč slouží k odkládání.</li>
-      <li><b>Zpět</b> vrátí poslední tah, klidně i několikrát.</li>
-      <li><b>Poradit</b> zvedne disk, se kterým je dobré táhnout, a zvýrazní tyč, kam patří. Pak stačí ťuknout.</li>
-      <li>Hra si pamatuje rekord (nejméně tahů) pro každý počet disků. Počítají se jen dohrané hry bez Poradit.</li>
-      <li>Se 3 disky jde věž přenést nejméně za 7 tahů, s každým dalším diskem je potřeba zhruba dvakrát víc tahů. Nikam se nespěchá.</li>
-      <li>Počet disků se mění v <b>Nastavení</b> (ozubené kolečko). Začni se třemi.</li>
+      ${[1, 2, 3, 4, 5, 6, 7, 8].map(i => `<li>${th(`hanojske-veze.help.${i}`)}</li>`).join('')}
     </ol></section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -629,6 +622,7 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+I18N.apply(); // the static texts (data-t*), <title> and <html lang> in the player's language
 // rule: ask for persistent storage so the browser does not delete the saved game by itself
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 const saved = load();
@@ -640,7 +634,7 @@ bests = validBests(saved && saved.bests);
 if (saved && validGame(saved.game)) {
   G = saved.game;
   // closed with Settings open after the disc count was changed: the new game starts now and says so
-  if (S.discs !== G.n) newGame(`Začala nová hra ${withDiscs(S.discs)}`); else render();
+  if (S.discs !== G.n) newGame(t('hanojske-veze.toast.newGame', { n: S.discs })); else render();
 } else newGame();
 
 window.addEventListener('resize', layout);

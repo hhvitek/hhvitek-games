@@ -13,17 +13,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -39,15 +39,20 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="texts.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f4ebdf">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Malované křížovky">
-<title>Malované křížovky</title>
+<title data-t="game.malovane-krizovky.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f4ebdf'/%3E%3Cpath d='M14 14h12v12H14zM26 26h12v12H26zM38 14h12v12H38zM14 38h12v12H14zM38 38h12v12H38z' fill='%23d0452f'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
@@ -236,19 +241,19 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app">
   <header class="topbar">
     <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Malované křížovky</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.malovane-krizovky.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
-  <div class="info"><span id="info"></span><button id="btnZoom" class="zoom" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/><path id="zoomPlus" d="M10.5 7.5v6M7.5 10.5h6"/></svg><span id="zoomLabel">Zvětšit</span></button></div>
+  <div class="info"><span id="info"></span><button id="btnZoom" class="zoom" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/><path id="zoomPlus" d="M10.5 7.5v6M7.5 10.5h6"/></svg><span id="zoomLabel" data-t="malovane-krizovky.zoom.in"></span></button></div>
   <main id="board">
     <div id="puz">
       <div id="corner"></div>
@@ -260,12 +265,12 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
   <footer class="tray">
     <div id="hint"></div>
     <div class="row">
-      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
-      <div class="modes" role="group" aria-label="Co kreslíš">
-        <button id="mFill" class="mode" aria-pressed="true"><i class="sq"></i>Vyplnit</button>
-        <button id="mCross" class="mode" aria-pressed="false"><i class="xx"></i>Křížek</button>
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span data-t="common.undo"></span></button>
+      <div class="modes" role="group" data-t-aria="malovane-krizovky.modes">
+        <button id="mFill" class="mode" aria-pressed="true"><i class="sq"></i><span data-t="malovane-krizovky.mode.fill"></span></button>
+        <button id="mCross" class="mode" aria-pressed="false"><i class="xx"></i><span data-t="malovane-krizovky.mode.cross"></span></button>
       </div>
-      <button id="btnHint" class="undo">Poradit</button>
+      <button id="btnHint" class="undo" data-t="common.hint"></button>
     </div>
   </footer>
 </div>
@@ -317,55 +322,55 @@ function KrizovkyEngine() {
   'use strict';
   // In play order: 5 x 5, 10 x 10, 15 x 15, each group from the easiest. Ids are stable forever (saves use them).
   var PUZZLES = [
-    { id: 'p01', name: 'Kostka', w: 5, h: 5, pal: { a: '#e8701f' }, rows: [
+    { id: 'p01', nameKey: 'malovane-krizovky.puzzle.p01', w: 5, h: 5, pal: { a: '#e8701f' }, rows: [
       'aaaaa',
       'a.a.a',
       'aa.aa',
       'a.a.a',
       'aaaaa'] },
-    { id: 'p02', name: 'Muchomůrka', w: 5, h: 5, pal: { a: '#d6332b', b: '#d9c49b' }, rows: [
+    { id: 'p02', nameKey: 'malovane-krizovky.puzzle.p02', w: 5, h: 5, pal: { a: '#d6332b', b: '#d9c49b' }, rows: [
       '.aaa.',
       'aa.aa',
       'aaaaa',
       '..b..',
       '.bbb.'] },
-    { id: 'p03', name: 'Kočička', w: 5, h: 5, pal: { a: '#26201c', b: '#d9822b', c: '#b5c934' }, rows: [
+    { id: 'p03', nameKey: 'malovane-krizovky.puzzle.p03', w: 5, h: 5, pal: { a: '#26201c', b: '#d9822b', c: '#b5c934' }, rows: [
       'aa.aa',
       'aaaab',
       'acaca',
       'baaaa',
       '.aaa.'] },
-    { id: 'p04', name: 'Stromek', w: 5, h: 5, pal: { a: '#3f8a3a', b: '#7a4b25' }, rows: [
+    { id: 'p04', nameKey: 'malovane-krizovky.puzzle.p04', w: 5, h: 5, pal: { a: '#3f8a3a', b: '#7a4b25' }, rows: [
       '..a..',
       '.aaa.',
       '.aaa.',
       'aaaaa',
       '..b..'] },
-    { id: 'p05', name: 'Jablíčko', w: 5, h: 5, pal: { a: '#d93a3a', b: '#7a4b25', c: '#4f9a3c' }, rows: [
+    { id: 'p05', nameKey: 'malovane-krizovky.puzzle.p05', w: 5, h: 5, pal: { a: '#d93a3a', b: '#7a4b25', c: '#4f9a3c' }, rows: [
       '..bc.',
       'aaaaa',
       'aaaaa',
       'aaaaa',
       '.aaa.'] },
-    { id: 'p06', name: 'Domeček', w: 5, h: 5, pal: { a: '#b5452c', b: '#e0b25a', c: '#6b4226' }, rows: [
+    { id: 'p06', nameKey: 'malovane-krizovky.puzzle.p06', w: 5, h: 5, pal: { a: '#b5452c', b: '#e0b25a', c: '#6b4226' }, rows: [
       '..a..',
       '.aaa.',
       'aaaaa',
       '.bbb.',
       '.bcb.'] },
-    { id: 'p07', name: 'Srdce', w: 5, h: 5, pal: { a: '#d93a3a' }, rows: [
+    { id: 'p07', nameKey: 'malovane-krizovky.puzzle.p07', w: 5, h: 5, pal: { a: '#d93a3a' }, rows: [
       '.a.a.',
       'aaaaa',
       'aaaaa',
       '.aaa.',
       '..a..'] },
-    { id: 'p08', name: 'Hvězda', w: 5, h: 5, pal: { a: '#f2b630' }, rows: [
+    { id: 'p08', nameKey: 'malovane-krizovky.puzzle.p08', w: 5, h: 5, pal: { a: '#f2b630' }, rows: [
       '..a..',
       'aaaaa',
       '.aaa.',
       '.a.a.',
       'a...a'] },
-    { id: 'p09', name: 'Šnek', w: 10, h: 10, pal: { a: '#d9a05a', b: '#9aa36a', d: '#8a4b22', e: '#5f9a3c' }, rows: [
+    { id: 'p09', nameKey: 'malovane-krizovky.puzzle.p09', w: 10, h: 10, pal: { a: '#d9a05a', b: '#9aa36a', d: '#8a4b22', e: '#5f9a3c' }, rows: [
       '..........',
       '.....ddd..',
       '....daaad.',
@@ -376,7 +381,7 @@ function KrizovkyEngine() {
       '.bb..ddd..',
       'bbbbbbbbbb',
       'eeeeeeeeee'] },
-    { id: 'p10', name: 'Hrnek', w: 10, h: 10, pal: { a: '#9aa3ab', b: '#3e7cc4', c: '#d93a3a' }, rows: [
+    { id: 'p10', nameKey: 'malovane-krizovky.puzzle.p10', w: 10, h: 10, pal: { a: '#9aa3ab', b: '#3e7cc4', c: '#d93a3a' }, rows: [
       '...a..a...',
       '..a..a....',
       '...a..a...',
@@ -387,7 +392,7 @@ function KrizovkyEngine() {
       'bbbbbbbbbb',
       'bbbbbbbb..',
       '.bbbbbb...'] },
-    { id: 'p11', name: 'Hřib', w: 10, h: 10, pal: { a: '#8a4b22', b: '#e6d3a8', c: '#d8b56a', d: '#5f9a3c' }, rows: [
+    { id: 'p11', nameKey: 'malovane-krizovky.puzzle.p11', w: 10, h: 10, pal: { a: '#8a4b22', b: '#e6d3a8', c: '#d8b56a', d: '#5f9a3c' }, rows: [
       '...aaaa...',
       '.aaaaaaaa.',
       'aaaaaaaaaa',
@@ -398,7 +403,7 @@ function KrizovkyEngine() {
       '..bbbbbb..',
       '..bbbbbb..',
       'dddddddddd'] },
-    { id: 'p12', name: 'Loďka', w: 10, h: 10, bg: '#e4f2fa', pal: { a: '#6b4226', b: '#f2ead0', c: '#e0662e', d: '#3e7cc4', e: '#7cc0e0' }, rows: [
+    { id: 'p12', nameKey: 'malovane-krizovky.puzzle.p12', w: 10, h: 10, bg: '#e4f2fa', pal: { a: '#6b4226', b: '#f2ead0', c: '#e0662e', d: '#3e7cc4', e: '#7cc0e0' }, rows: [
       '....a.....',
       '....ab....',
       '...cabb...',
@@ -409,7 +414,7 @@ function KrizovkyEngine() {
       'dddddddddd',
       '.dddddddd.',
       'e.ee.ee.ee'] },
-    { id: 'p13', name: 'Konvice', w: 10, h: 10, pal: { a: '#3e7cc4', b: '#26201c' }, rows: [
+    { id: 'p13', nameKey: 'malovane-krizovky.puzzle.p13', w: 10, h: 10, pal: { a: '#3e7cc4', b: '#26201c' }, rows: [
       '....bb....',
       '...aaaa...',
       '..........',
@@ -420,7 +425,7 @@ function KrizovkyEngine() {
       '..aaaaaaaa',
       '..aaaaaa..',
       '...aaaa...'] },
-    { id: 'p14', name: 'Mrkev', w: 10, h: 10, pal: { a: '#ec7a1c', b: '#4f9a3c', c: '#c95f12' }, rows: [
+    { id: 'p14', nameKey: 'malovane-krizovky.puzzle.p14', w: 10, h: 10, pal: { a: '#ec7a1c', b: '#4f9a3c', c: '#c95f12' }, rows: [
       '..b.bb.b..',
       '...bbbb...',
       '....bb....',
@@ -431,7 +436,7 @@ function KrizovkyEngine() {
       '....ca....',
       '....aa....',
       '....a.....'] },
-    { id: 'p15', name: 'Slunce', w: 10, h: 10, pal: { a: '#ec7a1c', b: '#f2c230' }, rows: [
+    { id: 'p15', nameKey: 'malovane-krizovky.puzzle.p15', w: 10, h: 10, pal: { a: '#ec7a1c', b: '#f2c230' }, rows: [
       'aa..aa..aa',
       'a........a',
       '...bbbb...',
@@ -442,7 +447,7 @@ function KrizovkyEngine() {
       '...bbbb...',
       'a........a',
       'aa..aa..aa'] },
-    { id: 'p16', name: 'Hruška', w: 10, h: 10, pal: { a: '#6b4226', b: '#4f9a3c', c: '#c4c43a' }, rows: [
+    { id: 'p16', nameKey: 'malovane-krizovky.puzzle.p16', w: 10, h: 10, pal: { a: '#6b4226', b: '#4f9a3c', c: '#c4c43a' }, rows: [
       '....a.....',
       '....abb...',
       '...ccc....',
@@ -453,7 +458,7 @@ function KrizovkyEngine() {
       'ccccccccc.',
       'ccccccccc.',
       '.ccccccc..'] },
-    { id: 'p17', name: 'Sova', w: 10, h: 10, pal: { a: '#8a5a36', b: '#f2c230', c: '#1d1916', d: '#e8701f', e: '#c9a27a' }, rows: [
+    { id: 'p17', nameKey: 'malovane-krizovky.puzzle.p17', w: 10, h: 10, pal: { a: '#8a5a36', b: '#f2c230', c: '#1d1916', d: '#e8701f', e: '#c9a27a' }, rows: [
       '.a......a.',
       '.aaaaaaaa.',
       'abbbaabbba',
@@ -464,7 +469,7 @@ function KrizovkyEngine() {
       '.aaeaaeaa.',
       '..aaaaaa..',
       '..dd..dd..'] },
-    { id: 'p18', name: 'Rybka', w: 10, h: 10, pal: { a: '#e8a21f', b: '#7cc0e0', c: '#e0662e', e: '#1d1916' }, rows: [
+    { id: 'p18', nameKey: 'malovane-krizovky.puzzle.p18', w: 10, h: 10, pal: { a: '#e8a21f', b: '#7cc0e0', c: '#e0662e', e: '#1d1916' }, rows: [
       '..........',
       '.b..cc....',
       '...aaaa...',
@@ -475,7 +480,7 @@ function KrizovkyEngine() {
       '..aaaaa...',
       '....cc....',
       '..........'] },
-    { id: 'p19', name: 'Deštník', w: 10, h: 10, pal: { a: '#d93a3a', b: '#6b4226', d: '#f2c230' }, rows: [
+    { id: 'p19', nameKey: 'malovane-krizovky.puzzle.p19', w: 10, h: 10, pal: { a: '#d93a3a', b: '#6b4226', d: '#f2c230' }, rows: [
       '....a.....',
       '..adada...',
       '.adadada..',
@@ -486,7 +491,7 @@ function KrizovkyEngine() {
       '....b.....',
       '..b.b.....',
       '...b......'] },
-    { id: 'p20', name: 'Jahoda', w: 10, h: 10, pal: { a: '#d6332b', b: '#4f9a3c', c: '#f2d23a' }, rows: [
+    { id: 'p20', nameKey: 'malovane-krizovky.puzzle.p20', w: 10, h: 10, pal: { a: '#d6332b', b: '#4f9a3c', c: '#f2d23a' }, rows: [
       '..b.bb.b..',
       '..bbbbbb..',
       '.aaabbaaa.',
@@ -497,7 +502,7 @@ function KrizovkyEngine() {
       '..acaaca..',
       '...aaaa...',
       '....aa....'] },
-    { id: 'p21', name: 'Autíčko', w: 10, h: 10, pal: { a: '#d93a3a', b: '#9fd0ea', c: '#26201c', d: '#f2c230' }, rows: [
+    { id: 'p21', nameKey: 'malovane-krizovky.puzzle.p21', w: 10, h: 10, pal: { a: '#d93a3a', b: '#9fd0ea', c: '#26201c', d: '#f2c230' }, rows: [
       '..........',
       '..........',
       '..aaaaa...',
@@ -508,7 +513,7 @@ function KrizovkyEngine() {
       'aacaaaacaa',
       '.ccc..ccc.',
       '..c....c..'] },
-    { id: 'p22', name: 'Třešně', w: 10, h: 10, pal: { a: '#6b4226', b: '#4f9a3c', c: '#c8202f' }, rows: [
+    { id: 'p22', nameKey: 'malovane-krizovky.puzzle.p22', w: 10, h: 10, pal: { a: '#6b4226', b: '#4f9a3c', c: '#c8202f' }, rows: [
       '......bbb.',
       '.....abb..',
       '....aaa...',
@@ -519,7 +524,7 @@ function KrizovkyEngine() {
       'cccc.cccc.',
       '.cc...cc..',
       '..........'] },
-    { id: 'p23', name: 'Motýl', w: 10, h: 10, pal: { a: '#e8701f', b: '#f2c230', c: '#26201c', d: '#d6332b' }, rows: [
+    { id: 'p23', nameKey: 'malovane-krizovky.puzzle.p23', w: 10, h: 10, pal: { a: '#e8701f', b: '#f2c230', c: '#26201c', d: '#d6332b' }, rows: [
       '...c..c...',
       'aa..cc..aa',
       'aaa.cc.aaa',
@@ -530,7 +535,7 @@ function KrizovkyEngine() {
       '.ddaccadd.',
       '.dd.cc.dd.',
       '..........'] },
-    { id: 'p24', name: 'Červenka', w: 10, h: 10, pal: { a: '#8a5a36', b: '#1d1916', c: '#e8a21f', d: '#e0662e', e: '#5a3a24' }, rows: [
+    { id: 'p24', nameKey: 'malovane-krizovky.puzzle.p24', w: 10, h: 10, pal: { a: '#8a5a36', b: '#1d1916', c: '#e8a21f', d: '#e0662e', e: '#5a3a24' }, rows: [
       '..........',
       '..aaa.....',
       '.aaba.....',
@@ -541,7 +546,7 @@ function KrizovkyEngine() {
       '..dddaaa..',
       '....e.e...',
       '...ee.ee..'] },
-    { id: 'p25', name: 'Náchodský zámek', w: 15, h: 15, bg: '#dceef8', pal: { a: '#b5452c', b: '#e6d6b0', c: '#3a4047', d: '#154f5e', e: '#6f9a4a' }, rows: [
+    { id: 'p25', nameKey: 'malovane-krizovky.puzzle.p25', w: 15, h: 15, bg: '#dceef8', pal: { a: '#b5452c', b: '#e6d6b0', c: '#3a4047', d: '#154f5e', e: '#6f9a4a' }, rows: [
       '...a...........',
       '...a...........',
       '..aaa..........',
@@ -557,7 +562,7 @@ function KrizovkyEngine() {
       'eebbbbbbbbbbbbb',
       'eeeeeeeeeeeeeee',
       'eeeeeeeeeeeeeee'] },
-    { id: 'p26', name: 'Kostel', w: 15, h: 15, pal: { a: '#b5452c', b: '#e6c36a', c: '#3a4047', d: '#6b4226', e: '#6f9a4a' }, rows: [
+    { id: 'p26', nameKey: 'malovane-krizovky.puzzle.p26', w: 15, h: 15, pal: { a: '#b5452c', b: '#e6c36a', c: '#3a4047', d: '#6b4226', e: '#6f9a4a' }, rows: [
       '...c...........',
       '..ccc..........',
       '...c...........',
@@ -573,7 +578,7 @@ function KrizovkyEngine() {
       '.bbddbb.bb.bb.b',
       '.bbddbbbbbbbbbb',
       'eeeeeeeeeeeeeee'] },
-    { id: 'p27', name: 'Lokomotiva', w: 15, h: 15, pal: { a: '#26201c', b: '#d6332b', c: '#3e7cc4', d: '#4a4f57', e: '#b8bec4', f: '#f2c230' }, rows: [
+    { id: 'p27', nameKey: 'malovane-krizovky.puzzle.p27', w: 15, h: 15, pal: { a: '#26201c', b: '#d6332b', c: '#3e7cc4', d: '#4a4f57', e: '#b8bec4', f: '#f2c230' }, rows: [
       '..ee...........',
       '.eeee..........',
       '..ee.....bbbbbb',
@@ -589,7 +594,7 @@ function KrizovkyEngine() {
       '.ddd.ddd.ddddd.',
       '.ddd.ddd..ddd..',
       'aaaaaaaaaaaaaaa'] },
-    { id: 'p28', name: 'Chaloupka', w: 15, h: 15, pal: { a: '#b5452c', b: '#e6c36a', c: '#6b4226', d: '#8a3a2a', e: '#9aa3ab', f: '#6f9a4a' }, rows: [
+    { id: 'p28', nameKey: 'malovane-krizovky.puzzle.p28', w: 15, h: 15, pal: { a: '#b5452c', b: '#e6c36a', c: '#6b4226', d: '#8a3a2a', e: '#9aa3ab', f: '#6f9a4a' }, rows: [
       '............e..',
       '...........e...',
       '............e..',
@@ -605,7 +610,7 @@ function KrizovkyEngine() {
       '..b..bcccb..b..',
       '..bbbbcccbbbb..',
       'fffffffffffffff'] },
-    { id: 'p29', name: 'Jabloň', w: 15, h: 15, pal: { a: '#4f9a3c', b: '#d6332b', c: '#6b4226', d: '#8cc05a' }, rows: [
+    { id: 'p29', nameKey: 'malovane-krizovky.puzzle.p29', w: 15, h: 15, pal: { a: '#4f9a3c', b: '#d6332b', c: '#6b4226', d: '#8cc05a' }, rows: [
       '.....aaaaa.....',
       '...aaaaaaaaa...',
       '..aaaaabaaaaa..',
@@ -621,7 +626,7 @@ function KrizovkyEngine() {
       '......ccc......',
       '.....ccccc.....',
       '...ddddddddd...'] },
-    { id: 'p30', name: 'Kočka', w: 15, h: 15, pal: { a: '#26201c', b: '#d9822b', c: '#b5c934', d: '#e89a9a' }, rows: [
+    { id: 'p30', nameKey: 'malovane-krizovky.puzzle.p30', w: 15, h: 15, pal: { a: '#26201c', b: '#d9822b', c: '#b5c934', d: '#e89a9a' }, rows: [
       '..a.....a......',
       '..aa...aa......',
       '..abaaaaa......',
@@ -637,7 +642,7 @@ function KrizovkyEngine() {
       'aabaaaaaaaa..a.',
       'abbaaaaaaaaaaa.',
       'aaa.aa.aa.aaa..'] },
-    { id: 'p31', name: 'Hrací kostka', w: 15, h: 15, pal: { a: '#e8701f', b: '#f4a259', c: '#b8561b' }, rows: [
+    { id: 'p31', nameKey: 'malovane-krizovky.puzzle.p31', w: 15, h: 15, pal: { a: '#e8701f', b: '#f4a259', c: '#b8561b' }, rows: [
       '.....bbbbbbbbbb',
       '....bbbbbbbbbbc',
       '...bbbb..bbbbcc',
@@ -653,7 +658,7 @@ function KrizovkyEngine() {
       'a..aaaa..acc...',
       'a..aaaa..ac....',
       'aaaaaaaaaa.....'] },
-    { id: 'p32', name: 'Veverka', w: 15, h: 15, pal: { a: '#b5562a', b: '#1d1916', d: '#6b4226', e: '#d9873e' }, rows: [
+    { id: 'p32', nameKey: 'malovane-krizovky.puzzle.p32', w: 15, h: 15, pal: { a: '#b5562a', b: '#1d1916', d: '#6b4226', e: '#d9873e' }, rows: [
       '.........eeee..',
       '........eeeeeee',
       '.......eeeeeeee',
@@ -669,7 +674,7 @@ function KrizovkyEngine() {
       'dd.aaaaaee.....',
       '...aaaaaa......',
       '.aaaa.aaa......'] },
-    { id: 'p33', name: 'Kachnička', w: 15, h: 15, pal: { a: '#f2c230', b: '#1d1916', c: '#e8701f', d: '#d99a1f', f: '#5ba8d6' }, rows: [
+    { id: 'p33', nameKey: 'malovane-krizovky.puzzle.p33', w: 15, h: 15, pal: { a: '#f2c230', b: '#1d1916', c: '#e8701f', d: '#d99a1f', f: '#5ba8d6' }, rows: [
       '...aaa.........',
       '..aaaaa........',
       '..abaaa........',
@@ -685,7 +690,7 @@ function KrizovkyEngine() {
       '...aaaaaaaaa...',
       'ff.ff.ff.ff.ff.',
       '.ff.ff.ff.ff.ff'] },
-    { id: 'p34', name: 'Ježek', w: 15, h: 15, pal: { a: '#5a3a24', b: '#d8b48a', c: '#1d1916', e: '#6f9a4a' }, rows: [
+    { id: 'p34', nameKey: 'malovane-krizovky.puzzle.p34', w: 15, h: 15, pal: { a: '#5a3a24', b: '#d8b48a', c: '#1d1916', e: '#6f9a4a' }, rows: [
       '......a...a....',
       '...a..aa.aaa.a.',
       '....aaaaaaaaaa.',
@@ -701,7 +706,7 @@ function KrizovkyEngine() {
       '...bb.....bb...',
       '...............',
       'eeeeeeeeeeeeeee'] },
-    { id: 'p35', name: 'Kohout', w: 15, h: 15, pal: { a: '#d6332b', b: '#c77a2e', c: '#2f5d50', d: '#1d1916', e: '#f2c230' }, rows: [
+    { id: 'p35', nameKey: 'malovane-krizovky.puzzle.p35', w: 15, h: 15, pal: { a: '#d6332b', b: '#c77a2e', c: '#2f5d50', d: '#1d1916', e: '#f2c230' }, rows: [
       '...a...........',
       '..aaa.......c..',
       '..bbb......cc..',
@@ -717,7 +722,7 @@ function KrizovkyEngine() {
       '.......e.e.....',
       '.......e.e.....',
       '......ee.ee....'] },
-    { id: 'p36', name: 'Slunečnice', w: 15, h: 15, pal: { a: '#f2c230', b: '#6b4226', c: '#4f9a3c', d: '#3f7a32' }, rows: [
+    { id: 'p36', nameKey: 'malovane-krizovky.puzzle.p36', w: 15, h: 15, pal: { a: '#f2c230', b: '#6b4226', c: '#4f9a3c', d: '#3f7a32' }, rows: [
       '.....a...a.....',
       '..a.aaa.aaa.a..',
       '..aaaabbbaaaa..',
@@ -906,17 +911,19 @@ function KrizovkyEngine() {
 'use strict';
 const $ = s => document.querySelector(s);
 const root = document.documentElement;
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 const GUT = 12; // side margin in px, the same as --gut in the CSS
 const E = KrizovkyEngine();
 
 /* ---------- Settings and storage ---------- */
 const ID = 'malovane-krizovky';                           // = the folder name
 const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
-const PROGRESS = `games.${ID}.progress`; // contract: a short Czech progress text the launcher shows on the game's row
+const PROGRESS = `games.${ID}.progress`; // contract 3a: { k: 'solved', n, of } the launcher shows on the game's row ("Vyřešeno 8 z 36")
 const THEMES = [
-  { id: 'paper', name: 'Papír', meta: '#f4ebdf' },
-  { id: 'night', name: 'Noc', meta: '#16233f' },
-  { id: 'slate', name: 'Břidlice', meta: '#dde2e7' },
+  { id: 'paper', nameKey: 'common.theme.paper', meta: '#f4ebdf' },
+  { id: 'night', nameKey: 'malovane-krizovky.theme.night', meta: '#16233f' },
+  { id: 'slate', nameKey: 'malovane-krizovky.theme.slate', meta: '#dde2e7' },
 ];
 const DEFAULTS = { theme: 'paper', mistakes: false, autoCross: false, mode: 'fill', vibrate: true };
 const MODES = ['fill', 'cross'];
@@ -931,8 +938,6 @@ function info(p) {
   return CACHE.get(p.id);
 }
 const numOf = p => BYID.get(p.id).i + 1;
-const sizeName = p => `${p.w} × ${p.h}`;
-const GROUP_NAMES = { 5: 'Malé', 10: 'Střední', 15: 'Velké' };
 // the runs of filled cells in a line of cell codes
 function runsOf(line) { const out = []; let k = 0; for (const v of line) { if (v === 1) k++; else if (k) { out.push(k); k = 0; } } if (k) out.push(k); return out; }
 const sameRuns = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
@@ -954,7 +959,7 @@ function save() {
     if (G.status === 'playing' && !isFresh()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
     // how many pictures are solved: "Vyřešeno 8 z 36" in the launcher
     const solved = PZ.filter(p => D.done[p.id]).length;
-    if (solved) localStorage.setItem(PROGRESS, `Vyřešeno ${solved} z ${PZ.length}`); else localStorage.removeItem(PROGRESS);
+    if (solved) localStorage.setItem(PROGRESS, JSON.stringify({ k: 'solved', n: solved, of: PZ.length })); else localStorage.removeItem(PROGRESS);
   } catch (e) {} // rule: storage may be full or blocked; the game goes on
 }
 const isCode = v => v === 0 || v === 1 || v === 2;
@@ -968,11 +973,11 @@ function validGame(g) {
     let ok = Array.isArray(g.history) && g.history.every(e => Array.isArray(e) && e.length > 0 && e.every(c => Array.isArray(c) && c.length === 3
       && Number.isInteger(c[0]) && c[0] >= 0 && c[0] < N && isCode(c[1]) && isCode(c[2])));
     if (ok) {
-      const t = g.cells.slice();
+      const cur = g.cells.slice();
       for (let k = g.history.length - 1; k >= 0 && ok; k--) for (let j = g.history[k].length - 1; j >= 0; j--) {
         const [i, before, after] = g.history[k][j];
-        if (t[i] !== after) { ok = false; break; }
-        t[i] = before;
+        if (cur[i] !== after) { ok = false; break; }
+        cur[i] = before;
       }
     }
     if (!ok) g.history = [];
@@ -1000,7 +1005,7 @@ function validDone(o) {
   return out;
 }
 function normalize(s) {
-  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  if (!THEMES.some(m => m.id === s.theme)) s.theme = DEFAULTS.theme;
   if (!MODES.includes(s.mode)) s.mode = DEFAULTS.mode;
   s.mistakes = !!s.mistakes; s.autoCross = !!s.autoCross; s.vibrate = !!s.vibrate;
 }
@@ -1036,11 +1041,11 @@ function buzz(ms = 12) {
 }
 let toastT;
 function toast(msg, ms = 2600) {
-  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  const el = $('#toast'); el.textContent = msg; el.classList.remove('hide');
   // its top at the top of the bottom buttons, but never below the visible bottom (a long text on a short screen)
   const vh = window.visualViewport ? visualViewport.height : innerHeight;
-  t.style.bottom = 'auto';
-  t.style.top = Math.round(Math.max(0, Math.min($('.tray .row').getBoundingClientRect().top, vh - t.getBoundingClientRect().height - 8))) + 'px';
+  el.style.bottom = 'auto';
+  el.style.top = Math.round(Math.max(0, Math.min($('.tray .row').getBoundingClientRect().top, vh - el.getBoundingClientRect().height - 8))) + 'px';
   clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
 }
 function hideToast() { $('#toast').classList.add('hide'); }
@@ -1134,21 +1139,22 @@ function paint() {
 /* ---------- Rendering ---------- */
 function applyLook() {
   root.dataset.theme = S.theme;
-  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(m => m.id === S.theme).meta;
 }
 const zoomable = () => P && P.w >= 15;
 function render() {
   applyLook();
   const won = G.status === 'won';
-  $('#info').innerHTML = won ? `<b>${esc(P.name)}</b> · ${sizeName(P)}${D.done[P.id] && D.done[P.id].clean ? ' ★' : ''}` : `Křížovka <b>${numOf(P)}</b> · ${sizeName(P)}`;
+  $('#info').innerHTML = won ? th('malovane-krizovky.info.won', { name: t(P.nameKey), w: P.w, h: P.h, clean: !!(D.done[P.id] && D.done[P.id].clean) })
+    : th('malovane-krizovky.info', { n: numOf(P), w: P.w, h: P.h });
   $('#btnZoom').hidden = !zoomable() || won;
-  $('#zoomLabel').textContent = zoom > 1 ? 'Zmenšit' : 'Zvětšit';
+  $('#zoomLabel').textContent = t(zoom > 1 ? 'malovane-krizovky.zoom.out' : 'malovane-krizovky.zoom.in');
   $('#zoomPlus').setAttribute('d', zoom > 1 ? 'M7.5 10.5h6' : 'M10.5 7.5v6M7.5 10.5h6');
   $('#mFill').setAttribute('aria-pressed', S.mode === 'fill');
   $('#mCross').setAttribute('aria-pressed', S.mode === 'cross');
   $('#btnUndo').classList.toggle('dim', won || !G.history.length);
   $('#btnHint').classList.toggle('dim', won);
-  $('#hint').textContent = won ? 'Hotovo! Další vybereš přes Nová hra' : S.mode === 'fill' ? 'Vybarvuj políčka podle čísel' : 'Křížkem označ prázdná políčka';
+  $('#hint').textContent = t(won ? 'malovane-krizovky.hint.won' : S.mode === 'fill' ? 'malovane-krizovky.hint.fill' : 'malovane-krizovky.hint.cross');
   layout();
   paint();
 }
@@ -1158,7 +1164,7 @@ function layout() {
   const b = $('#board'), { cl } = info(P);
   const W = b.clientWidth - 2 * GUT, H = b.clientHeight - 24; // inside #board's padding (GUT at the sides, 12 px above and below)
   // room for the clue numbers at font size f (a digit is about .6 of the font size wide)
-  const rowW = f => Math.max(...cl.rows.map(x => { const t = x.length ? x : [0]; return t.reduce((s, n) => s + String(n).length * .6 * f, 0) + (t.length - 1) * .38 * f; })) + .9 * f;
+  const rowW = f => Math.max(...cl.rows.map(x => { const xs = x.length ? x : [0]; return xs.reduce((s, n) => s + String(n).length * .6 * f, 0) + (xs.length - 1) * .38 * f; })) + .9 * f;
   const colH = f => Math.max(...cl.cols.map(x => Math.max(1, x.length))) * 1.12 * f + .4 * f;
   let c = Math.min(W / P.w, H / P.h), f = 14;
   for (let k = 0; k < 6; k++) {
@@ -1230,7 +1236,7 @@ function applyStroke() {
   }
 }
 function beginStroke(i, pid) {
-  if (G.status !== 'playing') { toast('Křížovka je hotová. Další vybereš přes Nová hra.'); return; }
+  if (G.status !== 'playing') { toast(t('malovane-krizovky.toast.done')); return; }
   const v = G.cells[i];
   let mark, erase;
   if (hint && hint.i === i) { mark = hint.wrong ? v : hint.v; erase = !!hint.wrong; } // a tap on the hinted cell does what the hint said
@@ -1296,10 +1302,10 @@ function win() {
   // rule: an end dialog only for the game that ended, never over Settings or Help (whenFree)
   whenFree(G, 1200, () => {
     const next = nextId();
-    showModal(`<h2>Hotovo!</h2><div class="wpic">${picSVG(P)}</div><p><b>${esc(P.name)}</b></p>${clean ? '<p class="star">★ Vyřešeno bez nápovědy</p>' : ''}`, [
-      { text: 'Další křížovka', fn: () => openPuzzle(next) },
-      { text: 'Vybrat jinou', cls: 'alt', fn: openList },
-      { text: 'Prohlédnout', cls: 'alt' },
+    showModal(`<h2>${th('malovane-krizovky.win.title')}</h2><div class="wpic">${picSVG(P)}</div><p><b>${th(P.nameKey)}</b></p>${clean ? `<p class="star">${th('malovane-krizovky.win.clean')}</p>` : ''}`, [
+      { text: th('malovane-krizovky.win.next'), fn: () => openPuzzle(next) },
+      { text: th('malovane-krizovky.win.other'), cls: 'alt', fn: openList },
+      { text: th('common.inspect'), cls: 'alt' },
     ]);
   });
 }
@@ -1350,15 +1356,15 @@ $('#mFill').addEventListener('click', () => setMode('fill'));
 $('#mCross').addEventListener('click', () => setMode('cross'));
 // Zpět undoes the last tap or drag (unlimited); after the win the picture is finished
 $('#btnUndo').addEventListener('click', () => {
-  if (G.status !== 'playing') { toast('Křížovka je hotová, není co vracet'); return; }
-  if (!G.history.length) { toast('Zatím není co vrátit'); return; }
+  if (G.status !== 'playing') { toast(t('malovane-krizovky.toast.noUndo')); return; }
+  if (!G.history.length) { toast(t('common.nothingToUndo')); return; }
   const e = G.history.pop();
   for (let j = e.length - 1; j >= 0; j--) G.cells[e[j][0]] = e[j][1];
   hint = null; buzz(); save(); render();
 });
 // Poradit: first a wrong mark, otherwise a cell that one row or column decides
 $('#btnHint').addEventListener('click', () => {
-  if (G.status !== 'playing') { toast('Křížovka je hotová'); return; }
+  if (G.status !== 'playing') { toast(t('malovane-krizovky.toast.finished')); return; }
   const { cl, sol } = info(P);
   const wrong = G.cells.findIndex((v, i) => (v === 1 && !sol[i]) || (v === 2 && sol[i]));
   // the first hint of a puzzle that could still get its ★ says once that it no longer can (rule: no star with Poradit)
@@ -1373,11 +1379,11 @@ $('#btnHint').addEventListener('click', () => {
       if (!hint) { const i = G.cells.findIndex(v => !v); hint = { i, v: sol[i] ? 1 : 2, line: null, k: -1 }; }
     }
   }
-  const where = hint.line === 'r' ? `u ${hint.k + 1}. řádku` : `u ${hint.k + 1}. sloupce`;
-  if (first) toast('S radou tahle křížovka nedostane ★. Ťukni na označené políčko.', 4000);
-  else toast(hint.wrong ? 'Tady je chyba. Ťukni na políčko a smaže se.'
-    : !hint.line ? (hint.v === 1 ? 'Tohle políčko má být vybarvené. Ťukni na něj.' : 'Tohle políčko zůstane prázdné. Ťukni na něj.')
-    : hint.v === 1 ? `Podle čísel ${where} musí být tohle políčko vybarvené` : `Podle čísel ${where} musí tohle políčko zůstat prázdné`, 4000);
+  const where = { line: hint.line, k: hint.k + 1 };
+  if (first) toast(t('malovane-krizovky.toast.hinted'), 4000);
+  else toast(hint.wrong ? t('malovane-krizovky.toast.wrong')
+    : !hint.line ? t(hint.v === 1 ? 'malovane-krizovky.toast.fill' : 'malovane-krizovky.toast.empty')
+    : t(hint.v === 1 ? 'malovane-krizovky.toast.lineFill' : 'malovane-krizovky.toast.lineEmpty', where), 4000);
   showCell(hint.i);
   buzz(); save(); render();
 });
@@ -1389,34 +1395,34 @@ function tileHTML(p) {
   const saved = !cur && D.prog[p.id] ? D.prog[p.id].replace('!', '').split('').map(Number) : null;
   const cells = cur ? (G.status === 'playing' && hasMarks(G) ? G.cells : null) : saved && saved.some(v => v) ? saved : null;
   const n = numOf(p);
-  let kind, th, nm;
-  if (done) { kind = 'done'; th = picSVG(p) + (done.clean ? '<span class="s" aria-hidden="true">★</span>' : ''); nm = esc(p.name); }
-  else if (cells) { kind = 'part'; th = picSVG(p, cells) + `<b>${n}</b>`; nm = '<span>rozpraco&shy;váno</span>'; }
-  else { kind = 'todo'; th = n; nm = ''; }
-  const label = done ? `Křížovka ${n}, vyřešeno: ${p.name}${done.clean ? ', bez nápovědy' : ''}` : cells ? `Křížovka ${n}, rozpracováno` : `Křížovka ${n}`;
-  return `<button class="lt ${kind}${cur ? ' cur' : ''}" data-open="${p.id}" aria-label="${esc(label)}"><span class="th">${th}</span><span class="nm${kind === 'part' ? ' soft' : ''}">${nm}</span></button>`;
+  let kind, pic, nm;
+  if (done) { kind = 'done'; pic = picSVG(p) + (done.clean ? '<span class="s" aria-hidden="true">★</span>' : ''); nm = th(p.nameKey); }
+  else if (cells) { kind = 'part'; pic = picSVG(p, cells) + `<b>${n}</b>`; nm = `<span>${th('malovane-krizovky.list.part')}</span>`; }
+  else { kind = 'todo'; pic = n; nm = ''; }
+  const label = t('malovane-krizovky.list.tile', { n, state: kind, name: done ? t(p.nameKey) : '', clean: !!(done && done.clean) });
+  return `<button class="lt ${kind}${cur ? ' cur' : ''}" data-open="${p.id}" aria-label="${esc(label)}"><span class="th">${pic}</span><span class="nm${kind === 'part' ? ' soft' : ''}">${nm}</span></button>`;
 }
 function renderList() {
   const groups = [...new Set(PZ.map(p => p.w))].sort((a, b) => a - b);
   $('#listIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Malované křížovky<small>Křížovky</small></h2></div>
-    ${G.status === 'playing' && hasMarks(G) ? '<button class="big alt" data-act="restart">Začít tuhle křížovku znovu</button>' : ''}
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.malovane-krizovky.name')}<small>${th('malovane-krizovky.list.title')}</small></h2></div>
+    ${G.status === 'playing' && hasMarks(G) ? `<button class="big alt" data-act="restart">${th('malovane-krizovky.list.restart')}</button>` : ''}
     ${groups.map(n => {
       const ps = PZ.filter(p => p.w === n), k = ps.filter(p => D.done[p.id]).length;
-      return `<section class="card"><h3>${GROUP_NAMES[n] || ''} ${n} × ${n}</h3><div class="lsub">vyřešeno ${k} z ${ps.length}</div><div class="ltiles">${ps.map(tileHTML).join('')}</div></section>`;
+      return `<section class="card"><h3>${th('malovane-krizovky.list.group', { n })}</h3><div class="lsub">${th('malovane-krizovky.list.solved', { k, all: ps.length })}</div><div class="ltiles">${ps.map(tileHTML).join('')}</div></section>`;
     }).join('')}
-    <div class="fnote">★ dostane křížovka vyřešená bez Poradit a bez upozorňování na chyby. Rada platí i po Zpět a po začátku znovu.</div>
-    <button class="big" data-act="close">Zpět ke křížovce</button>`;
+    <div class="fnote">${th('malovane-krizovky.list.note')}</div>
+    <button class="big" data-act="close">${th('malovane-krizovky.list.close')}</button>`;
 }
 function openList() { hideToast(); renderList(); $('#screenList').hidden = false; $('#screenList').scrollTop = 0; }
 $('#listIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act], [data-open]'); if (!b) return;
   if (b.dataset.act === 'close') { $('#screenList').hidden = true; return; }
   if (b.dataset.act === 'restart') {
-    showModal('<h2>Začít znovu?</h2><p>Všechny značky v této křížovce se smažou.</p>', [
+    showModal(`<h2>${th('malovane-krizovky.restart.title')}</h2><p>${th('malovane-krizovky.restart.text')}</p>`, [
       // rule: a hint stays with the puzzle when it starts over (no ★); only a new game (another or a solved puzzle) resets it
-      { text: 'Ano, začít znovu', fn: () => { const h = G.hints, w = G.warned; $('#screenList').hidden = true; openPuzzle(G.id, true); if (h || w) { G.hints = h; G.warned = w; save(); } toast('Křížovka začíná znovu'); } },
-      { text: 'Ne', cls: 'alt' },
+      { text: th('malovane-krizovky.restart.yes'), fn: () => { const h = G.hints, w = G.warned; $('#screenList').hidden = true; openPuzzle(G.id, true); if (h || w) { G.hints = h; G.warned = w; save(); } toast(t('malovane-krizovky.toast.restarted')); } },
+      { text: th('malovane-krizovky.restart.no'), cls: 'alt' },
     ]);
     return;
   }
@@ -1427,24 +1433,24 @@ $('#listIn').addEventListener('click', e => {
   const again = !!D.done[id] && !D.prog[id];
   openPuzzle(id, again);
   buzz(8);
-  toast(`Křížovka ${numOf(P)} · ${sizeName(P)}${again ? ' – znovu od začátku' : ''}`);
+  toast(t('malovane-krizovky.toast.opened', { n: numOf(P), w: P.w, h: P.h, again }));
 });
 
 /* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
-const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
 function renderSettings() {
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Malované křížovky<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Hra</h3>
-      ${toggleRow('mistakes', 'Upozorňovat na chyby', 'Políčko vybarvené nebo označené křížkem špatně se hned zbarví červeně. Křížovka vyřešená s touhle pomocí nedostane hvězdičku.')}
-      ${toggleRow('autoCross', 'Doplňovat křížky', 'Když má řádek nebo sloupec vybarvené přesně podle svých čísel, zbytek se sám označí křížky.')}
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.malovane-krizovky.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('common.game')}</h3>
+      ${toggleRow('mistakes', th('malovane-krizovky.set.mistakes'), th('malovane-krizovky.set.mistakes.note'))}
+      ${toggleRow('autoCross', th('malovane-krizovky.set.autoCross'), th('malovane-krizovky.set.autoCross.note'))}
     </section>
-    <section class="card"><h3>Vzhled</h3>
-      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch" data-theme="${t.id}"><i></i></span>${t.name}</button>`).join('')}</div>
-      ${toggleRow('vibrate', 'Vibrace')}
+    <section class="card"><h3>${th('common.look')}</h3>
+      <div class="tiles">${THEMES.map(m => `<button class="tile" data-act="theme:${m.id}" aria-pressed="${S.theme === m.id}"><span class="swatch" data-theme="${m.id}"><i></i></span>${th(m.nameKey)}</button>`).join('')}</div>
+      ${toggleRow('vibrate', th('common.vibrate'))}
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1452,7 +1458,7 @@ $('#settingsIn').addEventListener('click', e => {
   if (act === 'close') { closeSettings(); return; }
   if (act === 'theme') S.theme = arg;
   else if (act === 'toggle') S[arg] = !S[arg];
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('common.settingsReset')); }
   normalize(S);
   buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
@@ -1471,27 +1477,18 @@ $('#btnSettings').addEventListener('click', openSettings);
 function renderHelp() {
   const ex = s => `<span>${s.split('').map(ch => `<i${ch === '#' ? ' class="f"' : ''}></i>`).join('')}</span>`;
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Malované křížovky<small>Jak hrát</small></h2></div>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.malovane-krizovky.name')}<small>${th('common.help')}</small></h2></div>
     <section class="card help">
-      <p>Ve mřížce je schovaný obrázek. Čísla vlevo od řádku a nad sloupcem říkají, kolik políček je v něm vybarvených vedle sebe, a to v tomhle pořadí.</p>
+      <p>${th('malovane-krizovky.help.intro.1')}</p>
       <div class="ex"><b>3 1</b>${ex('###.#..')}</div>
       <div class="ex"><b>3 1</b>${ex('.###..#')}</div>
-      <p>Obě řady patří k číslům 3 1: nejdřív tři vybarvená políčka vedle sebe, potom jedno samotné.</p>
-      <p>Mezi dvěma skupinami je vždycky aspoň jedno prázdné políčko. Kde přesně skupiny leží, zjistíš z čísel řádků i sloupců dohromady.</p>
+      <p>${th('malovane-krizovky.help.intro.2')}</p>
+      <p>${th('malovane-krizovky.help.intro.3')}</p>
     </section>
     <section class="card help"><ol>
-      <li><b>Vyplnit</b>: ťuknutí políčko vybarví, další ťuknutí ho zase vymaže.</li>
-      <li><b>Křížek</b>: označí políčko, o kterém víš, že zůstane prázdné. Křížky ti pomáhají, do výsledku se nepočítají.</li>
-      <li>Táhnutím prstem po řádku nebo sloupci kreslíš víc políček najednou; bublina ukazuje, kolik jich je. Když začneš na políčku, které už má stejnou značku, tah ji naopak maže.</li>
-      <li>Číslo, které už má svůj řádek nebo sloupec vybarvený přesně, zešedne.</li>
-      <li><b>Zpět</b> vrátí poslední ťuknutí nebo tah, kolikrát chceš.</li>
-      <li><b>Poradit</b> ukáže chybu, nebo políčko, které jde z čísel jednoho řádku či sloupce poznat. Ťuknutím na něj ho rovnou vyplníš.</li>
-      <li>V Nastavení jde zapnout <b>Upozorňovat na chyby</b> (špatné značky zčervenají) a <b>Doplňovat křížky</b>.</li>
-      <li>Velké křížovky přiblížíš tlačítkem <b>Zvětšit</b> nebo roztažením dvěma prsty; dvěma prsty pak mřížkou i posouváš. Jedním prstem se kreslí.</li>
-      <li><b>Nová hra</b> otevře seznam křížovek. Rozpracované křížovky zůstanou tak, jak jsou, takže můžeš přecházet mezi nimi.</li>
-      <li>Vyřešená křížovka se ukáže v barvách. Když ji vyřešíš bez Poradit a bez upozorňování na chyby, dostane v seznamu <b>★</b>. Rada platí i po Zpět a po začátku znovu.</li>
+      ${Array.from({ length: 10 }, (_, i) => `<li>${th(`malovane-krizovky.help.${i + 1}`)}</li>`).join('')}
     </ol></section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -1523,6 +1520,7 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+I18N.apply(); // the static texts (data-t*), <title> and <html lang> in the player's language
 // rule: ask for persistent storage so the browser does not delete the saved game by itself
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 const saved = load();

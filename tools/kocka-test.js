@@ -188,7 +188,7 @@ section('30-day absence (paní Nováková)');
   ok(!st.ill && E.advance(E.create(23, t0, 'Koxa'), t0 + 73 * H).events.every(e => e.type !== 'ill'), 'away > 72 h: not ill (paní Nováková fed her from 24 h on)');
   ok(st.bond >= bond0 - 20 && st.bond >= 0, 'bond falls at most 20 and never below its level');
   const c1 = E.act(st, 'call', null, st.t), c2 = E.act(st, 'call', null, st.t);
-  ok(c1.events.some(e => e.type === 'turnBack') && c2.events.some(e => e.type === 'come' || e.type === 'callSlow' || (e.type === 'ignore' && /neslyší|smutně/.test(e.reason))), 'turns her back once when called, then she may come');
+  ok(c1.events.some(e => e.type === 'turnBack') && c2.events.some(e => e.type === 'come' || e.type === 'callSlow' || (e.type === 'ignore' && (e.reason === 'deaf' || e.reason === 'sadCall'))), 'turns her back once when called, then she may come');
   E.advance(st, st.t + 25 * H);
   ok(!E.health(st).offended, 'not offended after 24 h');
   // the same 72 h are simulated; then 0.1 kg for every whole day over 3, at most 0.4
@@ -410,18 +410,17 @@ function discover(seed) {
     const list = E.diary(st);
     const missing = list.filter(e => !e.found && !e.id.startsWith('pal') && !['sleepover', 'kittens', 'kitGrown'].includes(e.id)).map(e => e.id);   // pal*, sleepover, kittens: neighbour cats, see 'Visitors 2', 3 and 4
     ok(missing.length === 0, `seed ${seed} (${T.favFood}, ${T.spots}, ${T.fear}, ${T.quirk}, ${T.toy}): all found, missing ${missing.join(', ')}`);
-    ok(list.every(e => typeof e.text === 'string' && e.text.length > 3 && !/undefined|NaN/.test(e.text)), `seed ${seed}: entry texts`);
+    ok(list.every(e => (e.found ? e.info && typeof e.info === 'object' : e.info === null) && !/undefined|NaN|null/.test(JSON.stringify(Object.assign({}, e.info, { cat: 0, fem: 0 })))), `seed ${seed}: entry facts`);
     if (!missing.length) { seen.favFood.add(T.favFood); seen.fear.add(T.fear); seen.quirk.add(T.quirk); seen.toy.add(T.toy); T.spots.forEach(s => seen.spot.add(s)); }
     invariants(st, 'diary');
   }
   ok(full(), `every trait value reached (${tested} cats)`);
   const st = E.create(1, at(2026, 11, 12, 15), 'Koxa');
-  const d = E.diary(st, 'Micka');
-  ok(d.length === 21 && d.find(e => e.id === 'birthday').found && d.find(e => e.id === 'birthday').text === 'Micka k nám přišla 12. 11. 2026.', 'the list: 21 entries, the name from the argument, the birthday found at once');
+  const d = E.diary(st);
+  ok(d.length === 21 && d.find(e => e.id === 'birthday').found && JSON.stringify(d.find(e => e.id === 'birthday').info) === '{"y":2026,"m":11,"d":12}', 'the list: 21 entries, the birthday found at once (12. 11. 2026)');
   ok(d.map(e => e.id).slice(9, 15).join() === 'birthday,bliss,boop,reconcile,splash,payback' &&
-    d.filter(e => ['bliss', 'boop', 'reconcile', 'splash', 'payback'].includes(e.id)).every(e => !e.found && (e.text.endsWith('?') || e.text.endsWith('…'))),
-    'the five teasing entries follow the birthday; not found yet: a question or a neutral hint');
-  ok(E.diary(st).find(e => e.id === 'birthday').text.startsWith('Koxa'), 'the stored name without an argument');
+    d.filter(e => ['bliss', 'boop', 'reconcile', 'splash', 'payback'].includes(e.id)).every(e => !e.found && e.info === null),
+    'the five teasing entries follow the birthday; not found yet: no facts (the UI shows a question or a neutral hint)');
 }
 
 /* ---------- 11. repair survives garbage ---------- */
@@ -472,12 +471,12 @@ section('Actions');
   const fe = E.act(st, 'feed', null, t0).events;
   ok(fe.some(e => e.type === 'poured' && e.food === 'kibble' && e.comes === 'run') && st.needs.food === 30 && st.bowl.kind === 'kibble' && st.bowl.amt === 35,
     'feed(null) = granule into the bowl; she runs to it, the need does not rise at the pour');
-  ok(E.act(st, 'water', null, t0).events.some(e => e.type === 'refused' && e.reason === 'Miska s vodou je plná.'), 'a full water dish: refused (Czech reason)');
+  ok(E.act(st, 'water', null, t0).events.some(e => e.type === 'refused' && e.reason === 'dishFull'), 'a full water dish: refused (dishFull)');
   st.dish = 20; const wf = E.act(st, 'water', null, t0).events.find(e => e.type === 'dishFilled');
   ok(wf && st.dish === 100 && st.needs.water === (wf.tap ? 60 : 30), 'water fills the dish; the need does not rise (unless she drinks from the tap)');
   const l0 = st.needs.love; E.act(st, 'stroke', null, t0);
   ok(st.needs.love === Math.min(100, l0 + (st.traits.spots.includes('back') ? 4 : 2)), 'stroke(null) = along the back');
-  ok(E.act(st, 'feed', 'kibble', t0).events.some(e => e.type === 'refused' && e.reason === 'V misce ještě je jídlo.'), 'a second pour while food is left: refused (Czech reason)');
+  ok(E.act(st, 'feed', 'kibble', t0).events.some(e => e.type === 'refused' && e.reason === 'bowlNotEmpty'), 'a second pour while food is left: refused (bowlNotEmpty)');
   ok(E.act(st, 'dance', null, t0).events[0].type === 'refused', 'unknown action: refused');
   const r = E.advance(st, t0 + 2 * MIN).events.find(e => e.type === 'ate');
   ok(r && r.food === 'kibble' && r.gain === 35 && !r.left && st.bowl === null && st.needs.food > 64.5 && st.needs.food < 65, `she ate the bowl within 2 min (${st.needs.food})`);
@@ -526,12 +525,12 @@ section('Actions');
   const bnd = E.create(15, t0, 'Koxa'); bnd.bond = 99;
   bnd.needs.food = 20;
   const lu = feedNow(bnd, 'kibble', t0).find(e => e.type === 'levelUp');
-  ok(lu && lu.level === 1 && lu.name === 'Známá' && E.bondLevel(bnd).next === 300, 'a satisfied want +1 bond (at the end of the meal), level up');
+  ok(lu && lu.level === 1 && !('name' in lu) && E.bondLevel(bnd).next === 300, 'a satisfied want +1 bond (at the end of the meal), level up');
   E.advance(bnd, bnd.t + 5 * D);
   ok(bnd.bond >= 100, 'bond never falls below a level reached');
   // sleeping: refused, phases
   const z = E.create(16, at(2026, 11, 12, 21), 'Koxa'); E.advance(z, at(2026, 11, 13, 2));
-  ok(z.asleep && E.act(z, 'play', 'mouse', z.t).events.some(e => e.type === 'refused' && /spí/.test(e.reason)), 'asleep at night; play refused');
+  ok(z.asleep && E.act(z, 'play', 'mouse', z.t).events.some(e => e.type === 'refused' && e.reason === 'asleep'), 'asleep at night; play refused');
   E.advance(z, at(2026, 11, 13, 7));
   ok(!z.asleep, 'awake in the morning (lively at dawn)');
   // rename
@@ -669,7 +668,7 @@ section('Review regressions');
   // 8. no pill while she is outside
   const pl = E.create(14, t0, 'Koxa'); pl.pill = 20261112; friend(pl); E.act(pl, 'letOut', null, t0);
   const rp = E.act(pl, 'pill', null, t0 + MIN).events;
-  ok(rp.some(x => x.type === 'refused' && /venku/.test(x.reason)) && pl.pill === 20261112, '#8 pill refused outside');
+  ok(rp.some(x => x.type === 'refused' && x.reason === 'outside') && pl.pill === 20261112, '#8 pill refused outside');
   // minor: the morning quirk only when she is home and awake
   const mq = E.create(seed6, at(2026, 11, 12, 6, 30), 'Koxa'); mq.out = { since: mq.t, until: mq.t + 3 * H };
   ok(!E.act(mq, 'call', null, mq.t).events.some(x => x.type === 'quirk') && mq.cnt.quirk === 0, 'minor: wakesEarly not seen while she is outside');
@@ -712,7 +711,7 @@ section('UI integration');
   const ff = E.create(5, t0, 'Koxa');
   for (let i = 0; i < 30; i++) { const t = t0 + i * 8 * H; E.advance(ff, t); E.act(ff, 'feed', 'kibble', t); }
   const entry = E.diary(ff).find(e => e.id === 'favFood');
-  ok(!entry.found && /\?/.test(entry.text) && ff.cnt.favFood === 0, 'favourite food: granule never reveals it, the text stays a question');
+  ok(!entry.found && entry.info === null && ff.cnt.favFood === 0, 'favourite food: granule never reveals it, the entry stays a question');
 }
 
 /* ---------- 16. the lap (SPEC §12d) ---------- */
@@ -845,7 +844,7 @@ section('Weather');
   const p = (s, w) => (count[s][w] || 0) / days[s];
   ok(p('winter', 'snow') > 0.15 && p('winter', 'snow') < 0.35 && !count.spring.snow && !count.summer.snow && !count.autumn.snow, `snow only in winter (${Math.round(100 * p('winter', 'snow'))} % of winter days)`);
   ok(p('spring', 'rain') > 0.15 && p('spring', 'rain') < 0.4 && p('autumn', 'rain') > 0.2 && p('autumn', 'rain') < 0.45, `rain some spring and autumn days (${Math.round(100 * p('spring', 'rain'))} %, ${Math.round(100 * p('autumn', 'rain'))} %)`);
-  ok(p('summer', 'clear') > 0.5 && Object.keys(E.WEATHERS).every(w => typeof E.WEATHERS[w].name === 'string'), `mostly clear summers (${Math.round(100 * p('summer', 'clear'))} %)`);
+  ok(p('summer', 'clear') > 0.5 && Object.keys(E.WEATHERS).join() === 'clear,cloudy,rain,snow', `mostly clear summers (${Math.round(100 * p('summer', 'clear'))} %)`);
   ok(E.weather(at(2026, 4, 1), null) === E.weather(at(2026, 4, 1), { seed: 0 }) && E.weather(NaN) === 'clear', 'weather without a cat or with a bad time');
   // a storm day is a rainy day
   let stormRain = true;
@@ -931,7 +930,7 @@ section('Walks and postcards');
 {
   const t0 = at(2026, 6, 1, 10), st = E.create(8, t0, 'Koxa');
   const rr = E.act(st, 'letOut', null, t0).events[0];
-  ok(rr.type === 'refused' && /Kamarádka/.test(rr.reason) && !st.out, `letOut below bond 300: "${rr.reason}"`);
+  ok(rr.type === 'refused' && rr.reason === 'walkBond' && rr.level === 2 && rr.min === 300 && !st.out, `letOut below bond 300: "${rr.reason}"`);
   friend(st);
   const seen = []; let presents = 0, nothing = 0, t = t0;
   for (let i = 0; i < 200; i++) {
@@ -989,7 +988,7 @@ section('Beds');
   const wi = rich(E.create(15, at(2026, 11, 28, 9), 'Koxa')); E.act(wi, 'sow', { bed: 0, crop: 'tomato' }, wi.t);
   for (let d = 0; d < 20; d++) { const t1 = at(2026, 11, 28 + d, 9); E.advance(wi, t1); E.act(wi, 'waterBeds', null, t1); }
   const nov = wi.beds[0].days;
-  ok(nov <= 3 && E.act(wi, 'sow', { bed: 1, crop: 'radish' }, wi.t).events[0].reason === 'Záhony spí pod sněhem.', `Dec–Feb: no sowing, growth stops (${nov} days from November only)`);
+  ok(nov <= 3 && E.act(wi, 'sow', { bed: 1, crop: 'radish' }, wi.t).events[0].reason === 'bedsSnow', `Dec–Feb: no sowing, growth stops (${nov} days from November only)`);
   // šanta kočičí: zoomies at the harvest, or into the pantry when she sleeps; catnip from the pantry
   const ct = rich(E.create(16, sp, 'Koxa')); E.act(ct, 'sow', { bed: 0, crop: 'catnip' }, sp); ct.beds[0].days = 3; ct.needs.fun = 20;
   const hc = E.act(ct, 'harvest', { bed: 0 }, sp).events;
@@ -1046,15 +1045,15 @@ section('Economy');
   const t0 = at(2026, 6, 10, 10), st = E.create(20, t0, 'Koxa');
   st.needs.food = 40; st.pamlsky = 3;
   const r = E.act(st, 'feed', 'tuna', t0).events[0];
-  ok(r.type === 'refused' && r.reason === 'Na tuňáka nemáš dost pamlsků (4).', `tuna with 3 pamlsky: "${r.reason}"`);
+  ok(r.type === 'refused' && r.reason === 'foodFunds' && r.food === 'tuna' && r.price === 4, `tuna with 3 pamlsky: "${r.reason}"`);
   ok(E.act(st, 'feed', 'kibble', t0).events.some(e => e.type === 'poured') && st.pamlsky === 3, 'granule is free');
   st.bowl = null; st.pamlsky = 4; E.act(st, 'feed', 'tuna', t0);
   ok(st.pamlsky === 0 && st.bowl.kind === 'tuna', 'a serving of tuna costs 4');
   st.pamlsky = 8; E.act(st, 'buy', 'pouch5', t0); st.bowl = null; E.act(st, 'feed', 'pouch', t0);
   ok(st.pamlsky === 0 && st.stock.pouch === 4, 'a pack of 5 kapsičky (8): feeding takes a serving from the stock');
-  for (const [crop, text] of [['radish', 'Na ředkvičku nemáš dost pamlsků (3).'], ['carrot', 'Na mrkev nemáš dost pamlsků (5).'], ['strawberry', 'Na jahody nemáš dost pamlsků (8).'], ['tomato', 'Na rajče nemáš dost pamlsků (9).'], ['catnip', 'Na šantu nemáš dost pamlsků (7).']]) {
+  for (const [crop, price] of [['radish', 3], ['carrot', 5], ['strawberry', 8], ['tomato', 9], ['catnip', 7]]) {
     const rs = E.act(st, 'sow', { bed: 0, crop }, t0).events[0];
-    ok(rs.type === 'refused' && rs.reason === text, `seeds without pamlsky: "${rs.reason}"`);
+    ok(rs.type === 'refused' && rs.reason === 'seedFunds' && rs.crop === crop && rs.price === price, `seeds without pamlsky: "${rs.reason}" ${rs.crop} ${rs.price}`);
   }
   st.pamlsky = 8; E.act(st, 'buy', 'seedsRadish', t0);
   ok(E.act(st, 'sow', { bed: 0, crop: 'radish' }, t0).events.some(e => e.type === 'sown') && st.stock.seed_radish === 2 && st.pamlsky === 0, 'a seed packet from the stock');
@@ -1072,9 +1071,9 @@ section('Shop');
   ok(list.every(i => E.SHOP.find(x => x.id === i.id).bond === 0) && !list.some(i => i.id === 'catTree'), 'level Nová: only the basic items are offered');
   ok(E.act(st, 'buy', 'catTree', t0).events[0].type === 'refused', 'the cat tree needs bond level Kamarádka');
   ok(E.act(st, 'buy', 'scratcher', t0).events.some(e => e.type === 'bought' && e.kind === 'furniture') && st.owned.scratcher && st.pamlsky === 970, 'buy a škrabadlo (30)');
-  ok(E.act(st, 'buy', 'scratcher', t0).events[0].reason === 'Tohle už máš.', 'not twice');
+  ok(E.act(st, 'buy', 'scratcher', t0).events[0].reason === 'owned', 'not twice');
   const poor = E.create(22, t0, 'Koxa'); poor.pamlsky = 5;
-  ok(E.act(poor, 'buy', 'rug', t0).events[0].reason === 'Koberec stojí 35 pamlsků, tolik nemáš.' && E.act(poor, 'buy', 'nothing', t0).events[0].type === 'refused', 'too expensive / unknown: refused in Czech');
+  ok(E.act(poor, 'buy', 'rug', t0).events[0].reason === 'price' && E.act(poor, 'buy', 'rug', t0).events[0].item === 'rug' && E.act(poor, 'buy', 'rug', t0).events[0].price === 35 && E.act(poor, 'buy', 'nothing', t0).events[0].type === 'refused', 'too expensive / unknown: refused (price, item, price)');
   ok(E.act(st, 'place', { id: 'scratcher', room: 'living', x: 3, y: -1 }, t0).events.some(e => e.type === 'placed') && JSON.stringify(st.furniture.scratcher) === '{"room":"living","x":1,"y":0}', 'place: coordinates clamped to 0–1');
   ok(E.act(st, 'place', { id: 'scratcher', room: 'attic' }, t0).events[0].type === 'refused' && E.act(st, 'place', { id: 'lamp', room: 'living' }, t0).events[0].type === 'refused', 'place: unknown room or not owned: refused');
   friend(st);
@@ -1184,7 +1183,7 @@ section('Economy balance (60 days)');
     const hr = new Date(tt).getHours(), day = Math.floor((tt - t0) / D);
     if (hr === 8) {
       st.needs.food = Math.min(st.needs.food, 60); st.bowl = null;   // the leftovers go, the kapsička goes in
-      if (E.act(st, 'feed', 'pouch', tt).events.some(e => e.type === 'refused' && /pamlsk/.test(e.reason))) pouchRefused++;
+      if (E.act(st, 'feed', 'pouch', tt).events.some(e => e.type === 'refused' && e.reason === 'foodFunds')) pouchRefused++;
       const t1 = visitCare(st, tt);
       E.minigameResult(st, 'mouse', 15, t1 + 5 * MIN);
     }
@@ -1242,16 +1241,15 @@ section('Review 2 regressions');
   // 5. up the tree: only the allowed actions
   const tt = E.create(10, at(2026, 6, 3, 10), 'Koxa'); happy(tt); E.act(tt, 'goGarden', null, tt.t); tt.yard.tree = { since: tt.t, calls: 0 };
   for (const a of ['lapOn', 'pickUp', 'feed', 'play', 'showTrick', 'stroke', 'brush', 'letOut'])
-    ok(E.act(tt, a, a === 'showTrick' ? { trick: 'sedni' } : null, tt.t).events[0].reason === 'Koxa je na stromě.', `#5 ${a} on the tree: refused`);
-  ok(!tt.lap && !tt.held && E.minigameResult(tt, 'mouse', 10, tt.t).events[0].reason === 'Koxa je na stromě.', '#5 no minigame on the tree');
-  ok(E.act(tt, 'photo', {}, tt.t).events.some(e => e.type === 'photo') && E.act(tt, 'buy', 'pouch5', tt.t).events.every(e => e.type !== 'refused' || !/stromě/.test(e.reason)), '#5 the camera and the shop still work');
+    ok(E.act(tt, a, a === 'showTrick' ? { trick: 'sedni' } : null, tt.t).events[0].reason === 'onTree', `#5 ${a} on the tree: refused`);
+  ok(!tt.lap && !tt.held && E.minigameResult(tt, 'mouse', 10, tt.t).events[0].reason === 'onTree', '#5 no minigame on the tree');
+  ok(E.act(tt, 'photo', {}, tt.t).events.some(e => e.type === 'photo') && E.act(tt, 'buy', 'pouch5', tt.t).events.every(e => e.type !== 'refused' || e.reason !== 'onTree'), '#5 the camera and the shop still work');
   const tr2 = clone(tt); tr2.lap = { since: tt.t, annoy: 0, doze: false, pet: tt.t, dozeAt: 0 }; tr2.held = true; E.repair(tr2);
   ok(tr2.lap === null && tr2.held === false, '#5 repair: on the tree she is neither on the lap nor held');
-  // 6. unripe texts agree with the crop
+  // 6. an unripe crop says which crop
   const ur = E.create(11, at(2026, 6, 1, 10), 'Koxa'); ur.pamlsky = 999; ur.bond = 700; ur.lvl = 3;
-  const texts = ['Ředkvička ještě není zralá.', 'Mrkev ještě není zralá.', 'Jahody ještě nejsou zralé.', 'Rajče ještě není zralé.', 'Šanta kočičí ještě není zralá.'];
   ['radish', 'carrot', 'strawberry', 'tomato', 'catnip'].forEach((c, i) => { E.act(ur, 'sow', { bed: i, crop: c }, ur.t);
-    ok(E.act(ur, 'harvest', { bed: i }, ur.t).events[0].reason === texts[i], `#6 "${texts[i]}"`); });
+    const e = E.act(ur, 'harvest', { bed: i }, ur.t).events[0]; ok(e.reason === 'unripe' && e.crop === c, `#6 unripe ${c}`); });
   // 7. a normal training session never makes her ill; training treats do not count for the weight
   const ts = E.create(5, at(2026, 11, 12, 10), 'Koxa'); ts.bond = 500; ts.lvl = 2; ts.pamlsky = 80; let ill = null, t = ts.t;
   for (const [trk, cue] of [['sedni', 'swipeUp'], ['dejPac', 'tapPaw'], ['otocSe', 'circle']])
@@ -1300,7 +1298,7 @@ section('Tricks feel');
   const lt = E.act(l, 'train', { trick: 'sedni', cue: 'swipeUp', treatAt: l.t + 500 }, l.t).events;
   ok(lt.some(e => e.type === 'trickLearned' && e.trick === 'sedni') && !lt.some(e => e.type === 'perform' || e.type === 'treat') && l.pamlsky === 10, 'training a learned trick: trickLearned, no pamlsek used');
   // presents in the accusative
-  ok(E.PRESENTS.cone.acc === 'šišku' && E.PRESENTS.feather.acc === 'pírko' && E.PRESENTS.leaf.acc === 'lísteček', 'presents: Přinesla ti šišku / pírko / lísteček');
+  ok(Object.keys(E.PRESENTS).join() === 'feather,leaf,cone', 'presents: feather, leaf, cone (the UI says Přinesla ti pírko / lísteček / šišku)');
 }
 
 /* ---------- 20. Phase 5: neighbour cats and the album ---------- */
@@ -1354,9 +1352,9 @@ section('Visitors');
   ok(E.moodValue(with_('mourek')) === base, 'Mourek: she just watches');
   // feeding and stroking
   const p = with_('pacicka');
-  ok(E.act(p, 'feedVisitor', { id: 'liza' }, t0).events[0].reason === 'Líza tu teď není.', 'an absent visitor: refused');
+  ok(E.act(p, 'feedVisitor', { id: 'liza' }, t0).events[0].reason === 'notHere', 'an absent visitor: refused');
   ok(E.act(p, 'feedVisitor', { id: 'pacicka' }, t0).events.some(e => e.type === 'visitorFed') && p.visitors.pacicka.friend === 1 && p.visit.until === t0 + H + 30 * MIN, 'Pacička (greedy): food = a heart and a longer visit');
-  ok(E.act(p, 'feedVisitor', { id: 'pacicka' }, t0).events[0].reason === 'Pacička už dnes dostala.', 'fed once a day');
+  ok(E.act(p, 'feedVisitor', { id: 'pacicka' }, t0).events[0].reason === 'fedToday' && E.act(p, 'feedVisitor', { id: 'pacicka' }, t0).events[0].vis === 'pacicka', 'fed once a day');
   for (let i = 0; i < 20; i++) E.act(p, 'strokeVisitor', { id: 'pacicka' }, t0 + i * MIN);   // one stroke a minute counts (Phase B)
   ok(p.visitors.pacicka.friend === 2, `strokes: at most +1 heart a visit (${p.visitors.pacicka.friend})`);
   let fled = 0, hissed = 0;
@@ -1388,14 +1386,14 @@ section('Album');
   ok(r.some(e => e.type === 'photo' && e.n === 1) && p.t === t0 && p.pose === 'stretch' && p.room === 'kitchen' && p.note === 'První fotka' && p.mood === E.mood(st) && p.phase === 'day' && p.season === 'summer', 'a photo record: pose, room, mood, phase, season, note, date');
   for (let i = 1; i < 200; i++) E.act(st, 'photo', { pose: 'sit' }, t0 + i * 1000);
   const full = E.act(st, 'photo', {}, t0 + 300 * 1000).events[0];
-  ok(st.album.length === 200 && full.type === 'refused' && /200/.test(full.reason), `at most 200 photos: "${full.reason}"`);
+  ok(st.album.length === 200 && full.type === 'refused' && full.reason === 'albumFull' && full.max === 200, `at most 200 photos: "${full.reason}"`);
   ok(E.act(st, 'deletePhoto', { t: t0 }, t0 + 301 * 1000).events.some(e => e.type === 'photoDeleted') && st.album.length === 199 && E.act(st, 'photo', {}, t0 + 302 * 1000).events.some(e => e.type === 'photo'), 'delete one, then there is room again');
   ok(E.act(st, 'deletePhoto', { t: 1 }, st.t).events[0].type === 'refused', 'deleting a photo that is not there: refused');
   const o = friend(E.create(71, t0, 'Koxa')); E.act(o, 'letOut', null, t0);
   ok(E.act(o, 'photo', {}, t0).events[0].type === 'refused', 'no photo while she is out');
   st.postcards = [{ id: E.postcardAt(st.seed, 0), t: t0 }]; st.visitors = { liza: { friend: 2.5, pal: 1, met: t0, visits: 3, fed: 0 }, rambo: { friend: 0, pal: 0, met: 0, visits: 1, fed: 0 } };
   const al = E.album(st);
-  ok(al.photos.length === 200 && al.photos[0].t > al.photos[199].t && al.postcards.length === 1 && al.visitors.length === 1 && al.visitors[0].name === 'Líza' && al.visitors[0].hearts === 2 && al.visitors[0].pal === 1, 'album(st): photos newest first, postcards, only the cats met');
+  ok(al.photos.length === 200 && al.photos[0].t > al.photos[199].t && al.postcards.length === 1 && al.visitors.length === 1 && al.visitors[0].id === 'liza' && al.visitors[0].name === null && al.visitors[0].hearts === 2 && al.visitors[0].pal === 1, 'album(st): photos newest first, postcards, only the cats met');
   const g = clone(st); g.album = [null, { t: 'x' }, { t: t0, room: 'moon', mood: 'ecstatic', pose: 5 }].concat(Array(300).fill({ t: t0 }));
   E.repair(g); ok(g.album.length === 200 && g.album[0].room === 'living' && g.album[0].mood === 'calm' && g.album[0].pose === 'sit', 'repair: broken photos fixed or dropped, at most 200');
   const c = clone(st); E.repair(c); ok(JSON.stringify(c) === JSON.stringify(st), 'an album state is canonical');
@@ -1533,13 +1531,14 @@ section('Visitors 2');
   }
   ok(fr.visitors.sedivka.pal >= 3 && ups.join() === '1,2,3' + (fr.visitors.sedivka.pal >= 4 ? ',4' : '') + (fr.visitors.sedivka.pal >= 5 ? ',5' : ''), `pal grows over the visits (${fr.visitors.sedivka.pal}, palUp ${ups.join(',')})`);
   ok(fr.visitors.sedivka.friend === 0, "Koxa's hearts are her own: the player's stay 0");
-  const dl = E.diary(fr), txt = id => dl.find(e => e.id === id).text;
-  ok(fr.diaryCat.palFirst === 'sedivka' && txt('palFirst') === 'Koxa má první kamarádku: Šedivka.', `palFirst: "${txt('palFirst')}"`);
-  ok(txt('palGroom') === 'Koxa a Šedivka si poprvé navzájem umyly kožíšky.' && txt('palSnuggle') === 'Koxa a Šedivka si poprvé zdřímly schoulené u sebe.', `palGroom / palSnuggle: "${txt('palGroom')}" / "${txt('palSnuggle')}"`);
+  const dl = E.diary(fr), txt = id => JSON.stringify(dl.find(e => e.id === id).info);
+  ok(fr.diaryCat.palFirst === 'sedivka' && txt('palFirst') === '{"cat":"sedivka","fem":true}', `palFirst: ${txt('palFirst')}`);
+  ok(txt('palGroom') === '{"cat":"sedivka","fem":true}' && txt('palSnuggle') === '{"cat":"sedivka","fem":true}', `palGroom / palSnuggle: ${txt('palGroom')} / ${txt('palSnuggle')}`);
   const mo = clone(fr); mo.diaryCat = { palFirst: 'mourek', palGroom: 'bivoj', palSnuggle: 'fousek' }; E.repair(mo);
-  ok(E.diary(mo, 'Micka').find(e => e.id === 'palFirst').text === 'Micka má prvního kamaráda: Mourek.' && E.diary(mo).find(e => e.id === 'palSnuggle').text === 'Koxa a Fousek si poprvé zdřímli schoulení u sebe.' && E.diary(mo).find(e => e.id === 'palGroom').text === 'Koxa a Bivoj si poprvé navzájem umyli kožíšky.', 'he: kamaráda, zdřímli schoulení, umyli');
+  const md = id => E.diary(mo).find(e => e.id === id).info;
+  ok(md('palFirst').cat === 'mourek' && !md('palFirst').fem && md('palSnuggle').cat === 'fousek' && !md('palSnuggle').fem && md('palGroom').cat === 'bivoj' && !md('palGroom').fem, 'he: fem false (kamaráda, zdřímli schoulení, umyli)');
   const fresh = E.diary(E.create(85, at(2026, 6, 1), 'Koxa')).filter(e => e.id.startsWith('pal'));
-  ok(fresh.length === 3 && fresh.every(e => !e.found && e.text.length > 10), 'not found yet: a hint');
+  ok(fresh.length === 3 && fresh.every(e => !e.found && e.info === null), 'not found yet: a hint (the UI)');
   // Bivoj: Koxa hisses, but when the player befriends him in the garden she gets used to him
   const bv = E.create(86, at(2026, 6, 1, 9), 'Koxa'); let bday = at(2026, 6, 1, 10), standoffs = 0, greets = 0;
   for (let d = 0; d < 12; d++) {
@@ -1673,9 +1672,9 @@ section('Visitors 3');
     let bad = 0;
     for (const id of Object.keys(E.VISITORS)) {
       const L = E.visitorLikes(id);
-      if (!L || !L.likes.length || L.likes.some(r => !all.includes(r) || L.dislikes.includes(r)) || L.dislikes.some(r => !all.includes(r)) || !(L.text.length > 20 && L.text.includes(E.VISITORS[id].name))) bad++;
+      if (!L || !L.likes.length || L.likes.some(r => !all.includes(r) || L.dislikes.includes(r)) || L.dislikes.some(r => !all.includes(r)) || L.line !== id) bad++;
     }
-    ok(bad === 0 && E.visitorLikes('liza').gentle && !E.visitorLikes('bivoj').gentle && E.visitorLikes('tom') === null, 'visitorLikes: known regions, a Czech help line with the name, Líza only gently');
+    ok(bad === 0 && E.visitorLikes('liza').gentle && !E.visitorLikes('bivoj').gentle && E.visitorLikes('tom') === null, 'visitorLikes: known regions, the help line of the cat (line = its id), Líza only gently');
     ok(E.visitorLikes('ciperka').dislikes.join() === 'tail' && E.visitorLikes('rambo').dislikes.includes('belly') && E.visitorLikes('pacicka').likes.includes('chin') && E.visitorLikes('mourek').likes.includes('head'), 'Čiperka anything but the tail, Rambo hates the belly, Pacička the chin, Mourek the head');
   }
   // shy Líza: head and chin, gently; fast or elsewhere she runs off under 2 hearts, else she moves away a bit
@@ -1726,13 +1725,13 @@ section('Visitors 3');
     const p0 = st.pamlsky;
     let ev = E.act(st, 'treatVisitor', { id: 'pacicka' }, t).events;
     ok(ev.some(e => e.type === 'visitorTreat' && e.id === 'pacicka') && st.pamlsky === p0 - 1 && st.visitors.pacicka.friend === 1, 'treatVisitor: a pamlsek, greedy Pacička +1 heart');
-    ok(E.act(st, 'treatVisitor', { id: 'pacicka' }, t + MIN).events.find(e => e.type === 'refused').reason === 'Pacička už pamlsek dostala.' && st.pamlsky === p0 - 1, 'once a visit');
-    ok(E.act(st, 'feedVisitor', { id: 'pacicka' }, t + MIN).events[0].reason === 'Pacička už dnes dostala.', 'a treat counts as fed today');
+    ok(E.act(st, 'treatVisitor', { id: 'pacicka' }, t + MIN).events.find(e => e.type === 'refused').reason === 'treatGiven' && st.pamlsky === p0 - 1, 'once a visit');
+    ok(E.act(st, 'feedVisitor', { id: 'pacicka' }, t + MIN).events[0].reason === 'fedToday', 'a treat counts as fed today');
     const m = visiting(104, 'mourek', 0, 0, T0); m.st.pamlsky = 0;
-    ok(E.act(m.st, 'treatVisitor', { id: 'mourek' }, m.t).events[0].reason === 'Nemáš žádné pamlsky.' && m.st.visitors.mourek.friend === 0 && m.st.pamlsky === 0, 'no pamlsky: refused');
+    ok(E.act(m.st, 'treatVisitor', { id: 'mourek' }, m.t).events[0].reason === 'noTreats' && m.st.visitors.mourek.friend === 0 && m.st.pamlsky === 0, 'no pamlsky: refused');
     m.st.pamlsky = 3;
-    ok(E.act(m.st, 'treatVisitor', { id: 'mourek' }, m.t).events.some(e => e.type === 'visitorTreat') && m.st.visitors.mourek.friend === 0.5 && E.act(m.st, 'treatVisitor', { id: 'mourek' }, m.t).events[0].reason === 'Mourek už pamlsek dostal.', 'Mourek +½, "už pamlsek dostal"');
-    ok(E.act(m.st, 'treatVisitor', { id: 'liza' }, m.t).events[0].reason === 'Líza tu teď není.', 'an absent cat: refused');
+    ok(E.act(m.st, 'treatVisitor', { id: 'mourek' }, m.t).events.some(e => e.type === 'visitorTreat') && m.st.visitors.mourek.friend === 0.5 && E.act(m.st, 'treatVisitor', { id: 'mourek' }, m.t).events[0].reason === 'treatGiven', 'Mourek +½, "už pamlsek dostal"');
+    ok(E.act(m.st, 'treatVisitor', { id: 'liza' }, m.t).events[0].reason === 'notHere', 'an absent cat: refused');
     invariants(m.st, 'treat');
   }
   // the feather for two
@@ -1742,7 +1741,7 @@ section('Visitors 3');
     let ev = E.act(st, 'playVisitor', { id: 'ciperka', caught: 'koxa' }, t).events;
     ok(ev.some(e => e.type === 'visitorPlay' && e.caught === 'koxa' && e.koxa === true) && st.visitors.ciperka.friend === 0.25 && st.visitors.ciperka.pal === 0.25 && st.needs.fun > fun0, 'playVisitor: +¼ heart, Koxa plays along (+¼ of hers, fun)');
     ev = E.act(st, 'playVisitor', { id: 'ciperka', caught: 'visitor' }, t + 30000).events;
-    ok(ev[0].type === 'refused' && ev[0].reason === 'Čiperka si chvilku oddechne.' && st.visitors.ciperka.friend === 0.25, 'one game a minute');
+    ok(ev[0].type === 'refused' && ev[0].reason === 'resting' && ev[0].vis === 'ciperka' && st.visitors.ciperka.friend === 0.25, 'one game a minute');
     for (let k = 1; k <= 5; k++) E.act(st, 'playVisitor', { id: 'ciperka', caught: 'visitor' }, t + k * MIN);
     ok(st.visitors.ciperka.friend === 0.5 && st.visit.playGain === 0.5 && st.visitors.ciperka.pal <= 0.5, `at most +½ a visit from games (${st.visitors.ciperka.friend}, Koxa ${st.visitors.ciperka.pal})`);
     const i = visiting(105, 'ciperka', 0, 0, T0), f0 = i.st.needs.fun;
@@ -1852,15 +1851,15 @@ section('Visitors 3');
     const why = (r, id) => E.canInvite(r.st, id, r.t).reason;
     let r = inv(110, 'sedivka', 5, 3);
     ok(E.canInvite(r.st, 'sedivka', r.t).ok === true && E.canInvite(r.st, 'sedivka', r.t).reason === null, 'canInvite: ok');
-    ok(why(inv(110, 'sedivka', 4.75, 3), 'sedivka') === 'Šedivka ještě není tak velká kamarádka.', 'friend < 5: "není tak velká kamarádka"');
-    ok(why(inv(110, 'mourek', 4, 3), 'mourek') === 'Mourek ještě není tak velký kamarád.', 'he: "není tak velký kamarád"');
-    ok(why(inv(110, 'sedivka', 5, 2.75), 'sedivka') === 'Koxa a Šedivka ještě nejsou kamarádky.' && why(inv(110, 'mourek', 5, 2), 'mourek') === 'Koxa a Mourek ještě nejsou kamarádi.', 'pal < 3: "nejsou kamarádky / kamarádi"');
-    ok(why(inv(110, 'sedivka', 5, 3, at(2026, 6, 10, 15)), 'sedivka') === 'Pozvat na noc jde jen večer (od 18 do 22 h).', 'only in the evening');
-    ok(why(r, 'mourek') === 'Mourek tu teď není.' && why(r, 'tom') === 'Takovou kočku neznáme.', 'only the cat visiting now');
+    ok(why(inv(110, 'sedivka', 4.75, 3), 'sedivka') === 'notFriend', 'friend < 5: "není tak velká kamarádka"');
+    ok(why(inv(110, 'mourek', 4, 3), 'mourek') === 'notFriend', 'he: "není tak velký kamarád"');
+    ok(why(inv(110, 'sedivka', 5, 2.75), 'sedivka') === 'notPals' && why(inv(110, 'mourek', 5, 2), 'mourek') === 'notPals', 'pal < 3: "nejsou kamarádky / kamarádi"');
+    ok(why(inv(110, 'sedivka', 5, 3, at(2026, 6, 10, 15)), 'sedivka') === 'inviteHours', 'only in the evening');
+    ok(why(r, 'mourek') === 'notHere' && why(r, 'tom') === 'noCat', 'only the cat visiting now');
     const o = inv(110, 'sedivka', 5, 3); friend(o.st); E.act(o.st, 'letOut', null, o.t);
-    ok(why(o, 'sedivka') === 'Koxa je venku.' && E.act(o.st, 'invite', { id: 'sedivka' }, o.t).events[0].reason === 'Koxa je venku.', 'Koxa out: refused');
+    ok(why(o, 'sedivka') === 'outside' && E.act(o.st, 'invite', { id: 'sedivka' }, o.t).events[0].reason === 'outside', 'Koxa out: refused');
     const tr = inv(110, 'sedivka', 5, 3, EVE, true); tr.st.yard.tree = { since: tr.t, calls: 0 };
-    ok(why(tr, 'sedivka') === 'Koxa je na stromě.' && E.act(tr.st, 'invite', { id: 'sedivka' }, tr.t).events[0].reason === 'Koxa je na stromě.', 'Koxa up the tree: refused');
+    ok(why(tr, 'sedivka') === 'onTree' && E.act(tr.st, 'invite', { id: 'sedivka' }, tr.t).events[0].reason === 'onTree', 'Koxa up the tree: refused');
     const before = JSON.stringify(r.st); E.canInvite(r.st, 'sedivka', r.t + 5 * MIN); ok(JSON.stringify(r.st) === before, 'canInvite changes nothing');
     // the invitation
     let ev = E.act(r.st, 'invite', { id: 'sedivka' }, r.t).events;
@@ -1869,9 +1868,9 @@ section('Visitors 3');
     ok(ev.some(e => e.type === 'visitorLeave' && e.reason === 'inside' && e.id === 'sedivka') && ev.some(e => e.type === 'guestIn' && e.id === 'sedivka') && !r.st.visit &&
       r.st.guest && r.st.guest.id === 'sedivka' && r.st.guest.until === until && r.st.invDay === key0, 'invite: the visit ends ("inside"), the guest stays until 7:00');
     const found = ev.find(e => e.type === 'found' && e.id === 'sleepover');
-    ok(found && found.text === 'Koxa měla poprvé návštěvu na noc: Šedivka.' && r.st.diaryCat.sleepover === 'sedivka' && E.diary(r.st).find(e => e.id === 'sleepover').text === found.text, `diary: "${found && found.text}"`);
-    ok(why(r, 'sedivka') === 'Šedivka už u nás na noc je.', 'already a guest');
-    ok(E.act(r.st, 'treatVisitor', { id: 'sedivka' }, r.t).events[0].reason === 'Šedivka je u nás na noc. To počká do rána.' && E.act(r.st, 'strokeVisitor', { id: 'sedivka', region: 'back', speed: 300 }, r.t).events.some(e => e.type === 'visitorPurr') && r.st.visitors.sedivka.friend === 5, 'the guest: strokes only, no hearts');
+    ok(found && found.info.cat === 'sedivka' && found.info.fem === true && r.st.diaryCat.sleepover === 'sedivka' && JSON.stringify(E.diary(r.st).find(e => e.id === 'sleepover').info) === JSON.stringify(found.info), `diary: ${found && JSON.stringify(found.info)}`);
+    ok(why(r, 'sedivka') === 'guestHere', 'already a guest');
+    ok(E.act(r.st, 'treatVisitor', { id: 'sedivka' }, r.t).events[0].reason === 'guestWaits' && E.act(r.st, 'strokeVisitor', { id: 'sedivka', region: 'back', speed: 300 }, r.t).events.some(e => e.type === 'visitorPurr') && r.st.visitors.sedivka.friend === 5, 'the guest: strokes only, no hearts');
     // below the clamp (friend 4, Koxa's 3½): liked strokes, the menu's Pohladit and a disliked spot change neither
     {
       const gs = clone(r.st); gs.visitors.sedivka.friend = 4; gs.visitors.sedivka.pal = 3.5;
@@ -1923,7 +1922,7 @@ section('Visitors 3');
     ok(evOne.filter(e => e.type === 'guestOut').length === 1 && one.visitors.sedivka.pal === p4.visitors.sedivka.pal && one.visitors.sedivka.friend === p4.visitors.sedivka.friend && !one.guest, 'one jump to the morning: the same end');
     // once a day: the same evening no other sleepover (the guest gone by a repair of a broken guest)
     const od = clone(r.st); od.guest = null; od.visit = { id: 'mourek', since: od.t, until: od.t + H, gain: 0 }; od.visitors.mourek = rec(5, 5);
-    ok(why({ st: od, t: od.t + MIN }, 'mourek') === 'Dnes už u nás jedna návštěva spala.', 'at most one sleepover a day');
+    ok(why({ st: od, t: od.t + MIN }, 'mourek') === 'guestToday', 'at most one sleepover a day');
     const nx = clone(r3); E.advance(nx, until + 12 * H); nx.visit = { id: 'mourek', since: nx.t, until: nx.t + H, gain: 0 }; nx.visitors.mourek = rec(5, 5); nx.out = null; nx.yard = null;
     ok(E.canInvite(nx, 'mourek', nx.t).ok, `the next evening another one may come (${E.canInvite(nx, 'mourek', nx.t).reason})`);
     // a long absence, the clock moved back, repair
@@ -1951,12 +1950,12 @@ section('Visitors 3');
     E.act(st, 'photo', { room: 'kitchen', vpose: 'sit', vx: 10, nokoxa: false }, t + 2000);
     p = st.album[st.album.length - 1];
     ok(p.visitor === null && !('vpose' in p) && !('vx' in p), 'indoors the visitor is not in the picture');
-    ok(E.act(st, 'photo', { room: 'kitchen', nokoxa: true }, t + 3000).events[0].reason === 'Na fotce nikdo není.', 'nobody in the picture: refused');
+    ok(E.act(st, 'photo', { room: 'kitchen', nokoxa: true }, t + 3000).events[0].reason === 'photoEmpty', 'nobody in the picture: refused');
     const o = visiting(120, 'mourek', 1, 1, T0); friend(o.st); E.act(o.st, 'letOut', null, o.t);
     const evO = E.act(o.st, 'photo', { room: 'garden', vpose: 'sit', vx: 200 }, o.t + 1000).events;
     p = o.st.album[0];
     ok(evO.some(e => e.type === 'photo') && p.nokoxa === true && p.visitor === 'mourek', 'Koxa out: a photo of the visitor alone');
-    ok(E.act(o.st, 'photo', { room: 'living' }, o.t + 2000).events[0].reason === 'Koxa je venku.', 'Koxa out, nobody else: refused');
+    ok(E.act(o.st, 'photo', { room: 'living' }, o.t + 2000).events[0].reason === 'outside', 'Koxa out, nobody else: refused');
     const gq = visiting(121, 'sedivka', 5, 3, at(2026, 6, 10, 19)); E.act(gq.st, 'invite', { id: 'sedivka' }, gq.t);
     E.act(gq.st, 'photo', { room: 'living', vpose: 'loaf', vx: 300 }, gq.t + 1000);
     p = gq.st.album[0];
@@ -2163,9 +2162,9 @@ section('Visitors 4 (kittens)');
       if (!st.litter) continue;
       runs++;
       const dl = E.diary(st), dk = dl.find(e => e.id === 'kittens'), dg = dl.find(e => e.id === 'kitGrown');
-      const names = st.kits.filter(k => k.mother === st.litter.mother).map(k => k.name);
-      if (dk.found && dk.text.startsWith(E.visitor(st, st.litter.mother).name + ' přivedla na zahradu koťátka: ') && names.every(n => dk.text.includes(n)) && dk.text.endsWith(names[names.length - 1] + '.') &&
-        dg.found && / už chodí na návštěvu sam[a]?\.$|sám\.$/.test(dg.text)) diaryOk++;
+      const ids = st.kits.filter(k => k.mother === st.litter.mother).map(k => k.id);
+      if (dk.found && dk.info.cat === st.litter.mother && ids.every(n => dk.info.kits.includes(n)) && dk.info.kits.length === ids.length &&
+        dg.found && E.visitor(st, dg.info.cat) && E.visitor(st, dg.info.cat).fem === dg.info.fem) diaryOk++;
     }
     console.log(`  12 lives of 70 days: ${kittensEv} litters seen, ${group} visits with kittens, ${alone} visits of young cats, ${grown} kitGrown, acts ${JSON.stringify(acts)}`);
     ok(bad.length === 0, `kittens visit right: ${bad.slice(0, 4).join('; ')}`);
@@ -2200,8 +2199,8 @@ section('Visitors 4 (kittens)');
     const st = family();
     ok(E.visitorIds(st).join() === Object.keys(E.VISITORS).concat('k1', 'k5', 'k9', 'k10').join(), 'visitorIds: the eight, then the kittens');
     const all = E.visitorIds(st).map(id => E.visitor(st, id));
-    ok(all.every(v => v && typeof v.name === 'string' && typeof v.fem === 'boolean' && typeof v.trait === 'string' && typeof v.coat === 'string' && Object.prototype.hasOwnProperty.call(E.VISITORS, v.coat) && v.kit >= 0 && v.kit <= 1), 'visitor(): every id has a name, sex, trait, a neighbour\'s coat and kit 0–1');
-    ok(Object.keys(E.VISITORS).every(id => { const v = E.visitor(st, id); return v.coat === id && v.kit === 0 && v.mother === null && v.name === E.VISITORS[id].name; }), 'the eight: their own coat, kit 0, no mother');
+    ok(all.every(v => v && (v.name === null ? !v.mother : typeof v.name === 'string') && typeof v.fem === 'boolean' && typeof v.trait === 'string' && typeof v.coat === 'string' && Object.prototype.hasOwnProperty.call(E.VISITORS, v.coat) && v.kit >= 0 && v.kit <= 1), 'visitor(): every id has a name, sex, trait, a neighbour\'s coat and kit 0–1');
+    ok(Object.keys(E.VISITORS).every(id => { const v = E.visitor(st, id); return v.coat === id && v.kit === 0 && v.mother === null && v.name === null; }), 'the eight: their own coat, kit 0, no mother');
     const m = E.visitor(st, 'k9'), b = E.visitor(st, 'k5'), g = E.visitor(st, 'k1');
     ok(m.name === 'Micinka' && m.fem && m.mother === 'liza' && m.ageDays === 5 && m.small && m.kit > 0.8 && b.ageDays === 30 && !b.small && b.kit > 0.2 && b.kit < 0.35 && g.kit === 0 && g.ageDays === 70, `kittens: age and kit (${m.kit}, ${b.kit}, ${g.kit})`);
     ok(E.visitor(st, 'k2') === null && E.visitor(st, 'tom') === null && E.visitor(st, null) === null && E.visitor(st, '__proto__') === null, 'visitor(): null for unknown ids');
@@ -2222,13 +2221,13 @@ section('Visitors 4 (kittens)');
     ok(st.visit && st.visit.kits.length === 2 && st.visitors.k9.friend >= 0.5, 'shy Micinka with no hearts never runs off (the menu\'s Pohladit)');
     ev = E.act(st, 'treatVisitor', { id: 'k9' }, st.t + 30000).events;
     ok(ev.some(e => e.type === 'visitorTreat' && e.id === 'k9') && st.pamlsky === 19, 'a treat for Micinka');
-    ok(E.act(st, 'treatVisitor', { id: 'k9' }, st.t + 31000).events.some(e => e.type === 'refused' && e.reason === 'Micinka už pamlsek dostala.'), 'once a visit: "Micinka už pamlsek dostala."');
+    ok(E.act(st, 'treatVisitor', { id: 'k9' }, st.t + 31000).events.some(e => e.type === 'refused' && e.reason === 'treatGiven' && e.vis === 'k9'), 'once a visit: treatGiven');
     ok(E.act(st, 'treatVisitor', { id: 'k10' }, st.t + 32000).events.some(e => e.type === 'visitorTreat') && E.act(st, 'treatVisitor', { id: 'liza' }, st.t + 33000).events.some(e => e.type === 'visitorTreat') && st.pamlsky === 17, 'Tygřík and Líza get their own');
     ev = E.act(st, 'playVisitor', { id: 'k10', caught: 'visitor' }, st.t + 40000).events;
     ok(ev.some(e => e.type === 'visitorPlay' && e.id === 'k10' && e.koxa === true), 'the feather with Tygřík (Koxa plays too)');
-    ok(E.act(st, 'playVisitor', { id: 'k10' }, st.t + 50000).events.some(e => e.type === 'refused' && e.reason === 'Tygřík si chvilku oddechne.'), 'one game a minute each');
+    ok(E.act(st, 'playVisitor', { id: 'k10' }, st.t + 50000).events.some(e => e.type === 'refused' && e.reason === 'resting' && e.vis === 'k10'), 'one game a minute each');
     ok(E.act(st, 'playVisitor', { id: 'k9' }, st.t + 51000).events.some(e => e.type === 'visitorPlay'), 'Micinka has her own minute');
-    ok(E.act(st, 'feedVisitor', { id: 'k9' }, st.t + 52000).events.some(e => e.type === 'refused' && /dostala/.test(e.reason)), 'fed today by the treat');
+    ok(E.act(st, 'feedVisitor', { id: 'k9' }, st.t + 52000).events.some(e => e.type === 'refused' && e.reason === 'fedToday'), 'fed today by the treat');
     ok(Object.keys(st.visit.kp).join() === 'k9,k10', 'per-kitten state in the visit\'s order');
     {   // a greedy kitten fed: the mother's visit is not longer (a greedy visitor alone would stay 30 min more)
       const g = withKits(family(), true); g.kits.find(k => k.id === 'k10').trait = 'greedy'; E.repair(g);
@@ -2236,13 +2235,13 @@ section('Visitors 4 (kittens)');
       ok(E.visitor(g, 'k10').trait === 'greedy' && fe.some(e => e.type === 'visitorFed' && e.id === 'k10') && g.visit.until === until, 'feeding a greedy kitten does not make its mother\'s visit longer');
       invariants(g, 'greedy kitten fed');
     }
-    ok(E.act(st, 'strokeVisitor', { id: 'k5', speed: 300 }, st.t + 53000).events.some(e => e.type === 'refused' && e.reason === 'Drobek tu teď není.'), 'a kitten not here: "Drobek tu teď není."');
+    ok(E.act(st, 'strokeVisitor', { id: 'k5', speed: 300 }, st.t + 53000).events.some(e => e.type === 'refused' && e.reason === 'notHere' && e.vis === 'k5'), 'a kitten not here: notHere');
     invariants(st, 'kittens touched');
     // a young cat on its own follows its trait: shy Drobek under 2 hearts runs off from the belly
     const y = family(); y.visit = { id: 'k5', since: y.t, until: y.t + H, gain: 0 }; E.repair(y);
     ev = E.act(y, 'strokeVisitor', { id: 'k5', region: 'belly', along: true, speed: 300 }, y.t).events;
     ok(ev.some(e => e.type === 'visitorLeave' && e.reason === 'shy') && !y.visit, 'a shy young cat (30 days) runs off like Líza');
-    ok(E.visitorLikes('k5', y).text === 'Drobek se nechá hladit jen pomalu a jemně, na hlavě a na bradě.' && E.visitorLikes('k9', y).dislikes.length === 0 && E.visitorLikes('k9', y).text.startsWith('Micinka je ještě koťátko') && E.visitorLikes('k9') === null && E.visitorLikes('liza', y).text === E.visitorLikes('liza').text, 'visitorLikes(id, st): a kitten everywhere, a young cat by its trait');
+    ok(E.visitorLikes('k5', y).line === 'shy' && E.visitorLikes('k9', y).dislikes.length === 0 && E.visitorLikes('k9', y).line === 'small' && E.visitorLikes('k9') === null && E.visitorLikes('liza', y).line === 'liza' && E.visitorLikes('liza').line === 'liza', 'visitorLikes(id, st): a kitten everywhere, a young cat by its trait');
     invariants(y, 'young cat');
   }
   // kitten acts only with Koxa awake in the garden; the partner is one of the kittens; her hearts with the kitten grow too
@@ -2281,14 +2280,14 @@ section('Visitors 4 (kittens)');
   {
     const ev = at(2026, 6, 10, 19);
     const st = withKits(family(ev), false);
-    ok(E.canInvite(st, 'k9', ev).reason === 'Micinka je ještě moc malá.' && E.canInvite(st, 'k10', ev).reason === 'Tygřík je ještě moc malý.', 'a kitten: "je ještě moc malá / malý"');
-    ok(E.canInvite(st, 'liza', ev).reason === 'Líza má malá koťátka, musí být s nimi.' && E.act(st, 'invite', { id: 'liza' }, ev).events.some(e => e.type === 'refused' && e.reason === 'Líza má malá koťátka, musí být s nimi.'), 'the mother with small kittens stays with them');
+    ok(E.canInvite(st, 'k9', ev).reason === 'tooSmall' && E.canInvite(st, 'k9', ev).vis === 'k9' && E.canInvite(st, 'k10', ev).reason === 'tooSmall', 'a kitten: tooSmall ("je ještě moc malá / malý")');
+    ok(E.canInvite(st, 'liza', ev).reason === 'hasKits' && E.act(st, 'invite', { id: 'liza' }, ev).events.some(e => e.type === 'refused' && e.reason === 'hasKits' && e.vis === 'liza'), 'the mother with small kittens stays with them');
     const y = family(ev); y.visit = { id: 'k5', since: y.t, until: y.t + H, gain: 0 }; y.visitors.k5 = rec(5, 3); E.repair(y);
-    ok(E.canInvite(y, 'k5', ev).reason === 'Drobek je ještě moc malý.', 'a young cat (30 days) is still too small');
+    ok(E.canInvite(y, 'k5', ev).reason === 'tooSmall', 'a young cat (30 days) is still too small');
     const g = family(ev); g.visit = { id: 'k1', since: g.t, until: g.t + H, gain: 0 }; E.repair(g);
     const r = E.act(g, 'invite', { id: 'k1' }, g.t + 1000).events;
-    ok(E.canInvite(family(ev), 'k1', ev).reason === 'Žofka tu teď není.' && r.some(e => e.type === 'guestIn' && e.id === 'k1') && g.guest.id === 'k1', 'a grown kitten (70 days) can sleep over');
-    ok(E.act(g, 'treatVisitor', { id: 'k1' }, g.t + 2000).events.some(e => e.reason === 'Žofka je u nás na noc. To počká do rána.'), 'the grown kitten as the guest');
+    ok(E.canInvite(family(ev), 'k1', ev).reason === 'notHere' && r.some(e => e.type === 'guestIn' && e.id === 'k1') && g.guest.id === 'k1', 'a grown kitten (70 days) can sleep over');
+    ok(E.act(g, 'treatVisitor', { id: 'k1' }, g.t + 2000).events.some(e => e.reason === 'guestWaits' && e.vis === 'k1'), 'the grown kitten as the guest');
     E.advance(g, g.t + 14 * H);
     ok(!g.guest, 'the night ends');
     invariants(g, 'kitten guest'); invariants(st, 'invite mother');
@@ -2301,9 +2300,9 @@ section('Visitors 4 (kittens)');
     const K = st.kits.find(k => k.id === 'k9');
     ok(ev.some(e => e.type === 'kitNamed' && e.id === 'k9' && e.name === K.name) && K.named && K.name === 'Mourinka Malinká z N' && E.visitor(st, 'k9').name === K.name, `nameKitten: trimmed, at most 20 characters (${K.name})`);
     for (const bad of ['', '   ', 5, null])
-      ok(E.act(st, 'nameKitten', { id: 'k10', name: bad }, st.t).events.some(e => e.type === 'refused' && e.reason === 'Napiš koťátku jméno.') && !st.kits.find(k => k.id === 'k10').named, `a bad name refused (${JSON.stringify(bad)})`);
+      ok(E.act(st, 'nameKitten', { id: 'k10', name: bad }, st.t).events.some(e => e.type === 'refused' && e.reason === 'kitNameEmpty') && !st.kits.find(k => k.id === 'k10').named, `a bad name refused (${JSON.stringify(bad)})`);
     for (const id of ['k2', 'k5', 'mourek', null, '__proto__'])
-      ok(E.act(st, 'nameKitten', { id, name: 'Bob' }, st.t).events.some(e => e.type === 'refused' && e.reason === 'Takové koťátko neznáme.'), `an unknown kitten refused (${id})`);
+      ok(E.act(st, 'nameKitten', { id, name: 'Bob' }, st.t).events.some(e => e.type === 'refused' && e.reason === 'noKitten'), `an unknown kitten refused (${id})`);
     st.yard = { since: st.t, snow: false, tree: { since: st.t, calls: 0 } }; E.repair(st);
     ok(E.act(st, 'nameKitten', { id: 'k10', name: 'Rarášek' }, st.t + 1000).events.some(e => e.type === 'kitNamed') && st.yard.tree && E.kitsNew(st).length === 0, 'naming works whatever Koxa does (up the tree); kitsNew empty');
     ok(E.diary(st).find(e => e.id === 'kittens').found === null, 'no diary entry for kittens made by hand');
@@ -2323,7 +2322,7 @@ section('Visitors 4 (kittens)');
     ok(first.k5 && first.k6 && ['k5', 'k6'].every(id => k(id).length === 1 && k(id)[0].alone === true && k(id)[0].n === 1 && k(id)[0].ids.join() === id && k(id)[0].mother === 'pacicka'),
       `a young cat first seen alone: 'kittens' alone, only itself (${evs.map(id => JSON.stringify(k(id)))})`);
     const dk = E.diary(st).find(e => e.id === 'kittens'), fe = st.kits.find(o => o.id === evs[0]);
-    ok(dk.found && dk.text === `Na zahradu poprvé ${fe.fem ? 'přišla' : 'přišel'} ${fe.name}, koťátko Pacičky.`, `the diary: "${dk.text}"`);
+    ok(dk.found && dk.info.cat === fe.id && dk.info.fem === fe.fem && dk.info.mother === 'pacicka' && !dk.info.kits, `the diary: ${JSON.stringify(dk.info)} (Na zahradu poprvé přišla …, koťátko Pacičky.)`);
     ok(['k5', 'k6'].every(id => E.kitsNew(st).some(v => v.id === id)), 'both can be named once seen');
     invariants(st, 'kittens seen alone');
     const r = clone(st); E.repair(r);
@@ -2344,9 +2343,9 @@ section('Visitors 4 (kittens)');
   {
     const st = withKits(family(), false); st.visitors.k1.met = st.t; st.visitors.k9.met = st.t;
     const al = E.album(st);
-    ok(al.kittens.map(k => k.id).join() === 'k1,k9,k10' && al.kittens.every(k => ['id', 'name', 'named', 'mother', 'motherName', 'ageDays', 'kit', 'coat', 'fem', 'hearts', 'pal'].every(f => f in k)), `album.kittens: the seen ones with every field (${al.kittens.map(k => k.id)})`);
+    ok(al.kittens.map(k => k.id).join() === 'k1,k9,k10' && al.kittens.every(k => ['id', 'name', 'named', 'mother', 'ageDays', 'kit', 'coat', 'fem', 'hearts', 'pal'].every(f => f in k)), `album.kittens: the seen ones with every field (${al.kittens.map(k => k.id)})`);
     const z = al.kittens[0];
-    ok(z.name === 'Žofka' && z.named && z.motherName === 'Pacička' && z.ageDays === 70 && z.kit === 0 && z.hearts === 5 && z.pal === 3 && al.kittens[1].motherName === 'Líza', 'album.kittens: names, mother, age, hearts');
+    ok(z.name === 'Žofka' && z.named && z.mother === 'pacicka' && !('motherName' in z) && z.ageDays === 70 && z.kit === 0 && z.hearts === 5 && z.pal === 3 && al.kittens[1].mother === 'liza', 'album.kittens: names, mother, age, hearts');
     ok(al.visitors.some(v => v.id === 'k1' && v.name === 'Žofka') && !al.visitors.some(v => v.id === 'k9'), 'album.visitors: a grown kitten once met, not a small one');
     const ph = E.act(st, 'photo', { room: 'garden', vpose: 'sit' }, st.t + 1000).events;
     st.yard = { since: st.t, snow: false, tree: null }; E.repair(st);
@@ -2521,7 +2520,7 @@ section('Cat flap installed, shop toys, šanta from the pantry');
   cn.asleep = false; cn.wokeAt = cn.t; cn.needs.fun = 20; cn.needs.energy = 80;
   const gv = E.act(cn, 'catnip', null, cn.t).events;
   ok(gv.some(e => e.type === 'catnip') && !cn.pantry.catnip && cn.needs.fun === 80, 'šanta from the pantry: she goes wild (fun +60), the pantry is empty');
-  ok(E.act(cn, 'catnip', null, cn.t).events[0].reason === 'Nemáš žádnou šantu.', 'no more šanta: refused');
+  ok(E.act(cn, 'catnip', null, cn.t).events[0].reason === 'noCatnip', 'no more šanta: refused');
   invariants(cn, 'catnip given');
   const co = E.create(51, at(2026, 6, 10, 14), 'Koxa'); co.pantry.catnip = 2;
   co.out = { since: co.t, until: co.t + 3 * H, walk: true, byPlayer: true };
@@ -2608,7 +2607,7 @@ section('Bowls, meals and routine');
   {
     const st = cat(9, { food: 80 });
     E.act(st, 'feed', 'kibble', T);
-    ok(E.act(st, 'feed', 'pouch', T + sec).events.some(e => e.type === 'refused' && e.reason === 'V misce ještě je jídlo.') && st.pamlsky === 5, 'a second pour while food is left: refused, nothing paid');
+    ok(E.act(st, 'feed', 'pouch', T + sec).events.some(e => e.type === 'refused' && e.reason === 'bowlNotEmpty') && st.pamlsky === 5, 'a second pour while food is left: refused, nothing paid');
     E.advance(st, T + MIN);
     ok(st.bowl && Math.abs(st.bowl.amt - 20) < 0.1 && st.needs.food >= 94.9, `food 80: she eats 15 and leaves 20 (${st.bowl && st.bowl.amt.toFixed(2)})`);
     st.bowl.amt = 10.5;
@@ -2650,7 +2649,7 @@ section('Bowls, meals and routine');
     const st = cat(tapSeed, { water: 60 }); st.dish = 85;
     const fe = E.act(st, 'water', null, T).events;
     ok(fe.some(e => e.type === 'dishFilled' && e.tap === false) && st.dish === 100 && st.needs.water === 60, 'the jug fills the dish; the need does not rise');
-    ok(E.act(st, 'water', null, T).events.some(e => e.type === 'refused' && e.reason === 'Miska s vodou je plná.') && E.act(cat(1), 'water', null, T).events.some(e => e.type === 'refused'), 'a full dish (a new cat: 100): refused');
+    ok(E.act(st, 'water', null, T).events.some(e => e.type === 'refused' && e.reason === 'dishFull') && E.act(cat(1), 'water', null, T).events.some(e => e.type === 'refused'), 'a full dish (a new cat: 100): refused');
     const e1 = E.advance(st, T + 10 * sec).events;
     ok(types(e1).includes('drinkStart') && E.health(st).drinking && st.needs.water > 74 && st.needs.water < 76, `she drinks by herself (water under 70): 1.5 a second (${st.needs.water.toFixed(2)})`);
     const e2 = E.advance(st, T + MIN).events;
@@ -2967,7 +2966,7 @@ section("A cat's day: sleep, the garden alone, calls, visitors seen, walks");
     const ev = E.advance(g, clear + 2 * H).events, h = E.health(g);
     ok(has(ev, 'out', e => e.garden === true && e.walk === false) && h.gardenAlone && h.out && !h.walk && !h.garden, 'the player went away: health().gardenAlone (out, not a walk)');
     const c = E.act(clone(g), 'call', null, g.t).events;
-    ok(has(c, 'ignore', e => e.reason === 'Koxa je na zahradě.'), 'a call: "Koxa je na zahradě."');
+    ok(has(c, 'ignore', e => e.reason === 'inGarden'), 'a call: inGarden ("Koxa je na zahradě.")');
     const j = clone(g), je = E.act(j, 'goGarden', null, j.t).events;
     ok(has(je, 'garden', e => e.joined) && j.yard && !j.out && !E.health(j).gardenAlone, 'goGarden: the player joins her out there');
     const l = clone(g), le = E.act(l, 'letIn', null, l.t).events;
@@ -3029,7 +3028,7 @@ section("A cat's day: sleep, the garden alone, calls, visitors seen, walks");
     const d1 = E.create(5, at(2026, 9, 3, 10), 'Koxa'); mood(d1, 'calm'); E.repair(d1); const d2 = clone(d1);
     ok(JSON.stringify(E.act(d1, 'call', null, d1.t).events) === JSON.stringify(E.act(d2, 'call', null, d2.t).events), 'the same state: the same answer');
     const z = E.create(5, at(2026, 9, 2, 22), 'Koxa'); E.advance(z, at(2026, 9, 3, 3));
-    ok(z.asleep && has(E.act(z, 'call', null, z.t).events, 'ignore', e => e.reason === 'Koxa spí.') && !z.callAt, 'asleep: "Koxa spí."');
+    ok(z.asleep && has(E.act(z, 'call', null, z.t).events, 'ignore', e => e.reason === 'asleepCall') && !z.callAt, 'asleep: asleepCall ("Koxa spí.")');
     let pk = null;
     for (let seed = 1; seed <= 60 && !pk; seed++) { const p = E.create(seed, at(2026, 9, 3, 10), 'Koxa'); mood(p, 'calm'); E.repair(p); if (has(E.act(p, 'call', null, p.t).events, 'callSlow')) pk = p; }
     E.act(pk, 'pickUp', null, pk.t + 1000);
@@ -3254,7 +3253,7 @@ section('Teasing');
       'tail base, regular, in her tempo: bliss; the rear up from tap 3; close 1 in her tempo');
     ok(cnt(r.ev, 'flop') === 1 && idx(r.ev, 'flop') > r.ev.indexOf(bl[7]) && r.ev.find(e => e.type === 'flop').lap === false, 'the flop exactly once, after the 8th pat');
     const fd = r.ev.find(e => e.type === 'found' && e.id === 'bliss');
-    ok(fd && fd.text.includes(fav <= 520 ? 'svižně' : 'pomalu a pravidelně') && fd.text.startsWith('Koxa má ráda'), `Deníček: bliss (${fd && fd.text})`);
+    ok(fd && fd.info.brisk === (fav <= 520), `Deníček: bliss (${fd && JSON.stringify(fd.info)})`);
     ok(near(st.needs.love, l0 + 8 + 4) && st.tease.gain === 12, `8 steady pats in her tempo: pats capped at +8, the flop +4 on top, the window full (${l0} → ${st.needs.love})`);
     ok(st.bond === b0 + 1 && st.tease.bondDay === dk(st.t), 'the flop: bond +1 (bondDay today)');
     r = pats(st, r.t, 'tailBase', 5, fav, { n0: 8 });
@@ -3335,12 +3334,12 @@ section('Teasing');
     const ev = [];
     for (const reg of ['back', 'tail', 'belly', 'tailBase', 'nose']) ev.push(...pats(st, st.t, reg, 30, 120).ev);
     ok(st.asleep && ev.every(e => e.type === 'pat' && e.stage === 'tolerate' && e.sleeping === true) && JSON.stringify(st.tease) === T, 'asleep: 150 fast pats are only tolerated in her sleep, the tease state unchanged');
-    ok(E.act(st, 'boop', null, st.t).events.pop().reason === 'Koxa spí, nebuď ji.', 'boop asleep: refused');
+    ok(E.act(st, 'boop', null, st.t).events.pop().reason === 'asleep', 'boop asleep: refused');
     invariants(st, 'pats asleep');
     const lp = tc(7); E.act(lp, 'lapOn', null, lp.t); lp.lap.doze = true; lp.lap.dozeAt = lp.t;
     const e2 = pats(lp, lp.t, 'back', 30, 120).ev;
     ok(lp.lap && lp.lap.doze && e2.every(e => e.type === 'pat' && e.sleeping), 'dozing on the lap: tolerated, she stays dozing');
-    ok(E.act(lp, 'boop', null, lp.t).events.pop().reason === 'Koxa spí, nebuď ji.' && lp.lap, 'boop while she dozes on the lap: refused, the lap stays');
+    ok(E.act(lp, 'boop', null, lp.t).events.pop().reason === 'asleep' && lp.lap, 'boop while she dozes on the lap: refused, the lap stays');
     invariants(lp, 'pats dozing');
   }
 
@@ -3404,7 +3403,7 @@ section('Teasing');
     E.act(ref, 'stroke', { region: 'back', along: true, speed: 300 }, ref.t);
     const rc = ev.find(e => e.type === 'reconcile');
     ok(rc && rc.by === 'stroke' && rc.bond === true && st.tease.kind === null && st.tease.until === 0 && st.bond === b0 + 1, 'a stroke along the fur: made up, bond +1');
-    ok(near(st.needs.love - ref.needs.love, 3, 1e-9) && has(ev, 'found', e => e.id === 'reconcile' && e.text === 'Koxa se po škádlení usmířila: otřela se ti o ruku.'), 'reconcile: love +3, Deníček');
+    ok(near(st.needs.love - ref.needs.love, 3, 1e-9) && has(ev, 'found', e => e.id === 'reconcile' && JSON.stringify(e.info) === '{}'), 'reconcile: love +3, Deníček');
     ok(idx(ev, 'reconcile') < idx(ev, 'found', e => e.id === 'reconcile'), 'reconcile before its found');
     ok(!has(E.advance(st, st.t + 5 * MIN).events, 'sulkEnd'), 'no sulkEnd after making up');
     pats(st, st.t, 'back', 8, 500, { eating: true });
@@ -3435,7 +3434,7 @@ section('Teasing');
     const b4 = st.tease.boops.length;
     ok(one('boop', null)[0].why === 'boop' && st.tease.boops.length === b4, 'boop: a swat, not counted');
     ok(near(heatAt(st, t), h0, 1e-6) && near(st.needs.love, l0, 1e-9), 'swats: no heat, no love');
-    ok(one('call', null)[0].reason === 'Koxa tě teď schválně neposlouchá.' && one('play', 'mouse')[0].reason === 'Koxa si s tebou teď hrát nechce. Zlobí se.', 'call and play: ignored');
+    ok(one('call', null)[0].reason === 'crossCall' && one('play', 'mouse')[0].reason === 'playCross', 'call and play: ignored');
     ok(one('pickUp', null)[0].type === 'wriggle' && !st.held && one('lapOn', null)[0].type === 'wriggle' && !st.lap, 'pickUp and lapOn: wriggle');
     const tr = one('treat', null);
     ok(has(tr, 'treat') && !has(tr, 'reconcile') && st.tease.kind === 'cross', 'a treat: eaten, still cross');
@@ -3446,7 +3445,7 @@ section('Teasing');
     invariants(st, 'cross');
     ok(!has(E.advance(st, st.tease.until - 1).events, 'crossEnd') && has(E.advance(st, t + 20 * MIN).events, 'crossEnd') && st.tease.kind === null, 'crossEnd after 20 minutes');
     const cc = E.act(st, 'call', null, st.t).events;
-    ok(has(cc, 'come') || has(cc, 'callSlow') || (has(cc, 'ignore') && !/schválně/.test(cc[cc.length - 1].reason)), 'after the cross she comes when called (or a little later)');
+    ok(has(cc, 'come') || has(cc, 'callSlow') || (has(cc, 'ignore') && cc[cc.length - 1].reason !== 'crossCall'), 'after the cross she comes when called (or a little later)');
     invariants(st, 'cross end');
   }
 
@@ -3473,7 +3472,7 @@ section('Teasing');
   {
     const st = tc(22), t = st.t;
     let ev = E.act(st, 'boop', null, t).events;
-    ok(ev[0].type === 'boop' && !ev[0].swat && has(ev, 'found', e => e.id === 'boop' && e.text === 'Když jí ťukneš do nosu, Koxa zašilhá a kýchne.') && st.tease.boops.join() === String(t), 'the first boop: she sneezes, Deníček');
+    ok(ev[0].type === 'boop' && !ev[0].swat && has(ev, 'found', e => e.id === 'boop' && JSON.stringify(e.info) === '{}') && st.tease.boops.join() === String(t), 'the first boop: she sneezes, Deníček');
     ev = E.act(st, 'boop', null, t + 10000).events;
     ok(ev.map(e => e.type).join() === 'boop' && st.tease.boops.length === 2 && !st.tease.kind, 'the second: a boop');
     invariants(st, 'two boops');
@@ -3502,16 +3501,16 @@ section('Teasing');
   // the watering can
   {
     const st = tc(26);
-    ok(E.act(st, 'splash', null, st.t).events.pop().reason === 'Konví se zalévá na zahradě.', 'splash in the house: refused');
+    ok(E.act(st, 'splash', null, st.t).events.pop().reason === 'splashGarden', 'splash in the house: refused');
     const w = tc(27, 'happy', at(2027, 1, 14, 10)); E.act(w, 'goGarden', null, w.t);
-    ok(w.yard && E.act(w, 'splash', null, w.t).events.pop().reason === 'V zimě ne – byla by jí zima.', 'splash in winter: refused');
+    ok(w.yard && E.act(w, 'splash', null, w.t).events.pop().reason === 'splashWinter', 'splash in winter: refused');
     const g = tc(28); E.act(g, 'goGarden', null, g.t);
     const a = clone(g); a.asleep = true; a.sleepAt = a.t; a.needs.energy = 50;
-    ok(E.act(a, 'splash', null, a.t).events.pop().reason === 'Koxa spí. Nech ji spát.', 'splash asleep: refused');
+    ok(E.act(a, 'splash', null, a.t).events.pop().reason === 'splashAsleep', 'splash asleep: refused');
     const tr = clone(g); tr.yard.tree = { since: tr.t, calls: 0 };
-    ok(E.act(tr, 'splash', null, tr.t).events.pop().reason === 'Koxa je na stromě.', 'splash up the tree: refused');
+    ok(E.act(tr, 'splash', null, tr.t).events.pop().reason === 'onTree', 'splash up the tree: refused');
     const o = friend(clone(g)); E.act(o, 'letOut', null, o.t);
-    ok(o.out && E.act(o, 'splash', null, o.t).events.pop().reason === 'Koxa je venku.', 'splash while she is out: refused');
+    ok(o.out && E.act(o, 'splash', null, o.t).events.pop().reason === 'outside', 'splash while she is out: refused');
     for (const x of [st, w, a, tr, o]) invariants(x, 'splash refused');
     const l0 = g.needs.love, t = g.t, ref = clone(g);
     const ev = E.act(g, 'splash', null, t).events;
@@ -3586,7 +3585,7 @@ section('Teasing');
     ok(ok1 === 30 && kinds.shelf > 3 && kinds.ambush > 3, `a cross: one payback when due (${JSON.stringify(kinds)})`);
     // the Deníček text
     const dt = tc(231); makeCross(dt); for (let k = 0; k < 18; k++) E.advance(dt, dt.t + 10 * MIN);
-    ok(E.diary(dt).find(e => e.id === 'payback').text === 'Koxa ti to vrátila. Co se škádlívá, to se rádo mívá!', 'Deníček: payback');
+    ok(E.diary(dt).find(e => e.id === 'payback').found && JSON.stringify(E.diary(dt).find(e => e.id === 'payback').info) === '{}', 'Deníček: payback');
     // a sulk plans one with chance 0.5
     let planned = 0;
     for (let s = 1; s <= 200; s++) { const x = tc(300 + s); pats(x, x.t + s * 1000, 'back', 15, 150); if (x.tease.pay) planned++; }

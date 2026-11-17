@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,15 +34,20 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="texts.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f4ebdf">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Šipky ven">
-<title>Šipky ven</title>
+<title data-t="game.sipky-ven.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f4ebdf'/%3E%3Cpath d='M14 32h26' stroke='%234a2c17' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M52 32 36 20v24z' fill='%234a2c17'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
@@ -205,24 +210,24 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app">
   <header class="topbar">
     <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Šipky ven</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.sipky-ven.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
   <div class="stats" id="stats">&nbsp;</div>
-  <main id="board"><div id="field"><svg id="svg" role="img" aria-label="Plocha se šipkami"></svg></div></main>
+  <main id="board"><div id="field"><svg id="svg" role="img" data-t-aria="sipky-ven.board"></svg></div></main>
   <footer class="tray">
     <div id="hint"></div>
     <div class="row">
-      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span data-t="common.undo"></span></button>
       <button id="btnGo" class="go"></button>
     </div>
   </footer>
@@ -489,17 +494,19 @@ function SipkyEngine() {
 'use strict';
 const $ = s => document.querySelector(s);
 const root = document.documentElement;
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 const E = SipkyEngine();
 const DX = E.DX, DY = E.DY;
 
 /* ---------- Settings and storage ---------- */
 const ID = 'sipky-ven';                                   // = the folder name
 const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
-const PROGRESS = `games.${ID}.progress`; // contract: a short Czech progress text the launcher shows on the game's row
+const PROGRESS = `games.${ID}.progress`; // contract 3a: { k: 'level', n } the launcher shows on the game's row ("Úroveň 12")
 const THEMES = [
-  { id: 'paper', name: 'Papír', meta: '#f4ebdf' },
-  { id: 'night', name: 'Noc',   meta: '#131c2e' },
-  { id: 'sky',   name: 'Obloha', meta: '#d8e9f5' },
+  { id: 'paper', nameKey: 'common.theme.paper', meta: '#f4ebdf' },
+  { id: 'night', nameKey: 'sipky-ven.theme.night', meta: '#131c2e' },
+  { id: 'sky',   nameKey: 'sipky-ven.theme.sky',   meta: '#d8e9f5' },
 ];
 // lives: 0 = no limit (mistakes are only counted), else the level starts over after that many bumps (3 by default,
 // the usual number in this kind of game; user's decision 2026-11-13)
@@ -524,7 +531,7 @@ function save() {
     if (inProgress()) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
     // the level the player is at (after a win the next one), from level 2 on: "Úroveň 12" in the launcher
     const at = G ? (G.status === 'won' ? level : G.level) : 1;
-    if (at > 1) localStorage.setItem(PROGRESS, `Úroveň ${at}`); else localStorage.removeItem(PROGRESS);
+    if (at > 1) localStorage.setItem(PROGRESS, JSON.stringify({ k: 'level', n: at })); else localStorage.removeItem(PROGRESS);
   } catch (e) {} // rule: storage may be full or blocked; the game goes on
 }
 const clampLevel = v => Math.max(1, Math.min(MAX_LEVEL, v));
@@ -561,7 +568,7 @@ function validGame(g) {
   } catch (e) { return false; }
 }
 function normalize(s) {
-  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  if (!THEMES.some(m => m.id === s.theme)) s.theme = DEFAULTS.theme;
   s.lives = +s.lives;
   if (!LIVES.includes(s.lives)) s.lives = DEFAULTS.lives;
   s.vibrate = !!s.vibrate;
@@ -580,7 +587,7 @@ function restart(msg) {
   // a new object, so a dialog still waiting for the old attempt (whenFree) is dropped
   G = Object.assign({}, G, { history: [], bumps: 0, hints: 0, lives: S.lives, status: 'playing', hint: null, hinted: false });
   buzz(); save(); build(); render();
-  toast(msg || `Úroveň ${G.level} začíná znovu`);
+  toast(msg || t('sipky-ven.toast.restarted', { level: G.level }));
 }
 
 /* ---------- Helpers ---------- */
@@ -591,14 +598,14 @@ function buzz(ms = 12) {
 }
 let toastT;
 function toast(msg, ms = 2600) {
-  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  const el = $('#toast'); el.textContent = msg; el.classList.remove('hide');
   // over the row of bottom buttons (taps go through it), never over the hint line or the board
   const row = $('.tray .row').getBoundingClientRect();
   if (row.height) {
     // ... but never below the visible bottom (a long text on a short screen)
     const vh = window.visualViewport ? visualViewport.height : innerHeight;
-    t.style.bottom = 'auto';
-    t.style.top = Math.round(Math.max(0, Math.min(row.top, vh - t.getBoundingClientRect().height - 8))) + 'px';
+    el.style.bottom = 'auto';
+    el.style.top = Math.round(Math.max(0, Math.min(row.top, vh - el.getBoundingClientRect().height - 8))) + 'px';
   }
   clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
 }
@@ -623,8 +630,6 @@ function showModal(html, buttons) {
   };
   $('#modal').hidden = false;
 }
-const plural = (n, one, few, many) => n === 1 ? one : n >= 2 && n <= 4 ? few : many;
-const livesWord = n => `${n} ${plural(n, 'život', 'životy', 'životů')}`;
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 // stars of a win without Poradit: no bump = 3, at most two = 2, else 1
 const starsOf = slips => slips === 0 ? 3 : slips <= 2 ? 2 : 1;
@@ -657,7 +662,7 @@ let pcsEl = null;          // the <g> that holds the arrows of the board
 const leaving = {};        // arrows still sliding out (index: element), so Zpět can take one back at once
 function applyLook() {
   root.dataset.theme = S.theme;
-  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(m => m.id === S.theme).meta;
 }
 const pieceEl = i => pcsEl && pcsEl.querySelector(`.pc[data-i="${i}"]:not(.out)`);
 // the board is drawn once per level; a move only takes an arrow out or puts one back
@@ -678,17 +683,16 @@ function render() {
   if (G.hint !== null) { const el = pieceEl(G.hint); if (el) el.classList.add('hint'); }
   $('#field').classList.toggle('won', won);
   const left = G.lives ? Math.max(0, G.lives - G.bumps) : 0;
-  const tail = G.lives
-    ? `<span class="hearts" aria-label="Životy: ${left} z ${G.lives}">${Array.from({ length: G.lives }, (_, k) => `<svg viewBox="0 0 24 24" class="${k < left ? 'full' : 'empty'}">${HEART}</svg>`).join('')}</span>`
-    : `Chyby: <b>${G.bumps}</b>`;
-  $('#stats').innerHTML = `Úroveň <b>${G.level}</b> · Zbývá <b>${leftCount()}</b> · ${tail}`;
-  $('#hint').textContent = won ? (G.hinted ? 'Vyřešeno! S radou bez hvězd' : `Vyřešeno! ${starText(starsOf(G.bumps))}`)
-    : lost ? 'Došly životy, zkus to znovu'
-    : G.hint !== null ? 'Ťukni na šipku v rámečku'
-    : 'Pusť ven šipku s volnou cestou';
+  // [hearts] in the message is the row of hearts
+  const hearts = `<span class="hearts" aria-label="${th('sipky-ven.hearts', { left, lives: G.lives })}">${Array.from({ length: G.lives }, (_, k) => `<svg viewBox="0 0 24 24" class="${k < left ? 'full' : 'empty'}">${HEART}</svg>`).join('')}</span>`;
+  $('#stats').innerHTML = th('sipky-ven.stats', { level: G.level, left: leftCount(), lives: !!G.lives, bumps: G.bumps }).replace('[hearts]', () => hearts);
+  $('#hint').textContent = won ? (G.hinted ? t('sipky-ven.hint.wonHinted') : t('sipky-ven.hint.won', { stars: starText(starsOf(G.bumps)) }))
+    : lost ? t('sipky-ven.hint.lost')
+    : G.hint !== null ? t('sipky-ven.hint.hinted')
+    : t('sipky-ven.hint.play');
   $('#btnUndo').classList.toggle('dim', won || lost || !G.history.length);
-  $('#btnGo').innerHTML = won ? nextLabel() : lost ? 'Zkusit znovu'
-    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2zm-3 18h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/></svg>Poradit';
+  $('#btnGo').innerHTML = won ? I18N.esc(nextLabel()) : lost ? th('sipky-ven.retry')
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-4 12.7V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.3A7 7 0 0 0 12 2zm-3 18h6v1a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1z"/></svg>' + th('common.hint');
   layout(); // the score row may have changed its height (hearts)
 }
 // rule: the board size comes from the room that is left, so it fits without scrolling
@@ -730,9 +734,9 @@ function flash(el, cls, ms) {
 }
 
 /* ---------- Playing ---------- */
-const nextLabel = () => G.level < MAX_LEVEL ? 'Další úroveň' : 'Hrát znovu';
-const wonToast = () => toast(`Vyřešeno – ťukni na ${nextLabel()}`);
-const lostToast = () => toast('Došly životy – ťukni na Zkusit znovu');
+const nextLabel = () => t(G.level < MAX_LEVEL ? 'sipky-ven.next' : 'sipky-ven.again');
+const wonToast = () => toast(t('sipky-ven.toast.won', { last: G.level >= MAX_LEVEL }));
+const lostToast = () => toast(t('sipky-ven.toast.lost'));
 function takeOut(i) {
   const p = G.pieces[i];
   G.history.push(i);
@@ -759,7 +763,7 @@ function bump(i, b) {
   G.status = statusOf(G);
   save(); render();
   if (G.status === 'lost') { lose(); return; }
-  toast(G.lives ? `Náraz! ${G.lives - G.bumps === 1 ? 'Zbývá poslední život' : `Zbývají ${livesWord(G.lives - G.bumps)}`}` : 'Náraz! Té šipce stojí v cestě jiná', 1800);
+  toast(t('sipky-ven.toast.bump', { lives: !!G.lives, left: G.lives - G.bumps }), 1800);
 }
 // a tap on arrow i: out when its way is free, else it bumps and stays
 function tapPiece(i) {
@@ -783,22 +787,22 @@ function win() {
 }
 function showWin(prev) {
   if (G.hinted) {
-    showModal(`<h2>Výborně!</h2><p>Úroveň ${G.level} je vyřešená.</p><p>Hra s radou nedostane hvězdy ani rekord.</p>`,
-      [{ text: nextLabel(), fn: () => newGame(level) }, { text: 'Zavřít', cls: 'alt' }]);
+    showModal(`<h2>${th('sipky-ven.win.title')}</h2><p>${th('sipky-ven.win.text', { level: G.level })}</p><p>${th('sipky-ven.win.hinted')}</p>`,
+      [{ text: I18N.esc(nextLabel()), fn: () => newGame(level) }, { text: th('sipky-ven.close'), cls: 'alt' }]);
     return;
   }
   const slips = G.bumps, st = starsOf(slips);
-  const how = !slips ? 'bez jediné chyby' : `Chyby: ${G.bumps}`;
-  showModal(`<h2>Výborně!</h2><div class="stars" aria-label="Hvězdy: ${st} ze 3">${starText(st)}</div><p>Úroveň ${G.level} je vyřešená${slips ? '.</p><p>' + how + '.' : ' ' + how + '.'}</p>`
-    + (prev === undefined || slips >= prev ? '' : st > starsOf(prev) ? `<p>Víc hvězd než minule (${starText(starsOf(prev))}).</p>`
-      : `<p>Lepší než minule: chyb ${slips}, minule ${prev}.</p>`),
-    [{ text: nextLabel(), fn: () => newGame(level) }, { text: 'Zavřít', cls: 'alt' }]);
+  const how = slips ? `<p>${th('sipky-ven.win.text', { level: G.level })}</p><p>${th('sipky-ven.win.slips', { n: G.bumps })}</p>` : `<p>${th('sipky-ven.win.clean', { level: G.level })}</p>`;
+  showModal(`<h2>${th('sipky-ven.win.title')}</h2><div class="stars" aria-label="${th('sipky-ven.starsAria', { n: st })}">${starText(st)}</div>${how}`
+    + (prev === undefined || slips >= prev ? '' : st > starsOf(prev) ? `<p>${th('sipky-ven.win.moreStars', { stars: starText(starsOf(prev)) })}</p>`
+      : `<p>${th('sipky-ven.win.better', { now: slips, prev })}</p>`),
+    [{ text: I18N.esc(nextLabel()), fn: () => newGame(level) }, { text: th('sipky-ven.close'), cls: 'alt' }]);
 }
 function lose() {
   hideToast();
   buzz([80, 60, 120]);
-  whenFree(G, reducedMotion() ? 300 : 700, () => G.status === 'lost' && showModal(`<h2>Došly životy</h2><p>Šipka narazila už ${G.bumps}×. Úroveň ${G.level} můžeš zkusit znovu od začátku.</p>`,
-    [{ text: 'Zkusit znovu', fn: () => restart() }, { text: 'Prohlédnout', cls: 'alt' }]));
+  whenFree(G, reducedMotion() ? 300 : 700, () => G.status === 'lost' && showModal(`<h2>${th('sipky-ven.lost.title')}</h2><p>${th('sipky-ven.lost.text', { n: G.bumps, level: G.level })}</p>`,
+    [{ text: th('sipky-ven.retry'), fn: () => restart() }, { text: th('common.inspect'), cls: 'alt' }]));
 }
 // the arrow under a tap: the one on the tapped cell, else the nearest one a little beside it (small cells)
 function pieceAt(ux, uy) {
@@ -829,7 +833,7 @@ $('#field').addEventListener('click', e => {
 $('#btnUndo').addEventListener('click', () => {
   if (G.status === 'won') { wonToast(); return; }
   if (G.status === 'lost') { lostToast(); return; }
-  if (!G.history.length) { toast('Zatím není co vrátit'); return; }
+  if (!G.history.length) { toast(t('common.nothingToUndo')); return; }
   const i = G.history.pop(); G.hint = null;   // the arrow put back may stand in the framed one's way
   hideToast();
   if (leaving[i]) { leaving[i].getAnimations().forEach(a => a.cancel()); leaving[i].remove(); delete leaving[i]; }
@@ -845,12 +849,12 @@ $('#btnGo').addEventListener('click', () => {
   if (G.status === 'lost') { restart(); return; }
   if (G.hint === null) {
     const f = freeNow();
-    if (!f.length) { toast('Poradit se teď nepovedlo, zkus Zpět'); return; }
+    if (!f.length) { toast(t('sipky-ven.toast.hintFailed')); return; }
     G.hint = f[0]; G.hints++;
     const first = !G.hinted;
     G.hinted = true;
     save();
-    if (first) { buzz(8); render(); toast('S radou tahle úroveň nedostane hvězdy ani rekord', 3200); return; }
+    if (first) { buzz(8); render(); toast(t('sipky-ven.toast.hinted'), 3200); return; }
   }
   hideToast(); buzz(8); render(); // the hint line says what to do
 });
@@ -859,48 +863,48 @@ $('#btnNew').addEventListener('click', () => {
   if (G.status === 'won') { newGame(level); return; }
   if (G.status === 'lost') { restart(); return; }
   if (inProgress()) {
-    showModal(`<h2>Začít znovu?</h2><p>Úroveň ${G.level} začne od začátku, všechny šipky se vrátí a chyby se vynulují.</p>`, [
-      { text: 'Ano, od začátku', fn: () => restart() },
-      { text: 'Ne, hrát dál', cls: 'alt' }]);
-  } else toast(`Úroveň ${G.level} je na začátku, jinou vybereš v Nastavení`, 3200);
+    showModal(`<h2>${th('sipky-ven.restart.title')}</h2><p>${th('sipky-ven.restart.text', { level: G.level })}</p>`, [
+      { text: th('sipky-ven.restart.yes'), fn: () => restart() },
+      { text: th('common.confirmNew.no'), cls: 'alt' }]);
+  } else toast(t('sipky-ven.toast.atStart', { level: G.level }), 3200);
 });
 
 /* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
 const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
-const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
-const LIVES_TEXT = { 3: ['3 životy', 'Po třetím nárazu úroveň končí a můžeš ji zkusit znovu.'], 1: ['1 život', 'Jediný náraz a úroveň končí, můžeš ji zkusit znovu.'], 0: ['Bez omezení', 'Nárazy se jen počítají jako chyby.'] };
+const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>`;
+const LIVES_TEXT = { 3: ['sipky-ven.lives.three', 'sipky-ven.lives.three.desc'], 1: ['sipky-ven.lives.one', 'sipky-ven.lives.one.desc'], 0: ['sipky-ven.lives.free', 'sipky-ven.lives.free.desc'] };
 // the help's line about lives, for the lives set now
-const LIVES_HELP = { 3: 'Máš <b>3 životy</b>: po třetím nárazu úroveň končí a můžeš ji zkusit znovu.', 1: 'Máš <b>1 život</b>: po prvním nárazu úroveň končí a můžeš ji zkusit znovu.', 0: 'Hraješ <b>bez omezení</b>: nárazy se jen počítají jako chyby.' };
+const LIVES_HELP = { 3: 'sipky-ven.help.6.three', 1: 'sipky-ven.help.6.one', 0: 'sipky-ven.help.6.free' };
 function renderSettings() {
   const solved = Object.keys(bests).length, b = bests[level];
   const stars = Object.values(bests).reduce((s, v) => s + starsOf(v), 0);
   // the lives apply from the next game; an untouched level takes them at once (closeSettings)
   const livesNote = G && S.lives !== G.lives && !isFresh()
-    ? `<div class="notice">Platí od příští hry.${inProgress() ? ' Rozehraná úroveň zůstává.' : ''}</div>` : '';
+    ? `<div class="notice">${th('sipky-ven.set.livesNotice', { inProgress: inProgress() })}</div>` : '';
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Šipky ven<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Úroveň</h3>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.sipky-ven.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('sipky-ven.set.level')}</h3>
       <div class="field"><div class="stepper">
-        <button class="sbtn${level > 1 ? '' : ' dim'}" data-act="dec" aria-label="Nižší úroveň">−</button>
-        <div class="sval">Úroveň ${level}${b !== undefined ? `<small aria-label="Hvězdy: ${starsOf(b)} ze 3">${starText(starsOf(b))}</small>` : ''}</div>
-        <button class="sbtn${level < top ? '' : ' dim'}" data-act="inc" aria-label="Vyšší úroveň">+</button>
+        <button class="sbtn${level > 1 ? '' : ' dim'}" data-act="dec" aria-label="${th('sipky-ven.set.lower')}">−</button>
+        <div class="sval">${th('sipky-ven.set.value', { level })}${b !== undefined ? `<small aria-label="${th('sipky-ven.starsAria', { n: starsOf(b) })}">${starText(starsOf(b))}</small>` : ''}</div>
+        <button class="sbtn${level < top ? '' : ' dim'}" data-act="inc" aria-label="${th('sipky-ven.set.higher')}">+</button>
       </div>
-      <div class="fnote">${b !== undefined ? 'Vyřešeno bez Poradit.' : 'Zatím bez hvězd.'} Úrovní s hvězdami: ${solved}, hvězd: ${stars}${solved ? ` z ${solved * 3}` : ''}. Každá vyřešená úroveň otevře další. Hvězdy a rekord dostane jen úroveň dohraná bez Poradit.</div>
-      ${openLevel !== null && level !== openLevel ? `<div class="notice">Po návratu do hry začne <b>úroveň ${level}</b>${inProgress() ? ' a rozehraná úroveň se ztratí' : ''}.</div>` : ''}
+      <div class="fnote">${th('sipky-ven.set.note', { done: b !== undefined, solved, stars, any: solved > 0, max: solved * 3 })}</div>
+      ${openLevel !== null && level !== openLevel ? `<div class="notice">${th('sipky-ven.set.notice', { level, lost: inProgress() })}</div>` : ''}
       </div>
     </section>
-    <section class="card"><h3>Životy</h3>
+    <section class="card"><h3>${th('sipky-ven.set.lives')}</h3>
       <div class="field">
-        ${LIVES.map(n => opt('lives:' + n, S.lives === n, LIVES_TEXT[n][0], LIVES_TEXT[n][1])).join('')}
+        ${LIVES.map(n => opt('lives:' + n, S.lives === n, th(LIVES_TEXT[n][0]), th(LIVES_TEXT[n][1]))).join('')}
         ${livesNote}
       </div>
     </section>
-    <section class="card"><h3>Vzhled</h3>
-      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="mini" data-theme="${t.id}">${miniSVG(4, 3, EX)}</span>${t.name}</button>`).join('')}</div>
-      ${toggleRow('vibrate', 'Vibrace')}
+    <section class="card"><h3>${th('common.look')}</h3>
+      <div class="tiles">${THEMES.map(m => `<button class="tile" data-act="theme:${m.id}" aria-pressed="${S.theme === m.id}"><span class="mini" data-theme="${m.id}">${miniSVG(4, 3, EX)}</span>${th(m.nameKey)}</button>`).join('')}</div>
+      ${toggleRow('vibrate', th('common.vibrate'))}
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -908,15 +912,15 @@ $('#settingsIn').addEventListener('click', e => {
   if (act === 'close') { closeSettings(); return; }
   if (act === 'dec' || act === 'inc') {
     const v = level + (act === 'inc' ? 1 : -1);
-    if (v < 1) { toast('Nižší úroveň už není'); return; }
-    if (v > MAX_LEVEL) { toast('Vyšší úroveň už není'); return; }
-    if (v > top) { toast(`Úroveň ${v} se otevře, až vyřešíš úroveň ${top}`); return; }
+    if (v < 1) { toast(t('sipky-ven.toast.noLower')); return; }
+    if (v > MAX_LEVEL) { toast(t('sipky-ven.toast.noHigher')); return; }
+    if (v > top) { toast(t('sipky-ven.toast.locked', { level: v, top })); return; }
     level = v;
   }
   else if (act === 'lives') S.lives = +arg;
   else if (act === 'theme') S.theme = arg;
   else if (act === 'toggle') S[arg] = !S[arg];
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí (úrovně zůstávají)'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('sipky-ven.toast.reset')); }
   normalize(S); buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
 });
@@ -929,10 +933,10 @@ function closeSettings() {
   $('#screenSettings').hidden = true;
   const changed = openLevel !== null && level !== openLevel, had = inProgress();
   openLevel = null;
-  if (changed) { newGame(level, had ? `Začala úroveň ${level}, rozehraná se ztratila` : `Úroveň ${level}`); return; }
+  if (changed) { newGame(level, t('sipky-ven.toast.started', { level, lost: had })); return; }
   if (S.lives !== G.lives) {
     if (isFresh() && G.status === 'playing') { G.lives = S.lives; save(); }
-    else toast('Nové životy platí od příští hry');
+    else toast(t('sipky-ven.toast.livesNext'));
   }
   render();
 }
@@ -940,21 +944,21 @@ $('#btnSettings').addEventListener('click', openSettings);
 
 /* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
 function renderHelp() {
-  const th = S.theme;
+  const theme = S.theme;
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Šipky ven<small>Jak hrát</small></h2></div>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.sipky-ven.name')}<small>${th('common.help')}</small></h2></div>
     <section class="card help"><ol>
-      <li><b>Ťukni na šipku.</b> Když jí až k okraji plochy nic nestojí v cestě, vyjede ven ve směru, kam ukazuje.
-        <div class="mini" data-theme="${th}">${miniSVG(4, 3, EX, { 0: 'hint' })}<span class="arrow">ťuk<br>→</span>${miniSVG(4, 3, exWithout(0))}</div></li>
-      <li>Když jí v cestě stojí jiná šipka, <b>narazí</b> a zůstane na místě. To je chyba.
-        <div class="mini" data-theme="${th}">${miniSVG(4, 3, EX, { 1: 'bump', 0: 'blk' })}</div></li>
-      <li>Vyveď ven <b>všechny šipky</b>. Každá úroveň jde vyřešit a pořadí je na tobě: šipka, která jednou může ven, může i později.</li>
-      <li>Za vyřešenou úroveň dostaneš hvězdy: <b>★★★</b> bez chyby, <b>★★☆</b> nejvýš se dvěma chybami, jinak <b>★☆☆</b>. Hvězdy a rekord dostane jen úroveň dohraná bez Poradit.</li>
-      <li><b>Poradit</b> ukáže v rámečku šipku, která může ven; ťukni na ni. <b>Zpět</b> vrátí poslední šipku na plochu, chyby zůstávají.</li>
-      <li>${LIVES_HELP[S.lives]} Počet životů změníš v Nastavení.</li>
-      <li>Úrovně jsou postupně větší a těžší: víc šipek, delší šipky a plochy různých tvarů. <b>Nová hra</b> začne úroveň znovu od začátku, po vyřešení přejde na další. Vyřešené úrovně si můžeš znovu zahrát v Nastavení.</li>
+      <li>${th('sipky-ven.help.1')}
+        <div class="mini" data-theme="${theme}">${miniSVG(4, 3, EX, { 0: 'hint' })}<span class="arrow">${th('sipky-ven.help.tap')}<br>→</span>${miniSVG(4, 3, exWithout(0))}</div></li>
+      <li>${th('sipky-ven.help.2')}
+        <div class="mini" data-theme="${theme}">${miniSVG(4, 3, EX, { 1: 'bump', 0: 'blk' })}</div></li>
+      <li>${th('sipky-ven.help.3')}</li>
+      <li>${th('sipky-ven.help.4')}</li>
+      <li>${th('sipky-ven.help.5')}</li>
+      <li>${th(LIVES_HELP[S.lives])}</li>
+      <li>${th('sipky-ven.help.7')}</li>
     </ol></section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -986,6 +990,7 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+I18N.apply(); // the static texts (data-t*), <title> and <html lang> in the player's language
 // rule: ask for persistent storage so the browser does not delete the saved game by itself
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 const saved = load();
@@ -1012,7 +1017,7 @@ if (saved && validGame(saved.game)) {
   build();
   // the level was changed in Settings and the page closed before returning: apply it now, as closing Settings would
   // (after a win the expected level is the next one, so only a real change in Settings starts another level)
-  if (level !== (G.status === 'won' ? clampLevel(G.level + 1) : G.level)) newGame(level, inProgress() ? `Začala úroveň ${level}, rozehraná se ztratila` : `Úroveň ${level}`);
+  if (level !== (G.status === 'won' ? clampLevel(G.level + 1) : G.level)) newGame(level, t('sipky-ven.toast.started', { level, lost: inProgress() }));
   else { if (S.lives !== G.lives && isFresh() && G.status === 'playing') G.lives = S.lives; render(); }
 }
 else newGame(level);

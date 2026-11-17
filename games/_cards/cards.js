@@ -1,7 +1,10 @@
 // Shared look of the card games (Solitér, FreeCell, Pyramida, Pavouk): table themes, card faces and backs,
 // the pictures in the middle of the cards and the appearance part of their settings; also their statistics rule.
-// Load it after images/sets.js:  <script src="../_cards/cards.js"></script>
+// Load it after images/sets.js:  <script src="../_cards/cards.js"></script>, after the texts scripts right below the
+// Error log (i18n/languages.js, i18n.js, common.js, games.js and its own texts i18n/cards.js: tools/check.js checks it).
 // It adds its CSS and the suit symbols (#s0–#s3) to the page and sets globalThis.CARDS.
+// Names in TABLES, BACKS, FACES and PICS are message keys (nameKey, descKey); their name and desc are getters that give
+// the text in the player's language, for the games that are not converted yet (a converted game uses th(x.nameKey)).
 // Cards here are described by suit (0 ♠, 1 ♥, 2 ♣, 3 ♦; odd = red) and rank (1 = ace … 13 = king).
 // Game-specific sizes (.ix corner index, .art picture box, highlights) stay in each game.
 (() => {
@@ -46,8 +49,8 @@ html[data-table="paper"],[data-table="paper"]{--tex:none} /* the paper table is 
 .art .hd{fill:var(--fc);stroke:currentColor;stroke-width:5}
 .art .lt{font:700 92px Georgia,"Times New Roman",serif;fill:currentColor}
 `;
-// suit symbols used by <use href="#s0"> … "#s3"
-document.body.insertAdjacentHTML('afterbegin', `<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+// suit symbols used by <use href="#s0"> … "#s3" (in <body>: when this file is loaded in <head>, once the body is there)
+const symbols = () => document.body.insertAdjacentHTML('afterbegin', `<svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <defs>
     <symbol id="s0" viewBox="0 0 100 100"><path d="M50 4C40 22 8 38 8 62c0 15 11 24 23 24 8 0 14-4 17-9-1 9-5 15-12 19h28c-7-4-11-10-12-19 3 5 9 9 17 9 12 0 23-9 23-24C92 38 60 22 50 4z"/></symbol>
     <symbol id="s1" viewBox="0 0 100 100"><path d="M50 92C22 70 6 54 6 32 6 17 17 7 30 7c9 0 16 5 20 13 4-8 11-13 20-13 13 0 24 10 24 25 0 22-16 38-44 60z"/></symbol>
@@ -55,20 +58,26 @@ document.body.insertAdjacentHTML('afterbegin', `<svg width="0" height="0" style=
     <symbol id="s3" viewBox="0 0 100 100"><path d="M50 3 87 50 50 97 13 50z"/></symbol>
   </defs>
 </svg>`);
+if (document.body) symbols(); else document.addEventListener('DOMContentLoaded', symbols);
 
 const RANK = ['', 'A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
 
 /* ---------- Appearance ---------- */
-const TABLES = [
-  { id: 'green', name: 'Zelené sukno', meta: '#1e7135' },
-  { id: 'blue',  name: 'Modré sukno',  meta: '#1c5687' },
-  { id: 'wine',  name: 'Vínová',       meta: '#6e1f2c' },
-  { id: 'wood',  name: 'Dřevo',        meta: '#6a4327' },
-  { id: 'slate', name: 'Břidlice',     meta: '#36404a' },
-  { id: 'sand',  name: 'Písková',      meta: '#d9c8a2' },
-  { id: 'paper', name: 'Papír',        meta: '#f4ebdf' },
-  { id: 'night', name: 'Noc',          meta: '#111316' },
-];
+// x.name and x.desc read the messages x.nameKey and x.descKey (the games not converted yet use them)
+const named = list => list.map(x => Object.defineProperties(x, {
+  name: { get() { return I18N.t(x.nameKey); }, enumerable: true },
+  desc: { get() { return x.descKey ? I18N.t(x.descKey) : ''; }, enumerable: true },
+}));
+const TABLES = named([
+  { id: 'green', nameKey: 'cards.table.green', meta: '#1e7135' },
+  { id: 'blue',  nameKey: 'cards.table.blue',  meta: '#1c5687' },
+  { id: 'wine',  nameKey: 'cards.table.wine',  meta: '#6e1f2c' },
+  { id: 'wood',  nameKey: 'cards.table.wood',  meta: '#6a4327' },
+  { id: 'slate', nameKey: 'cards.table.slate', meta: '#36404a' },
+  { id: 'sand',  nameKey: 'cards.table.sand',  meta: '#d9c8a2' },
+  { id: 'paper', nameKey: 'common.theme.paper', meta: '#f4ebdf' },
+  { id: 'night', nameKey: 'cards.table.night', meta: '#111316' },
+]);
 const svgURI = s => `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 140">${s}</svg>`)}")`;
 const HATCH = 'repeating-linear-gradient(45deg,rgba(255,255,255,.24) 0 1.5px,transparent 1.5px 6px),repeating-linear-gradient(-45deg,rgba(255,255,255,.24) 0 1.5px,transparent 1.5px 6px)';
 const ART_BACKS = {
@@ -91,38 +100,39 @@ const ART_BACKS = {
     <g fill="none" stroke="#fff" stroke-width="3"><circle cx="22" cy="36" r="5"/><circle cx="32" cy="24" r="3.5"/><circle cx="26" cy="14" r="2.5"/></g>`,
 };
 const BACKS = [
-  { id: 'blue',   name: 'Modrá mřížka',    bg: `${HATCH},#1f4fa8` },
-  { id: 'red',    name: 'Červená mřížka',  bg: `${HATCH},#b3202a` },
-  { id: 'green',  name: 'Zelené puntíky',  bg: 'radial-gradient(circle,rgba(255,255,255,.36) 0 1.7px,transparent 2.3px) 0 0/7px 7px,#22764a' },
-  { id: 'purple', name: 'Fialové kostky',  bg: 'linear-gradient(45deg,rgba(255,255,255,.17) 25%,transparent 25% 75%,rgba(255,255,255,.17) 75%) 0 0/10px 10px,linear-gradient(45deg,rgba(255,255,255,.17) 25%,transparent 25% 75%,rgba(255,255,255,.17) 75%) 5px 5px/10px 10px,#5b3a8e' },
-  { id: 'brown',  name: 'Hnědé proužky',   bg: 'repeating-linear-gradient(90deg,rgba(255,255,255,.18) 0 2px,transparent 2px 6px),#8a5a1f', edge: '#f6ecd8' },
-  { id: 'cat',    name: 'Kočička',   bg: `${svgURI(ART_BACKS.cat)} center/92% no-repeat,#e0762b` },
-  { id: 'sun',    name: 'Sluníčko',  bg: `${svgURI(ART_BACKS.sun)} center/92% no-repeat,#3d8fd8` },
-  { id: 'flower', name: 'Kytička',   bg: `${svgURI(ART_BACKS.flower)} center/92% no-repeat,#3c9a5a` },
-  { id: 'fish',   name: 'Rybička',   bg: `${svgURI(ART_BACKS.fish)} center/92% no-repeat,#1b8796` },
+  { id: 'blue',   nameKey: 'cards.back.blue',   bg: `${HATCH},#1f4fa8` },
+  { id: 'red',    nameKey: 'cards.back.red',    bg: `${HATCH},#b3202a` },
+  { id: 'green',  nameKey: 'cards.back.green',  bg: 'radial-gradient(circle,rgba(255,255,255,.36) 0 1.7px,transparent 2.3px) 0 0/7px 7px,#22764a' },
+  { id: 'purple', nameKey: 'cards.back.purple', bg: 'linear-gradient(45deg,rgba(255,255,255,.17) 25%,transparent 25% 75%,rgba(255,255,255,.17) 75%) 0 0/10px 10px,linear-gradient(45deg,rgba(255,255,255,.17) 25%,transparent 25% 75%,rgba(255,255,255,.17) 75%) 5px 5px/10px 10px,#5b3a8e' },
+  { id: 'brown',  nameKey: 'cards.back.brown',  bg: 'repeating-linear-gradient(90deg,rgba(255,255,255,.18) 0 2px,transparent 2px 6px),#8a5a1f', edge: '#f6ecd8' },
+  { id: 'cat',    nameKey: 'cards.back.cat',    bg: `${svgURI(ART_BACKS.cat)} center/92% no-repeat,#e0762b` },
+  { id: 'sun',    nameKey: 'cards.back.sun',    bg: `${svgURI(ART_BACKS.sun)} center/92% no-repeat,#3d8fd8` },
+  { id: 'flower', nameKey: 'cards.back.flower', bg: `${svgURI(ART_BACKS.flower)} center/92% no-repeat,#3c9a5a` },
+  { id: 'fish',   nameKey: 'cards.back.fish',   bg: `${svgURI(ART_BACKS.fish)} center/92% no-repeat,#1b8796` },
 ];
 // Picture backs from the shared images/ (only when images/sets.js is available); listed first
 const IMG = globalThis.IMAGE_SETS || {};
 const CASTLE = IMG.nachod && IMG.nachod.items[0], COAT = IMG.coats && IMG.coats.items[0];
 // author, license and a link to the source of a card-back picture (the images must name their authors)
 const escHTML = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const credit = (what, it) => `${what}: ${escHTML(it.author)}, ${escHTML(it.license)}, <a href="${escHTML(it.source)}" target="_blank" rel="noopener">zdroj</a>`;
-if (COAT) BACKS.unshift({ id: 'nachod-coat', name: 'Erb Náchoda', bg: `url("../../images/${COAT.file}") center/88% no-repeat,#7a1f2b` });
-if (CASTLE) BACKS.unshift({ id: 'nachod', name: 'Zámek Náchod', bg: `url("../../images/${CASTLE.file}") center/cover no-repeat,#4f7a4a` });
+const credit = (key, it) => I18N.th(key, { author: it.author, license: it.license, source: it.source });
+if (COAT) BACKS.unshift({ id: 'nachod-coat', nameKey: 'cards.back.nachod-coat', bg: `url("../../images/${COAT.file}") center/88% no-repeat,#7a1f2b` });
+if (CASTLE) BACKS.unshift({ id: 'nachod', nameKey: 'cards.back.nachod', bg: `url("../../images/${CASTLE.file}") center/cover no-repeat,#4f7a4a` });
+named(BACKS);
 addStyle('cards-backs').textContent = BACKS.map(b => `[data-back="${b.id}"]{--bk-bg:${b.bg};--bk-edge:${b.edge || '#fff'}}`).join('\n');
-const FACES = [
-  { id: 'white',    name: 'Bílé' },
-  { id: 'cream',    name: 'Krémové' },
-  { id: 'contrast', name: 'Kontrastní' },
-];
+const FACES = named([
+  { id: 'white',    nameKey: 'cards.face.white' },
+  { id: 'cream',    nameKey: 'cards.face.cream' },
+  { id: 'contrast', nameKey: 'cards.face.contrast' },
+]);
 
 /* ---------- Pictures in the middle of cards (custom drawings, viewBox 0 0 100 120) ---------- */
-const PICS = [
-  { id: 'classic', name: 'Klasické',  desc: 'Velký symbol barvy, u kluka, dámy a krále písmeno.' },
-  { id: 'stick',   name: 'Panďuláci', desc: 'Postavičky drží svou barvu. Kluk má kšiltovku, dáma korunku, král korunu a vousy.' },
-  { id: 'animals', name: 'Zvířátka',  desc: 'Esa jsou sovičky, kluci pejsci, dámy kočičky a králové lvi. Čísla jsou broučci.' },
-  { id: 'smile',   name: 'Smajlíci',  desc: 'Veselé obličeje. Kluk má kšiltovku, dáma mašli, král korunu.' },
-];
+const PICS = named([
+  { id: 'classic', nameKey: 'cards.pic.classic', descKey: 'cards.pic.classic.desc' },
+  { id: 'stick',   nameKey: 'cards.pic.stick',   descKey: 'cards.pic.stick.desc' },
+  { id: 'animals', nameKey: 'cards.pic.animals', descKey: 'cards.pic.animals.desc' },
+  { id: 'smile',   nameKey: 'cards.pic.smile',   descKey: 'cards.pic.smile.desc' },
+]);
 const U = (s, x, y, w, cls = '') => `<use href="#s${s}" x="${x}" y="${y}" width="${w}" height="${w}"${cls ? ` class="${cls}"` : ''}/>`;
 const FACE = [
   { e: [[38, 58], [62, 58]], m: 'M39 71Q50 81 61 71' },
@@ -176,21 +186,22 @@ function faceHTML(s, r, pic) {
 
 /* ---------- Settings: pictures, table, back and face (with sample cards drawn by the game) ---------- */
 // tile(act, on, inner, name) and minis(pic, withBack) come from the game; backMini = size of the back samples;
-// last = extra HTML at the end of the last section (e.g. the Vibrace switch).
+// last = extra HTML at the end of the last section (e.g. the Vibrace switch). The names given to tile() are HTML.
 function appearanceHTML(S, tile, minis, backMini, last = '') {
-  return `<section class="card"><h3>Obrázky na kartách</h3>
-      <div class="fnote" style="margin-top:0">Hodnota a barva v rohu karty zůstávají vždy stejné.</div>
-      <div class="tiles">${PICS.map(p => tile('pic:' + p.id, S.pic === p.id, `<span class="swatch">${minis(p.id)}</span>`, p.name)).join('')}</div>
+  const th = I18N.th;
+  return `<section class="card"><h3>${th('cards.pics')}</h3>
+      <div class="fnote" style="margin-top:0">${th('cards.pics.note')}</div>
+      <div class="tiles">${PICS.map(p => tile('pic:' + p.id, S.pic === p.id, `<span class="swatch">${minis(p.id)}</span>`, th(p.nameKey))).join('')}</div>
     </section>
-    <section class="card"><h3>Stůl</h3>
-      <div class="tiles">${TABLES.map(t => tile('table:' + t.id, S.table === t.id, `<span class="swatch" data-table="${t.id}">${minis(S.pic, true)}</span>`, t.name)).join('')}</div>
+    <section class="card"><h3>${th('cards.table')}</h3>
+      <div class="tiles">${TABLES.map(t => tile('table:' + t.id, S.table === t.id, `<span class="swatch" data-table="${t.id}">${minis(S.pic, true)}</span>`, th(t.nameKey))).join('')}</div>
     </section>
-    <section class="card"><h3>Rub karet</h3>
-      <div class="tiles">${BACKS.map(b => tile('back:' + b.id, S.back === b.id, `<span class="swatch" data-back="${b.id}"><span class="mini" style="${backMini}"><div class="cd"></div><div class="cd"></div></span></span>`, b.name)).join('')}</div>
-      ${CASTLE || COAT ? `<div class="fnote">${[CASTLE && credit('Fotka zámku Náchod', CASTLE), COAT && credit('Erb Náchoda', COAT)].filter(Boolean).join('<br>')}<br>Obrázky jsou z Wikimedia Commons.</div>` : ''}
+    <section class="card"><h3>${th('cards.back')}</h3>
+      <div class="tiles">${BACKS.map(b => tile('back:' + b.id, S.back === b.id, `<span class="swatch" data-back="${b.id}"><span class="mini" style="${backMini}"><div class="cd"></div><div class="cd"></div></span></span>`, th(b.nameKey))).join('')}</div>
+      ${CASTLE || COAT ? `<div class="fnote">${[CASTLE && credit('cards.credit.castle', CASTLE), COAT && credit('cards.credit.coat', COAT)].filter(Boolean).join('<br>')}<br>${th('cards.credit.commons')}</div>` : ''}
     </section>
-    <section class="card"><h3>Barva líce</h3>
-      <div class="tiles">${FACES.map(f => tile('face:' + f.id, S.face === f.id, `<span class="swatch" data-face="${f.id}">${minis(S.pic)}</span>`, f.name)).join('')}</div>
+    <section class="card"><h3>${th('cards.face')}</h3>
+      <div class="tiles">${FACES.map(f => tile('face:' + f.id, S.face === f.id, `<span class="swatch" data-face="${f.id}">${minis(S.pic)}</span>`, th(f.nameKey))).join('')}</div>
       ${last}
     </section>`;
 }
@@ -239,7 +250,7 @@ function statsKit(o) {
   // the hint's message, the first time after the note that the game no longer counts
   function hintToast(msg, ms, note) {
     if (!note) { o.toast(msg, ms); return; }
-    o.toast('S radou se tahle hra nepočítá do statistiky', NOTE_MS);
+    o.toast(I18N.t('cards.stats.hinted'), NOTE_MS);
     const h = o.hint();
     setTimeout(() => { const now = o.hint(); if (now && now === h) o.toast(msg, ms); }, NOTE_MS);
   }
@@ -248,8 +259,7 @@ function statsKit(o) {
 // Statistics saved before the rule above counted every started game: kept as they are, with a note.
 // stored = the saved stats object, played = how many games it counts in all
 const statsMixed = (stored, played) => stored && typeof stored === 'object' && typeof stored.mixed === 'boolean' ? stored.mixed : played > 0;
-const statsNote = mixed => `<p class="fnote">Počítají se jen dohrané hry (vyhrané, nebo když už nejde žádný tah) bez Poradit.${mixed
-  ? ' Starší čísla zahrnují i hry, které nebyly dohrané: dřív se počítala každá rozehraná hra.' : ''}</p>`;
+const statsNote = mixed => `<p class="fnote">${I18N.th('cards.stats.note', { mixed: !!mixed })}</p>`;
 
 globalThis.CARDS = { TABLES, BACKS, FACES, PICS, CASTLE, COAT, artSVG, faceHTML, appearanceHTML, normalizeLook, applyLook, statsKit, statsMixed, statsNote };
 })();

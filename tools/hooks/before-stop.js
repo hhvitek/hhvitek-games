@@ -6,6 +6,7 @@
 //     (.playwright-mcp/<id>-1start.png: the pictures stay there until the change is committed).
 // Otherwise the turn goes on once with the reason (exit code 2, text on stderr). The second time
 // (stop_hook_active) it lets the agent stop, so it is a reminder, never a loop.
+// When texts changed (games/ or i18n/), one line with the translation debt (tools/i18n.js) is added; it never blocks.
 'use strict';
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -47,11 +48,23 @@ process.stdin.on('end', () => {
   if (forPlayers.length && !changed.includes('CHANGELOG.md')) reasons.push(
     `Players will get changes (${forPlayers.slice(0, 4).join(', ')}${forPlayers.length > 4 ? ', …' : ''}) but CHANGELOG.md has no new line: ` +
     'add a short Czech line under "## Nevydáno", or say in your answer why it is not needed.');
-  if (!ids.size) {
-    if (!reasons.length) process.exit(0);
-    process.stderr.write(reasons.join('\n') + '\n');
-    process.exit(2);
+  // the shared texts (i18n/) or their checker changed: every game is checked once
+  if (changed.some(f => /^i18n\//.test(f) || f === 'tools/i18n.js')) {
+    const r = spawnSync(process.execPath, [CHECK], { cwd: ROOT, encoding: 'utf8' });
+    if (r.status !== 0) reasons.push('tools/check.js fails after the change of the texts (i18n/):', (r.stdout || '').split('\n').filter(l => /^(FAIL|\s+- )/.test(l)).join('\n'));
   }
+  // information only: what is left to translate (never a reason to go on)
+  let debt = '';
+  if (changed.some(f => /^(games|i18n)\//.test(f))) { try { debt = require('../i18n.js').debtLine(); } catch (e) {} }
+  const finish = () => {
+    if (!reasons.length) {
+      if (debt) process.stdout.write(JSON.stringify({ systemMessage: debt }) + '\n');
+      process.exit(0);
+    }
+    process.stderr.write(reasons.join('\n') + '\n' + (debt ? debt + ' (information only)\n' : ''));
+    process.exit(2);
+  };
+  if (!ids.size) finish();
 
   const failing = [];
   for (const id of ids) {
@@ -71,7 +84,5 @@ process.stdin.on('end', () => {
     `.playwright-mcp/sheet-<id>.png; keep the pictures until the change is committed (this check reads their time). ` +
     `Or say in your answer why it is not needed (e.g. a comment-only change).`);
 
-  if (!reasons.length) process.exit(0);
-  process.stderr.write(reasons.join('\n') + '\n');
-  process.exit(2);
+  finish();
 });

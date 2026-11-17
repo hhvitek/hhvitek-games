@@ -190,9 +190,9 @@ sea**. Angles inside a flight are **radians, positive = nose to the right** (clo
   `E.DECK` (`height` 2.5 m of the deck top above the water, `drift` period 90 s), `E.PLANETS`, `E.STARS` = [600, 850].
 
 ### Missions
-- `E.CHAPTERS` = `[{ id: 1..6, name, what }]` (Czech).
+- `E.CHAPTERS` = `[{ id: 1..6 }]`; the engine holds no text: the names and descriptions are messages `pristani.ch.<id>.name|what` and `pristani.m.<mission id>.name|what` in `games/pristani/texts.js`.
 - `E.MISSIONS` = 24 objects (ids `m01`…`m24`, in order; chapter `c` holds `m(4c−3)`…`m(4c)`):
-  `{ id, chapter, num (1–4), name, what (one Czech sentence of what is new), world: 'earth'|'moon'|'mars',
+  `{ id, chapter, num (1–4), desc (the daily challenge's kind code only), world: 'earth'|'moon'|'mars',
   g (m/s²), air (density factor, 0 = none), sound (m/s, 0 = none), twr (thrust/weight with a full tank; rises 30 % as it
   empties), fuel (seconds of full thrust), ignitions (null = unlimited, else 1–3), wind { steady, gusts, shear: null |
   { alt, high } } (m/s, + = to the right; above `shear.alt` the wind blends to `shear.high`), surface: 'land'|'sea'|
@@ -203,7 +203,7 @@ sea**. Angles inside a flight are **radians, positive = nose to the right** (clo
   fog: null | { base, top }, rain, lightning, haze 0–1, terrain: 'desert'|'sea'|'moon'|'crater'|'mars' }, seed, par }`.
   **Start a mission's flight with `mission.seed`** (fixed gusts and waves every attempt, so ghosts and bests are fair).
 - `E.dailyMission('YYYY-MM-DD')` → a mission like the above with `id: 'daily-YYYY-MM-DD'`, `chapter: 0`,
-  `name: 'Výzva dne'`, its own `seed` and `par`. It is checked by flying it with the autopilot (10–35 s), so it is
+  `desc: 'calm'|'moon'|'mars'|'sea'|'seaDrift'|'desert'` (the page turns it into a text), its own `seed` and `par`. It is checked by flying it with the autopilot (10–35 s), so it is
   always landable; it takes about 60 ms, so build it once per day, not every frame.
 
 ### Flight
@@ -243,8 +243,7 @@ sea**. Angles inside a flight are **radians, positive = nose to the right** (clo
 - Scene functions (same ones the physics uses): `E.windAt(f, t, h)`, `E.water(f, x, t)` (the sea surface; the
   renderer's spring water should follow it as its swell), `E.deckAt(f, t)`, `E.ground(f, x)` (land and the crater),
   `E.surfaceY(f, x, t)`, `E.density(f, h)`, `E.thrustAccel(f)`.
-- `E.outcomeText(f)` → `{ title, detail }` in Czech, e.g. "Moc rychle dolů" / "Dosednutí 7,4 m/s, nejvýš 4 m/s.",
-  "Do moře" / "Loď minuta o 40 m.", plus "Došlo palivo." when the tank was empty.
+- `E.outcomeInfo(f)` → `null` before the end, else `{ reason: 'landed'|'fastDown'|'fastSide'|'noLegs'|'tilt'|'edge'|'offPad'|'away', sea, fuelOut, legAlt, limits, vDown, vSide, tilt, footOff, dist, miss }` (raw numbers; the page turns it into the card's title and detail, `pristani.out.*`).
 
 ### Score
 - `E.score(f)` → `{ precision 0–500, fuel 0–250, upright 0–150, softness 0–100, total, stars }` (the maxima are

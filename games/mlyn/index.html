@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,15 +34,22 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="../../i18n/opponents.js"></script>
+<script src="../_opponents/opponents.js"></script>
+<script src="texts.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f4ebdf">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Mlýn">
-<title>Mlýn</title>
+<title data-t="game.mlyn.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23c8945a'/%3E%3Cpath d='M10 10H54V54H10ZM21 21H43V43H21ZM32 10V21M32 43V54M10 32H21M43 32H54' fill='none' stroke='%233a2412' stroke-width='3'/%3E%3Ccircle cx='10' cy='10' r='7' fill='%23fff6e4'/%3E%3Ccircle cx='32' cy='10' r='7' fill='%23fff6e4'/%3E%3Ccircle cx='54' cy='10' r='7' fill='%23fff6e4'/%3E%3Ccircle cx='43' cy='43' r='7' fill='%231e130b'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes: a solid colour; everything below reads these variables (rule) ----------
@@ -220,28 +227,28 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app">
   <header class="topbar">
     <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Mlýn</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.mlyn.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
   <div id="mid">
     <div id="foeRow" class="side"></div>
-    <main id="board"><svg id="svg" viewBox="-0.6 -0.6 7.2 7.2" role="group" aria-label="Hrací deska"></svg></main>
+    <main id="board"><svg id="svg" viewBox="-0.6 -0.6 7.2 7.2" role="group" data-t-aria="mlyn.aria.board"></svg></main>
     <div id="meRow" class="side"></div>
   </div>
   <footer class="tray">
     <div id="hint"></div>
     <div class="row">
-      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
-      <button id="btnHint" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>Poradit</button>
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span data-t="common.undo"></span></button>
+      <button id="btnHint" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg><span data-t="common.hint"></span></button>
     </div>
   </footer>
 </div>
@@ -250,7 +257,6 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 <div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
 <div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
 <div id="toast" class="hide"></div>
-<script src="../_opponents/opponents.js"></script>
 <script>
 /* ---------- Visible height ---------- */
 // The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
@@ -705,6 +711,8 @@ return { START, LINES, ADJ, parse, text, moves, play, result, mills, removable, 
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 const root = document.documentElement;
 const GUT = 12; // side margin in px, the same as --gut in the CSS
 const E = MlynEngine();
@@ -713,23 +721,25 @@ const E = MlynEngine();
 const ID = 'mlyn';
 const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
 const THEMES = [
-  { id: 'paper', name: 'Papír',    meta: '#f4ebdf' },
-  { id: 'wood',  name: 'Dřevo',    meta: '#4a2f1b' },
-  { id: 'slate', name: 'Břidlice', meta: '#263038' },
+  { id: 'paper', nameKey: 'common.theme.paper', meta: '#f4ebdf' },
+  { id: 'wood',  nameKey: 'mlyn.theme.wood',    meta: '#4a2f1b' },
+  { id: 'slate', nameKey: 'mlyn.theme.slate',   meta: '#263038' },
 ];
 // The computer opponent: its own AI here (the engine), the name, face and stars from games/_opponents/opponents.js
 const O = OPPONENTS;
 const LEVELS = [
-  { id: 'normal', title: 'Běžný hráč', desc: 'Hraje jako běžný člověk: skládá mlýny a hlídá ty tvoje, vidí tah dopředu, ale občas něco přehlédne. Dobrý soupeř na každý den.' },
-  { id: 'master', title: 'Mistr', desc: 'Hraje nejlépe, jak umí: propočítá mnoho tahů dopředu a nic nedaruje. Porazit ho je opravdu těžké.' },
+  { id: 'normal', titleKey: 'mlyn.level.normal', descKey: 'mlyn.level.normal.desc' },
+  { id: 'master', titleKey: 'mlyn.level.master', descKey: 'mlyn.level.master.desc' },
 ];
+const lvName = i => I18N.esc(O.levelName(LEVELS, i)); // "Mistr ★★" for HTML
+const foeP = () => ({ name: G.foe.name, fem: G.foe.fem }); // the opponent as message params (name, fem)
 const lvIdx = id => Math.max(0, LEVELS.findIndex(l => l.id === id));
 const SPEEDS = [
-  { id: 'slow', name: 'Pomalu', desc: 'Soupeř chvíli přemýšlí a kameny se posouvají pomalu, takže je dobře vidět, co udělal.', think: 900, slide: 450, pause: 700 },
-  { id: 'fast', name: 'Rychle', desc: 'Soupeř táhne hned.', think: 250, slide: 220, pause: 250 },
+  { id: 'slow', nameKey: 'opponents.speed.slow', descKey: 'mlyn.speed.slow.desc', think: 900, slide: 450, pause: 700 },
+  { id: 'fast', nameKey: 'opponents.speed.fast', descKey: 'mlyn.speed.fast.desc', think: 250, slide: 220, pause: 250 },
 ];
 const DEFAULTS = { level: 'normal', jump: true, theme: 'paper', show: true, speed: 'slow', vibrate: true };
-const COLOR = ['bílými', 'černými'], CH = ['w', 'b'];
+const CH = ['w', 'b'];
 const nm = () => G.foe.name;
 // where the points are drawn (a 7 × 7 grid) and their names (columns a–g, rows 1–7 from the bottom)
 const XY = [[0, 0], [3, 0], [6, 0], [1, 1], [3, 1], [5, 1], [2, 2], [3, 2], [4, 2], [0, 3], [1, 3], [2, 3], [4, 3], [5, 3], [6, 3], [2, 4], [3, 4], [4, 4], [1, 5], [3, 5], [5, 5], [0, 6], [3, 6], [6, 6]];
@@ -933,7 +943,7 @@ let view = null;      // what the board shows while the opponent's move is shown
 let fx = null;        // the animation of one render right after a move: { m, pre, side, slide, fade }
 let thinking = false, anim = false, hintBusy = false, cpuTimer = 0, animTimer = 0;
 const busy = () => thinking || anim;
-const busyMsg = () => thinking ? `Chvilku, ${nm()} přemýšlí` : `Chvilku, ${nm()} táhne`;
+const busyMsg = () => t(thinking ? 'mlyn.toast.waitThinking' : 'mlyn.toast.waitMoving', { name: nm() });
 // the opponent's last move in the line (for its marks after Zpět), or null
 function foeLast() {
   const i = G.line.length - 2;
@@ -993,7 +1003,7 @@ function cpuTurn() {
         view = null; fx = { m, pre, side, slide: 0, fade: true, still: true };
         render(); fx = null;
         buzz(20);
-        if (G.status === 'playing' && nothingOpen()) toast(`${nm()} ${O.past(G.foe, 'složil', 'složila')} mlýn a ${O.past(G.foe, 'vzal', 'vzala')} ti kámen`);
+        if (G.status === 'playing' && nothingOpen()) toast(t('mlyn.toast.foeMill', foeP()));
         animTimer = setTimeout(done, 450);
       }, sp.slide + sp.pause);
     }, wait);
@@ -1084,8 +1094,8 @@ function renderBoard() {
   // the places to tap, over everything
   const hintTap = hint < 0 ? -1 : pend ? (removable.has(hRm) ? hRm : -1) : hTo;
   for (let i = 0; i < 24; i++) {
-    const what = t[i] === '.' ? (dots.has(i) ? ', sem můžeš táhnout' : '') : `, ${t[i] === CH[me] ? 'tvůj' : 'soupeřův'} kámen${removable.has(i) ? ', můžeš ho vzít' : ''}`;
-    s += `<circle class="hit${i === hintTap ? ' hint' : ''}" data-p="${i}" cx="${XY[i][0]}" cy="${XY[i][1]}" r=".5" role="button" aria-label="${ptName(i)}${what}"/>`;
+    const what = t[i] === '.' ? (dots.has(i) ? 'canMove' : '') : removable.has(i) ? 'foeTake' : t[i] === CH[me] ? 'mine' : 'foe';
+    s += `<circle class="hit${i === hintTap ? ' hint' : ''}" data-p="${i}" cx="${XY[i][0]}" cy="${XY[i][1]}" r=".5" role="button" aria-label="${th('mlyn.point', { pt: ptName(i), what })}"/>`;
   }
   $('#svg').innerHTML = s;
 }
@@ -1099,9 +1109,9 @@ function foeMood() {
 function countHTML(side, you) {
   const t = shownText(), [hand, board] = stones(t, side);
   const fly = G.jump && !hand && board === 3;
-  const l1 = hand ? `<b>${hand}</b> v ruce` : `<b>${board}</b> na desce`;
-  const l2 = hand ? `<b>${board}</b> na desce` : fly ? (you ? 'skáčeš' : 'skáče') : '';
-  const aria = `${you ? 'Máš' : 'Soupeř má'} ${plural(hand, 'kámen', 'kameny', 'kamenů')} v ruce a ${board} na desce`;
+  const l1 = hand ? th('mlyn.count.hand', { n: hand }) : th('mlyn.count.board', { n: board });
+  const l2 = hand ? th('mlyn.count.board', { n: board }) : fly ? th(you ? 'mlyn.count.flyYou' : 'mlyn.count.flyFoe') : '';
+  const aria = th(you ? 'mlyn.left.you' : 'mlyn.left.foe', { hand, board });
   return `<span class="cnt" aria-label="${aria}"><i class="mini c${side}"></i><span>${l1}${l2 ? '<br>' + l2 : ''}</span></span>`;
 }
 function renderSides() {
@@ -1112,24 +1122,24 @@ function renderSides() {
     ${countHTML(cpu, false)}`; // its turn shows in the frame, its face and the line under the board (no room for a tag)
   const meTurn = G.status === 'playing' && stm() === G.you && !anim;
   $('#meRow').classList.toggle('on', meTurn);
-  $('#meRow').innerHTML = `<div class="left"><span class="me">Ty</span>${countHTML(G.you, true)}</div>
-    ${meTurn ? '<span class="tag">Na tahu</span>' : `<span class="tag off">hraješ ${COLOR[G.you]}</span>`}`;
+  $('#meRow').innerHTML = `<div class="left"><span class="me">${th('mlyn.you')}</span>${countHTML(G.you, true)}</div>
+    ${meTurn ? `<span class="tag">${th('mlyn.tag.toMove')}</span>` : `<span class="tag off">${th('mlyn.tag.color', { color: G.you })}</span>`}`;
 }
 function renderHint() {
-  let t = '';
+  let k, par;
   const [hand, board] = stones(cur(), G.you);
-  if (G.status === 'won') t = 'Výhra! Ťukni na Nová hra.';
-  else if (G.status === 'lost') t = `${O.past(G.foe, 'Vyhrál', 'Vyhrála')} ${nm()}. Zpět vrátí tah.`;
-  else if (G.status === 'draw') t = 'Remíza. Ťukni na Nová hra.';
-  else if (thinking) t = `${nm()} přemýšlí…`;
-  else if (anim) t = `${nm()} táhne`;
-  else if (pend) t = '<b>Mlýn!</b> Vyber kámen, který vezmeš';
-  else if (hintBusy) t = 'Hledám dobrý tah…';
-  else if (hintM >= 0) t = 'Rada: modře označený tah';
-  else if (hand) t = 'Polož kámen na volný bod';
-  else if (G.jump && board === 3) t = sel >= 0 ? 'Skoč na kterýkoli volný bod' : 'Vyber kámen, kterým skočíš';
-  else t = sel >= 0 ? 'Ťukni, kam kámen posuneš' : 'Vyber kámen, kterým táhneš';
-  $('#hint').innerHTML = t;
+  if (G.status === 'won') k = 'mlyn.hint.won';
+  else if (G.status === 'lost') { k = 'mlyn.hint.lost'; par = foeP(); }
+  else if (G.status === 'draw') k = 'mlyn.hint.draw';
+  else if (thinking) { k = 'mlyn.hint.thinking'; par = foeP(); }
+  else if (anim) { k = 'mlyn.hint.moving'; par = foeP(); }
+  else if (pend) k = 'mlyn.hint.mill';
+  else if (hintBusy) k = 'mlyn.hint.searching';
+  else if (hintM >= 0) k = 'mlyn.hint.advice';
+  else if (hand) k = 'mlyn.hint.place';
+  else if (G.jump && board === 3) k = sel >= 0 ? 'mlyn.hint.jumpTo' : 'mlyn.hint.jumpPick';
+  else k = sel >= 0 ? 'mlyn.hint.moveTo' : 'mlyn.hint.movePick';
+  $('#hint').innerHTML = th(k, par);
 }
 // rule: the board size comes from the room that is left, so it fits without scrolling
 function layout() {
@@ -1147,34 +1157,34 @@ $('#svg').addEventListener('click', e => {
   tapPoint(+h.dataset.p);
 });
 function tapPoint(i) {
-  if (G.status !== 'playing') { toast(G.status === 'won' ? 'Hra skončila. Ťukni na Nová hra.' : 'Hra skončila. Zpět vrátí tvůj tah, nebo ťukni na Nová hra.'); return; }
+  if (G.status !== 'playing') { toast(t(G.status === 'won' ? 'mlyn.toast.overWon' : 'mlyn.toast.overLost')); return; }
   if (busy()) { toast(busyMsg()); return; }
   if (!yourTurn()) return;
-  const t = cur(), me = CH[G.you], foe = CH[1 - G.you];
+  const tx = cur(), me = CH[G.you], foe = CH[1 - G.you];
   // your mill: the stone to take
   if (pend) {
     const m = pend.list.find(x => E.mRm(x) === i);
     if (m !== undefined) { playYours(m, true); return; }
-    toast(shownText()[i] === foe ? 'Kámen z mlýna vzít nejde, soupeř má na desce i kameny mimo mlýny' : 'Vezmi kámen s oranžovým kroužkem');
+    toast(t(shownText()[i] === foe ? 'mlyn.toast.millProtected' : 'mlyn.toast.takeOrange'));
     return;
   }
-  const list = E.moves(t, G.jump), [hand, board] = stones(t, G.you);
+  const list = E.moves(tx, G.jump), [hand, board] = stones(tx, G.you);
   // the advice: a tap on its point plays it, a tap on its stone keeps that stone chosen (another stone chosen by the
   // player goes its own way: the advice never moves a stone the player did not choose)
   if (hintM >= 0 && list.includes(hintM) && (sel < 0 || sel === E.mFrom(hintM))) {
-    if (i === E.mTo(hintM) && t[i] === '.') { tryMove(list.filter(m => E.mFrom(m) === E.mFrom(hintM) && E.mTo(m) === i)); return; }
+    if (i === E.mTo(hintM) && tx[i] === '.') { tryMove(list.filter(m => E.mFrom(m) === E.mFrom(hintM) && E.mTo(m) === i)); return; }
     if (i === E.mFrom(hintM)) { sel = i; render(); return; }
   }
   if (hand) {
-    if (t[i] !== '.') { toast(t[i] === me ? 'Tady už stojí tvůj kámen' : 'Tady stojí soupeřův kámen'); return; }
+    if (tx[i] !== '.') { toast(t(tx[i] === me ? 'mlyn.toast.mineHere' : 'mlyn.toast.foeHere')); return; }
     tryMove(list.filter(m => E.mTo(m) === i));
     return;
   }
-  if (t[i] === me) {
-    if (!list.some(m => E.mFrom(m) === i)) { toast('Tento kámen nemá kam táhnout'); return; }
+  if (tx[i] === me) {
+    if (!list.some(m => E.mFrom(m) === i)) { toast(t('mlyn.toast.cannotMove')); return; }
     sel = sel === i ? -1 : i; buzz(6); render(); return;
   }
-  if (t[i] === foe) { toast('To je soupeřův kámen'); return; }
+  if (tx[i] === foe) { toast(t('mlyn.toast.foeStone')); return; }
   // a free point: the chosen stone goes there; with no stone chosen, the only stone that can go there
   if (sel >= 0) {
     const l = list.filter(m => E.mFrom(m) === sel && E.mTo(m) === i);
@@ -1183,8 +1193,8 @@ function tapPoint(i) {
   const froms = new Set(list.filter(m => E.mTo(m) === i).map(E.mFrom));
   if (sel < 0 && froms.size === 1) { tryMove(list.filter(m => E.mTo(m) === i)); return; } // never another stone than the chosen one
   const fly = G.jump && board === 3;
-  if (sel < 0) toast(froms.size ? `Nejdřív ťukni na kámen, kterým ${fly ? 'skočíš' : 'táhneš'}` : 'Sem žádný tvůj kámen nedojde');
-  else toast(fly ? 'Sem nejde' : 'Sem nejde: kámen táhne po čáře na sousední volný bod');
+  if (sel < 0) toast(froms.size ? t('mlyn.toast.pickFirst', { fly }) : t('mlyn.toast.noneReaches'));
+  else toast(t(fly ? 'mlyn.toast.notHereJump' : 'mlyn.toast.notHere'));
 }
 // l: the legal moves with the same start and end (several when the move closes a mill: one for each stone to take)
 function tryMove(l) {
@@ -1194,7 +1204,7 @@ function tryMove(l) {
   if (!(hintM >= 0 && E.mFrom(hintM) === from && E.mTo(hintM) === to)) hintM = -1;
   pend = { from, to, list: l }; sel = -1;
   buzz(20); render();
-  toast('Mlýn! Vezmi soupeři jeden kámen');
+  toast(t('mlyn.toast.mill'));
 }
 // Undo: back to before your last move, with the opponent's reply (also after the end of the game);
 // a mill waiting for the stone to take is only cancelled
@@ -1204,9 +1214,9 @@ function undoTarget() {
 }
 $('#btnUndo').addEventListener('click', () => {
   if (anim) { toast(busyMsg()); return; }
-  if (pend) { pend = null; hintM = -1; buzz(); render(); toast('Tah je vrácený, kámen stojí, kde stál'); return; }
+  if (pend) { pend = null; hintM = -1; buzz(); render(); toast(t('mlyn.toast.millUndone')); return; }
   const i = undoTarget();
-  if (i < 0) { toast('Zatím není co vrátit'); return; }
+  if (i < 0) { toast(t('common.nothingToUndo')); return; }
   stopThinking();
   G.line.length = i + 1;
   G.last = foeLast(); hintM = -1; sel = -1;
@@ -1215,9 +1225,9 @@ $('#btnUndo').addEventListener('click', () => {
   buzz(); save(); render();
 });
 $('#btnHint').addEventListener('click', () => {
-  if (G.status !== 'playing') { toast('Hra skončila'); return; }
+  if (G.status !== 'playing') { toast(t('mlyn.toast.overShort')); return; }
   if (busy()) { toast(busyMsg()); return; }
-  if (hintBusy) { toast('Chvilku, hledám dobrý tah'); return; }
+  if (hintBusy) { toast(t('mlyn.toast.waitHint')); return; }
   const list = pend ? pend.list : E.moves(cur(), G.jump);
   // returns true for the first advice in a game that is not counted yet (the toast says it)
   const show = m => {
@@ -1228,83 +1238,76 @@ $('#btnHint').addEventListener('click', () => {
     save(); render();
     return first;
   };
-  if (list.length === 1) { const first = show(list[0]); toast(first ? 'Jiný tah tu není. S radou se hra nepočítá do statistik.' : 'Jiný tah tu není', first ? 3600 : 2600); return; }
+  if (list.length === 1) { const first = show(list[0]); toast(t(first ? 'mlyn.toast.onlyMoveHinted' : 'mlyn.toast.onlyMove'), first ? 3600 : 2600); return; }
   const g0 = G, n = G.line.length, p0 = pend;
   hintBusy = true; render();
   ask(engineInput('hint', pend ? pend.list : null), r => {
     hintBusy = false;
     if (G !== g0 || G.line.length !== n || pend !== p0) { render(); return; }
     if (!list.includes(r.m)) { render(); return; }
-    if (show(r.m)) toast('S radou se tahle hra nepočítá do statistik', 3200);
+    if (show(r.m)) toast(t('mlyn.toast.hinted'), 3200);
   });
 });
 // rule: a new game in the middle of one asks first
 $('#btnNew').addEventListener('click', () => {
   if (hasProgress()) {
-    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('common.confirmNew.text')}</p>`, [{ text: th('common.confirmNew.yes'), fn: () => newGame() }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
   } else newGame();
 });
 // why the game ended, in words
 function whyText() {
   const won = G.status === 'won';
-  switch (G.why) {
-    case 'few': return won ? `${nm()} ${O.past(G.foe, 'měl', 'měla')} už jen dva kameny.` : 'Zbyly ti už jen dva kameny.';
-    case 'blocked': return won ? `${nm()} nemůže táhnout: všechny ${O.past(G.foe, 'jeho', 'její')} kameny jsou zablokované.` : 'Nemůžeš táhnout: všechny tvé kameny jsou zablokované.';
-    case 'rep': return 'Stejná pozice se opakovala potřetí.';
-    case 'quiet': return 'Každý z vás táhl 25krát a nikdo nesložil mlýn.';
-    case 'three': return 'Oba máte tři kameny a během 10 tahů každého z vás nikdo nesložil mlýn.';
-  }
-  return '';
+  const k = { few: won ? 'mlyn.why.fewWon' : 'mlyn.why.fewLost', blocked: won ? 'mlyn.why.blockedWon' : 'mlyn.why.blockedLost', rep: 'mlyn.why.rep', quiet: 'mlyn.why.quiet', three: 'mlyn.why.three' }[G.why];
+  return k ? th(k, foeP()) : '';
 }
 // rule: an end dialog only for the game that ended, never over Settings or Help (whenFree)
 function endDialog() {
   const g0 = G, line = G.line.length;
   whenFree(g0, 500, () => {
     if (G.line.length !== line || G.status === 'playing') return;
-    const head = G.status === 'won' ? 'Výhra! 🎉' : G.status === 'lost' ? `${O.past(G.foe, 'Vyhrál', 'Vyhrála')} ${nm()}` : 'Remíza';
-    const btns = [{ text: 'Nová hra', fn: () => newGame() }];
-    if (G.status !== 'won') btns.push({ text: 'Vrátit tah', cls: 'alt', fn: () => $('#btnUndo').click() });
-    btns.push({ text: 'Prohlédnout', cls: 'alt' });
-    showModal(`<h2>${head}</h2><p>${whyText()}</p>${G.hinted && !G.inStats ? '<p>Hra s radou se do statistik nepočítá.</p>' : ''}`, btns);
+    const head = th(G.status === 'won' ? 'mlyn.end.won' : G.status === 'lost' ? 'mlyn.end.lost' : 'mlyn.end.draw', foeP());
+    const btns = [{ text: th('common.newGame'), fn: () => newGame() }];
+    if (G.status !== 'won') btns.push({ text: th('common.undoMove'), cls: 'alt', fn: () => $('#btnUndo').click() });
+    btns.push({ text: th('common.inspect'), cls: 'alt' });
+    showModal(`<h2>${head}</h2><p>${whyText()}</p>${G.hinted && !G.inStats ? `<p>${th('mlyn.end.hinted')}</p>` : ''}`, btns);
   });
 }
 
 /* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
 const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
-const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
 const swatch = id => `<span class="swatch" data-theme="${id}"><svg viewBox="-0.6 -0.6 7.2 7.2" aria-hidden="true"><rect x="-.55" y="-.55" width="7.1" height="7.1" rx=".4" fill="var(--board)"/><path d="M0 0H6V6H0ZM1.5 1.5H4.5V4.5H1.5ZM3 0V1.5M3 4.5V6M0 3H1.5M4.5 3H6" fill="none" stroke="var(--grid)" stroke-width=".25"/><circle cx="0" cy="0" r=".9" fill="var(--s0)" stroke="var(--s0-rim)" stroke-width=".15"/><circle cx="3" cy="0" r=".9" fill="var(--s0)" stroke="var(--s0-rim)" stroke-width=".15"/><circle cx="4.5" cy="4.5" r=".9" fill="var(--s1)" stroke="var(--s1-rim)" stroke-width=".15"/><circle cx="6" cy="6" r=".9" fill="var(--s1)" stroke="var(--s1-rim)" stroke-width=".15"/></svg></span>`;
-const plural = (n, a, b, c) => `${n} ${n === 1 ? a : n >= 2 && n <= 4 ? b : c}`;
 function renderSettings() {
   const lvChanged = G && S.level !== G.level, jumpChanged = G && S.jump !== G.jump;
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Mlýn<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Soupeř</h3>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.mlyn.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('opponents.heading')}</h3>
       <div class="field">
-        ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, O.levelName(LEVELS, i), l.desc)).join('')}
-        <div class="fnote">Soupeř má každou hru jiné jméno. Kdo začíná, se střídá: kdo začíná, hraje bílými.</div>
-        ${lvChanged && !isFresh() ? `<div class="notice">Nový soupeř začne hrát od příští hry.${hasProgress() ? ' Rozehraná hra zůstává.' : ''}</div>` : ''}
+        ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, lvName(i), th(l.descKey))).join('')}
+        <div class="fnote">${th('mlyn.foeNote')}</div>
+        ${lvChanged && !isFresh() ? `<div class="notice">${th('mlyn.notice.nextGame', { progress: hasProgress() })}</div>` : ''}
       </div>
-      <div class="field"><div class="flabel">Rychlost soupeře</div>
-        ${SPEEDS.map(s => opt('speed:' + s.id, S.speed === s.id, s.name, s.desc)).join('')}
+      <div class="field"><div class="flabel">${th('opponents.speed')}</div>
+        ${SPEEDS.map(s => opt('speed:' + s.id, S.speed === s.id, th(s.nameKey), th(s.descKey))).join('')}
       </div>
     </section>
-    <section class="card"><h3>Pravidla</h3>
-      ${toggleRow('jump', 'Skákání se třemi kameny', 'Komu zbudou jen tři kameny, smí skákat na kterýkoli volný bod. Bez skákání táhne dál jen po čarách.')}
-      ${jumpChanged && !isFresh() ? `<div class="notice">Změna pravidel platí od příští hry.${hasProgress() ? ' Rozehraná hra zůstává.' : ''}</div>` : ''}
+    <section class="card"><h3>${th('mlyn.rules')}</h3>
+      ${toggleRow('jump', th('mlyn.jump'), th('mlyn.jump.note'))}
+      ${jumpChanged && !isFresh() ? `<div class="notice">${th('mlyn.notice.nextRules', { progress: hasProgress() })}</div>` : ''}
     </section>
-    <section class="card"><h3>Pomoc</h3>
-      ${toggleRow('show', 'Ukazovat možné tahy', 'Čárkované kroužky ukážou kameny, které mohou táhnout, a tečky, kam může vybraný kámen.')}
+    <section class="card"><h3>${th('common.assist')}</h3>
+      ${toggleRow('show', th('mlyn.show'), th('mlyn.show.note'))}
     </section>
-    <section class="card"><h3>Vzhled</h3>
-      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}">${swatch(t.id)}${t.name}</button>`).join('')}</div>
-      ${toggleRow('vibrate', 'Vibrace')}
+    <section class="card"><h3>${th('common.look')}</h3>
+      <div class="tiles">${THEMES.map(m => `<button class="tile" data-act="theme:${m.id}" aria-pressed="${S.theme === m.id}">${swatch(m.id)}${th(m.nameKey)}</button>`).join('')}</div>
+      ${toggleRow('vibrate', th('common.vibrate'))}
     </section>
-    <section class="card"><h3>Statistika</h3>
-      ${LEVELS.map((l, i) => [l.id, l.id + NOJUMP].map(k => { const st = ST[k]; if (k !== l.id && !st.played) return ''; return `<p class="stats"><b>${O.levelName(LEVELS, i)}${k === l.id ? '' : ', bez skákání'}</b><br>Odehráno ${plural(st.played, 'hra', 'hry', 'her')}, výher ${st.won}, remíz ${st.draw}</p>`; }).join('')).join('')}
-      <p class="fnote">Počítají se jen dohrané hry bez Poradit.</p>
+    <section class="card"><h3>${th('common.stats')}</h3>
+      ${LEVELS.map((l, i) => [l.id, l.id + NOJUMP].map(k => { const st = ST[k]; if (k !== l.id && !st.played) return ''; return `<p class="stats">${th(k === l.id ? 'mlyn.stats' : 'mlyn.stats.noJump', { level: O.levelName(LEVELS, i), played: st.played, won: st.won, draw: st.draw })}</p>`; }).join('')).join('')}
+      <p class="fnote">${th('common.statsNote')}</p>
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1314,7 +1317,7 @@ $('#settingsIn').addEventListener('click', e => {
   else if (act === 'speed') S.speed = arg;
   else if (act === 'theme') S.theme = arg;
   else if (act === 'toggle') S[arg] = !S[arg];
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('common.settingsReset')); }
   normalize(S); buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
 });
@@ -1323,8 +1326,8 @@ function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hi
 function closeSettings() {
   $('#screenSettings').hidden = true;
   const lv = S.level !== G.level, ju = S.jump !== G.jump;
-  if ((lv || ju) && isFresh()) newGame(lv ? `Hraješ proti soupeři: ${O.levelName(LEVELS, lvIdx(S.level))}` : S.jump ? 'Hraje se se skákáním' : 'Hraje se bez skákání'); // keeps the starter, new seed
-  else if (lv || ju) { render(); toast(`${lv ? 'Nový soupeř' : 'Změna pravidel'} platí od příští hry${hasProgress() ? '. Rozehraná hra zůstává.' : ''}`); }
+  if ((lv || ju) && isFresh()) newGame(lv ? t('opponents.playAgainst', { level: O.levelName(LEVELS, lvIdx(S.level)) }) : t(S.jump ? 'mlyn.toast.jumpOn' : 'mlyn.toast.jumpOff')); // keeps the starter, new seed
+  else if (lv || ju) { render(); toast(t(lv ? 'mlyn.toast.nextGame' : 'mlyn.toast.nextRules', { progress: hasProgress() })); }
   else render();
 }
 $('#btnSettings').addEventListener('click', openSettings);
@@ -1332,35 +1335,21 @@ $('#btnSettings').addEventListener('click', openSettings);
 /* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
 function renderHelp() {
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Mlýn<small>Jak hrát</small></h2></div>
-    <section class="card help"><h3>Pravidla</h3><ul>
-      <li>Každý hráč má <b>9 kamenů</b>. Začínají bílé; kdo začíná, se každou hru střídá.</li>
-      <li><b>Pokládání:</b> nejdřív hráči střídavě pokládají kameny na volné body (kde se kříží nebo končí čáry).</li>
-      <li><b>Posouvání:</b> když jsou všechny kameny položené, táhne se kamenem po čáře na sousední volný bod.</li>
-      <li><b>Mlýn</b> jsou tři tvoje kameny v jedné řadě na čáře. Kdo mlýn složí (položením i posunutím), vezme soupeři jeden kámen. Kámen z mlýna vzít nejde, pokud má soupeř na desce i kameny mimo mlýny. Dva mlýny najednou berou také jen jeden kámen.</li>
-      <li>Mlýn můžeš otevřít (odtáhnout z něj kámen) a pak znovu zavřít: zase bereš.</li>
-      <li><b>Skákání:</b> komu zbudou jen tři kameny, smí skočit na kterýkoli volný bod. Dá se vypnout v Nastavení.</li>
-      <li><b>Prohrává</b>, komu zbudou jen dva kameny, nebo kdo nemůže táhnout (všechny jeho kameny jsou zablokované).</li>
-      <li><b>Remíza</b> je, když se stejná pozice opakuje potřetí, když každý táhne 25krát a nikdo nesloží mlýn ani nepoloží kámen, nebo když mají oba tři kameny a 10 tahů každého nikdo nesloží mlýn.</li>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.mlyn.name')}<small>${th('common.help')}</small></h2></div>
+    <section class="card help"><h3>${th('mlyn.rules')}</h3><ul>
+      ${[1, 2, 3, 4, 5, 6, 7, 8].map(i => `<li>${th(`mlyn.help.rule.${i}`)}</li>`).join('')}
     </ul></section>
-    <section class="card help"><h3>Rady</h3><ul>
-      <li>Při pokládání jsou nejcennější body uprostřed stran prostředního čtverce: mají čtyři sousedy, rohy jen dva.</li>
-      <li>Hlídej si soupeřovy dva kameny v řadě s volným třetím bodem a zavčas ten bod obsaď.</li>
-      <li>Nejsilnější je kámen, který může tah co tah přecházet mezi dvěma mlýny: každým tahem jeden zavře a bere.</li>
+    <section class="card help"><h3>${th('mlyn.help.tips')}</h3><ul>
+      ${[1, 2, 3].map(i => `<li>${th(`mlyn.help.tip.${i}`)}</li>`).join('')}
     </ul></section>
-    <section class="card help"><h3>Ovládání</h3><ol>
-      <li>Při pokládání ťukni na volný bod.</li>
-      <li>Při posouvání ťukni na svůj kámen a pak na bod, kam ho posuneš. Když tam může jen jeden tvůj kámen, stačí ťuknout rovnou na bod. Čárkované kroužky a tečky ukazují, co jde (dají se vypnout v Nastavení).</li>
-      <li>Když složíš mlýn, soupeřovy kameny, které smíš vzít, mají oranžový kroužek. Ťukni na jeden z nich.</li>
-      <li>Soupeřův poslední kámen má červenou tečku, prázdný kroužek ukazuje, odkud přišel, a čárkovaný kroužek, odkud ti vzal kámen.</li>
-      <li><b>Zpět</b> vrátí tvůj poslední tah i soupeřovu odpověď. Dá se ťukat opakovaně, i po konci hry.</li>
-      <li><b>Poradit</b> ukáže modře dobrý tah. Ťukni na modrý bod a tah se zahraje. Hra, ve které použiješ Poradit, se do statistik nepočítá; počítají se jen dohrané hry.</li>
+    <section class="card help"><h3>${th('mlyn.help.controls')}</h3><ol>
+      ${[1, 2, 3, 4, 5, 6].map(i => `<li>${th(`mlyn.help.control.${i}`)}</li>`).join('')}
     </ol></section>
-    <section class="card help"><h3>Soupeř</h3>
-      <p>${LEVELS.map((l, i) => `<b>${O.levelName(LEVELS, i)}</b>: ${l.desc}`).join('<br><br>')}</p>
-      <p style="margin-top:12px">Soupeře vybereš v Nastavení. Každou hru má jiné jméno.</p>
+    <section class="card help"><h3>${th('opponents.heading')}</h3>
+      <p>${LEVELS.map((l, i) => `<b>${lvName(i)}</b>: ${th(l.descKey)}`).join('<br><br>')}</p>
+      <p style="margin-top:12px">${th('mlyn.help.foe')}</p>
     </section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -1392,6 +1381,8 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+// the static texts (data-t*), <title> and <html lang> in the player's language
+I18N.apply();
 // rule: ask for persistent storage so the browser does not delete the saved game by itself
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 const saved = load();

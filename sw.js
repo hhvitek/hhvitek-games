@@ -21,8 +21,10 @@ const OLD_CACHE = /^games-v\d+$/; // our caches before the prefix
 // App files: all of them must arrive before a new version takes over (shared scripts first, then pages and icons)
 const APP_FILES = [
   'version.js', 'games/registry.js', 'games/_cards/cards.js', 'games/_cards/marias.js', 'games/_opponents/opponents.js', 'images/sets.js', // version, shared card look, mariáš cards, opponents, image list
+  'i18n/languages.js', 'i18n/i18n.js', 'i18n/common.js', 'i18n/games.js', 'i18n/flags.js', 'i18n/launcher.js', 'i18n/opponents.js', 'i18n/cards.js', // the texts runtime, the shared texts, the flags, the launcher's texts, the opponents' and the card games' texts
   './', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png',
-  ...(self.GAMES || []).flatMap(g => [`games/${g.id}/index.html`, `games/${g.id}/icon.svg`]),
+  // a game with texts: true in the registry keeps its texts in games/<id>/texts.js
+  ...(self.GAMES || []).flatMap(g => [`games/${g.id}/index.html`, `games/${g.id}/icon.svg`, ...(g.texts ? [`games/${g.id}/texts.js`] : [])]),
 ];
 const PHOTOS = Object.values(self.IMAGE_SETS || {}).flatMap(set => set.items.map(it => `images/${it.file}`));
 // Games are opened from the launcher with ?menu: every file is cached once, under its address without the query

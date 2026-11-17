@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,15 +34,22 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="../../i18n/opponents.js"></script>
+<script src="../_opponents/opponents.js"></script>
+<script src="texts.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f4ebdf">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Piškvorky">
-<title>Piškvorky</title>
+<title data-t="game.piskvorky.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f4ebdf'/%3E%3Cpath d='M14 14l16 16M30 14L14 30' stroke='%232b1a0e' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='42' cy='42' r='9' fill='none' stroke='%23b5482a' stroke-width='6'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
@@ -194,29 +201,29 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app">
   <header class="topbar">
     <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Piškvorky</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.piskvorky.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
   <div id="mid">
     <div id="foeRow" class="side"></div>
-    <main id="board"><div id="view"><svg id="svg" aria-label="Hrací plocha"></svg></div></main>
+    <main id="board"><div id="view"><svg id="svg" data-t-aria="piskvorky.aria.board"></svg></div></main>
     <div id="meRow" class="side"></div>
   </div>
   <footer class="tray">
     <div id="hint"></div>
     <div class="row">
-      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
-      <button id="btnHint" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>Poradit</button>
-      <button id="btnZoom" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/><path id="zoomPlus" d="M10.5 7.5v6M7.5 10.5h6"/></svg><span id="zoomLabel">Zvětšit</span></button>
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span data-t="common.undo"></span></button>
+      <button id="btnHint" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg><span data-t="common.hint"></span></button>
+      <button id="btnZoom" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/><path id="zoomPlus" d="M10.5 7.5v6M7.5 10.5h6"/></svg><span id="zoomLabel" data-t="piskvorky.zoom.in"></span></button>
     </div>
   </footer>
 </div>
@@ -225,7 +232,6 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 <div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
 <div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
 <div id="toast" class="hide"></div>
-<script src="../_opponents/opponents.js"></script>
 <script>
 /* ---------- Visible height ---------- */
 // The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
@@ -730,6 +736,8 @@ return { think, winLine, validMoves,
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 const root = document.documentElement;
 const GUT = 12; // side margin in px, the same as --gut in the CSS
 const E = PiskvorkyEngine();
@@ -738,28 +746,29 @@ const E = PiskvorkyEngine();
 const ID = 'piskvorky';
 const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
 const THEMES = [
-  { id: 'paper',    name: 'Papír',  meta: '#f4ebdf' },
-  { id: 'notebook', name: 'Sešit',  meta: '#eef2f8' },
-  { id: 'board',    name: 'Tabule', meta: '#23402a' },
+  { id: 'paper',    nameKey: 'common.theme.paper',       meta: '#f4ebdf' },
+  { id: 'notebook', nameKey: 'piskvorky.theme.notebook', meta: '#eef2f8' },
+  { id: 'board',    nameKey: 'piskvorky.theme.board',    meta: '#23402a' },
 ];
 // The computer opponent: its own AI here (the engine), the name, face and stars from games/_opponents/opponents.js
 const O = OPPONENTS;
 const LEVELS = [
-  { id: 'normal', title: 'Běžný hráč', desc: 'Hraje jako běžný člověk: čtyřku v řadě vždycky zastaví, ale otevřenou trojku občas přehlédne a sem tam táhne jinam, než by měl. Dobrý soupeř na každý den.' },
-  { id: 'master', title: 'Mistr', desc: 'Hraje nejlépe, jak umí: hledá vynucené výhry řadou hrozeb, propočítá tahy dopředu a hrozby skoro nikdy nepřehlédne. Porazit ho je opravdu těžké, hlavně když začíná.' },
+  { id: 'normal', titleKey: 'piskvorky.level.normal', descKey: 'piskvorky.level.normal.desc' },
+  { id: 'master', titleKey: 'piskvorky.level.master', descKey: 'piskvorky.level.master.desc' },
 ];
+const lvName = i => I18N.esc(O.levelName(LEVELS, i)); // "Mistr ★★" for HTML
+const foeP = () => ({ name: G.foe.name, fem: G.foe.fem }); // the opponent as message params (name, fem)
 const lvIdx = id => Math.max(0, LEVELS.findIndex(l => l.id === id));
 const SIZES = [
-  { n: 13, name: 'Malá',    desc: '13 × 13 políček. Hra je kratší a políčka větší.' },
-  { n: 15, name: 'Střední', desc: '15 × 15 políček, obvyklá velikost.' },
-  { n: 19, name: 'Velká',   desc: '19 × 19 políček, víc místa. Políčka jsou malá: plochu si přibliž tlačítkem Zvětšit nebo dvěma prsty.' },
+  { n: 13, nameKey: 'piskvorky.size.small',  descKey: 'piskvorky.size.small.desc' },
+  { n: 15, nameKey: 'piskvorky.size.medium', descKey: 'piskvorky.size.medium.desc' },
+  { n: 19, nameKey: 'piskvorky.size.large',  descKey: 'piskvorky.size.large.desc' },
 ];
 const SPEEDS = [
-  { id: 'slow', name: 'Pomalu', desc: 'Soupeř chvíli přemýšlí, takže je dobře vidět, kam táhl.', think: 800 },
-  { id: 'fast', name: 'Rychle', desc: 'Soupeř táhne hned, jak má tah promyšlený.', think: 150 },
+  { id: 'slow', nameKey: 'opponents.speed.slow', descKey: 'piskvorky.speed.slow.desc', think: 800 },
+  { id: 'fast', nameKey: 'opponents.speed.fast', descKey: 'piskvorky.speed.fast.desc', think: 150 },
 ];
 const DEFAULTS = { level: 'normal', size: 15, theme: 'paper', confirm: false, speed: 'slow', vibrate: true };
-const MARK = ['křížky', 'kolečka'];
 const nm = () => G.foe.name;
 
 /* ---------- State ----------
@@ -988,7 +997,7 @@ function render() {
   layout(); // the hint may have changed the height of the tray
   $('#btnUndo').classList.toggle('dim', undoTarget() < 0);
   $('#btnHint').classList.toggle('dim', !yourTurn() || busy());
-  $('#zoomLabel').textContent = zoom > 1 ? 'Zmenšit' : 'Zvětšit';
+  $('#zoomLabel').textContent = t(zoom > 1 ? 'piskvorky.zoom.out' : 'piskvorky.zoom.in');
   $('#zoomPlus').setAttribute('d', zoom > 1 ? 'M7.5 10.5h6' : 'M10.5 7.5v6M7.5 10.5h6');
 }
 function renderBoard() {
@@ -1021,23 +1030,24 @@ function renderSides() {
   const foeTurn = G.status === 'playing' && turn() === cpu;
   $('#foeRow').classList.toggle('on', foeTurn);
   $('#foeRow').innerHTML = `<div class="left">${O.head(G.foe, { mood: foeMood(), badge: O.levelBadge(LEVELS, lvIdx(G.level)) })}</div>
-    <span class="left">${markIcon(cpu)}${foeTurn ? `<span class="tag">${thinking ? 'Přemýšlí…' : 'Na tahu'}</span>` : ''}</span>`;
+    <span class="left">${markIcon(cpu)}${foeTurn ? `<span class="tag">${th(thinking ? 'piskvorky.tag.thinking' : 'piskvorky.tag.toMove')}</span>` : ''}</span>`;
   const meTurn = G.status === 'playing' && turn() === G.you;
   $('#meRow').classList.toggle('on', meTurn);
-  $('#meRow').innerHTML = `<div class="left"><span class="me">Ty</span>${markIcon(G.you)}</div>
-    ${meTurn ? '<span class="tag">Na tahu</span>' : `<span class="tag off">hraješ ${MARK[G.you]}</span>`}`;
+  $('#meRow').innerHTML = `<div class="left"><span class="me">${th('piskvorky.you')}</span>${markIcon(G.you)}</div>
+    ${meTurn ? `<span class="tag">${th('piskvorky.tag.toMove')}</span>` : `<span class="tag off">${th('piskvorky.tag.mark', { mark: G.you })}</span>`}`;
 }
 function renderHint() {
-  let t = '';
-  if (G.status === 'won') t = 'Pět v řadě, vyhráváš!';
-  else if (G.status === 'lost') t = `${O.past(G.foe, 'Vyhrál', 'Vyhrála')} ${nm()}. Zpět vrátí tah.`;
-  else if (G.status === 'draw') t = 'Plocha je plná, remíza.';
-  else if (thinking) t = `${nm()} přemýšlí…`;
-  else if (hintBusy) t = 'Hledám dobrý tah…';
-  else if (pending >= 0) t = 'Ťukni znovu a tah se potvrdí';
-  else if (hintCell >= 0) t = 'Rada: ťukni na označené políčko';
-  else t = G.moves.length ? `Hraješ ${MARK[G.you]}: ťukni na políčko` : 'Začínáš ty: ťukni na políčko';
-  $('#hint').textContent = t;
+  let k, par;
+  if (G.status === 'won') k = 'piskvorky.hint.won';
+  else if (G.status === 'lost') { k = 'piskvorky.hint.lost'; par = foeP(); }
+  else if (G.status === 'draw') k = 'piskvorky.hint.draw';
+  else if (thinking) { k = 'piskvorky.hint.thinking'; par = foeP(); }
+  else if (hintBusy) k = 'piskvorky.hint.searching';
+  else if (pending >= 0) k = 'piskvorky.hint.confirm';
+  else if (hintCell >= 0) k = 'piskvorky.hint.advice';
+  else if (G.moves.length) { k = 'piskvorky.hint.play'; par = { mark: G.you }; }
+  else k = 'piskvorky.hint.start';
+  $('#hint').textContent = t(k, par);
 }
 // rule: the board size comes from the room that is left, so it fits without scrolling
 let side = 0;
@@ -1121,10 +1131,10 @@ $('#btnZoom').addEventListener('click', () => {
 
 /* ---------- Controls ---------- */
 function onCell(cell) {
-  if (G.status !== 'playing') { toast(G.status === 'lost' ? 'Hra skončila. Zpět vrátí tvůj tah, nebo ťukni na Nová hra.' : 'Hra skončila. Ťukni na Nová hra.'); return; }
-  if (busy()) { toast(`Chvilku, ${nm()} přemýšlí`); return; }
+  if (G.status !== 'playing') { toast(t(G.status === 'lost' ? 'piskvorky.toast.overLost' : 'piskvorky.toast.over')); return; }
+  if (busy()) { toast(t('piskvorky.toast.waitThinking', foeP())); return; }
   if (!yourTurn()) return;
-  if (G.moves.includes(cell)) { if (pending >= 0) { pending = -1; render(); } toast('Tohle políčko už je zabrané'); return; }
+  if (G.moves.includes(cell)) { if (pending >= 0) { pending = -1; render(); } toast(t('piskvorky.toast.taken')); return; }
   // the advice and a second tap on the faint mark place it; with "Potvrzovat tah" the first tap only shows it
   if (cell === hintCell || cell === pending || !S.confirm) { playYours(cell); return; }
   pending = cell; buzz(8); render();
@@ -1137,7 +1147,7 @@ function undoTarget() {
 $('#btnUndo').addEventListener('click', () => {
   if (pending >= 0 && yourTurn()) { pending = -1; buzz(); render(); return; } // first only the faint mark goes
   const i = undoTarget();
-  if (i < 0) { toast('Zatím není co vrátit'); return; }
+  if (i < 0) { toast(t('common.nothingToUndo')); return; }
   stopThinking();
   G.moves.length = i;
   pending = -1; hintCell = -1;
@@ -1146,9 +1156,9 @@ $('#btnUndo').addEventListener('click', () => {
   buzz(); save(); render();
 });
 $('#btnHint').addEventListener('click', () => {
-  if (G.status !== 'playing') { toast('Hra skončila'); return; }
-  if (busy()) { toast(`Chvilku, ${nm()} přemýšlí`); return; }
-  if (hintBusy) { toast('Chvilku, hledám dobrý tah'); return; }
+  if (G.status !== 'playing') { toast(t('piskvorky.toast.overShort')); return; }
+  if (busy()) { toast(t('piskvorky.toast.waitThinking', foeP())); return; }
+  if (hintBusy) { toast(t('piskvorky.toast.waitHint')); return; }
   const g0 = G, k = G.moves.length;
   hintBusy = true; render();
   ask(engineInput('hint'), r => {
@@ -1159,13 +1169,13 @@ $('#btnHint').addEventListener('click', () => {
     const first = hintCell >= 0 && !G.hinted && !G.counted;
     if (hintCell >= 0) { showCell(hintCell); G.hinted = true; save(); }
     render();
-    if (first) toast('S radou se tahle hra nepočítá do statistik', 3200);
+    if (first) toast(t('piskvorky.toast.hinted'), 3200);
   });
 });
 // rule: a new game in the middle of one asks first
 $('#btnNew').addEventListener('click', () => {
   if (hasProgress()) {
-    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('common.confirmNew.text')}</p>`, [{ text: th('common.confirmNew.yes'), fn: () => newGame() }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
   } else newGame();
 });
 // rule: an end dialog only for the game that ended, never over Settings or Help (whenFree)
@@ -1173,55 +1183,54 @@ function endDialog() {
   const g0 = G, k = G.moves.length;
   whenFree(g0, 900, () => {
     if (G.moves.length !== k || G.status === 'playing') return;
-    const head = G.status === 'won' ? 'Výhra! 🎉' : G.status === 'lost' ? `${O.past(G.foe, 'Vyhrál', 'Vyhrála')} ${nm()}` : 'Remíza';
-    const why = G.status === 'won' ? 'Máš pět v řadě.' : G.status === 'lost' ? `${nm()} má pět v řadě.` : 'Plocha je plná a nikdo nemá pět v řadě.';
-    const btns = [{ text: 'Nová hra', fn: () => newGame() }];
-    if (G.status !== 'won') btns.push({ text: 'Vrátit tah', cls: 'alt', fn: () => $('#btnUndo').click() });
-    btns.push({ text: 'Prohlédnout', cls: 'alt' });
-    showModal(`<h2>${head}</h2><p>${why}</p>${G.hinted && !G.inStats ? '<p>Hra s radou se do statistik nepočítá.</p>' : ''}`, btns);
+    const head = th(G.status === 'won' ? 'piskvorky.end.won' : G.status === 'lost' ? 'piskvorky.end.lost' : 'piskvorky.end.draw', foeP());
+    const why = th(G.status === 'won' ? 'piskvorky.why.won' : G.status === 'lost' ? 'piskvorky.why.lost' : 'piskvorky.why.draw', foeP());
+    const btns = [{ text: th('common.newGame'), fn: () => newGame() }];
+    if (G.status !== 'won') btns.push({ text: th('common.undoMove'), cls: 'alt', fn: () => $('#btnUndo').click() });
+    btns.push({ text: th('common.inspect'), cls: 'alt' });
+    showModal(`<h2>${head}</h2><p>${why}</p>${G.hinted && !G.inStats ? `<p>${th('piskvorky.end.hinted')}</p>` : ''}`, btns);
   });
 }
 
 /* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
 const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
-const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
 const swatch = id => `<span class="swatch" data-theme="${id}"><svg viewBox="0 0 60 30" aria-hidden="true"><path class="gl" d="M15 0V30M30 0V30M45 0V30M0 15H60"/><path class="x" d="M4 4l7 7M11 4l-7 7M34 19l7 7M41 19l-7 7"/><circle class="o" cx="22.5" cy="22.5" r="4.4"/><circle class="o" cx="52.5" cy="7.5" r="4.4"/></svg></span>`;
-const plural = (n, a, b, c) => `${n} ${n === 1 ? a : n >= 2 && n <= 4 ? b : c}`;
 const changed = () => G && (S.level !== G.level || S.size !== G.n);
 function renderSettings() {
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Piškvorky<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Soupeř</h3>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.piskvorky.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('opponents.heading')}</h3>
       <div class="field">
-        ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, O.levelName(LEVELS, i), l.desc)).join('')}
-        <div class="fnote">Soupeř má každou hru jiné jméno. Kdo začíná, se střídá: kdo začíná, kreslí křížky.</div>
+        ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, lvName(i), th(l.descKey))).join('')}
+        <div class="fnote">${th('piskvorky.foeNote')}</div>
       </div>
-      <div class="field"><div class="flabel">Rychlost soupeře</div>
-        ${SPEEDS.map(s => opt('speed:' + s.id, S.speed === s.id, s.name, s.desc)).join('')}
+      <div class="field"><div class="flabel">${th('opponents.speed')}</div>
+        ${SPEEDS.map(s => opt('speed:' + s.id, S.speed === s.id, th(s.nameKey), th(s.descKey))).join('')}
       </div>
     </section>
-    <section class="card"><h3>Plocha</h3>
+    <section class="card"><h3>${th('piskvorky.board')}</h3>
       <div class="field">
-        ${SIZES.map(z => opt('size:' + z.n, S.size === z.n, z.name, z.desc)).join('')}
+        ${SIZES.map(z => opt('size:' + z.n, S.size === z.n, th(z.nameKey), th(z.descKey))).join('')}
       </div>
-      ${changed() && !isFresh() ? `<div class="notice">Změna platí od příští hry.${hasProgress() ? ' Rozehraná hra zůstává.' : ''}</div>` : ''}
+      ${changed() && !isFresh() ? `<div class="notice">${th('piskvorky.notice.nextGame', { progress: hasProgress() })}</div>` : ''}
     </section>
-    <section class="card"><h3>Ovládání</h3>
-      ${toggleRow('confirm', 'Potvrzovat tah', 'První ťuknutí ukáže značku jen slabě, druhé ťuknutí na stejné políčko ji položí. Chrání před překlepem na malých políčkách.')}
+    <section class="card"><h3>${th('piskvorky.controls')}</h3>
+      ${toggleRow('confirm', th('piskvorky.confirm'), th('piskvorky.confirm.note'))}
     </section>
-    <section class="card"><h3>Vzhled</h3>
-      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}">${swatch(t.id)}${t.name}</button>`).join('')}</div>
-      ${toggleRow('vibrate', 'Vibrace')}
+    <section class="card"><h3>${th('common.look')}</h3>
+      <div class="tiles">${THEMES.map(m => `<button class="tile" data-act="theme:${m.id}" aria-pressed="${S.theme === m.id}">${swatch(m.id)}${th(m.nameKey)}</button>`).join('')}</div>
+      ${toggleRow('vibrate', th('common.vibrate'))}
     </section>
-    <section class="card"><h3>Statistika</h3>
+    <section class="card"><h3>${th('common.stats')}</h3>
       ${LEVELS.map((l, i) => {
-        const rows = SIZES.filter(z => ST[l.id][z.n].played).map(z => { const st = ST[l.id][z.n]; return `${z.name} plocha: ${plural(st.played, 'hra', 'hry', 'her')}, výher ${st.won}, remíz ${st.draw}`; });
-        return `<p class="stats"><b>${O.levelName(LEVELS, i)}</b><br>${rows.length ? rows.join('<br>') : 'Zatím žádná dohraná hra'}</p>`;
+        const rows = SIZES.filter(z => ST[l.id][z.n].played).map(z => { const st = ST[l.id][z.n]; return th('piskvorky.stats.row', { size: z.n, played: st.played, won: st.won, draw: st.draw }); });
+        return `<p class="stats"><b>${lvName(i)}</b><br>${rows.length ? rows.join('<br>') : th('piskvorky.stats.none')}</p>`;
       }).join('')}
-      <p class="fnote">Počítají se jen dohrané hry bez Poradit.</p>
+      <p class="fnote">${th('common.statsNote')}</p>
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1232,7 +1241,7 @@ $('#settingsIn').addEventListener('click', e => {
   else if (act === 'size') S.size = +arg;
   else if (act === 'theme') S.theme = arg;
   else if (act === 'toggle') S[arg] = !S[arg];
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('common.settingsReset')); }
   normalize(S); buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
 });
@@ -1247,8 +1256,8 @@ function closeSettings() {
     G = Object.assign({}, g, { n: S.size, level: S.level, foe, moves: [], status: 'playing', counted: false, hinted: false, inStats: false });
     pending = -1; hintCell = -1; resetZoom();
     save(); render(); cpuTurn();
-    toast(S.level !== g.level ? `Hraješ proti soupeři: ${O.levelName(LEVELS, lvIdx(S.level))}` : `Nová hra na ploše ${S.size} × ${S.size}`);
-  } else if (changed()) { render(); toast(`Změna platí od příští hry${hasProgress() ? '. Rozehraná hra zůstává.' : ''}`); }
+    toast(S.level !== g.level ? t('opponents.playAgainst', { level: O.levelName(LEVELS, lvIdx(S.level)) }) : t('piskvorky.toast.newBoard', { size: S.size }));
+  } else if (changed()) { render(); toast(t('piskvorky.toast.nextGame', { progress: hasProgress() })); }
   else render();
 }
 $('#btnSettings').addEventListener('click', openSettings);
@@ -1256,25 +1265,18 @@ $('#btnSettings').addEventListener('click', openSettings);
 /* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
 function renderHelp() {
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Piškvorky<small>Jak hrát</small></h2></div>
-    <section class="card help"><h3>Pravidla</h3><ul>
-      <li>Ty a soupeř se střídáte a kreslíte značky do volných políček. Kdo začíná, kreslí <b>křížky</b>, druhý <b>kolečka</b>. Kdo začíná, se každou hru střídá.</li>
-      <li><b>Vyhrává</b>, kdo má první <b>pět svých značek v řadě</b>: vodorovně, svisle nebo šikmo. Platí i šest a víc v řadě.</li>
-      <li>Když se zaplní celá plocha a nikdo nemá pět v řadě, je to <b>remíza</b>.</li>
-      <li>Tip: <b>otevřená trojka</b> (tři v řadě a volno na obou koncích) se musí zastavit hned, jinak z ní soupeř udělá čtyřku, kterou už zavřít nejde.</li>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.piskvorky.name')}<small>${th('common.help')}</small></h2></div>
+    <section class="card help"><h3>${th('piskvorky.help.rules')}</h3><ul>
+      ${[1, 2, 3, 4].map(i => `<li>${th(`piskvorky.help.rule.${i}`)}</li>`).join('')}
     </ul></section>
-    <section class="card help"><h3>Ovládání</h3><ol>
-      <li>Ťukni na volné políčko. Když je zapnuté <b>Potvrzovat tah</b> (v Nastavení), značka se ukáže slabě a další ťuknutí na stejné políčko ji položí; ťuknutím jinam ji přesuneš.</li>
-      <li>Soupeřova poslední značka má podbarvené políčko.</li>
-      <li><b>Zpět</b> vrátí tvůj poslední tah i soupeřovu odpověď. Dá se ťukat opakovaně, i po konci hry.</li>
-      <li><b>Poradit</b> označí dobré políčko. Ťukni na něj a tah se hned zahraje. Hra, ve které použiješ Poradit, se do statistik nepočítá; počítají se jen dohrané hry.</li>
-      <li><b>Zvětšit</b> přiblíží plochu kolem poslední značky, <b>Zmenšit</b> ukáže zase celou. Přibližovat jde i roztažením dvěma prsty; přiblíženou plochou posouváš jedním prstem.</li>
+    <section class="card help"><h3>${th('piskvorky.controls')}</h3><ol>
+      ${[1, 2, 3, 4, 5].map(i => `<li>${th(`piskvorky.help.control.${i}`)}</li>`).join('')}
     </ol></section>
-    <section class="card help"><h3>Soupeř</h3>
-      <p>${LEVELS.map((l, i) => `<b>${O.levelName(LEVELS, i)}</b>: ${l.desc}`).join('<br><br>')}</p>
-      <p style="margin-top:12px">Soupeře a velikost plochy vybereš v Nastavení. Soupeř má každou hru jiné jméno.</p>
+    <section class="card help"><h3>${th('opponents.heading')}</h3>
+      <p>${LEVELS.map((l, i) => `<b>${lvName(i)}</b>: ${th(l.descKey)}`).join('<br><br>')}</p>
+      <p style="margin-top:12px">${th('piskvorky.help.foe')}</p>
     </section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -1306,6 +1308,8 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+// the static texts (data-t*), <title> and <html lang> in the player's language
+I18N.apply();
 // rule: ask for persistent storage so the browser does not delete the saved game by itself
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 const saved = load();

@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,15 +34,22 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="../../i18n/opponents.js"></script>
+<script src="../_opponents/opponents.js"></script>
+<script src="texts.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f4ebdf">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Lodě">
-<title>Lodě</title>
+<title data-t="game.lode.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232c6b97'/%3E%3Crect x='9' y='26' width='40' height='12' rx='6' fill='%23e3e9ee'/%3E%3Cpath d='M47 25l8 8M55 25l-8 8' stroke='%23e8463a' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes: a solid colour; everything below reads these variables (rule) ----------
@@ -227,16 +234,16 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app">
   <header class="topbar">
     <!-- contract: the home button is hidden and shown only when opened from the launcher (?menu) -->
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Lodě</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.lode.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
   <div id="mid">
@@ -247,19 +254,19 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
       <div id="grid" class="cells"></div>
     </main>
     <div id="low">
-      <div id="mini" class="cells" role="img" aria-label="Tvoje moře"></div>
+      <div id="mini" class="cells" role="img" data-t-aria="lode.aria.mySea"></div>
       <div id="panel"></div>
     </div>
   </div>
   <footer class="tray">
     <div id="hint" aria-live="polite"></div>
     <div class="row" id="rowPlace">
-      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
-      <button id="btnShuffle" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c3 0 4.5 10 8 10H21"/><path d="M3 17h3.5c1.4 0 2.4-2 3.3-4.4M14.2 11.4C15 9 16.1 7 17.5 7H21"/><path d="m18 4 3 3-3 3M18 14l3 3-3 3"/></svg>Zamíchat</button>
-      <button id="btnStart" class="undo go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15L19.5 12z" fill="currentColor"/></svg>Hrát</button>
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span data-t="common.undo"></span></button>
+      <button id="btnShuffle" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h3.5c3 0 4.5 10 8 10H21"/><path d="M3 17h3.5c1.4 0 2.4-2 3.3-4.4M14.2 11.4C15 9 16.1 7 17.5 7H21"/><path d="m18 4 3 3-3 3M18 14l3 3-3 3"/></svg><span data-t="lode.shuffle"></span></button>
+      <button id="btnStart" class="undo go"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15L19.5 12z" fill="currentColor"/></svg><span data-t="lode.play"></span></button>
     </div>
     <div class="row" id="rowBattle" hidden>
-      <button id="btnHint" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>Poradit</button>
+      <button id="btnHint" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg><span data-t="common.hint"></span></button>
     </div>
   </footer>
 </div>
@@ -268,7 +275,6 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 <div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
 <div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
 <div id="toast" class="hide"></div>
-<script src="../_opponents/opponents.js"></script>
 <script>
 /* ---------- Visible height ---------- */
 // The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
@@ -511,6 +517,8 @@ return { N, CELLS, FLEETS, rng, mix, cellsOf, inside, ring, blocked, fits, valid
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 const root = document.documentElement;
 const GUT = 12; // side margin in px, the same as --gut in the CSS
 const E = LodeEngine();
@@ -520,25 +528,26 @@ const N = 10;
 const ID = 'lode';
 const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
 const THEMES = [
-  { id: 'paper',    name: 'Papír', meta: '#f4ebdf' },
-  { id: 'sea',      name: 'Moře',  meta: '#0f2c44' },
-  { id: 'notebook', name: 'Sešit', meta: '#fdfcf7' },
+  { id: 'paper',    nameKey: 'common.theme.paper',  meta: '#f4ebdf' },
+  { id: 'sea',      nameKey: 'lode.theme.sea',      meta: '#0f2c44' },
+  { id: 'notebook', nameKey: 'lode.theme.notebook', meta: '#fdfcf7' },
 ];
 // The computer opponent: its own aim here (the engine), the name, face and stars from games/_opponents/opponents.js
 const O = OPPONENTS;
 const LEVELS = [
-  { id: 'easy',   title: 'Začátečník',   desc: 'Střílí většinou naslepo. Když trefí loď, zkouší pole vedle, ale občas na ni zapomene.' },
-  { id: 'normal', title: 'Zkušený hráč', desc: 'Hledá lodě po šachovnici, aby žádná neunikla, a zasaženou loď dorazí: zkouší pole vedle a pak pokračuje v řadě.' },
-  { id: 'master', title: 'Mistr',        desc: 'Počítá, kde všude se lodě, které ještě plují, mohou schovávat, a střílí tam, kde je loď nejpravděpodobnější.' },
+  { id: 'easy',   titleKey: 'lode.level.easy',   descKey: 'lode.level.easy.desc' },
+  { id: 'normal', titleKey: 'lode.level.normal', descKey: 'lode.level.normal.desc' },
+  { id: 'master', titleKey: 'lode.level.master', descKey: 'lode.level.master.desc' },
 ];
 const lvIdx = id => Math.max(0, LEVELS.findIndex(l => l.id === id));
+const lvName = i => I18N.esc(O.levelName(LEVELS, i)); // "Mistr ★★★" for HTML
 const FLEETS = [
-  { id: 'classic', name: 'Pět lodí',   desc: 'Lodě o 5, 4, 3, 3 a 2 polích.' },
-  { id: 'big',     name: 'Deset lodí', desc: 'Jedna čtyřka, dvě trojky, tři dvojky a čtyři jedničky.' },
+  { id: 'classic', nameKey: 'lode.fleet.classic', descKey: 'lode.fleet.classic.desc' },
+  { id: 'big',     nameKey: 'lode.fleet.big',     descKey: 'lode.fleet.big.desc' },
 ];
 const SPEEDS = [
-  { id: 'slow', name: 'Pomalu', desc: 'Soupeř chvíli míří, takže je dobře vidět, kam střílí.', think: 1100 },
-  { id: 'fast', name: 'Rychle', desc: 'Soupeř střílí hned.', think: 350 },
+  { id: 'slow', nameKey: 'opponents.speed.slow', descKey: 'lode.speed.slow.desc', think: 1100 },
+  { id: 'fast', nameKey: 'opponents.speed.fast', descKey: 'lode.speed.fast.desc', think: 350 },
 ];
 const DEFAULTS = { level: 'normal', fleet: 'classic', again: true, speed: 'slow', theme: 'paper', vibrate: true };
 const COLS = 'ABCDEFGHIJ';
@@ -685,7 +694,6 @@ function showModal(html, buttons) {
   };
   $('#modal').hidden = false;
 }
-const plural = (n, a, b, c) => `${n} ${n === 1 ? a : n >= 2 && n <= 4 ? b : c}`;
 
 /* ---------- Shots ----------
    The computer shoots after a short pause (Rychlost soupeře); its square depends only on what it knows, the game's seed
@@ -756,22 +764,22 @@ function endDrag(e, cancel) {
   // checked again at the drop: the fleet may have changed under a held finger (Zamíchat or Zpět with another finger)
   const ok = !!d.pos && E.fits(G.mine, d.pos, d.j);
   if (ok && (d.pos.r !== s.r || d.pos.c !== s.c)) { pushHist(); G.mine[d.j] = d.pos; buzz(); save(); }
-  else if (d.pos && !ok) toast('Sem ne: lodě se nesmí dotýkat, ani rohem');
+  else if (d.pos && !ok) toast(t('lode.toast.noTouch'));
   render();
 }
 $('#grid').addEventListener('pointerup', e => endDrag(e, false));
 $('#grid').addEventListener('pointercancel', e => endDrag(e, true));
 // turn a ship round the tapped square; where it does not fit, it slides along so that it still covers that square
-function rotate(j, t) {
+function rotate(j, tp) {
   const s = G.mine[j];
-  if (s.len === 1) { toast('Loď o jednom poli stačí přesunout'); return; }
-  const r0 = s.r + (s.v ? t : 0), c0 = s.c + (s.v ? 0 : t), v = !s.v;
-  const offs = [...Array(s.len).keys()].sort((a, b) => Math.abs(a - t) - Math.abs(b - t) || a - b);
+  if (s.len === 1) { toast(t('lode.toast.singleShip')); return; }
+  const r0 = s.r + (s.v ? tp : 0), c0 = s.c + (s.v ? 0 : tp), v = !s.v;
+  const offs = [...Array(s.len).keys()].sort((a, b) => Math.abs(a - tp) - Math.abs(b - tp) || a - b);
   for (const o of offs) {
     const n = { r: v ? r0 - o : r0, c: v ? c0 : c0 - o, len: s.len, v };
     if (E.fits(G.mine, n, j)) { pushHist(); G.mine[j] = n; buzz(); save(); render(); return; }
   }
-  toast('Tady se loď neotočí: nevešla by se nebo by se dotýkala jiné');
+  toast(t('lode.toast.noTurn'));
 }
 
 /* ---------- Rendering ---------- */
@@ -799,7 +807,7 @@ function hulls(fleet, extra, cls = 's') {
   return out;
 }
 const mark = (b, i) => b.k[i] === 1 ? (b.shot[i] ? ' o' : ' w') : b.k[i] >= 2 ? ' x' : '';
-const said = (b, i) => b.k[i] === 1 ? (b.shot[i] ? ', voda' : ', voda vedle potopené lodi') : b.k[i] === 2 ? ', zásah' : b.k[i] === 3 ? ', potopená loď' : '';
+const said = (b, i) => b.k[i] === 1 ? (b.shot[i] ? 'water' : 'waterNear') : b.k[i] === 2 ? 'hit' : b.k[i] === 3 ? 'sunk' : '';
 const lastOf = who => { for (let n = G.shots.length - 1; n >= 0; n--) if (G.shots[n][0] === who) return G.shots[n][1]; return -1; };
 const isNew = (who, i) => fresh >= 0 && fresh < G.shots.length && G.shots[fresh][0] === who && G.shots[fresh][1] === i ? ' new' : '';
 function setHTML(el, html) { if (el._html !== html) { el.innerHTML = html; el._html = html; } }
@@ -813,7 +821,7 @@ function renderBoards() {
     const zone = moving ? E.blocked(G.mine, moving.j) : null;
     for (let i = 0; i < E.CELLS; i++) {
       const cls = ghost && ghost[i] ? ghost[i] : hull[i] + (zone && zone[i] && !hull[i] ? ' z' : '');
-      big += `<button class="c${cls}" data-i="${i}" aria-label="${coord(i)}${hull[i] ? ', tvoje loď' : ''}"></button>`;
+      big += `<button class="c${cls}" data-i="${i}" aria-label="${th('lode.cell.mine', { sq: coord(i), ship: !!hull[i] })}"></button>`;
     }
     small = '<i class="c fog"></i>'.repeat(E.CELLS);
   } else {
@@ -822,7 +830,7 @@ function renderBoards() {
     const hull = hulls(G.theirs, j => b0.sunk[j] ? ' sk' : lost ? ' rv' : null);
     const hint = yourTurn() && !thinking ? hintCell : -1;
     for (let i = 0; i < E.CELLS; i++) {
-      big += `<button class="c${hull[i]}${mark(b0, i)}${i === hint ? ' hint' : ''}${isNew(0, i)}" data-i="${i}" aria-label="${coord(i)}${said(b0, i)}${i === hint ? ', rada' : ''}"></button>`;
+      big += `<button class="c${hull[i]}${mark(b0, i)}${i === hint ? ' hint' : ''}${isNew(0, i)}" data-i="${i}" aria-label="${th('lode.cell.foe', { sq: coord(i), state: said(b0, i), hint: i === hint })}"></button>`;
     }
     // your sea: your fleet and the computer's shots, its last shot framed
     const mine = hulls(G.mine, j => b1.sunk[j] ? ' sk' : ''), lc = lastOf(1);
@@ -832,7 +840,7 @@ function renderBoards() {
   setHTML($('#mini'), small);
   $('#grid').classList.toggle('on', yourTurn() && !thinking);
   $('#grid').classList.toggle('place', !G.started);
-  $('#grid').setAttribute('aria-label', G.started ? 'Moře soupeře' : 'Tvoje moře');
+  $('#grid').setAttribute('aria-label', t(G.started ? 'lode.aria.foeSea' : 'lode.aria.mySea'));
 }
 function foeMood() {
   if (thinking) return 'think';
@@ -846,33 +854,33 @@ function foeMood() {
 function renderPanel() {
   const head = O.head(G.foe, { mood: foeMood(), badge: O.levelBadge(LEVELS, lvIdx(G.level)) });
   const ships = G.theirs.map((s, j) => ({ len: s.len, gone: G.started && B.B[0].sunk[j] })).sort((a, b) => b.len - a.len);
-  const ros = `<div class="ros" aria-label="Lodě soupeře: ${ships.filter(s => !s.gone).length} z ${ships.length} pluje">${ships.map(s => `<i class="${s.gone ? 'gone' : ''}" style="--n:${s.len}"></i>`).join('')}</div>`;
+  const ros = `<div class="ros" aria-label="${th('lode.ros', { n: ships.filter(s => !s.gone).length, total: ships.length })}">${ships.map(s => `<i class="${s.gone ? 'gone' : ''}" style="--n:${s.len}"></i>`).join('')}</div>`;
   let tag, foot;
   if (!G.started) {
-    tag = `<span class="tag off">${G.starter === 0 ? 'Začínáš ty' : `Začíná ${nm()}`}</span>`;
-    foot = '<div class="pl">Lodě se nesmí dotýkat, ani rohem.</div>';
+    tag = `<span class="tag off">${th(G.starter === 0 ? 'lode.tag.youFirst' : 'lode.tag.foeFirst', { name: nm() })}</span>`;
+    foot = `<div class="pl">${th('lode.panel.rule')}</div>`;
   } else {
-    tag = G.status !== 'playing' ? '<span class="tag off">Konec hry</span>'
-      : thinking ? `<span class="tag">${nm()} míří…</span>`
-      : `<span class="tag">${turn() === 0 ? 'Střílíš ty' : `Střílí ${nm()}`}</span>`;
-    foot = `<div class="pl">Tvé výstřely: <b>${yourShots()}</b></div>`;
+    tag = G.status !== 'playing' ? `<span class="tag off">${th('lode.tag.over')}</span>`
+      : thinking ? `<span class="tag">${th('lode.tag.aiming', { name: nm() })}</span>`
+      : `<span class="tag">${th(turn() === 0 ? 'lode.tag.youShoot' : 'lode.tag.foeShoots', { name: nm() })}</span>`;
+    foot = `<div class="pl">${th('lode.panel.shots', { n: yourShots() })}</div>`;
   }
   setHTML($('#panel'), head + tag + ros + foot);
 }
 function renderHint() {
-  let t;
-  const n = G.shots.length, last = n ? G.shots[n - 1] : null, r = n ? B.res[n - 1] : null, past = (m, f) => O.past(G.foe, m, f);
-  if (!G.started) t = 'Posuň lodě tažením, otoč ťuknutím';
-  else if (G.status === 'won') t = '<b>Výhra!</b> Loďstvo soupeře je na dně.';
-  else if (G.status === 'lost') t = `${nm()} ${past('potopil', 'potopila')} všechny tvé lodě.`;
-  else if (!last) t = turn() === 0 ? 'Střílej: ťukni do moře soupeře' : `${nm()} začíná a míří…`;
-  else if (last[0] === 0) t = (r === 'miss' ? '<b>Voda.</b>' : r === 'hit' ? '<b>Zásah!</b>' : '<b>Zásah, potopena!</b>') + (turn() === 0 ? ' Střílíš znovu.' : ` Teď míří ${nm()}.`);
+  let k, par;
+  const n = G.shots.length, last = n ? G.shots[n - 1] : null, r = n ? B.res[n - 1] : null, fp = { name: nm(), fem: G.foe.fem };
+  if (!G.started) k = 'lode.hint.place';
+  else if (G.status === 'won') k = 'lode.hint.won';
+  else if (G.status === 'lost') { k = 'lode.hint.lost'; par = fp; }
+  else if (!last) { if (turn() === 0) k = 'lode.hint.shoot'; else { k = 'lode.hint.foeStarts'; par = fp; } }
+  else if (last[0] === 0) { k = 'lode.hint.yourShot'; par = { ...fp, res: r, again: turn() === 0 }; }
   else {
-    const co = coord(last[1]);
-    if (turn() === 1) t = r === 'sunk' ? `${nm()} ${past('potopil', 'potopila')} loď, míří znovu…` : `${nm()}: ${co} zásah, míří znovu…`;
-    else t = r === 'miss' ? `${nm()}: ${co} voda. Jsi na tahu.` : r === 'hit' ? `${nm()}: ${co} zásah. Jsi na tahu.` : `${nm()} ${past('potopil', 'potopila')} loď. Jsi na tahu.`;
+    par = { ...fp, sq: coord(last[1]) };
+    if (turn() === 1) k = r === 'sunk' ? 'lode.hint.foeSunkAgain' : 'lode.hint.foeHitAgain';
+    else k = r === 'miss' ? 'lode.hint.foeMissed' : r === 'hit' ? 'lode.hint.foeHit' : 'lode.hint.foeSunk';
   }
-  $('#hint').innerHTML = t;
+  $('#hint').innerHTML = th(k, par);
 }
 // rule: the seas are sized from the room that is left, so they fit without scrolling. The big sea (with its letters
 // and numbers) as large as fits together with your small sea (half its squares) and the opponent's panel: in a row
@@ -918,19 +926,19 @@ $('#grid').addEventListener('click', e => {
   const i = +b.dataset.i;
   if (!G.started) {
     if (skipClick) { skipClick = false; return; }
-    if (shipAt(i) < 0) toast('Loď přesuneš tažením, ťuknutím na loď ji otočíš');
+    if (shipAt(i) < 0) toast(t('lode.toast.dragHint'));
     else rotate(shipAt(i), (() => { const s = G.mine[shipAt(i)]; return s.v ? (i / N | 0) - s.r : i % N - s.c; })()); // a click without a pointer (keyboard)
     return;
   }
-  if (G.status !== 'playing') { toast('Hra skončila. Ťukni na Nová hra.'); return; }
-  if (thinking || turn() !== 0) { toast(`Chvilku, ${nm()} míří`); return; }
+  if (G.status !== 'playing') { toast(t('lode.toast.over')); return; }
+  if (thinking || turn() !== 0) { toast(t('lode.toast.wait', { name: nm() })); return; }
   const b0 = B.B[0];
-  if (b0.k[i]) { toast(b0.shot[i] ? 'Sem už se střílelo' : 'Tady je voda: vedle potopené lodi žádná loď být nemůže'); return; }
+  if (b0.k[i]) { toast(t(b0.shot[i] ? 'lode.toast.shotAlready' : 'lode.toast.waterHere')); return; }
   shoot(0, i);
 });
 $('#btnUndo').addEventListener('click', () => {
   if (G.started) return;
-  if (!G.hist.length) { toast('Zatím není co vrátit'); return; }
+  if (!G.hist.length) { toast(t('common.nothingToUndo')); return; }
   drag = null; // a ship held by another finger is dropped where it was
   G.mine = G.hist.pop();
   buzz(); save(); render();
@@ -945,25 +953,25 @@ $('#btnStart').addEventListener('click', () => {
   if (G.started) return;
   G.started = true; G.hist = []; drag = null;
   buzz(); save(); render();
-  toast(`Bitva začala! Tvoje lodě jsou ${$('#mid').classList.contains('side') ? 'vpravo' : 'dole vlevo'}.`);
+  toast(t('lode.toast.battle', { side: $('#mid').classList.contains('side') ? 'right' : 'bottom' }));
   cpuTurn();
 });
 // Poradit: the square the Mistr would shoot at, from what you know (a game with advice is not in the statistics)
 $('#btnHint').addEventListener('click', () => {
-  if (G.status !== 'playing') { toast('Hra skončila'); return; }
-  if (!yourTurn() || thinking) { toast(`Chvilku, ${nm()} míří`); return; }
+  if (G.status !== 'playing') { toast(t('lode.toast.overShort')); return; }
+  if (!yourTurn() || thinking) { toast(t('lode.toast.wait', { name: nm() })); return; }
   const b0 = B.B[0];
   hintCell = E.aim(b0.k, E.afloat(b0), 'master', E.rng(E.mix(G.seed, G.shots.length, 0x51ED27)));
-  if (!G.helped && !G.counted) toast('Rada je orámovaná. S radou se hra nepočítá do statistik.', 3600);
+  if (!G.helped && !G.counted) toast(t('lode.toast.hinted'), 3600);
   G.helped = true;
   save(); render();
 });
 // rule: a new game in the middle of one asks first
 $('#btnNew').addEventListener('click', () => {
-  if (hasProgress()) showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
-  else if (!G.started && G.hist.length) showModal('<h2>Začít novou hru?</h2><p>Tvoje lodě se rozmístí znovu náhodně.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  if (hasProgress()) showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('common.confirmNew.text')}</p>`, [{ text: th('common.confirmNew.yes'), fn: () => newGame() }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
+  else if (!G.started && G.hist.length) showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('lode.confirm.placing')}</p>`, [{ text: th('common.confirmNew.yes'), fn: () => newGame() }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
   // the battle started before your first shot: the fleet you arranged would be lost too
-  else if (G.started && G.status === 'playing') showModal('<h2>Začít novou hru?</h2><p>Bitva už začala. Tvoje lodě se rozmístí znovu náhodně.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  else if (G.started && G.status === 'playing') showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('lode.confirm.started')}</p>`, [{ text: th('common.confirmNew.yes'), fn: () => newGame() }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
   else newGame();
 });
 // rule: an end dialog only for the game that ended, never over Settings or Help (whenFree)
@@ -972,58 +980,56 @@ function endDialog() {
   whenFree(g0, 700, () => {
     if (G.shots.length !== n || G.status === 'playing') return;
     let head, why;
+    const fp = { name: nm(), fem: G.foe.fem };
     if (G.status === 'won') {
-      head = 'Výhra! 🎉';
-      why = `Celé loďstvo soupeře je na dně. Stačilo ti <b>${plural(yourShots(), 'výstřel', 'výstřely', 'výstřelů')}</b>.`
-        + (G.record ? '<br>To je tvůj nový rekord!' : G.helped ? '<br>Hra s radou se do statistik nepočítá.' : '');
+      head = th('lode.end.won');
+      why = th('lode.end.wonWhy', { n: yourShots(), extra: G.record ? 'record' : G.helped ? 'helped' : '' });
     } else {
-      const left = B.B[0].left;
-      head = `${O.past(G.foe, 'Vyhrál', 'Vyhrála')} ${nm()}`;
-      why = `${nm()} ${O.past(G.foe, 'potopil', 'potopila')} všechny tvé lodě. Tobě ${left === 1 ? 'chyběl jen jeden zásah' : left <= 4 ? `chyběly ještě ${left} zásahy` : `chybělo ještě ${left} zásahů`}. Zbylé lodě soupeře jsou teď v moři vidět.`
-        + (G.helped ? '<br>Hra s radou se do statistik nepočítá.' : '');
+      head = th('lode.end.lost', fp);
+      why = th('lode.end.lostWhy', { ...fp, left: B.B[0].left, helped: G.helped });
     }
-    showModal(`<h2>${head}</h2><p>${why}</p>`, [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout', cls: 'alt' }]);
+    showModal(`<h2>${head}</h2><p>${why}</p>`, [{ text: th('common.newGame'), fn: () => newGame() }, { text: th('common.inspect'), cls: 'alt' }]);
   });
 }
 
 /* ---------- Settings (rule: a separate screen, applied at once, no Save button) ---------- */
 const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
-const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
 const swatch = id => `<span class="swatch" data-theme="${id}"><span class="cells"><i class="c s h f"></i><i class="c s h l x"></i><i class="c"></i><i class="c o"></i><i class="c"></i></span></span>`;
 function renderSettings() {
   const changed = G && rulesChanged();
-  const notice = !changed ? '' : changesHere() ? '<div class="notice">Platí hned, tvoje rozmístěné lodě zůstávají.</div>'
-    : isFresh() ? `<div class="notice">Po návratu do hry začne <b>nová hra</b> s tímto nastavením${keepsShips() ? ', tvoje lodě zůstanou rozmístěné, jak jsou' : ' a lodě se rozmístí znovu'}.</div>`
-    : `<div class="notice">Změna platí od příští hry.${hasProgress() ? ' Rozehraná hra zůstává.' : ''}</div>`;
+  const notice = !changed ? '' : changesHere() ? `<div class="notice">${th('lode.notice.now')}</div>`
+    : isFresh() ? `<div class="notice">${th('lode.notice.fresh', { keeps: keepsShips() })}</div>`
+    : `<div class="notice">${th('lode.notice.next', { progress: hasProgress() })}</div>`;
   const fl = FLEETS.find(f => f.id === S.fleet);
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Lodě<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Soupeř</h3>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.lode.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('opponents.heading')}</h3>
       <div class="field">
-        ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, O.levelName(LEVELS, i), l.desc)).join('')}
-        <div class="fnote">Soupeř má každou hru jiné jméno. Tvoje lodě nevidí, ví jen to, co se dozvěděl ze svých výstřelů. Kdo začíná, se každou hru střídá.</div>
+        ${LEVELS.map((l, i) => opt('level:' + l.id, S.level === l.id, lvName(i), th(l.descKey))).join('')}
+        <div class="fnote">${th('lode.foeNote')}</div>
       </div>
-      <div class="field"><div class="flabel">Rychlost soupeře</div>
-        ${SPEEDS.map(s => opt('speed:' + s.id, S.speed === s.id, s.name, s.desc)).join('')}
+      <div class="field"><div class="flabel">${th('opponents.speed')}</div>
+        ${SPEEDS.map(s => opt('speed:' + s.id, S.speed === s.id, th(s.nameKey), th(s.descKey))).join('')}
       </div>
     </section>
-    <section class="card"><h3>Pravidla</h3>
-      <div class="field"><div class="flabel">Loďstvo</div>
-        ${FLEETS.map(f => opt('fleet:' + f.id, S.fleet === f.id, f.name, f.desc)).join('')}
+    <section class="card"><h3>${th('lode.rules')}</h3>
+      <div class="field"><div class="flabel">${th('lode.fleet')}</div>
+        ${FLEETS.map(f => opt('fleet:' + f.id, S.fleet === f.id, th(f.nameKey), th(f.descKey))).join('')}
       </div>
-      ${toggleRow('again', 'Po zásahu střílíš znovu', 'Kdo zasáhne loď, střílí ještě jednou; platí pro oba. Vypnuté: střídáte se vždy po jedné ráně.')}
+      ${toggleRow('again', th('lode.again'), th('lode.again.note'))}
       ${notice}
     </section>
-    <section class="card"><h3>Vzhled</h3>
-      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}">${swatch(t.id)}${t.name}</button>`).join('')}</div>
-      ${toggleRow('vibrate', 'Vibrace')}
+    <section class="card"><h3>${th('common.look')}</h3>
+      <div class="tiles">${THEMES.map(m => `<button class="tile" data-act="theme:${m.id}" aria-pressed="${S.theme === m.id}">${swatch(m.id)}${th(m.nameKey)}</button>`).join('')}</div>
+      ${toggleRow('vibrate', th('common.vibrate'))}
     </section>
-    <section class="card"><h3>Statistika</h3>
-      <div class="fnote" style="margin:0 0 8px">${fl.name}. Počítají se jen dohrané hry bez Poradit.</div>
-      ${LEVELS.map((l, i) => { const st = ST[stKey(l.id, S.fleet)]; return `<p class="stats"><b>${O.levelName(LEVELS, i)}</b><br>Odehráno ${plural(st.played, 'hra', 'hry', 'her')}, výher ${st.won}${st.best ? `, nejméně výstřelů ${st.best}` : ''}</p>`; }).join('')}
+    <section class="card"><h3>${th('common.stats')}</h3>
+      <div class="fnote" style="margin:0 0 8px">${th('lode.stats.note', { fleet: t(fl.nameKey) })}</div>
+      ${LEVELS.map((l, i) => { const st = ST[stKey(l.id, S.fleet)]; return `<p class="stats">${th('lode.stats', { level: O.levelName(LEVELS, i), played: st.played, won: st.won, hasBest: !!st.best, best: st.best || 0 })}</p>`; }).join('')}
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1034,7 +1040,7 @@ $('#settingsIn').addEventListener('click', e => {
   else if (act === 'fleet') S.fleet = arg;
   else if (act === 'theme') S.theme = arg;
   else if (act === 'toggle') S[arg] = !S[arg];
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('common.settingsReset')); }
   normalize(S); buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
 });
@@ -1043,12 +1049,12 @@ function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hi
 function closeSettings() {
   $('#screenSettings').hidden = true;
   if (rulesChanged() && changesHere()) { // same opponent face and name, same ships
-    const msg = S.level !== G.level ? `Hraješ proti soupeři: ${O.levelName(LEVELS, lvIdx(S.level))}` : S.again ? 'Po zásahu se střílí znovu' : 'Střídáte se po jedné ráně';
+    const msg = S.level !== G.level ? t('opponents.playAgainst', { level: O.levelName(LEVELS, lvIdx(S.level)) }) : t(S.again ? 'lode.toast.againOn' : 'lode.toast.againOff');
     G.level = S.level; G.rules.again = S.again;
     sync(); save(); render(); toast(msg);
   }
-  else if (rulesChanged() && isFresh()) newGame(keepsShips() ? 'Nová hra s novým nastavením, tvoje lodě zůstaly' : 'Začala nová hra s novým nastavením', true); // keeps the starter
-  else if (rulesChanged()) { render(); toast(`Změna platí od příští hry${hasProgress() ? '. Rozehraná hra zůstává.' : ''}`); }
+  else if (rulesChanged() && isFresh()) newGame(t(keepsShips() ? 'lode.toast.newKeep' : 'lode.toast.newSettings'), true); // keeps the starter
+  else if (rulesChanged()) { render(); toast(t('lode.toast.nextGame', { progress: hasProgress() })); }
   else render();
   cpuTurn();
 }
@@ -1057,30 +1063,21 @@ $('#btnSettings').addEventListener('click', openSettings);
 /* ---------- Help (rule: only behind "?", never opens by itself) ---------- */
 function renderHelp() {
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Lodě<small>Jak hrát</small></h2></div>
-    <section class="card help"><h3>Pravidla</h3><ul>
-      <li>Ty i soupeř máte moře 10 × 10 polí: sloupce A až J, řádky 1 až 10. V něm je schované loďstvo: ${FLEETS.map(f => `<b>${f.name.toLowerCase()}</b> (${f.desc.charAt(0).toLowerCase() + f.desc.slice(1, -1)})`).join(', nebo ')}, podle Nastavení.</li>
-      <li>Lodě jsou rovné, leží vodorovně nebo svisle a <b>nesmí se dotýkat</b>, ani rohem.</li>
-      <li>Střílíte na střídačku, každý jednou. <b>Kdo zasáhne loď, střílí znovu</b> (dá se vypnout v Nastavení). Kdo začíná, se každou hru střídá.</li>
-      <li><b>Voda</b>: vedle. <b>Zásah</b>: trefa do lodi. <b>Potopena</b>: loď má zasažená všechna pole. Kolem potopené lodi se voda označí sama, protože tam už žádná loď být nemůže.</li>
-      <li><b>Vyhrává, kdo první potopí celé loďstvo soupeře.</b></li>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.lode.name')}<small>${th('common.help')}</small></h2></div>
+    <section class="card help"><h3>${th('lode.help.rules')}</h3><ul>
+      ${[1, 2, 3, 4, 5].map(i => `<li>${th(`lode.help.rule.${i}`)}</li>`).join('')}
     </ul></section>
-    <section class="card help"><h3>Ovládání</h3><ol>
-      <li><b>Před bitvou</b> jsou tvoje lodě ve velkém moři rozmístěné náhodně. Loď přesuneš tažením prstem, ťuknutím ji otočíš. Zelená loď se tam vejde, červená ne. <b>Zamíchat</b> rozmístí všechny lodě znovu, <b>Zpět</b> vrátí poslední změnu. <b>Hrát</b> začne bitvu.</li>
-      <li><b>V bitvě</b> je velké moře soupeřovo: ťukni na pole a vystřel. Tečka je voda, křížek zásah, tmavá loď potopená. Proužky pod soupeřovým jménem jsou jeho lodě; potopené jsou bledé.</li>
-      <li>Malé moře pod ním (na širokém okně vedle něj) je tvoje: tvoje lodě a soupeřovy výstřely. Jeho poslední výstřel je orámovaný.</li>
-      <li>Výstřel se vrátit nedá (to už by bylo vidět, co tam je). Zpět funguje jen při rozmisťování lodí.</li>
-      <li><b>Poradit</b> orámuje pole, kam se nejvíc vyplatí střílet; ťukni na něj. Hra, ve které použiješ Poradit, se do statistik nepočítá; počítají se jen dohrané hry.</li>
+    <section class="card help"><h3>${th('lode.help.controls')}</h3><ol>
+      ${[1, 2, 3, 4, 5].map(i => `<li>${th(`lode.help.control.${i}`)}</li>`).join('')}
     </ol></section>
-    <section class="card help"><h3>Rady</h3><ul>
-      <li>Po zásahu zkoušej pole nahoře, dole, vlevo a vpravo. Šikmo od zásahu loď být nemůže.</li>
-      <li>Když hledáš, střílej ob jedno pole jako po šachovnici: žádná loď delší než jedno pole se mezi nimi neschová.</li>
+    <section class="card help"><h3>${th('lode.help.tips')}</h3><ul>
+      ${[1, 2].map(i => `<li>${th(`lode.help.tip.${i}`)}</li>`).join('')}
     </ul></section>
-    <section class="card help"><h3>Soupeř</h3>
-      <p>${LEVELS.map((l, i) => `<b>${O.levelName(LEVELS, i)}</b>: ${l.desc}`).join('<br><br>')}</p>
-      <p style="margin-top:12px">Soupeř hraje férově: tvoje lodě nevidí, ví jen to, co se dozvěděl ze svých výstřelů, stejně jako ty. Vybereš ho v Nastavení; každou hru má jiné jméno.</p>
+    <section class="card help"><h3>${th('opponents.heading')}</h3>
+      <p>${LEVELS.map((l, i) => `<b>${lvName(i)}</b>: ${th(l.descKey)}`).join('<br><br>')}</p>
+      <p style="margin-top:12px">${th('lode.help.foe')}</p>
     </section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -1112,6 +1109,8 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+// the static texts (data-t*), <title> and <html lang> in the player's language
+I18N.apply();
 // rule: ask for persistent storage so the browser does not delete the saved game by itself
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 const saved = load();

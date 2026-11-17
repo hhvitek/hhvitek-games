@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,16 +34,21 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
-
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="../../images/sets.js"></script>
+<script src="texts.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#6e4a2c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Mahjong">
-<title>Mahjong</title>
+<title data-t="game.mahjong.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23143a38'/%3E%3Crect x='16' y='12' width='34' height='44' rx='5' fill='%233f8f78'/%3E%3Crect x='13' y='9' width='34' height='44' rx='5' fill='%23fbf8ee'/%3E%3Ctext x='30' y='42' font-size='28' text-anchor='middle' fill='%23c62828' font-family='serif'%3E%E4%B8%AD%3C/text%3E%3C/svg%3E">
 <style>
 /* ---------- Themes ---------- */
@@ -202,16 +207,16 @@ a.round{text-decoration:none}
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs id="defs"></defs></svg>
 <div id="app">
   <header class="topbar">
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Mahjong</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.mahjong.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
   <main class="wrap" id="wrap"><div class="board" id="board"></div></main>
@@ -228,7 +233,6 @@ a.round{text-decoration:none}
 <div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
 <div id="toast" class="hide"></div>
 
-<script src="../../images/sets.js"></script>
 <script>
 /* ---------- Visible height ---------- */
 // The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
@@ -265,33 +269,35 @@ a.round{text-decoration:none}
 'use strict';
 const $ = s => document.querySelector(s);
 const root = document.documentElement;
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 
 /* ---------- Constants ---------- */
 const THEMES = [
-  { id: 'night',    name: 'Noc',          meta: '#143a38' },
-  { id: 'blue',  name: 'Modrá',        meta: '#1b2b4a' },
-  { id: 'felt',  name: 'Zelené sukno', meta: '#1f6b45' },
-  { id: 'wood',  name: 'Dřevo',        meta: '#6e4a2c' },
-  { id: 'paper', name: 'Papír',        meta: '#f4ebdf' },
+  { id: 'night',    nameKey: 'mahjong.theme.night',          meta: '#143a38' },
+  { id: 'blue',  nameKey: 'mahjong.theme.blue',        meta: '#1b2b4a' },
+  { id: 'felt',  nameKey: 'mahjong.theme.felt', meta: '#1f6b45' },
+  { id: 'wood',  nameKey: 'mahjong.theme.wood',        meta: '#6e4a2c' },
+  { id: 'paper', nameKey: 'common.theme.paper',        meta: '#f4ebdf' },
 ];
 const SIZES = [
-  { id: 's', name: 'Malý',    desc: 'Asi 45 kamenů. Rychlá hra a největší kameny.' },
-  { id: 'm', name: 'Střední', desc: 'Asi 75 kamenů ve třech vrstvách.' },
-  { id: 'l', name: 'Velký',   desc: 'Asi 110 kamenů ve čtyřech vrstvách. Navíc dvě skupiny kamenů s rámečkem, které k sobě patří.' },
+  { id: 's', nameKey: 'mahjong.size.s', descKey: 'mahjong.size.s.desc' },
+  { id: 'm', nameKey: 'mahjong.size.m', descKey: 'mahjong.size.m.desc' },
+  { id: 'l', nameKey: 'mahjong.size.l', descKey: 'mahjong.size.l.desc' },
 ];
 // Shared image sets from images/sets.js (missing when the game is opened on its own)
 const IMG = globalThis.IMAGE_SETS || {}, IMG_BASE = '../../images/';
 // Names of the two framed groups of a picture set, from images/sets.js: faces 34–37 are group 1, 38–41 group 2 (see kindOf)
 const groupsOf = id => { const it = (IMG[id] && IMG[id].items) || []; return [it[34] && it[34].group, it[38] && it[38].group]; };
 const SETS = [
-  { id: 'classic',   name: 'Klasické',   desc: 'Kruhy, bambusy, znaky, větry a draci. Číslo v rohu pomáhá kameny rozlišit.', groups: ['Květiny', 'Roční období'], sample: [4, 13, 21, 31] },
-  { id: 'pics',      name: 'Obrázky',    desc: 'Ovoce, zvířata a věci. Snadno se rozeznají.', groups: ['Květiny', 'Roční období'], sample: [4, 13, 21, 31] },
-  { id: 'cats',      name: 'Kočky',      desc: 'Fotky koček různých plemen a barev.', img: 'photo', groups: groupsOf('cats'), sample: [0, 7, 13, 34] },
-  { id: 'nachod',    name: 'Náchodsko',  desc: 'Zámky, kostely, skály a místa z Náchodska a pár slavných míst z kraje. Zámek Náchod je v každé nové hře.', img: 'photo', groups: groupsOf('nachod'), must: [0], sample: [0, 12, 20, 35] },
-  { id: 'coats',     name: 'Znaky obcí', desc: 'Znaky měst a obcí z okresu Náchod a okresních měst kraje. Náchod je v každé nové hře.', img: 'coat', groups: groupsOf('coats'), must: [0], sample: [0, 3, 22, 34] },
-  { id: 'mushrooms', name: 'Houby',      desc: 'Kreslené houby z našich lesů, jedlé i jedovaté.', img: 'drawing', groups: groupsOf('mushrooms'), sample: [0, 2, 3, 38] },
-  { id: 'birds',     name: 'Ptáci',      desc: 'Kreslení ptáci ze zahrad, polí a lesů.', img: 'drawing', groups: groupsOf('birds'), sample: [0, 1, 5, 34] },
-  { id: 'produce',   name: 'Ovoce a zelenina', desc: 'Kreslené ovoce a zelenina ze zahrady.', img: 'drawing', groups: groupsOf('produce'), sample: [0, 3, 4, 34] },
+  { id: 'classic',   nameKey: 'mahjong.set.classic', descKey: 'mahjong.set.classic.desc', groups: [t('mahjong.group.flowers'), t('mahjong.group.seasons')], sample: [4, 13, 21, 31] },
+  { id: 'pics',      nameKey: 'mahjong.set.pics', descKey: 'mahjong.set.pics.desc', groups: [t('mahjong.group.flowers'), t('mahjong.group.seasons')], sample: [4, 13, 21, 31] },
+  { id: 'cats',      nameKey: 'mahjong.set.cats', descKey: 'mahjong.set.cats.desc', img: 'photo', groups: groupsOf('cats'), sample: [0, 7, 13, 34] },
+  { id: 'nachod',    nameKey: 'mahjong.set.nachod', descKey: 'mahjong.set.nachod.desc', img: 'photo', groups: groupsOf('nachod'), must: [0], sample: [0, 12, 20, 35] },
+  { id: 'coats',     nameKey: 'mahjong.set.coats', descKey: 'mahjong.set.coats.desc', img: 'coat', groups: groupsOf('coats'), must: [0], sample: [0, 3, 22, 34] },
+  { id: 'mushrooms', nameKey: 'mahjong.set.mushrooms', descKey: 'mahjong.set.mushrooms.desc', img: 'drawing', groups: groupsOf('mushrooms'), sample: [0, 2, 3, 38] },
+  { id: 'birds',     nameKey: 'mahjong.set.birds', descKey: 'mahjong.set.birds.desc', img: 'drawing', groups: groupsOf('birds'), sample: [0, 1, 5, 34] },
+  { id: 'produce',   nameKey: 'mahjong.set.produce', descKey: 'mahjong.set.produce.desc', img: 'drawing', groups: groupsOf('produce'), sample: [0, 3, 4, 34] },
 ].filter(x => !x.img || (IMG[x.id] && IMG[x.id].items.length >= 42));
 const setOf = id => SETS.find(x => x.id === id) || SETS[0];
 // Set ids used before the images moved to the shared images/ folder
@@ -307,9 +313,9 @@ const ICONS = {
   shuffle: '<path d="M3 7h3.5c2 0 3.2 1 4.3 2.6l2.4 4.8c1.1 1.6 2.3 2.6 4.3 2.6H21"/><path d="M3 17h3.5c1.6 0 2.7-.6 3.6-1.6"/><path d="M14.4 8.6c.9-1 2-1.6 3.6-1.6H21"/><path d="M18 4l3 3-3 3"/><path d="M18 14l3 3-3 3"/>',
 };
 const ACTS = [
-  { id: 'undo', label: 'Zpět' },
-  { id: 'hint', label: 'Poradit' },
-  { id: 'shuffle', label: 'Zamíchat' },
+  { id: 'undo', labelKey: 'common.undo' },
+  { id: 'hint', labelKey: 'common.hint' },
+  { id: 'shuffle', labelKey: 'mahjong.act.shuffle' },
 ];
 // Default picture set: coats of arms of the Náchod district (falls back to classic tiles without images/)
 // the default theme is Dřevo (user's decision, see CLAUDE.md)
@@ -320,49 +326,49 @@ const KEY = 'games.mahjong.state', OLD_KEY = 'mahjong.v1';
 // Board shapes: layer = [downward offset in half tiles, ...rows]; "[]" = tile, space = half a tile.
 // All fit a portrait phone: at most 7 tiles wide and 9 tall, even tile count.
 const LAYOUTS = {
-  pyramid: ['s', 'Pyramida', [
+  pyramid: ['s', 'pyramid', [
     [0, '  [][][][]', '[][][][][][]', '[][][][][][]', '[][][][][][]', '  [][][][]'],
     [1, ' [][][][][]', ' [][][][][]', ' [][][][][]', ' [][][][][]'],
     [3, '    [][]'],
   ]],
-  heart: ['s', 'Srdce', [
+  heart: ['s', 'heart', [
     [0, ' [][]  [][]', '[][][][][][]', '[][][][][][]', ' [][][][][]', '  [][][][]', '   [][][]', '    [][]'],
     [2, ' [][][][][]', '  [][][][]', '   [][][]'],
     [3, '    [][]'],
   ]],
-  bouquet: ['s', 'Kytička', [
+  bouquet: ['s', 'bouquet', [
     [0, '  [][][]', '[][][][][]', '[][][][][]', '[][][][][]', '  [][][]', '   [][]', '[][][][][]'],
     [1, ' [][][][]', ' [][][][]', ' [][][][]'],
     [3, '   [][]'],
   ]],
-  gate: ['m', 'Brána', [
+  gate: ['m', 'gate', [
     [0, '[][][][][][][]', '[][][][][][][]', '[][]      [][]', '[][]      [][]', '[][]      [][]', '[][]      [][]', '[][][][][][][]', '[][][][][][][]'],
     [1, ' [][][][][][]', ' [][]    [][]', ' [][]    [][]', ' [][]    [][]', ' [][]    [][]', ' [][][][][][]'],
     [2, '   [][][][]'],
   ]],
-  butterfly: ['m', 'Motýl', [
+  butterfly: ['m', 'butterfly', [
     [0, '[][]      [][]', '[][][]  [][][]', '[][][][][][][]', '[][][][][][][]', '  [][][][][]', '[][][][][][][]', '[][][]  [][][]', '[][]      [][]'],
     [2, ' [][]    [][]', ' [][][][][][]', '   [][][][]', ' [][][][][][]', ' [][]    [][]'],
     [5, '      []', '      []'],
   ]],
-  tower: ['m', 'Věž', [
+  tower: ['m', 'tower', [
     [0, '  [][][][][]', '  [][][][][]', '  [][][][][]', '  [][][][][]', '  [][][][][]', '  [][][][][]', '[][][][][][][]', '[][][][][][][]'],
     [1, '   [][][][]', '   [][][][]', '   [][][][]', '   [][][][]', '   [][][][]', ' [][][][][][]'],
     [2, '    [][][]', '    [][][]'],
   ]],
-  turtle: ['l', 'Želvička', [
+  turtle: ['l', 'turtle', [
     [0, '   [][][][]', '[][][][][][][]', '[][][][][][][]', '[][][][][][][]', '[][][][][][][]', '[][][][][][][]', '[][][][][][][]', '[][][][][][][]', '   [][][][]'],
     [2, '  [][][][][]', '  [][][][][]', '  [][][][][]', '  [][][][][]', '  [][][][][]', '  [][][][][]', '  [][][][][]'],
     [4, '    [][][]', '    [][][]', '    [][][]', '    [][][]'],
     [7, '     [][]', '     [][]'],
   ]],
-  castle: ['l', 'Hrad', [
+  castle: ['l', 'castle', [
     [0, '[][]      [][]', '[][][][][][][]', '[][][][][][][]', '[][][][][][][]', '[][][][][][][]', '[][][][][][][]', '[][][][][][][]', '[][][][][][][]', '[][][]  [][][]'],
     [0, '[][]      [][]', '[][]      [][]', '  [][][][][]', '  [][][][][]', '  [][][][][]', '  [][][][][]', '  [][][][][]', '[][]      [][]'],
     [4, '   [][][][]', '   [][][][]', '   [][][][]', '   [][][][]'],
     [7, '     [][]', '     [][]'],
   ]],
-  flower: ['l', 'Květ', [
+  flower: ['l', 'flower', [
     [0, '    [][][]', '  [][][][][]', '[][][][][][][]', '[][][][][][][]', '[][][][][][][]', '[][][][][][][]', '[][][][][][][]', '  [][][][][]', '    [][][]'],
     [1, '   [][][][]', ' [][][][][][]', ' [][][][][][]', ' [][][][][][]', ' [][][][][][]', ' [][][][][][]', '   [][][][]'],
     [3, '   [][][][]', '   [][][][]', '   [][][][]', '   [][][][]', '   [][][][]'],
@@ -564,7 +570,7 @@ function solve(g, alive0, faces, rank, budget = 15000) {
 /* ---------- State and saving ---------- */
 let S, G, busy = false, hintPair = null;
 // rule: while a pair is being removed (or a hint is being looked for) a tap explains itself
-const busyToast = () => toast('Chvilku, kameny se ještě odebírají');
+const busyToast = () => toast(t('mahjong.toast.busy'));
 const hasProgress = () => G.status === 'playing' && G.hist.length > 0;
 const aliveCount = () => G.a.reduce((s, v) => s + v, 0);
 
@@ -610,7 +616,7 @@ function normalize(s) {
   const pick = (k, list) => { if (!list.includes(s[k])) s[k] = list.includes(DEFAULTS[k]) ? DEFAULTS[k] : list[0]; };
   if (OLD_SET_IDS[s.set]) s.set = OLD_SET_IDS[s.set];
   if (OLD_THEME_IDS[s.theme]) s.theme = OLD_THEME_IDS[s.theme];
-  pick('size', SIZES.map(x => x.id)); pick('set', SETS.map(x => x.id)); pick('theme', THEMES.map(t => t.id));
+  pick('size', SIZES.map(x => x.id)); pick('set', SETS.map(x => x.id)); pick('theme', THEMES.map(m => m.id));
   s.dim = !!s.dim; s.vibrate = !!s.vibrate;
 }
 function makeGame(size, prev) {
@@ -652,32 +658,31 @@ function whenFree(g0, ms, fn) {
 // hinted pair): when one of them would be under the toast, it moves up below the top bar, or else just above or
 // below one of those stones, to the first place that leaves them all free (none found: it stays at the bottom).
 function toast(msg, keep) {
-  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  const el = $('#toast'); el.textContent = msg; el.classList.remove('hide');
   const tray = $('#tray').getBoundingClientRect();
-  t.style.top = ''; if (tray.height) t.style.bottom = Math.round(innerHeight - tray.top + 8) + 'px';
+  el.style.top = ''; if (tray.height) el.style.bottom = Math.round(innerHeight - tray.top + 8) + 'px';
   if (keep && keep.length && tray.height) {
-    const h = t.offsetHeight, top = $('.topbar').getBoundingClientRect().bottom + 6, low = tray.top - 8 - h;
+    const h = el.offsetHeight, top = $('.topbar').getBoundingClientRect().bottom + 6, low = tray.top - 8 - h;
     const rs = keep.map(e => e.getBoundingClientRect());
     const free = y => rs.every(q => q.bottom <= y || q.top >= y + h);
     const y = [low, top, ...rs.flatMap(q => [q.top - 8 - h, q.bottom + 8])].filter(y => y >= top && y <= low).find(free);
-    if (y !== undefined && y !== low) { t.style.bottom = 'auto'; t.style.top = Math.round(y) + 'px'; }
+    if (y !== undefined && y !== low) { el.style.bottom = 'auto'; el.style.top = Math.round(y) + 'px'; }
   }
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hide'), 3000);
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.add('hide'), 3000);
 }
 const reduced = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
-function plural(n, one, few, many) { return n === 1 ? one : n >= 2 && n <= 4 ? few : many; }
 
 /* ---------- Moves ---------- */
 function tap(i) {
   if (busy) { busyToast(); return; }
-  if (G.status !== 'playing') { toast('Hra je dohraná. Ťukni na Nová hra.'); return; }
+  if (G.status !== 'playing') { toast(t('mahjong.toast.over')); return; }
   const g = geo(G.lay);
   if (!isFree(g, i, G.a)) {
     // the hint stays shown (and a tap on it still does the hinted move): a tap on a blocked stone changes nothing
     const el = document.querySelector(`.t[data-i="${i}"]`);
     if (el) { el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
     buzz(30);
-    toast(anyAlive(g.cover[i], G.a) ? 'Na tomhle kameni leží jiný. Zatím nejde vzít.' : 'Tenhle kámen má sousedy vlevo i vpravo. Zatím nejde vzít.');
+    toast(t(anyAlive(g.cover[i], G.a) ? 'mahjong.toast.covered' : 'mahjong.toast.sides'));
     return;
   }
   // a tap on a hinted stone takes the hinted pair
@@ -697,8 +702,8 @@ function removePair(a, b) {
     if (G.status === 'won') {
       buzz([40, 60, 40, 60, 80]);
       const g0 = G;
-      whenFree(g0, 250, () => showModal('<h2>Výborně! 🎉</h2><p>Všechny kameny jsou pryč.</p>',
-        [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Zavřít', cls: 'alt' }]));
+      whenFree(g0, 250, () => showModal(`<h2>${th('mahjong.win.title')}</h2><p>${th('mahjong.win.text')}</p>`,
+        [{ text: th('common.newGame'), fn: () => newGame() }, { text: th('mahjong.win.close'), cls: 'alt' }]));
     } else if (!freePairs(geo(G.lay), G.a, G.f)) { const h0 = G.hist.length; whenFree(G, 250, () => { if (G.hist.length === h0) stuck(); }); }
   };
   if (reduced()) { done(); return; }
@@ -706,23 +711,23 @@ function removePair(a, b) {
   setTimeout(done, 230);
 }
 function stuck() {
-  showModal('<h2>Žádná dvojice</h2><p>Teď už nejdou vzít žádné dva stejné kameny. Zamíchej je, nebo vrať tah.</p>',
-    [{ text: 'Zamíchat', fn: doShuffle }, { text: 'Vrátit tah', cls: 'alt', fn: undo }]);
+  showModal(`<h2>${th('mahjong.stuck.title')}</h2><p>${th('mahjong.stuck.text')}</p>`,
+    [{ text: th('mahjong.act.shuffle'), fn: doShuffle }, { text: th('common.undoMove'), cls: 'alt', fn: undo }]);
 }
 function undo() {
   if (busy) { busyToast(); return; }
-  if (G.status !== 'playing') { toast('Hra je dohraná. Ťukni na Nová hra.'); return; }
-  if (!G.hist.length) { toast('Zatím není co vrátit'); return; }
+  if (G.status !== 'playing') { toast(t('mahjong.toast.over')); return; }
+  if (!G.hist.length) { toast(t('mahjong.toast.nothingToUndo')); return; }
   const h = G.hist.pop();
   if (h.p) G.a[h.p[0]] = G.a[h.p[1]] = 1;
   else if (h.s) { G.f = h.s; if (h.r) G.r = h.r; }
   G.sel = -1; hintPair = null;
   buzz(); save(); render();
-  if (!h.p) toast('Zamíchání je vrácené');
+  if (!h.p) toast(t('mahjong.toast.shuffleUndone'));
 }
 function doShuffle() {
   if (busy) { busyToast(); return; }
-  if (G.status !== 'playing') { toast('Hra je dohraná. Ťukni na Nová hra.'); return; }
+  if (G.status !== 'playing') { toast(t('mahjong.toast.over')); return; }
   const g = geo(G.lay), idx = g.order.filter(i => G.a[i]);
   // remaining faces paired by kind (flowers together, seasons together)
   const by = {};
@@ -731,30 +736,30 @@ function doShuffle() {
   for (const k in by) { const l = shuffle(by[k]); for (let j = 0; j < l.length; j += 2) pairs.push([l[j], l[j + 1]]); }
   const d = deal(g, idx, pairs);
   if (!d) {
-    showModal('<h2>Zamíchat nejde</h2><p>Zbylé kameny leží na sobě, takže by to nešlo dohrát. Vrať pár tahů tlačítkem Zpět.</p>',
-      [{ text: 'Vrátit tah', fn: undo }, { text: 'Zavřít', cls: 'alt' }]);
+    showModal(`<h2>${th('mahjong.noShuffle.title')}</h2><p>${th('mahjong.noShuffle.text')}</p>`,
+      [{ text: th('common.undoMove'), fn: undo }, { text: th('mahjong.win.close'), cls: 'alt' }]);
     return;
   }
   const f = G.f.slice(), r = G.r.slice(); for (const i of idx) { f[i] = d.faces[i]; r[i] = d.rank[i]; }
   G.hist.push({ s: G.f, r: G.r });
   G.f = f; G.r = r; G.sel = -1; hintPair = null;
   buzz(); save(); render();
-  toast('Kameny jsou zamíchané. Teď to jde dohrát.');
+  toast(t('mahjong.toast.shuffled'));
 }
 function doHint() {
   if (busy) { busyToast(); return; }
-  if (G.status !== 'playing') { toast('Hra je dohraná. Ťukni na Nová hra.'); return; }
+  if (G.status !== 'playing') { toast(t('mahjong.toast.over')); return; }
   const g = geo(G.lay);
   if (!freePairs(g, G.a, G.f)) { stuck(); return; }
   // the search can take a moment on a phone: show a message first, then think
-  busy = true; G.sel = -1; hintPair = null; render(); toast('Přemýšlím…');
+  busy = true; G.sel = -1; hintPair = null; render(); toast(t('mahjong.toast.thinking'));
   setTimeout(() => { busy = false; showHint(g); }, 30);
 }
 function showHint(g) {
   const r = solve(g, G.a, G.f, G.r);
   if (r.proven) {
-    showModal('<h2>Takhle už to nejde dohrát</h2><p>Zbylé kameny se navzájem blokují. Pomůže Zamíchat, nebo vrátit pár tahů.</p>',
-      [{ text: 'Zamíchat', fn: doShuffle }, { text: 'Vrátit tah', cls: 'alt', fn: undo }, { text: 'Hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('mahjong.blocked.title')}</h2><p>${th('mahjong.blocked.text')}</p>`,
+      [{ text: th('mahjong.act.shuffle'), fn: doShuffle }, { text: th('common.undoMove'), cls: 'alt', fn: undo }, { text: th('mahjong.keepPlaying'), cls: 'alt' }]);
     return;
   }
   let p = r.first;
@@ -766,13 +771,13 @@ function showHint(g) {
     }
   }
   G.sel = -1; hintPair = p; buzz(); render();
-  toast('Tyhle dva kameny jdou vzít. Stačí ťuknout na jeden z nich.', [...document.querySelectorAll('.t.hl')]);
+  toast(t('mahjong.toast.hinted'), [...document.querySelectorAll('.t.hl')]);
 }
 
 /* ---------- Rendering ---------- */
 function applyLook() {
   root.dataset.theme = S.theme;
-  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(m => m.id === S.theme).meta;
 }
 // Tile edge: pixel-by-pixel shadow down and right (light ivory, then the coloured base)
 function edgeShadow(e) {
@@ -836,16 +841,16 @@ function render() {
   const playing = G.status === 'playing';
   $('#acts').innerHTML = ACTS.map(a => {
     const dim = !playing || (a.id === 'undo' && !G.hist.length);
-    return `<button class="act${dim ? ' dim' : ''}" data-a="${a.id}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.id]}</svg>${a.label}</button>`;
+    return `<button class="act${dim ? ' dim' : ''}" data-a="${a.id}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.id]}</svg>${th(a.labelKey)}</button>`;
   }).join('');
   const n = idx.length;
   const def = setOf(S.set);
-  $('#hint').textContent = !playing ? 'Dohráno! 🎉'
+  $('#hint').textContent = !playing ? t('mahjong.hint.won')
     : def.img && G.sel >= 0 ? IMG[def.id].items[G.f[G.sel]].name
-    : `${plural(n, 'Zbývá', 'Zbývají', 'Zbývá')} ${n} ${plural(n, 'kámen', 'kameny', 'kamenů')} · Volné dvojice: ${freePairs(g, G.a, G.f)}`;
+    : t('mahjong.hint.left', { n, pairs: freePairs(g, G.a, G.f) });
   if (!idx.length) {
     board.style.width = board.style.height = '';
-    board.innerHTML = `<div class="done">Všechny kameny jsou pryč! 🎉<br><button class="pill" data-new>Nová hra</button></div>`;
+    board.innerHTML = `<div class="done">${th('mahjong.done')}<br><button class="pill" data-new>${th('common.newGame')}</button></div>`;
   } else {
     // size from the whole shape so tiles don't grow or move while removing
     const L = place(g, g.order, fitTile(g, g.order));
@@ -861,8 +866,8 @@ function render() {
 /* ---------- Input ---------- */
 $('#board').addEventListener('click', e => {
   if (e.target.closest('[data-new]')) { newGame(); return; }
-  const t = e.target.closest('.t'); if (!t) return;
-  tap(+t.dataset.i);
+  const tile = e.target.closest('.t'); if (!tile) return;
+  tap(+tile.dataset.i);
 });
 $('#acts').addEventListener('click', e => {
   const b = e.target.closest('.act'); if (!b) return;
@@ -885,43 +890,43 @@ function showModal(html, buttons) {
 $('#btnNew').addEventListener('click', () => {
   if (busy) { busyToast(); return; }
   if (hasProgress()) {
-    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>',
-      [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Začít tuto znovu', fn: restart }, { text: 'Hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('common.confirmNew.text')}</p>`,
+      [{ text: th('common.newGame'), fn: () => newGame() }, { text: th('mahjong.restart'), fn: restart }, { text: th('mahjong.keepPlaying'), cls: 'alt' }]);
   } else newGame();
 });
 
 /* ---------- Settings ---------- */
 const opt = (act, on, title, desc, extra = '') => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}${extra}</span></button>`;
-const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
 const mini = (f, set, sel) => `<span class="mini${sel ? ' sel' : ''}" style="--tw:38px;--e:4px;--tsh:${edgeShadow(4)}">${faceHTML(f, set)}</span>`;
 
 function renderSettings() {
   let pending = '';
   if (S.size !== G.size) {
     pending = hasProgress()
-      ? '<div class="notice">Jiná velikost potřebuje nový plán. Po návratu do hry začne <b>nová hra</b>.</div>'
-      : '<div class="notice">Po návratu do hry začne nový plán.</div>';
+      ? `<div class="notice">${th('mahjong.set.pendingLost')}</div>`
+      : `<div class="notice">${th('mahjong.set.pending')}</div>`;
   }
   const smp = set => `<span class="samples">${setOf(set).sample.map(f => mini(f, set)).join('')}</span>`;
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Mahjong<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Hra</h3>
-      <div class="field"><div class="flabel">Velikost plánu</div>
-        ${SIZES.map(x => opt('set:size:' + x.id, S.size === x.id, x.name, x.desc)).join('')}
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.mahjong.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('common.game')}</h3>
+      <div class="field"><div class="flabel">${th('mahjong.set.size')}</div>
+        ${SIZES.map(x => opt('set:size:' + x.id, S.size === x.id, th(x.nameKey), th(x.descKey))).join('')}
         ${pending}
       </div>
-      <div class="field"><div class="flabel">Obrázky na kamenech</div>
-        ${SETS.map(x => opt('set:set:' + x.id, S.set === x.id, x.name, x.desc, smp(x.id))).join('')}
+      <div class="field"><div class="flabel">${th('mahjong.set.pictures')}</div>
+        ${SETS.map(x => opt('set:set:' + x.id, S.set === x.id, th(x.nameKey), th(x.descKey), smp(x.id))).join('')}
       </div>
-      ${toggleRow('dim', 'Ztmavit kameny, které nejdou vzít', 'Volné kameny jsou světlé, ostatní ztmavlé. Když je to vypnuté, všechny kameny vypadají stejně a volné se hledají bez pomoci.')}
+      ${toggleRow('dim', th('mahjong.set.dim'), th('mahjong.set.dim.note'))}
     </section>
-    <section class="card"><h3>Vzhled</h3>
-      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch" data-theme="${t.id}">${mini(31, S.set)}${mini(4, S.set, true)}</span>${t.name}</button>`).join('')}</div>
-      ${toggleRow('vibrate', 'Vibrace')}
+    <section class="card"><h3>${th('common.look')}</h3>
+      <div class="tiles">${THEMES.map(m => `<button class="tile" data-act="theme:${m.id}" aria-pressed="${S.theme === m.id}"><span class="swatch" data-theme="${m.id}">${mini(31, S.set)}${mini(4, S.set, true)}</span>${th(m.nameKey)}</button>`).join('')}</div>
+      ${toggleRow('vibrate', th('common.vibrate'))}
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    ${Object.keys(IMG).length ? '<button class="link" data-act="credits">Autoři obrázků</button>' : ''}
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    ${Object.keys(IMG).length ? `<button class="link" data-act="credits">${th('mahjong.credits.link')}</button>` : ''}
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -931,7 +936,7 @@ $('#settingsIn').addEventListener('click', e => {
   if (act === 'set') S[key] = val;
   else if (act === 'toggle') S[key] = !S[key];
   else if (act === 'theme') S.theme = key;
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('common.settingsReset')); }
   normalize(S);
   buzz(8); applyLook(); save(); renderSettings();
 });
@@ -940,7 +945,7 @@ function openSettings() { if (busy) { busyToast(); return; } hideToast(); render
 function closeSettings() {
   $('#screenSettings').hidden = true;
   // also after a finished game (rule): only an untouched plan is replaced without a word
-  if (S.size !== G.size) { newGame(G.hist.length ? 'Začala nová hra s novou velikostí plánu' : ''); return; }
+  if (S.size !== G.size) { newGame(G.hist.length ? t('mahjong.toast.newSize') : ''); return; }
   save(); render();
 }
 $('#btnSettings').addEventListener('click', openSettings);
@@ -949,26 +954,26 @@ $('#btnSettings').addEventListener('click', openSettings);
 function renderHelp() {
   const ico = id => `<span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[id]}</svg></span>`;
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Mahjong<small>Jak hrát</small></h2></div>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.mahjong.name')}<small>${th('common.help')}</small></h2></div>
     <section class="card help">
       <ol>
-        <li>Odeber všechny kameny z plánu. Bere se vždy <b>dvojice stejných kamenů</b>.</li>
-        <li>Ťukni na kámen a potom na druhý stejný. Oba zmizí.</li>
-        <li>Vzít jde jen <b>volný kámen</b>: nic na něm neleží a má volný <b>levý nebo pravý bok</b>.
+        <li>${th('mahjong.help.1')}</li>
+        <li>${th('mahjong.help.2')}</li>
+        <li>${th('mahjong.help.3')}
           <div class="demo" id="demo"><div class="board" id="demoBoard"></div></div>
-          <div class="demo-cap"><span>krajní jdou vzít,<br>prostřední ne</span><span>vrchní jde vzít,<br>spodní ne</span></div></li>
-        <li>${S.dim ? 'Kameny, které teď nejdou vzít, jsou ztmavlé (dá se vypnout v nastavení).' : 'Ztmavení kamenů, které teď nejdou vzít, jde zapnout v nastavení.'}</li>
-        <li>Ve velkém plánu jsou navíc dvě skupiny kamenů s rámečkem: <b>${setOf(S.set).groups[0]}</b> (růžový rámeček) a <b>${setOf(S.set).groups[1]}</b> (modrý rámeček). Jakékoli dva kameny ze stejné skupiny jdou k sobě.</li>
-        ${setOf(S.set).img ? '<li>Název vybraného kamene se ukáže dole nad tlačítky.</li>' : ''}
+          <div class="demo-cap"><span>${th('mahjong.help.3.demo1')}</span><span>${th('mahjong.help.3.demo2')}</span></div></li>
+        <li>${th(S.dim ? 'mahjong.help.4.on' : 'mahjong.help.4.off')}</li>
+        <li>${th('mahjong.help.5', { g1: setOf(S.set).groups[0], g2: setOf(S.set).groups[1] })}</li>
+        ${setOf(S.set).img ? `<li>${th('mahjong.help.6')}</li>` : ''}
       </ol>
     </section>
-    <section class="card help"><h3>Tlačítka</h3>
-      <div class="legend">${ico('undo')}<span><b>Zpět</b> vrátí poslední tah. Dá se ťukat opakovaně.</span></div>
-      <div class="legend">${ico('hint')}<span><b>Poradit</b> ukáže dvojici, kterou jde vzít – když to jde, takovou, se kterou se dá hra dohrát.</span></div>
-      <div class="legend">${ico('shuffle')}<span><b>Zamíchat</b> přeskládá zbylé kameny tak, aby se hra dala dohrát.</span></div>
-      <p class="fnote">Na čas se nehraje. Když se hra zasekne, pomůže Zamíchat nebo Zpět.</p>
+    <section class="card help"><h3>${th('mahjong.help.buttons')}</h3>
+      <div class="legend">${ico('undo')}<span>${th('mahjong.help.undo')}</span></div>
+      <div class="legend">${ico('hint')}<span>${th('mahjong.help.hint')}</span></div>
+      <div class="legend">${ico('shuffle')}<span>${th('mahjong.help.shuffle')}</span></div>
+      <p class="fnote">${th('mahjong.help.note')}</p>
     </section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
   // demo: a row of three tiles and a tile lying on two others
   const dg = { pos: [[0, 0, 0], [2, 0, 0], [4, 0, 0], [8, 0, 0], [10, 0, 0], [9, 0, 1]], n: 6, order: [0, 1, 2, 3, 4, 5] };
   // the picture is six tiles wide: on a narrow phone the tiles get smaller so it stays inside its box (the help is
@@ -978,24 +983,24 @@ function renderHelp() {
   setTileVars(demo, L);
   let h = '';
   for (const i of dg.order) {
-    const [l, t] = L.P[i], blk = i === 1 || i === 3 || i === 4;
-    h += `<div class="t${blk ? ' blk' : ''}" style="left:${l - L.x0}px;top:${t - L.y0}px;z-index:${i}">${faceHTML(faces[i])}</div>`;
+    const [l, tp] = L.P[i], blk = i === 1 || i === 3 || i === 4;
+    h += `<div class="t${blk ? ' blk' : ''}" style="left:${l - L.x0}px;top:${tp - L.y0}px;z-index:${i}">${faceHTML(faces[i])}</div>`;
   }
   demo.innerHTML = h;
   $('#demo').classList.add('dim');
 }
 function openCredits() {
   $('#creditsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Mahjong<small>Autoři obrázků</small></h2></div>
-    <section class="card credits"><p class="fnote" style="margin-top:0">Fotografie a znaky pocházejí z Wikimedia Commons. Obrázky jsou zmenšené a oříznuté. Licence: CC BY / CC BY-SA (creativecommons.org), CC0 nebo volné dílo. Kreslené obrázky (houby, ptáci, ovoce a zelenina) jsou nakreslené pro tyto hry a jsou volným dílem (CC0).</p></section>
-    ${SETS.filter(x => x.img).map(x => `<section class="card credits"><h3>${x.name}</h3><ol>${IMG[x.id].items.map(it => creditLine(it, x.img === 'drawing')).join('')}</ol></section>`).join('')}
-    <button class="big" data-act="close">Zpět</button>`;
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.mahjong.name')}<small>${th('mahjong.credits.link')}</small></h2></div>
+    <section class="card credits"><p class="fnote" style="margin-top:0">${th('mahjong.credits.intro')}</p></section>
+    ${SETS.filter(x => x.img).map(x => `<section class="card credits"><h3>${th(x.nameKey)}</h3><ol>${IMG[x.id].items.map(it => creditLine(it, x.img === 'drawing')).join('')}</ol></section>`).join('')}
+    <button class="big" data-act="close">${th('mahjong.credits.back')}</button>`;
   $('#screenCredits').hidden = false; $('#screenCredits').scrollTop = 0;
 }
 // One line of the credits; the drawings are all by the same author, so they list only the name
 const creditLine = ({ name: n, author: a, license: l, source: u }, drawn, pre = '') => drawn ? `<li><b>${pre}${esc(n)}</b></li>`
-  : `<li><b>${pre}${esc(n)}</b>: ${esc(a)}, ${esc(l)}, <a href="${esc(u)}" target="_blank" rel="noopener">zdroj</a></li>`;
-const esc = t => String(t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  : `<li><b>${pre}${esc(n)}</b>: ${esc(a)}, ${esc(l)}, <a href="${esc(u)}" target="_blank" rel="noopener">${th('mahjong.credits.source')}</a></li>`;
+const esc = I18N.esc;
 $('#creditsIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenCredits').hidden = true; });
 function openHelp() { if (busy) { busyToast(); return; } hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -1027,6 +1032,7 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+I18N.apply(); // the static texts (data-t*), <title> and <html lang> in the player's language
 const saved = load();
 // rule: only the known settings are taken over from the save
 const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};

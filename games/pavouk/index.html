@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,16 +34,24 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="../../i18n/cards.js"></script>
+<script src="../../images/sets.js"></script>
+<script src="../_cards/cards.js"></script>
+<script src="texts.js"></script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#1e7135">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Pavouk">
-<title>Pavouk</title>
+<title data-t="game.pavouk.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%231e7135'/%3E%3Cpath d='M32 4v20' stroke='%23fff' stroke-width='2'/%3E%3Cg fill='none' stroke='%23111' stroke-width='3.4' stroke-linecap='round'%3E%3Cpath d='M26 32 12 24 8 30M26 37 10 36 6 44M27 42 14 48 12 56M29 45 22 56M38 32l14-8 4 6M38 37l16-1 4 8M37 42l13 6 2 8M35 45l7 11'/%3E%3C/g%3E%3Cellipse cx='32' cy='40' rx='10' ry='11' fill='%23111'/%3E%3Ccircle cx='32' cy='27' r='7' fill='%23111'/%3E%3Ccircle cx='29' cy='26' r='2.2' fill='%23fff'/%3E%3Ccircle cx='35' cy='26' r='2.2' fill='%23fff'/%3E%3C/svg%3E">
 <style>
 
@@ -188,15 +196,15 @@ a.round{text-decoration:none}
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app">
   <header class="topbar">
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Pavouk</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.pavouk.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
   <main id="table"></main>
@@ -208,8 +216,6 @@ a.round{text-decoration:none}
 <div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
 <div id="toast" class="hide"></div>
 
-<script src="../../images/sets.js"></script>
-<script src="../_cards/cards.js"></script>
 <script>
 /* ---------- Visible height ---------- */
 // The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
@@ -245,6 +251,8 @@ a.round{text-decoration:none}
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 const root = document.documentElement;
 const table = $('#table');
 
@@ -258,7 +266,7 @@ const SUITMAP = { 1: [0, 0, 0, 0, 0, 0, 0, 0], 2: [0, 1, 0, 1, 0, 1, 0, 1], 4: [
 let NS = 1; // number of suits in the current game
 const rank = c => c % 13 + 1, suit = c => SUITMAP[NS][(c / 13) | 0], red = c => suit(c) & 1;
 const nm = c => RANK[rank(c)] + SYM[suit(c)];
-const SUIT_NAMES = { 1: 'Jedna barva', 2: 'Dvě barvy', 4: 'Čtyři barvy' };
+const suitsName = n => t(`pavouk.suits.${n}`); // 'Jedna barva' …
 
 /* ---------- Appearance: shared with the other card games (games/_cards/cards.js) ---------- */
 const { TABLES, BACKS, FACES, PICS, CASTLE, COAT } = CARDS;
@@ -367,7 +375,7 @@ function sideMove(g) {
 /* ---------- State and saving ---------- */
 let S, G = null, ST, busy = false, SEL = null;
 // rule: while something runs, a tap explains itself instead of doing nothing
-const busyToast = () => toast('Chvilku, hotová řada ještě odlétá');
+const busyToast = () => toast(t('pavouk.toast.busy'));
 const playing = () => G && G.status === 'playing';
 const hasProgress = () => playing() && G.moves > 0;
 function load() {
@@ -446,8 +454,8 @@ function restart() {
 function buzz(ms = 12) { if (S.vibrate && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
 let toastT;
 function toast(msg, ms = 3000) {
-  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
-  t.style.bottom = (innerHeight - $('#tray').getBoundingClientRect().top + 12) + 'px';
+  const el = $('#toast'); el.textContent = msg; el.classList.remove('hide');
+  el.style.bottom = (innerHeight - $('#tray').getBoundingClientRect().top + 12) + 'px';
   clearTimeout(toastT); toastT = setTimeout(hideToast, ms);
 }
 function hideToast() { $('#toast').classList.add('hide'); }
@@ -469,19 +477,17 @@ function locate(c) {
 }
 const runOf = src => G.tab[src.col].slice(src.idx);
 const canTake = src => src.idx >= runStart(G.tab[src.col], G.down[src.col]);
-const takeMsg = () => NS === 1
-  ? 'Vzít najednou jde jen řada karet po sobě, třeba 8, 7, 6'
-  : 'Vzít najednou jde jen řada karet po sobě ve stejné barvě, třeba 8♠ 7♠ 6♠';
+const takeMsg = () => t(NS === 1 ? 'pavouk.takeOne' : 'pavouk.takeMany');
 
 // '' = move allowed; otherwise an explanation why not ('same' = same column, say nothing)
 function why(src, to) {
   if (src.col === to) return 'same';
-  const t = G.tab[to];
-  if (!t.length) return '';
-  const c = G.tab[src.col][src.idx], top = t[t.length - 1];
+  const pile = G.tab[to];
+  if (!pile.length) return '';
+  const c = G.tab[src.col][src.idx], top = pile[pile.length - 1];
   if (rank(top) === rank(c) + 1) return '';
-  if (rank(top) === 1) return 'Na eso už nic nepatří';
-  return `Na ${nm(top)} patří jen ${RANK[rank(top) - 1]}` + (NS > 1 ? ' (barva může být jakákoli)' : '');
+  if (rank(top) === 1) return t('pavouk.why.onAce');
+  return t('pavouk.why.needs', { card: nm(top), rank: RANK[rank(top) - 1], many: NS > 1 });
 }
 
 /* ---------- Moves ---------- */
@@ -497,11 +503,11 @@ const dealBlocked = g => g.tab.some(a => !a.length) && g.tab.reduce((n, a) => n 
 function deal() {
   if (busy) { busyToast(); return; }
   clearHint();
-  if (!playing()) { if (G.status === 'won') toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
-  if (!G.stock.length) { toast('Všechny karty už jsou rozdané'); return; }
+  if (!playing()) { if (G.status === 'won') toast(t('pavouk.toast.won')); return; }
+  if (!G.stock.length) { toast(t('pavouk.toast.stockEmpty')); return; }
   const empty = G.tab.map((a, i) => a.length ? -1 : i).filter(i => i >= 0);
   if (dealBlocked(G)) {
-    toast('Rozdat jde, až bude v každém sloupci aspoň jedna karta. Dej sem nějakou kartu.', 4500);
+    toast(t('pavouk.toast.dealBlocked'), 4500);
     HINT = empty.map(i => SLOT.col[i]); HINT.forEach(e => e.classList.add('hint'));
     hintT = setTimeout(clearHint, 3000);
     buzz(30);
@@ -526,7 +532,7 @@ function after(order) {
       busy = false;
       buzz([30, 50, 30]);
       save(); render();
-      if (G.done.length < 8) toast(`Hotová řada! ${G.done.length === 7 ? 'Zbývá poslední.' : `Zbývá ${8 - G.done.length}.`}`);
+      if (G.done.length < 8) toast(t('pavouk.toast.runDone', { left: 8 - G.done.length }));
       checkEnd();
     }, order ? 700 : 380);
     return;
@@ -535,8 +541,8 @@ function after(order) {
 }
 function undo() {
   if (busy) { busyToast(); return; }
-  if (!playing()) { toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
-  if (!G.hist.length) { toast('Není co vrátit'); return; }
+  if (!playing()) { toast(t('pavouk.toast.won')); return; }
+  if (!G.hist.length) { toast(t('pavouk.toast.nothingToUndo')); return; }
   restore(G.hist.pop());
   SEL = null; clearHint();
   buzz(); save(); render();
@@ -546,14 +552,14 @@ function autoMove(src) {
   let best = -1, bs = 0;
   for (let to = 0; to < COLS; to++) {
     if (to === src.col) continue;
-    const t = G.tab[to];
+    const pile = G.tab[to];
     let s = 0;
-    if (!t.length) s = src.idx > 0 ? 1 : 0;
+    if (!pile.length) s = src.idx > 0 ? 1 : 0;
     else {
-      const top = t[t.length - 1];
+      const top = pile[pile.length - 1];
       if (rank(top) === rank(c) + 1) {
         if (suit(top) === suit(c)) {
-          const tr = t.length - runStart(t, G.down[to]);
+          const tr = pile.length - runStart(pile, G.down[to]);
           s = 3 + (rank(a[a.length - 1]) === 1 && tr + len >= 13 ? 5 : 0) + tr * .01;
         } else s = 2;
       }
@@ -562,7 +568,7 @@ function autoMove(src) {
   }
   if (best < 0) {
     shake(runOf(src));
-    toast(src.idx === 0 && G.tab.some(x => !x.length) ? 'Karta už je na začátku sloupce' : `${nm(c)} teď nejde nikam dát`);
+    toast(src.idx === 0 && G.tab.some(x => !x.length) ? t('pavouk.toast.atStart') : t('pavouk.toast.nowhere', { card: nm(c) }));
     return;
   }
   doMove(src, best);
@@ -585,8 +591,8 @@ function checkEnd() {
     const wonGame = G;
     whenFree(wonGame, 900, () => {
       if (busy) return;
-      showModal(`<h2>Vyhráno! 🎉</h2><p>Všech osm řad je složených.</p>${wonGame.hinted ? '<p>Hra s radou se do statistiky nepočítá.</p>' : `<p>${SUIT_NAMES[G.suits]}: vyhrané hry <b>${st.won}</b> z ${st.played}</p>`}`,
-      [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout stůl', cls: 'alt' }]);
+      showModal(`<h2>${th('pavouk.won.title')}</h2><p>${th('pavouk.won.text')}</p><p>${wonGame.hinted ? th('pavouk.won.hinted') : th('pavouk.won.count', { variant: suitsName(G.suits), won: st.won, played: st.played })}</p>`,
+      [{ text: th('common.newGame'), fn: () => newGame() }, { text: th('pavouk.won.view'), cls: 'alt' }]);
     });
     return;
   }
@@ -596,8 +602,8 @@ function checkEnd() {
     whenFree(g0, 500, () => {
       if (G.hist.length !== h0 || busy || !playing()) return;
       countEnd(false); save(); // the stuck end counts the game as played, not won
-      showModal('<h2>Dál to nejde</h2><p>Všechny karty jsou rozdané a žádný užitečný tah už nevidím.</p>',
-        [{ text: 'Vrátit tah zpět', fn: undo }, { text: 'Nová hra', fn: () => newGame() }, { text: 'Ještě se podívám', cls: 'alt' }]);
+      showModal(`<h2>${th('pavouk.stuck.title')}</h2><p>${th('pavouk.stuck.text')}</p>`,
+        [{ text: th('pavouk.stuck.undo'), fn: undo }, { text: th('common.newGame'), fn: () => newGame() }, { text: th('pavouk.stuck.look'), cls: 'alt' }]);
     });
   }
 }
@@ -611,27 +617,27 @@ function clearHint() {
 }
 function hint() {
   if (busy) { busyToast(); return; }
-  if (!playing()) { toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
+  if (!playing()) { toast(t('pavouk.toast.won')); return; }
   SEL = null; clearHint();
   const M = freshMoves(G), side = M.length ? null : sideMove(G), m = M[0] || side; // side: a move that frees the next one
   const empty = G.tab.map((a, i) => a.length ? -1 : i).filter(i => i >= 0);
   let els = [], msg;
   if (m && (side || m.sc >= 8 || empty.length || !G.stock.length)) {
-    const run = G.tab[m.col].slice(m.idx), c = run[0], t = G.tab[m.to];
+    const run = G.tab[m.col].slice(m.idx), c = run[0], pile = G.tab[m.to];
     var hintMove = { col: m.col, idx: m.idx, to: m.to };
     run.forEach(x => els.push(EL[x]));
-    els.push(t.length ? EL[t[t.length - 1]] : SLOT.col[m.to]);
-    msg = t.length ? `Přesuň ${nm(c)} na ${nm(t[t.length - 1])}` : `Přesuň ${nm(c)} na prázdné místo`;
-    if (m.sc >= 200) msg += ', složí se celá řada';
+    els.push(pile.length ? EL[pile[pile.length - 1]] : SLOT.col[m.to]);
+    const full = m.sc >= 200;
+    msg = pile.length ? t('pavouk.hint.onto', { card: nm(c), target: nm(pile[pile.length - 1]), full }) : t('pavouk.hint.toEmpty', { card: nm(c), full });
   } else if (G.stock.length && !dealBlocked(G)) {
     els = G.stock.slice(-COLS).map(c => EL[c]);
     HINT_DEAL = true;
-    msg = 'Teď je dobré rozdat další karty: ťukni na Rozdat';
+    msg = t('pavouk.hint.deal');
   } else if (G.stock.length) {
     els = empty.map(i => SLOT.col[i]);
-    msg = 'Dej na prázdné místo nějakou kartu, potom jde rozdat';
+    msg = t('pavouk.hint.fillEmpty');
   } else {
-    render(); toast('Žádný užitečný tah už nevidím. Zkus Zpět nebo novou hru.'); return;
+    render(); toast(t('pavouk.toast.noUseful')); return;
   }
   render();
   els.forEach(e => e.classList.add('hint'));
@@ -780,9 +786,9 @@ function renderTray() {
   const left = G ? G.stock.length / COLS : 0;
   const canDeal = playing() && left > 0 && !dealBlocked(G);
   const acts = [
-    { id: 'undo', label: 'Zpět', cls: !playing() || !G.hist.length ? ' dim' : '' },
-    { id: 'hint', label: 'Poradit', cls: !playing() ? ' dim' : '' },
-    { id: 'deal', label: `Rozdat <small>(${left})</small>`, cls: (canDeal ? '' : ' dim') + (HINT_DEAL ? ' hint' : '') },
+    { id: 'undo', label: th('common.undo'), cls: !playing() || !G.hist.length ? ' dim' : '' },
+    { id: 'hint', label: th('common.hint'), cls: !playing() ? ' dim' : '' },
+    { id: 'deal', label: th('pavouk.btn.deal', { n: left }), cls: (canDeal ? '' : ' dim') + (HINT_DEAL ? ' hint' : '') },
   ];
   $('#tray').innerHTML = acts.map(a => `<button class="act${a.cls}" data-a="${a.id}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.id]}</svg><span>${a.label}</span></button>`).join('');
 }
@@ -801,12 +807,12 @@ function hitAt(e) {
 function tap(hit) {
   const hinted = HINT_MOVE;
   clearHint();
-  if (!playing()) { if (G.status === 'won') toast('Hra je vyhraná. Ťukni na Nová hra.'); return; }
+  if (!playing()) { if (G.status === 'won') toast(t('pavouk.toast.won')); return; }
   if (!hit) { if (SEL) { SEL = null; render(); } return; }
   if (hit.kind === 'stock' || (hit.kind === 'card' && hit.loc.t === 'stock')) { SEL = null; deal(); return; }
   if (hit.kind === 'done' || (hit.kind === 'card' && hit.loc.t === 'done')) {
     if (SEL) { SEL = null; render(); }
-    toast('Sem nahoru odcházejí hotové řady od krále po eso');
+    toast(t('pavouk.toast.doneRows'));
     return;
   }
   const l = hit.kind === 'card' ? hit.loc : null;
@@ -835,7 +841,7 @@ function tap(hit) {
   }
 
   if (l) {
-    if (!src) { toast('Tahle karta leží rubem nahoru. Otočí se sama, až z ní odejdou karty nad ní.'); return; }
+    if (!src) { toast(t('pavouk.toast.faceDown')); return; }
     if (!canTake(src)) { shake(runOf(src)); toast(takeMsg(), 4000); return; }
     if (S.mode === 'tap') {
       // any card of the hinted run (they all blink) does the hinted move
@@ -848,7 +854,7 @@ function tap(hit) {
     else { SEL = src; buzz(8); render(); }
     return;
   }
-  if (!G.tab[col].length) toast('Sem jde dát jakákoli karta nebo řada karet');
+  if (!G.tab[col].length) toast(t('pavouk.toast.anyToEmpty'));
 }
 
 let PD = null;
@@ -856,7 +862,7 @@ let dealUntil = 0;
 table.addEventListener('pointerdown', e => {
   if (busy && G) { busyToast(); return; }
   if (busy || PD || !G || (e.button !== undefined && e.button > 0)) return;
-  if (Date.now() < dealUntil) { toast('Chvilku, karty se ještě rozdávají'); return; }
+  if (Date.now() < dealUntil) { toast(t('pavouk.toast.dealing')); return; }
   const hit = hitAt(e);
   PD = { id: e.pointerId, x0: e.clientX, y0: e.clientY, hit, drag: false };
   if (hit && hit.kind === 'card' && hit.loc.t === 'tab' && playing()) {
@@ -921,14 +927,14 @@ function showModal(html, buttons) {
 $('#btnNew').addEventListener('click', () => {
   if (busy) { busyToast(); return; }
   if (hasProgress()) {
-    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>',
-      [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Začít tuto znovu', fn: restart }, { text: 'Hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('common.confirmNew.text')}</p>`,
+      [{ text: th('common.newGame'), fn: () => newGame() }, { text: th('pavouk.confirm.restart'), fn: restart }, { text: th('pavouk.confirm.keep'), cls: 'alt' }]);
   } else newGame();
 });
 
 /* ---------- Settings ---------- */
 const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
-const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
+const toggleRow = (key, label, note) => `<div class="field"><div class="trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>${note ? `<div class="fnote">${note}</div>` : ''}</div>`;
 // sample cards depending on the number of suits: ace, 7 and king
 const sample = () => S.suits === 1 ? [[0, 1], [0, 7], [0, 13]] : S.suits === 2 ? [[1, 1], [0, 7], [1, 13]] : [[1, 1], [0, 7], [3, 13]];
 const minis = (pic, withBack) => `<span class="mini">${sample().slice(0, withBack ? 2 : 3).map(([s, r]) => cardHTML(s, r, true, pic)).join('')}${withBack ? '<div class="cd"></div>' : ''}</span>`;
@@ -937,30 +943,29 @@ function renderSettings() {
   const tile = (act, on, inner, name) => `<button class="tile" data-act="${act}" aria-pressed="${on}">${inner}${name}</button>`;
   const pending = G && S.suits !== G.suits;
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Pavouk<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Hra</h3>
-      <div class="field"><div class="flabel">Počet barev</div>
-        ${opt('set:suits:1', S.suits === 1, 'Jedna barva', 'Nejsnazší. Všechny karty jsou piky ♠, řady se skládají snadno.')}
-        ${opt('set:suits:2', S.suits === 2, 'Dvě barvy', 'Piky ♠ a srdce ♥. Těžší, hotová řada musí být celá v jedné barvě.')}
-        ${opt('set:suits:4', S.suits === 4, 'Čtyři barvy', 'Všechny barvy ♠ ♥ ♣ ♦. Hodně těžké.')}
-        ${pending ? (G.moves ? `<div class="notice">Počet barev se změní od <b>příští hry</b>.${playing() ? ' Rozehraná hra zůstává.' : ''}</div>`
-          : `<div class="notice">Po návratu do hry se rozdá <b>nová hra</b> (${SUIT_NAMES[S.suits].toLowerCase()}).</div>`) : ''}
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.pavouk.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('common.game')}</h3>
+      <div class="field"><div class="flabel">${th('pavouk.suits')}</div>
+        ${opt('set:suits:1', S.suits === 1, th('pavouk.suits.1'), th('pavouk.suits.1.desc'))}
+        ${opt('set:suits:2', S.suits === 2, th('pavouk.suits.2'), th('pavouk.suits.2.desc'))}
+        ${opt('set:suits:4', S.suits === 4, th('pavouk.suits.4'), th('pavouk.suits.4.desc'))}
+        ${pending ? `<div class="notice">${G.moves ? th('pavouk.suits.next', { progress: playing() }) : th('pavouk.newDeal', { suits: S.suits })}</div>` : ''}
       </div>
     </section>
-    <section class="card"><h3>Ovládání</h3>
+    <section class="card"><h3>${th('pavouk.controls')}</h3>
       <div class="field">
-        ${opt('set:mode:tap', S.mode === 'tap', 'Ťuknout na kartu', 'Karta se sama přesune tam, kam se hodí nejlépe.')}
-        ${opt('set:mode:select', S.mode === 'select', 'Ťuknout na kartu, pak na místo', 'Vybraná karta se zvýrazní a čárkovaně se ukáže, kam může. Pak ťukni, kam ji dát.')}
-        <div class="fnote">Kartu jde vždy i přetáhnout prstem. Karty jsou úzké, protože vedle sebe musí být deset sloupců – ťuknout stačí kamkoli na viditelnou část karty.</div>
+        ${opt('set:mode:tap', S.mode === 'tap', th('pavouk.mode.tap'), th('pavouk.mode.tap.desc'))}
+        ${opt('set:mode:select', S.mode === 'select', th('pavouk.mode.select'), th('pavouk.mode.select.desc'))}
+        <div class="fnote">${th('pavouk.mode.drag')}</div>
       </div>
     </section>
-    ${CARDS.appearanceHTML(S, tile, minis, '--cw:52px;--ch:73px', toggleRow('vibrate', 'Vibrace'))}
-    <section class="card"><h3>Statistika</h3>
-      <p class="stats">${[1, 2, 4].map(n => `${SUIT_NAMES[n]}: vyhráno <b>${ST[n].won}</b> z ${ST[n].played}`).join('<br>')}</p>
+    ${CARDS.appearanceHTML(S, tile, minis, '--cw:52px;--ch:73px', toggleRow('vibrate', th('common.vibrate')))}
+    <section class="card"><h3>${th('common.stats')}</h3>
+      <p class="stats">${[1, 2, 4].map(n => th('pavouk.stats.row', { variant: suitsName(n), won: ST[n].won, played: ST[n].played })).join('<br>')}</p>
       ${CARDS.statsNote(ST.mixed)}
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -969,7 +974,7 @@ $('#settingsIn').addEventListener('click', e => {
   if (act === 'set') S[key] = key === 'suits' ? +val : val;
   else if (act === 'toggle') S[key] = !S[key];
   else if (['table', 'back', 'face', 'pic'].includes(act)) S[act] = key;
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('common.settingsReset')); }
   normalize(S);
   buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop;
@@ -981,7 +986,7 @@ function closeSettings() {
   $('#screenSettings').hidden = true;
   SEL = null;
   // the number of suits belongs to the game (rule): it changes from the next game, at once only when nothing was played yet
-  if (G && S.suits !== G.suits && !G.moves) { newGame(`Nová hra: ${SUIT_NAMES[S.suits].toLowerCase()}`); return; }
+  if (G && S.suits !== G.suits && !G.moves) { newGame(t('pavouk.toast.newGameSuits', { suits: S.suits })); return; }
   save(); render({ instant: true });
   if (playing()) checkEnd(); // the cards did not move: "Dál to nejde" is not said again
 }
@@ -992,30 +997,27 @@ function renderHelp() {
   const ico = id => `<span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[id]}</svg></span>`;
   const ds = NS === 4 ? [0, 1, 2] : NS === 2 ? [0, 1, 0] : [0, 0, 0];
   const demo = [9, 8, 7].map((r, i) => cardHTML(ds[i], r, true, S.pic, `top:${i * 40}px`)).join('');
-  const how = S.mode === 'tap'
-    ? 'Ťukni na kartu a ona se sama přesune, kam se hodí. Když nemůže nikam, zatřese se.'
-    : 'Ťukni na kartu, zvýrazní se. Čárkovaně se ukáže, kam může. Pak ťukni na místo, kam má jít.';
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Pavouk<small>Jak hrát</small></h2></div>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.pavouk.name')}<small>${th('common.help')}</small></h2></div>
     <section class="card help">
       <ol>
-        <li><b>Cíl:</b> složit ve sloupcích celé řady od <b>krále</b> po <b>eso</b> (K, Q, J, 10 … 2, A)${NS > 1 ? ' v jedné barvě' : ''}. Hotová řada sama odejde nahoru doprava. Vyhráno je, když odejde všech <b>osm řad</b>.</li>
-        <li>Ve sloupcích se skládá <b>dolů o jedno nižší</b> karta: na devítku osmička, na ni sedmička.${NS > 1 ? ' Barva při tom může být <b>jakákoli</b>.' : ''}
+        <li>${th('pavouk.help.1', { many: NS > 1 })}</li>
+        <li>${th('pavouk.help.2', { many: NS > 1 })}
           <div class="demo-felt"><div class="demo" style="height:160px">${demo}</div></div></li>
-        <li>Přesunout jde i řada karet najednou, ale jen když jdou po sobě${NS > 1 ? ' a jsou <b>stejné barvy</b>' : ''}. Stačí vzít tu nejvyšší z nich.</li>
-        <li>Na <b>prázdné místo</b> jde jakákoli karta nebo řada.</li>
-        <li>Karty ležící rubem nahoru se otočí samy, jakmile z nich odejdou karty nad nimi.</li>
-        <li><b>Rozdat</b> (nebo ťuknutí na balíček vlevo nahoře) přidá do každého sloupce jednu kartu. Jde to pětkrát, a jen když žádný sloupec není prázdný. Když je na stole méně než 10 karet, jde to i s prázdným sloupcem.</li>
-        <li>${how} Kartu jde také přetáhnout prstem.</li>
+        <li>${th('pavouk.help.3', { many: NS > 1 })}</li>
+        <li>${th('pavouk.help.4')}</li>
+        <li>${th('pavouk.help.5')}</li>
+        <li>${th('pavouk.help.6')}</li>
+        <li>${th('pavouk.help.7', { mode: S.mode })}</li>
       </ol>
     </section>
-    <section class="card help"><h3>Tlačítka</h3>
-      <div class="legend">${ico('undo')}<span><b>Zpět</b> vrátí poslední tah. Dá se ťukat opakovaně.</span></div>
-      <div class="legend">${ico('hint')}<span><b>Poradit</b> ukáže dobrý tah: karta i místo, kam patří, zablikají. Hra s radou se nepočítá do statistiky.</span></div>
-      <div class="legend">${ico('deal')}<span><b>Rozdat</b> dá do každého sloupce jednu kartu. Číslo říká, kolikrát to ještě jde.</span></div>
-      <p class="fnote">Na čas se nehraje. Počet barev (obtížnost), vzhled stolu, karet a obrázky jdou změnit v nastavení ⚙.</p>
+    <section class="card help"><h3>${th('pavouk.help.buttons')}</h3>
+      <div class="legend">${ico('undo')}<span>${th('pavouk.help.undo')}</span></div>
+      <div class="legend">${ico('hint')}<span>${th('pavouk.help.hint')}</span></div>
+      <div class="legend">${ico('deal')}<span>${th('pavouk.help.deal')}</span></div>
+      <p class="fnote">${th('pavouk.help.note')}</p>
     </section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { if (busy) { busyToast(); return; } hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -1047,6 +1049,7 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+I18N.apply(); // the static texts (data-t*), <title> and <html lang> in the player's language
 // Persistent storage: the browser won't evict settings or the saved game on its own
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 const saved = load();

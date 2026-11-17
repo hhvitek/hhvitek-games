@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,16 +34,21 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
-
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="../../images/sets.js"></script>
+<script src="texts.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#232b33">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Spoj tři">
-<title>Spoj tři</title>
+<title data-t="game.spoj-tri.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%233a4651'/%3E%3Ccircle cx='14' cy='32' r='9' fill='%23e23a2e'/%3E%3Ccircle cx='32' cy='32' r='9' fill='%23e23a2e'/%3E%3Ccircle cx='50' cy='32' r='9' fill='%23e23a2e'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes (solid colours) ---------- */
@@ -227,10 +232,9 @@ main{flex:1;min-height:0;display:grid;place-items:center;padding:12px var(--gut)
   #rotate span{font-size:20px;color:var(--psoft)}
 }
 </style>
-<script src="../../images/sets.js"></script>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
   <linearGradient id="g0" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8f84"/><stop offset=".55" stop-color="#e23a2e"/><stop offset="1" stop-color="#b8231a"/></linearGradient>
   <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7fb0ff"/><stop offset=".55" stop-color="#1f63d6"/><stop offset="1" stop-color="#174ba6"/></linearGradient>
@@ -251,25 +255,25 @@ main{flex:1;min-height:0;display:grid;place-items:center;padding:12px var(--gut)
 
 <div id="app">
   <header class="topbar">
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Spoj tři</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.spoj-tri.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
   <section class="stats">
-    <div class="stat" id="stScoreBox"><small>Body</small><b id="stScore">0</b></div>
-    <div class="stat"><small id="stMovesLab">Zbývá tahů</small><b id="stMoves">30</b></div>
-    <div class="stat" id="stBestBox"><small>Rekord</small><b id="stBest">0</b></div>
+    <div class="stat" id="stScoreBox"><small data-t="spoj-tri.stat.score"></small><b id="stScore">0</b></div>
+    <div class="stat"><small id="stMovesLab" data-t="spoj-tri.stat.movesLeft"></small><b id="stMoves">30</b></div>
+    <div class="stat" id="stBestBox"><small data-t="spoj-tri.stat.best"></small><b id="stBest">0</b></div>
   </section>
-  <main id="main"><div id="boardWrap"><div id="tiles" aria-label="Hrací deska"><div id="fx"></div></div></div></main>
+  <main id="main"><div id="boardWrap"><div id="tiles" data-t-aria="spoj-tri.board"><div id="fx"></div></div></div></main>
   <footer class="tray">
     <div class="hint" id="hint"></div>
     <div class="actions">
-      <button id="btnUndo" class="tbtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
-      <button id="btnHint" class="tbtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 18h5"/><path d="M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg>Poradit</button>
+      <button id="btnUndo" class="tbtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span data-t="common.undo"></span></button>
+      <button id="btnHint" class="tbtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 18h5"/><path d="M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/></svg><span data-t="common.hint"></span></button>
     </div>
   </footer>
 </div>
@@ -316,37 +320,40 @@ main{flex:1;min-height:0;display:grid;place-items:center;padding:12px var(--gut)
 'use strict';
 const $ = s => document.querySelector(s);
 const root = document.documentElement;
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 // Shared image sets from images/sets.js (missing when the game is opened on its own)
 const IMG = globalThis.IMAGE_SETS || {}, IMG_BASE = '../../images/';
 
 /* ---------- Constants ---------- */
-// Stone kinds: every colour also has its own shape (helps with weaker colour vision)
+// Stone kinds: every colour also has its own shape (helps with weaker colour vision): red circle, blue square,
+// yellow triangle, green diamond, purple star, pink heart, orange hexagon
 const KINDS = [
-  { name: 'červený kruh', c: '#e23a2e' },
-  { name: 'modrý čtverec', c: '#1f63d6' },
-  { name: 'žlutý trojúhelník', c: '#f7c21a' },
-  { name: 'zelený kosočtverec', c: '#25a244' },
-  { name: 'fialová hvězda', c: '#8c3fd0' },
-  { name: 'růžové srdce', c: '#f0509b' },
-  { name: 'oranžový šestiúhelník', c: '#f57c10' },
+  { c: '#e23a2e' },
+  { c: '#1f63d6' },
+  { c: '#f7c21a' },
+  { c: '#25a244' },
+  { c: '#8c3fd0' },
+  { c: '#f0509b' },
+  { c: '#f57c10' },
 ];
 const THEMES = [
-  { id: 'slate',    name: 'Břidlice',   meta: '#232b33' },
-  { id: 'navy',     name: 'Modrá',      meta: '#0f1f36' },
-  { id: 'green',    name: 'Zelená',     meta: '#10291b' },
-  { id: 'burgundy', name: 'Vínová',     meta: '#250a10' },
-  { id: 'lavender', name: 'Levandule',  meta: '#2a2238' },
-  { id: 'paper',    name: 'Papír',      meta: '#f4ebdf' },
-  { id: 'night',    name: 'Noc',        meta: '#0b0c0e' },
+  { id: 'slate',    nameKey: 'spoj-tri.theme.slate',    meta: '#232b33' },
+  { id: 'navy',     nameKey: 'spoj-tri.theme.navy',     meta: '#0f1f36' },
+  { id: 'green',    nameKey: 'spoj-tri.theme.green',    meta: '#10291b' },
+  { id: 'burgundy', nameKey: 'spoj-tri.theme.burgundy', meta: '#250a10' },
+  { id: 'lavender', nameKey: 'spoj-tri.theme.lavender', meta: '#2a2238' },
+  { id: 'paper',    nameKey: 'common.theme.paper',      meta: '#f4ebdf' },
+  { id: 'night',    nameKey: 'spoj-tri.theme.night',    meta: '#0b0c0e' },
 ];
 const SYMBOLS = [
-  { id: 'shapes', name: 'Barevné tvary', desc: 'Každá barva má i svůj tvar.' },
-  { id: 'cats',   name: 'Kočky',         desc: 'Fotky koček v barevných rámečcích.' },
-  { id: 'nachod', name: 'Náchodsko',     desc: 'Hrady a místa z Náchodska a okolí.' },
-  { id: 'coats',  name: 'Znaky obcí',    desc: 'Znaky obcí z Náchodska a okolí.' },
-  { id: 'mushrooms', name: 'Houby',       desc: 'Kreslené houby z našich lesů.' },
-  { id: 'birds',  name: 'Ptáci',         desc: 'Kreslení ptáci ze zahrad a lesů.' },
-  { id: 'produce', name: 'Ovoce a zelenina', desc: 'Kreslené ovoce a zelenina ze zahrady.' },
+  { id: 'shapes', nameKey: 'spoj-tri.symbols.shapes', descKey: 'spoj-tri.symbols.shapes.desc' },
+  { id: 'cats',   nameKey: 'spoj-tri.symbols.cats', descKey: 'spoj-tri.symbols.cats.desc' },
+  { id: 'nachod', nameKey: 'spoj-tri.symbols.nachod', descKey: 'spoj-tri.symbols.nachod.desc' },
+  { id: 'coats',  nameKey: 'spoj-tri.symbols.coats', descKey: 'spoj-tri.symbols.coats.desc' },
+  { id: 'mushrooms', nameKey: 'spoj-tri.symbols.mushrooms', descKey: 'spoj-tri.symbols.mushrooms.desc' },
+  { id: 'birds',  nameKey: 'spoj-tri.symbols.birds', descKey: 'spoj-tri.symbols.birds.desc' },
+  { id: 'produce', nameKey: 'spoj-tri.symbols.produce', descKey: 'spoj-tri.symbols.produce.desc' },
 ].filter(x => x.id === 'shapes' || (IMG[x.id] && Array.isArray(IMG[x.id].items) && pool(x.id).length >= 7));
 const MOVES = [20, 30, 40, 50, 0];          // 0 = no limit
 const LIMITS = { n: [6, 8], kinds: [4, 7] };
@@ -515,7 +522,7 @@ function normalize(s) {
   s.vibrate = s.vibrate !== false;
   if (!SYMBOLS.some(x => x.id === s.symbols)) s.symbols = 'shapes';
   if (s.theme === 'cream') s.theme = 'paper'; // renamed: Krémová became Papír
-  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  if (!THEMES.some(m => m.id === s.theme)) s.theme = DEFAULTS.theme;
 }
 function validPics(p) {
   if (!p || typeof p !== 'object' || !IMG[p.set] || !Array.isArray(p.idx) || p.idx.length !== KINDS.length) return false;
@@ -564,7 +571,7 @@ function newGame() {
 }
 
 /* ---------- Helpers ---------- */
-const fmt = v => Math.round(v).toLocaleString('cs-CZ');
+const fmt = v => I18N.num(Math.round(v));
 function buzz(ms = 12) { if (S.vibrate && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
 let toastT;
 function hideToast() { clearTimeout(toastT); $('#toast').classList.add('hide'); }
@@ -693,7 +700,7 @@ async function trySwap(a, b) {
       [c[a], c[b]] = [c[b], c[a]];
       await wait(sync() + 30);
       busy = false; render(); buzz(30);
-      toast('Tady řada tří nevznikne');
+      toast(t('spoj-tri.toast.noRow'));
       return;
     }
     G.undo.push(snap); if (G.undo.length > UNDO_MAX) G.undo.shift();
@@ -711,7 +718,7 @@ async function trySwap(a, b) {
       if (end.record) { G.recPrev = prev; R[recKey(G)] = G.score; }
     }
     busy = false; save(); render();
-    if (end) { const t = token; whenFree(G, 700, () => { if (t === token && G.status === 'over') showEnd(end); }); }
+    if (end) { const tk = token; whenFree(G, 700, () => { if (tk === token && G.status === 'over') showEnd(end); }); }
   } catch (e) {
     if (e !== STALE) { busy = false; render(); throw e; }
   }
@@ -798,7 +805,7 @@ function gravity() {
 }
 async function ensureMoves() {
   if (findMoves(G.cells, G.n).length) return;
-  toast('Žádný tah – kameny se zamíchaly');
+  toast(t('spoj-tri.toast.shuffled'));
   await wait(700);
   G.cells = reshuffle(G.cells, G.n, G.kinds);
   await wait(sync({ base: 300 }) + 40);
@@ -806,10 +813,10 @@ async function ensureMoves() {
 
 // While stones are falling (busy) taps are not lost silently: they say why nothing happens
 // After the end of the game Undo still works (while there are moves to take back), so say so
-const overMsg = () => G.undo.length ? 'Hra skončila – ťukni na Zpět nebo Nová hra' : 'Hra skončila – ťukni na Nová hra';
+const overMsg = () => t(G.undo.length ? 'spoj-tri.toast.overUndo' : 'spoj-tri.toast.over');
 function undo() {
-  if (busy) { toast('Chvilku, kameny ještě padají'); return; }
-  if (!G.undo.length) { toast(G.made ? 'Starší tahy už vrátit nejdou' : 'Zatím není co vrátit'); return; }
+  if (busy) { toast(t('spoj-tri.toast.busy')); return; }
+  if (!G.undo.length) { toast(t(G.made ? 'spoj-tri.toast.tooOld' : 'common.nothingToUndo')); return; }
   const u = G.undo.pop();
   if (G.status === 'over' && G.recPrev !== undefined) { if (G.recPrev > 0) R[recKey(G)] = G.recPrev; else delete R[recKey(G)]; }
   delete G.recPrev;
@@ -820,10 +827,10 @@ function undo() {
   buzz(); save(); rebuild(); render();
 }
 function showHint() {
-  if (busy) { toast('Chvilku, kameny ještě padají'); return; }
+  if (busy) { toast(t('spoj-tri.toast.busy')); return; }
   if (G.status !== 'playing') { toast(overMsg()); return; }
   const m = findMoves(G.cells, G.n);
-  if (!m.length) { toast('Teď žádný tah nevidím'); return; }
+  if (!m.length) { toast(t('spoj-tri.toast.noMove')); return; }
   // Prefer an ordinary move, so the hint shows the basic idea
   const plain = m.filter(([i, j]) => G.cells[i].s !== 3 && G.cells[j].s !== 3);
   const pick = plain.length ? plain : m;
@@ -831,10 +838,10 @@ function showHint() {
   const first = !G.hinted;
   G.hinted = true; // rule: a game with a hint never counts for the record; Undo does not clear it
   buzz(); save(); render();
-  if (first && G.moves) toast('S radou se tahle hra nepočítá do rekordů');
+  if (first && G.moves) toast(t('spoj-tri.toast.hinted'));
 }
 function tap(i) {
-  if (busy) { toast('Chvilku, kameny ještě padají'); return; }
+  if (busy) { toast(t('spoj-tri.toast.busy')); return; }
   if (G.status !== 'playing') { toast(overMsg()); return; }
   // a tap on a hinted stone swaps the hinted pair
   if (hintPair && hintPair.includes(i)) { const [a, b] = hintPair; sel = null; hintPair = null; trySwap(a, b); return; }
@@ -847,13 +854,13 @@ function tap(i) {
 /* ---------- Rendering ---------- */
 function applyLook() {
   root.dataset.theme = S.theme;
-  const th = THEMES.find(t => t.id === S.theme);
-  document.querySelector('meta[name="theme-color"]').content = th.meta;
+  const theme = THEMES.find(m => m.id === S.theme);
+  document.querySelector('meta[name="theme-color"]').content = theme.meta;
 }
 let lastScore = null;
 function renderStats(animate) {
   $('#stScore').textContent = fmt(G.score);
-  $('#stMovesLab').textContent = G.moves ? 'Zbývá tahů' : 'Tahů';
+  $('#stMovesLab').textContent = t(G.moves ? 'spoj-tri.stat.movesLeft' : 'spoj-tri.stat.moves');
   $('#stMoves').textContent = G.moves ? G.left : G.made;
   $('#stBestBox').hidden = !G.moves;
   $('#stBest').textContent = fmt(best());
@@ -865,10 +872,10 @@ function renderStats(animate) {
 function render() {
   applyLook(); renderStats();
   let h;
-  if (G.status === 'over') h = G.undo.length ? 'Konec hry – ťukni na Zpět nebo Nová hra' : 'Konec hry – ťukni na Nová hra';
-  else if (sel !== null) h = 'Teď ťukni na sousední kámen';
-  else if (hintPair) h = 'Ťukni na jeden z kývajících se kamenů a prohodí se';
-  else h = 'Prohoď dva sousední kameny';
+  if (G.status === 'over') h = t(G.undo.length ? 'spoj-tri.hint.overUndo' : 'spoj-tri.hint.over');
+  else if (sel !== null) h = t('spoj-tri.hint.second');
+  else if (hintPair) h = t('spoj-tri.hint.hinted');
+  else h = t('spoj-tri.hint.swap');
   $('#hint').textContent = h;
   layout(); // after the hint: a longer hint leaves less room for the board
   $('#btnUndo').classList.toggle('dim', busy || !G.undo.length);
@@ -909,7 +916,7 @@ window.addEventListener('pointermove', e => {
   const cell = tilesEl.getBoundingClientRect().width / G.n;
   if (Math.max(Math.abs(dx), Math.abs(dy)) < cell * 0.4) return;
   ptr.done = true;
-  if (busy) { toast('Chvilku, kameny ještě padají'); return; }
+  if (busy) { toast(t('spoj-tri.toast.busy')); return; }
   if (G.status !== 'playing') { toast(overMsg()); return; }
   const n = G.n, i = ptr.i, r = (i / n) | 0, col = i % n;
   let j = -1;
@@ -942,29 +949,29 @@ function showModal(html, buttons) {
 }
 function showEnd(end) {
   buzz([40, 60, 40, 60, 80]);
-  const rec = end.hinted ? `<p>Hra s radou se do rekordů nepočítá.${end.prev ? `<br>Rekord: ${fmt(end.prev)}` : ''}</p>`
-    : end.record ? (end.prev ? `<p><b>Nový rekord! 🎉</b><br>Předchozí rekord: ${fmt(end.prev)}</p>` : '<p><b>První rekord! 🎉</b></p>')
-    : `<p>Rekord: ${fmt(end.prev)}</p>`;
-  showModal(`<h2>Konec hry</h2><p>Tahy došly. Získané body:</p><div class="score">${fmt(G.score)}</div>${rec}`,
-    [{ text: 'Nová hra', fn: newGame }, ...(G.undo.length ? [{ text: 'Vrátit tah', cls: 'alt', fn: undo }] : []), { text: 'Prohlédnout desku', cls: 'alt' }]);
+  const rec = end.hinted ? `<p>${th('spoj-tri.end.hinted', { hasPrev: !!end.prev, prev: fmt(end.prev || 0) })}</p>`
+    : end.record ? (end.prev ? `<p>${th('spoj-tri.end.newRecord', { prev: fmt(end.prev) })}</p>` : `<p>${th('spoj-tri.end.firstRecord')}</p>`)
+    : `<p>${th('spoj-tri.end.record', { prev: fmt(end.prev) })}</p>`;
+  showModal(`<h2>${th('spoj-tri.end.title')}</h2><p>${th('spoj-tri.end.text')}</p><div class="score">${fmt(G.score)}</div>${rec}`,
+    [{ text: th('common.newGame'), fn: newGame }, ...(G.undo.length ? [{ text: th('common.undoMove'), cls: 'alt', fn: undo }] : []), { text: th('spoj-tri.end.inspect'), cls: 'alt' }]);
 }
 $('#btnNew').addEventListener('click', () => {
   if (G.status === 'playing' && G.made > 0) {
-    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>',
-      [{ text: 'Ano, nová hra', fn: newGame }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('common.confirmNew.text')}</p>`,
+      [{ text: th('common.confirmNew.yes'), fn: newGame }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
   } else newGame();
 });
 
 /* ---------- Settings ---------- */
 function stepper(key, label, value, canDec, canInc, note) {
   return `<div class="field"><div class="flabel">${label}</div><div class="stepper">
-    <button class="sbtn${canDec ? '' : ' dim'}" data-act="dec:${key}" aria-label="Méně">−</button>
+    <button class="sbtn${canDec ? '' : ' dim'}" data-act="dec:${key}" aria-label="${th('spoj-tri.set.less')}">−</button>
     <div class="sval">${value}</div>
-    <button class="sbtn${canInc ? '' : ' dim'}" data-act="inc:${key}" aria-label="Více">+</button>
+    <button class="sbtn${canInc ? '' : ' dim'}" data-act="inc:${key}" aria-label="${th('spoj-tri.set.more')}">+</button>
   </div>${note || ''}</div>`;
 }
 function toggleRow(key, label) {
-  return `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+  return `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>`;
 }
 const previewPics = id => id === 'shapes' ? null : { set: id, idx: pool(id).slice(0, KINDS.length) };
 
@@ -972,36 +979,36 @@ function renderSettings() {
   const mi = MOVES.indexOf(S.moves);
   let dots = ''; for (let k = 0; k < S.kinds; k++) dots += demo(k);
   const pending = rulesDiffer() && G.made > 0
-    ? '<div class="notice">Změněná pravidla platí pro novou hru. Po návratu do hry začne <b>nová hra</b>.</div>' : '';
+    ? `<div class="notice">${th('spoj-tri.set.pending')}</div>` : '';
   const hasImages = SYMBOLS.length > 1;
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Spoj tři<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Pravidla hry</h3>
-      ${stepper('n', 'Velikost desky', `${S.n} × ${S.n}`, S.n > LIMITS.n[0], S.n < LIMITS.n[1], '<div class="fnote">Menší deska má větší kameny.</div>')}
-      ${stepper('kinds', 'Počet druhů kamenů', S.kinds, S.kinds > LIMITS.kinds[0], S.kinds < LIMITS.kinds[1], `<div class="dots">${dots}</div><div class="fnote">Méně druhů = snazší hra a víc řad samo od sebe.</div>`)}
-      ${stepper('moves', 'Počet tahů', S.moves ? S.moves : 'Bez omezení', mi > 0, mi < MOVES.length - 1, `<div class="fnote">${S.moves ? `Hra skončí po ${S.moves} tazích. Rekord se počítá jen z dohraných her bez Poradit.` : 'Hra nikdy neskončí, sbírají se jen body.'}</div>`)}
-      ${toggleRow('specials', 'Zvláštní kameny')}
-      <div class="fnote legend" style="margin:0 0 6px">${demo(0, 1)}<span><b>Raketa</b> ze 4 kamenů smaže celý řádek nebo sloupec.</span></div>
-      <div class="fnote legend" style="margin:0 0 4px">${demo(-1, 3)}<span><b>Duha</b> z 5 kamenů smaže všechny kameny jedné barvy.</span></div>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.spoj-tri.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('spoj-tri.set.rules')}</h3>
+      ${stepper('n', th('spoj-tri.set.size'), `${S.n} × ${S.n}`, S.n > LIMITS.n[0], S.n < LIMITS.n[1], `<div class="fnote">${th('spoj-tri.set.size.note')}</div>`)}
+      ${stepper('kinds', th('spoj-tri.set.kinds'), S.kinds, S.kinds > LIMITS.kinds[0], S.kinds < LIMITS.kinds[1], `<div class="dots">${dots}</div><div class="fnote">${th('spoj-tri.set.kinds.note')}</div>`)}
+      ${stepper('moves', th('spoj-tri.set.moves'), S.moves ? S.moves : th('spoj-tri.set.moves.none'), mi > 0, mi < MOVES.length - 1, `<div class="fnote">${S.moves ? th('spoj-tri.set.moves.limit', { n: S.moves }) : th('spoj-tri.set.moves.endless')}</div>`)}
+      ${toggleRow('specials', th('spoj-tri.set.specials'))}
+      <div class="fnote legend" style="margin:0 0 6px">${demo(0, 1)}<span>${th('spoj-tri.set.rocket')}</span></div>
+      <div class="fnote legend" style="margin:0 0 4px">${demo(-1, 3)}<span>${th('spoj-tri.set.rainbow')}</span></div>
       ${pending}
     </section>
-    <section class="card"><h3>Kameny</h3>
-      ${SYMBOLS.map(x => { const p = previewPics(x.id); return `<button class="opt" data-act="symbols:${x.id}" aria-pressed="${S.symbols === x.id}"><span class="radio"></span><span><b>${x.name}</b><span class="d">${x.desc}</span><span class="prev">${[0, 1, 2, 3].map(k => demo(k, 0, p)).join('')}</span></span></button>`; }).join('')}
-      ${hasImages ? '<button class="link" data-act="credits">Autoři obrázků</button>' : ''}
+    <section class="card"><h3>${th('spoj-tri.set.stones')}</h3>
+      ${SYMBOLS.map(x => { const p = previewPics(x.id); return `<button class="opt" data-act="symbols:${x.id}" aria-pressed="${S.symbols === x.id}"><span class="radio"></span><span><b>${th(x.nameKey)}</b><span class="d">${th(x.descKey)}</span><span class="prev">${[0, 1, 2, 3].map(k => demo(k, 0, p)).join('')}</span></span></button>`; }).join('')}
+      ${hasImages ? `<button class="link" data-act="credits">${th('spoj-tri.credits.link')}</button>` : ''}
     </section>
-    <section class="card"><h3>Vzhled</h3>
-      <div class="tiles">${THEMES.map(t => `<button class="ttile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch" data-theme="${t.id}">${demo(0)}${demo(1)}${demo(3)}</span>${t.name}</button>`).join('')}</div>
-      ${toggleRow('vibrate', 'Vibrace')}
+    <section class="card"><h3>${th('common.look')}</h3>
+      <div class="tiles">${THEMES.map(m => `<button class="ttile" data-act="theme:${m.id}" aria-pressed="${S.theme === m.id}"><span class="swatch" data-theme="${m.id}">${demo(0)}${demo(1)}${demo(3)}</span>${th(m.nameKey)}</button>`).join('')}</div>
+      ${toggleRow('vibrate', th('common.vibrate'))}
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const [act, arg] = b.dataset.act.split(':');
   if (act === 'inc' || act === 'dec') {
     if (b.classList.contains('dim')) {
-      toast(act === 'inc' ? 'Víc už to nejde' : 'Míň už to nejde'); return;
+      toast(t(act === 'inc' ? 'spoj-tri.toast.noMore' : 'spoj-tri.toast.noLess')); return;
     }
     const d = act === 'inc' ? 1 : -1;
     if (arg === 'moves') S.moves = MOVES[clamp(MOVES.indexOf(S.moves) + d, [0, MOVES.length - 1])];
@@ -1013,20 +1020,20 @@ $('#settingsIn').addEventListener('click', e => {
   else if (act === 'toggle') S[arg] = !S[arg];
   else if (act === 'reset') {
     S = Object.assign({}, DEFAULTS); normalize(S); ensurePics(); rebuild();
-    toast('Nastavení je zase výchozí');
+    toast(t('common.settingsReset'));
   }
   else if (act === 'credits') { openCredits(); return; }
   else if (act === 'close') { closeSettings(); return; }
   buzz(8); applyLook(); save(); renderSettings();
 });
-function openSettings() { if (busy) { toast('Chvilku, kameny ještě padají'); return; } hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
+function openSettings() { if (busy) { toast(t('spoj-tri.toast.busy')); return; } hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
 // Settings apply right after returning to the game, no Save needed; changed rules start a new game.
 function closeSettings() {
   $('#screenSettings').hidden = true;
   if (rulesDiffer()) {
     const hadProgress = G.made > 0; // also after a finished game (rule)
     newGame();
-    if (hadProgress) toast('Začala nová hra s novými pravidly');
+    if (hadProgress) toast(t('spoj-tri.toast.newRules'));
     return;
   }
   render();
@@ -1035,13 +1042,13 @@ $('#btnSettings').addEventListener('click', openSettings);
 
 // One line of the credits; the drawings are all by the same author, so they list only the name
 const creditLine = ({ name: n, author: a, license: l, source: u }, drawn, pre = '') => drawn ? `<li><b>${pre}${esc(n)}</b></li>`
-  : `<li><b>${pre}${esc(n)}</b>: ${esc(a)}, ${esc(l)}, <a href="${esc(u)}" target="_blank" rel="noopener">zdroj</a></li>`;
+  : `<li><b>${pre}${esc(n)}</b>: ${esc(a)}, ${esc(l)}, <a href="${esc(u)}" target="_blank" rel="noopener">${th('spoj-tri.credits.source')}</a></li>`;
 function openCredits() {
   $('#creditsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Spoj tři<small>Autoři obrázků</small></h2></div>
-    <section class="card credits"><p class="fnote" style="margin-top:0">Fotografie a znaky pocházejí z Wikimedia Commons. Obrázky jsou zmenšené a oříznuté. Licence: CC BY / CC BY-SA (creativecommons.org), CC0 nebo volné dílo. Kreslené obrázky (houby, ptáci, ovoce a zelenina) jsou nakreslené pro tyto hry a jsou volným dílem (CC0).</p></section>
-    ${SYMBOLS.filter(x => x.id !== 'shapes').map(x => `<section class="card credits"><h3>${x.name}</h3><ol>${pool(x.id).map(i => creditLine(IMG[x.id].items[i], IMG[x.id].kind === 'drawing')).join('')}</ol></section>`).join('')}
-    <button class="big" data-act="close">Zpět</button>`;
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.spoj-tri.name')}<small>${th('spoj-tri.credits.link')}</small></h2></div>
+    <section class="card credits"><p class="fnote" style="margin-top:0">${th('spoj-tri.credits.intro')}</p></section>
+    ${SYMBOLS.filter(x => x.id !== 'shapes').map(x => `<section class="card credits"><h3>${th(x.nameKey)}</h3><ol>${pool(x.id).map(i => creditLine(IMG[x.id].items[i], IMG[x.id].kind === 'drawing')).join('')}</ol></section>`).join('')}
+    <button class="big" data-act="close">${th('spoj-tri.credits.back')}</button>`;
   $('#screenCredits').hidden = false; $('#screenCredits').scrollTop = 0;
 }
 $('#creditsIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenCredits').hidden = true; });
@@ -1049,25 +1056,25 @@ $('#creditsIn').addEventListener('click', e => { if (e.target.closest('[data-act
 /* ---------- Help ---------- */
 function renderHelp() {
   const sp = S.specials ? `
-        <li><b>Zvláštní kameny:</b>
-          <div class="legend">${demo(0, 1)}<span><b>Raketa</b> vznikne ze 4 kamenů v řadě. Když zmizí, smaže celý řádek (nebo sloupec – podle šipky).</span></div>
-          <div class="legend">${demo(-1, 3)}<span><b>Duha</b> vznikne z 5 kamenů. Prohoď ji s libovolným sousedem a zmizí všechny kameny té barvy.</span></div>
-          Každý kámen, který raketa nebo duha smaže navíc, dá 20 bodů.</li>` : '';
+        <li>${th('spoj-tri.help.specials')}
+          <div class="legend">${demo(0, 1)}<span>${th('spoj-tri.help.rocket')}</span></div>
+          <div class="legend">${demo(-1, 3)}<span>${th('spoj-tri.help.rainbow')}</span></div>
+          ${th('spoj-tri.help.specialsBonus')}</li>` : '';
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Spoj tři<small>Jak hrát</small></h2></div>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.spoj-tri.name')}<small>${th('common.help')}</small></h2></div>
     <section class="card help">
       <ol>
-        <li>Prohoď dva <b>sousední</b> kameny (vedle sebe nebo nad sebou) tak, aby vedle sebe byly aspoň <b>tři stejné</b> – v řádku nebo ve sloupci.
+        <li>${th('spoj-tri.help.1')}
           <div class="legend">${demo(0)}${demo(0)}${demo(0)}</div></li>
-        <li><b>Jak prohodit:</b> ťukni na kámen a potom na jeho souseda. Nebo kámen přetáhni prstem k sousedovi.</li>
-        <li>Spojené kameny zmizí, kameny nad nimi spadnou dolů a shora přibudou nové. Když tím vznikne další řada, zmizí také a body se násobí.</li>
-        <li>Body: 3 kameny = 30, 4 kameny = 60, 5 kamenů = 100.</li>${sp}
-        <li>${S.moves ? `Na hru je <b>${S.moves} tahů</b>. Potom hra skončí a ukáže body. Zkus překonat svůj rekord! Počítají se jen dohrané hry bez Poradit.` : 'Tahů je <b>bez omezení</b>, hra nikdy neskončí.'}</li>
-        <li><b>Zpět</b> vrátí poslední tah. <b>Poradit</b> ukáže jeden možný tah.</li>
-        <li>Když už žádný tah není, kameny se samy zamíchají.</li>
+        <li>${th('spoj-tri.help.2')}</li>
+        <li>${th('spoj-tri.help.3')}</li>
+        <li>${th('spoj-tri.help.4')}</li>${sp}
+        <li>${S.moves ? th('spoj-tri.help.limit', { n: S.moves }) : th('spoj-tri.help.endless')}</li>
+        <li>${th('spoj-tri.help.5')}</li>
+        <li>${th('spoj-tri.help.6')}</li>
       </ol>
     </section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -1099,6 +1106,7 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+I18N.apply(); // the static texts (data-t*), <title> and <html lang> in the player's language
 const saved = load();
 const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};
 S = Object.assign({}, DEFAULTS);

@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,16 +34,23 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="../../i18n/opponents.js"></script>
+<script src="../_opponents/opponents.js"></script>
+<script src="texts.js"></script>
 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f4ebdf">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Kostky">
-<title>Kostky</title>
+<title data-t="game.kostky.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a7346'/%3E%3Crect x='14' y='14' width='36' height='36' rx='7' fill='%23fbfaf6'/%3E%3Ccircle cx='24' cy='24' r='4' fill='%23222'/%3E%3Ccircle cx='40' cy='24' r='4' fill='%23222'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%23222'/%3E%3Ccircle cx='24' cy='40' r='4' fill='%23222'/%3E%3Ccircle cx='40' cy='40' r='4' fill='%23222'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes: a solid colour (felt in a wooden frame); everything below reads these variables ---------- */
@@ -217,38 +224,38 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app">
   <header class="topbar">
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Kostky</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.kostky.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
-  <section class="pl" id="pOpp" aria-label="Soupeř">
+  <section class="pl" id="pOpp" data-t-aria="opponents.heading">
     <div class="ava" id="avaOpp"></div>
     <div class="mid"><div class="nm"><span id="nmOpp"></span><span class="tag" id="tagOpp" hidden></span></div><div class="bubble" id="say" aria-live="polite"></div></div>
     <div class="sc"><b id="scOpp">0</b><small id="ofOpp"></small><span class="bar"><i id="barOpp"></i></span></div>
   </section>
   <main id="table">
-    <div class="strip" id="stripOpp" aria-label="Odložené kostky soupeře"></div>
-    <div class="center"><div id="roll" aria-label="Hozené kostky"></div><div id="turnLine"></div></div>
-    <div class="strip" id="stripMe" aria-label="Tvoje odložené kostky"></div>
+    <div class="strip" id="stripOpp" data-t-aria="kostky.aria.keptFoe"></div>
+    <div class="center"><div id="roll" data-t-aria="kostky.aria.roll"></div><div id="turnLine"></div></div>
+    <div class="strip" id="stripMe" data-t-aria="kostky.aria.keptMe"></div>
   </main>
-  <section class="pl" id="pMe" aria-label="Ty">
+  <section class="pl" id="pMe" data-t-aria="kostky.you">
     <div class="ava" id="avaMe"></div>
-    <div class="mid"><div class="nm"><span>Ty</span><span class="tag" id="tagMe" hidden></span></div><div class="sub" id="subMe"></div></div>
+    <div class="mid"><div class="nm"><span data-t="kostky.you"></span><span class="tag" id="tagMe" hidden></span></div><div class="sub" id="subMe"></div></div>
     <div class="sc"><b id="scMe">0</b><small id="ofMe"></small><span class="bar"><i id="barMe"></i></span></div>
   </section>
   <footer class="tray">
     <div id="hint"></div>
     <div class="row">
-      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
-      <button id="btnBank" class="go bank"><span>Zapsat</span><small id="bankSub"></small></button>
-      <button id="btnRoll" class="go"><span id="rollTxt">Hodit</span><small id="rollSub"></small></button>
+      <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span data-t="common.undo"></span></button>
+      <button id="btnBank" class="go bank"><span data-t="kostky.bank"></span><small id="bankSub"></small></button>
+      <button id="btnRoll" class="go"><span id="rollTxt" data-t="kostky.roll"></span><small id="rollSub"></small></button>
     </div>
   </footer>
 </div>
@@ -257,7 +264,6 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 <div id="screenHelp" class="screen paper" hidden><div class="screen-in" id="helpIn"></div></div>
 <div id="modal" class="modal paper" hidden><div class="mcard" id="modalCard"></div></div>
 <div id="toast" class="hide"></div>
-<script src="../_opponents/opponents.js"></script>
 <script>
 /* ---------- Visible height ---------- */
 // The game is exactly as tall as the part of the window that is really shown (--app-h on #app). 100dvh alone is not
@@ -293,26 +299,28 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 (() => {
 'use strict';
 const $ = s => document.querySelector(s);
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 const root = document.documentElement;
 
 /* ---------- Settings and storage ---------- */
 const ID = 'kostky';
 const KEY = `games.${ID}.state`, BADGE = `games.${ID}.inProgress`; // contract: storage key and the "Rozehráno" badge
 const THEMES = [
-  { id: 'green',    name: 'Zelené sukno', meta: '#163d27' },
-  { id: 'blue',     name: 'Modré sukno',  meta: '#132a45' },
-  { id: 'burgundy', name: 'Vínové sukno', meta: '#3a1018' },
-  { id: 'paper',    name: 'Papír',        meta: '#f4ebdf' },
-  { id: 'night',    name: 'Noc',          meta: '#0e1013' },
+  { id: 'green',    nameKey: 'kostky.theme.green',    meta: '#163d27' },
+  { id: 'blue',     nameKey: 'kostky.theme.blue',     meta: '#132a45' },
+  { id: 'burgundy', nameKey: 'kostky.theme.burgundy', meta: '#3a1018' },
+  { id: 'paper',    nameKey: 'common.theme.paper',    meta: '#f4ebdf' },
+  { id: 'night',    nameKey: 'kostky.theme.night',    meta: '#0e1013' },
 ];
 const TARGETS = [3000, 5000, 10000];
 const SPEEDS = { slow: 1700, normal: 1150, fast: 650 }; // one step of the opponent in ms
 // How well the opponent plays (levels 0, 1, 2); shown as stars next to its name (games/_opponents/opponents.js)
 const O = OPPONENTS;
 const LEVELS = [
-  { title: 'Začátečník', desc: 'Hraje, jak ho napadne. Často riskuje, i když nemá.' },
-  { title: 'Zkušený hráč', desc: 'Ví, kdy přestat. Občas to ale stejně zkusí.' },
-  { title: 'Mistr', desc: 'Počítá šance. Riskuje, jen když se to vyplatí.' },
+  { titleKey: 'kostky.level.beginner', descKey: 'kostky.level.beginner.desc' },
+  { titleKey: 'kostky.level.normal', descKey: 'kostky.level.normal.desc' },
+  { titleKey: 'kostky.level.master', descKey: 'kostky.level.master.desc' },
 ];
 const lvName = i => O.levelName(LEVELS, i);
 // Every game the opponent gets another name and face (user's wish), whatever its level: O.create(rnd, [previous name])
@@ -567,7 +575,7 @@ function newGame(msg) {
   G = { rules: { level: S.level, target: S.target }, scores: [0, 0], turn: starter, starter, final: false,
         foe: foeNew, dice: [], kept: [], sel: [], selUndo: [], turnPts: 0, lost: 0, phase: 'start', plan: null, rolls: 0,
         seed: rnd(2 ** 31), say: '', mood: 'calm', status: 'playing', counted: false };
-  G.say = starter ? pick(['Začínám já.', 'Tak já začnu.']) : pick(['Začínáš ty. Hodně štěstí!', 'Ty začínáš.']);
+  G.say = t(pick(starter ? ['kostky.say.begin.1', 'kostky.say.begin.2'] : ['kostky.say.youBegin.1', 'kostky.say.youBegin.2']));
   save(); render();
   if (msg) toast(msg);
   advance();
@@ -617,27 +625,24 @@ function showModal(html, buttons) {
   };
   $('#modal').hidden = false;
 }
-const fmt = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
-const diceWord = n => n === 1 ? 'kostkou' : 'kostkami';
-const FACE1 = { 2: 'Dvojka', 3: 'Trojka', 4: 'Čtyřka', 6: 'Šestka' };
-const FACES = { 2: 'Dvojky', 3: 'Trojky', 4: 'Čtyřky', 6: 'Šestky' };
+const fmt = n => I18N.num(n);
+const foeP = f => ({ name: f.name, fem: f.fem }); // the opponent as message params (name, fem)
 const LINES = {
-  start: ['Tak hážu.', 'Jdeme na to.', 'Hážu!', 'Uvidíme…'],
-  big: ['To je hod!', 'Výborně!', 'Tohle se povedlo!'],
-  roll: ['Ještě jednou!', 'Hážu dál.', 'Zkusím to dál.'],
-  bold: ['Risknu to!', 'Co už, zkusím to!', 'Štěstí přeje odvážným!'],
-  bank: ['Raději si to zapíšu.', 'Stačilo, nebudu riskovat.', 'Zapíšu si to.'],
-  hot: ['Všechny bodují! Hážu znovu.', 'Všech šest! Jedu dál.'],
-  bust: ['Jejda, nic.', 'To je smůla.', 'No nic, příště.'],
-  yourBust: ['To je smůla.', 'Nevadí, příště.', 'Jejda!'],
-  yourBig: ['Pěkné!', 'To se povedlo.', 'Tak to je dobré.'],
-  yourTurn: ['Jsi na tahu.', 'Teď ty.', 'Hoď si.'],
+  start: ['kostky.say.start.1', 'kostky.say.start.2', 'kostky.say.start.3', 'kostky.say.start.4'],
+  big: ['kostky.say.big.1', 'kostky.say.big.2', 'kostky.say.big.3'],
+  roll: ['kostky.say.roll.1', 'kostky.say.roll.2', 'kostky.say.roll.3'],
+  bold: ['kostky.say.bold.1', 'kostky.say.bold.2', 'kostky.say.bold.3'],
+  bank: ['kostky.say.bank.1', 'kostky.say.bank.2', 'kostky.say.bank.3'],
+  hot: ['kostky.say.hot.1', 'kostky.say.hot.2'],
+  bust: ['kostky.say.bust.1', 'kostky.say.bust.2', 'kostky.say.bust.3'],
+  yourBust: ['kostky.say.yourBust.1', 'kostky.say.yourBust.2', 'kostky.say.yourBust.3'],
+  yourBig: ['kostky.say.yourBig.1', 'kostky.say.yourBig.2', 'kostky.say.yourBig.3'],
+  yourTurn: ['kostky.say.yourTurn.1', 'kostky.say.yourTurn.2', 'kostky.say.yourTurn.3'],
 };
-// The opponent rolled nothing that scores: "Pepovi nic nebodovalo" is awkward with every name, so the name leads
-const foeBust = g => { const f = foe(g); return g.lost
-  ? `${f.name} ${O.past(f, 'hodil', 'hodila')} a nic nebodovalo. ${O.past(f, 'Propadlo mu', 'Propadlo jí')} ${fmt(g.lost)} bodů.`
-  : `${f.name} ${O.past(f, 'hodil', 'hodila')} a nic nebodovalo. Hraješ ty.`; };
-function say(key, mood, extra) { G.say = [extra, key && pick(LINES[key])].filter(Boolean).join(' '); G.mood = mood || 'calm'; }
+// The opponent rolled nothing that scores: the name leads (an awkward sentence with every name otherwise)
+const foeBust = g => { const f = foe(g); return g.lost ? t('kostky.hint.foeBustLost', { ...foeP(f), n: g.lost }) : t('kostky.hint.foeBust', foeP(f)); };
+// the bubble: the sentences in `extra` (already texts), then a random line of the kind `key`
+function say(key, mood, ...extra) { G.say = [...extra, key && t(pick(LINES[key]))].filter(Boolean).join(' '); G.mood = mood || 'calm'; }
 
 /* ---------- Rendering ---------- */
 const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
@@ -645,16 +650,16 @@ function pips(v) { let s = ''; for (let i = 0; i < 9; i++) s += `<i${PIPS[v].inc
 function setFace(el, v) { [...el.children].forEach((p, i) => p.classList.toggle('on', PIPS[v].includes(i))); }
 function applyLook() {
   root.dataset.theme = S.theme;
-  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(m => m.id === S.theme).meta;
 }
 // What is wrong with the player's selection ('' = it scores as a whole)
 function selProblem() {
   const vals = G.sel.map(i => G.dice[i]);
-  if (!vals.length) return 'Nejdřív ťukni na kostky, které bodují';
+  if (!vals.length) return t('kostky.problem.none');
   if (score(vals)) return '';
   const c = counts(vals);
-  for (const f of [2, 3, 4, 6]) if (c[f] && c[f] < 3) return `${FACES[f]} bodují jen tři a víc stejných`;
-  return 'Tyhle kostky spolu nebodují';
+  for (const f of [2, 3, 4, 6]) if (c[f] && c[f] < 3) return t('kostky.problem.pair', { face: f });
+  return t('kostky.problem.nonScoring');
 }
 // Can the die i still be part of something that scores in this roll?
 const scoring = (dice, i) => { const v = dice[i]; return v === 1 || v === 5 || counts(dice)[v] >= 3 || isStraight(dice); };
@@ -673,16 +678,16 @@ function render() {
   $('#say').textContent = g.say || '…';
   for (const [p, sfx] of [[1, 'Opp'], [0, 'Me']]) {
     $('#sc' + sfx).textContent = fmt(g.scores[p]);
-    $('#of' + sfx).textContent = 'z ' + fmt(g.rules.target);
+    $('#of' + sfx).textContent = t('kostky.of', { n: g.rules.target });
     $('#bar' + sfx).style.width = Math.min(100, g.scores[p] / g.rules.target * 100) + '%';
     const tag = $('#tag' + sfx), winner = g.status === 'won' ? 0 : g.status === 'lost' ? 1 : -1;
     tag.hidden = playing ? g.turn !== p : winner !== p;
-    tag.textContent = !playing ? 'Vítěz' : g.final ? 'Poslední pokus' : 'Na tahu';
+    tag.textContent = !playing ? t('kostky.tag.winner') : g.final ? t('kostky.tag.last') : t('kostky.tag.toMove');
   }
   $('#pOpp').classList.toggle('on', theirs);
   $('#pMe').classList.toggle('on', mine);
   const need = Math.max(MIN_BANK, g.scores[1] - g.scores[0] + 50); // the last turn: more than the opponent
-  $('#subMe').textContent = mine ? (g.final ? `Potřebuješ ${fmt(need)}` : 'Hraješ') : theirs ? `Hraje ${f.name}` : '';
+  $('#subMe').textContent = mine ? (g.final ? t('kostky.sub.need', { n: need }) : t('kostky.sub.you')) : theirs ? t('kostky.sub.foe', foeP(f)) : '';
 
   // Dice: the roll in the middle, set-aside dice at the side of the one who plays
   const roll = $('#roll');
@@ -690,35 +695,35 @@ function render() {
   else if (!g.dice.length) roll.innerHTML = playing ? '<span class="die blank" aria-hidden="true"></span>'.repeat(6) : ''; // dice waiting for the roll
   else roll.innerHTML = g.dice.map((v, i) => {
     const sel = g.sel.includes(i), dead = picking && S.hints && !sel && !scoring(g.dice, i);
-    return `<button class="die${sel ? ' sel' : ''}${dead ? ' dead' : ''}" data-i="${i}" aria-label="Kostka ${v}${sel ? ', vybraná' : ''}">${pips(v)}</button>`;
+    return `<button class="die${sel ? ' sel' : ''}${dead ? ' dead' : ''}" data-i="${i}" aria-label="${th('kostky.aria.die', { v, sel })}">${pips(v)}</button>`;
   }).join('');
-  const kept = g.kept.map(v => `<span class="die" aria-label="Odložená kostka ${v}">${pips(v)}</span>`).join('');
+  const kept = g.kept.map(v => `<span class="die" aria-label="${th('kostky.aria.keptDie', { v })}">${pips(v)}</span>`).join('');
   $('#stripOpp').innerHTML = theirs ? kept : '';
   $('#stripMe').innerHTML = mine ? kept : '';
   const line = $('#turnLine');
-  if (!playing) line.innerHTML = g.status === 'won' ? 'Vyhráváš!' : g.status === 'lost' ? `Vyhrává ${f.name}` : 'Remíza';
-  else if (busy) line.innerHTML = 'Kostky se kutálejí…';
-  else if (g.phase === 'bust') line.innerHTML = g.lost ? `Propadlo <b>${fmt(g.lost)}</b> bodů` : 'Nic nepadlo';
-  else if (g.phase === 'start') line.innerHTML = g.turnPts ? `V tomto tahu: <b>${fmt(g.turnPts)}</b>` : '';
-  else line.innerHTML = `V tomto tahu: <b>${fmt(g.turnPts + selPts)}</b>`;
+  if (!playing) line.innerHTML = g.status === 'won' ? th('kostky.line.won') : g.status === 'lost' ? th('kostky.line.lost', foeP(f)) : th('kostky.line.draw');
+  else if (busy) line.innerHTML = th('kostky.line.rolling');
+  else if (g.phase === 'bust') line.innerHTML = g.lost ? th('kostky.line.lostPts', { n: g.lost }) : th('kostky.line.nothing');
+  else if (g.phase === 'start') line.innerHTML = g.turnPts ? th('kostky.line.turn', { n: g.turnPts }) : '';
+  else line.innerHTML = th('kostky.line.turn', { n: g.turnPts + selPts });
 
   // Hint and buttons
   const hint = $('#hint');
-  if (!playing) hint.textContent = 'Ťukni na Nová hra';
-  else if (theirs) hint.textContent = busy ? `${f.name} hází…` : g.phase === 'bust' ? foeBust(g) : `Hraje ${f.name}. Nikam se nespěchá.`;
-  else if (busy) hint.textContent = 'Kostky se kutálejí…';
-  else if (g.phase === 'bust') hint.textContent = 'Nic nebodovalo, body z tahu propadly';
-  else if (g.phase === 'start') hint.textContent = g.final ? `Poslední pokus: na výhru potřebuješ ${fmt(need)} bodů` : 'Ťukni na Hodit, nebo na kostky';
-  else if (!g.sel.length) hint.textContent = S.hints ? 'Ťukni na kostky, které bodují (světlé)' : 'Ťukni na kostky, které bodují';
+  if (!playing) hint.textContent = t('kostky.hint.newGame');
+  else if (theirs) hint.textContent = busy ? t('kostky.hint.foeRolls', foeP(f)) : g.phase === 'bust' ? foeBust(g) : t('kostky.hint.foeTurn', foeP(f));
+  else if (busy) hint.textContent = t('kostky.hint.rolling');
+  else if (g.phase === 'bust') hint.textContent = t('kostky.hint.bust');
+  else if (g.phase === 'start') hint.textContent = g.final ? t('kostky.hint.lastStart', { n: need }) : t('kostky.hint.start');
+  else if (!g.sel.length) hint.textContent = t(S.hints ? 'kostky.hint.pickHints' : 'kostky.hint.pick');
   else if (prob) hint.textContent = prob;
-  else if (hot) hint.textContent = 'Všechny bodují: hoď znovu všemi šesti';
-  else if (g.final && g.scores[0] + total <= g.scores[1]) hint.textContent = `Na výhru chybí ještě ${fmt(g.scores[1] - g.scores[0] + 50 - total)} bodů`;
-  else if (total < MIN_BANK) hint.textContent = `Hoď znovu. Zapsat můžeš od ${MIN_BANK} bodů.`;
-  else hint.textContent = 'Hoď znovu, nebo si body zapiš';
+  else if (hot) hint.textContent = t('kostky.hint.hot');
+  else if (g.final && g.scores[0] + total <= g.scores[1]) hint.textContent = t('kostky.hint.lastMissing', { n: g.scores[1] - g.scores[0] + 50 - total });
+  else if (total < MIN_BANK) hint.textContent = t('kostky.hint.tooLittle', { min: MIN_BANK });
+  else hint.textContent = t('kostky.hint.rollOrBank');
 
   const rollN = g.phase === 'pick' ? (g.dice.length - g.sel.length || 6) : 6;
-  $('#rollTxt').textContent = playing ? 'Hodit' : 'Nová hra';
-  $('#rollSub').textContent = playing ? `${rollN} ${diceWord(rollN)}` : '';
+  $('#rollTxt').textContent = playing ? t('kostky.roll') : t('common.newGame');
+  $('#rollSub').textContent = playing ? t('kostky.rollDice', { n: rollN }) : '';
   $('#bankSub').textContent = picking && !prob ? fmt(total) : '';
   const canRoll = mine && !busy && (g.phase === 'start' || g.phase === 'pick' && !prob);
   const canBank = picking && !prob && !hot && total >= MIN_BANK;
@@ -771,7 +776,7 @@ function doRoll() {
   if (bust) { g.phase = 'bust'; g.lost = g.turnPts; g.turnPts = 0; }
   else g.phase = 'pick';
   // the bubble tells the result only after the dice stop (a reload during the animation shows it at once)
-  const said = g.turn === 1 ? (bust ? ['bust', 'sad'] : ['', 'think', 'Hmm…']) : bust ? ['yourBust', 'calm'] : null;
+  const said = g.turn === 1 ? (bust ? ['bust', 'sad'] : ['', 'think', t('kostky.say.hmm')]) : bust ? ['yourBust', 'calm'] : null;
   const keepSay = [g.say, g.mood];
   if (said) say(...said);
   save(); // the result is saved before the animation, so a reload cannot roll again
@@ -782,7 +787,7 @@ function doRoll() {
     if (G !== g) return;
     if (said) say(...said);
     stopRolling(); render(); buzz(bust ? 40 : 15);
-    if (bust && g.turn === 0) toast(g.lost ? `Nic nebodovalo. ${fmt(g.lost)} bodů propadlo.` : 'Nic nebodovalo, hraje soupeř.');
+    if (bust && g.turn === 0) toast(g.lost ? t('kostky.toast.bustLost', { n: g.lost }) : t('kostky.toast.bustNone'));
     if (bust && g.turn === 1) toast(foeBust(g), 3500); // the player sees the opponent's lost points too (user's wish)
     advance();
   }, S.speed === 'fast' ? 450 : 700);
@@ -810,17 +815,17 @@ function endTurn() {
   if (p === g.starter && g.scores[p] >= T) g.final = true;
   g.turn = 1 - p; g.phase = 'start';
   if (g.turn === 0) {
-    if (g.final) { say('', 'think', 'Máš poslední pokus.'); toast(`${foe().name} má ${fmt(g.scores[1])}. Máš poslední pokus.`, 3200); }
+    if (g.final) { say('', 'think', t('kostky.say.lastChance')); toast(t('kostky.toast.foeLastScore', { name: foe().name, n: g.scores[1] }), 3200); }
     else if (g.mood !== 'happy') say('yourTurn', 'calm');
-  } else if (g.final) toast(`${foe().name} má poslední pokus`);
+  } else if (g.final) toast(t('kostky.toast.foeLast', { name: foe().name }));
   buzz(15); save(); render(); advance();
 }
 function gameOver() {
   const g = G, f = foe(g);
   g.phase = 'over'; g.status = statusOf(g);
-  if (g.status === 'won') say('', 'calm', 'Gratuluju!');
-  else if (g.status === 'lost') say('', 'happy', O.past(f, 'Vyhrál jsem!', 'Vyhrála jsem!'));
-  else say('', 'happy', 'Remíza! To se nestává.');
+  if (g.status === 'won') say('', 'calm', t('kostky.say.congrats'));
+  else if (g.status === 'lost') say('', 'happy', t('kostky.say.iWon', { fem: f.fem }));
+  else say('', 'happy', t('kostky.say.draw'));
   recordEnd();
   buzz(g.status === 'won' ? [40, 60, 40, 60, 80] : 30); save(); render();
   endDue = g;
@@ -834,11 +839,11 @@ function aiStep() {
   if (g.phase === 'pick') {
     const d = aiDecide(g.rules.level, { dice: g.dice, turnPts: g.turnPts, my: g.scores[1], opp: g.scores[0], target: g.rules.target, last: g.final }, () => rand01(g));
     g.sel = d.idx; g.plan = d.plan; g.phase = 'chosen';
-    const t = g.turnPts + d.pts, hot = d.idx.length === g.dice.length;
-    const took = d.pts >= 500 ? pick(LINES.big) + ` Beru ${fmt(d.pts)}.` : `Beru si ${fmt(d.pts)}.`;
-    if (hot) say('hot', 'happy', took);
-    else if (d.plan === 'bank') say('', 'happy', `${took} Zapíšu si ${fmt(t)}.`);
-    else say(d.bold ? 'bold' : 'roll', d.pts >= 500 ? 'happy' : 'think', took);
+    const tot = g.turnPts + d.pts, hot = d.idx.length === g.dice.length;
+    const took = d.pts >= 500 ? [t(pick(LINES.big)), t('kostky.say.takeBig', { n: d.pts })] : [t('kostky.say.take', { n: d.pts })];
+    if (hot) say('hot', 'happy', ...took);
+    else if (d.plan === 'bank') say('', 'happy', ...took, t('kostky.say.bankIt', { n: tot }));
+    else say(d.bold ? 'bold' : 'roll', d.pts >= 500 ? 'happy' : 'think', ...took);
     buzz(8); save(); render(); advance();
     return;
   }
@@ -850,26 +855,26 @@ function aiStep() {
 }
 
 /* ---------- Controls ---------- */
-const busyMsg = () => toast(G.turn === 1 ? `Chvilku, hraje ${foe().name}` : 'Chvilku, kostky se ještě kutálejí');
-function ended() { toast('Hra skončila – ťukni na Nová hra'); }
+const busyMsg = () => toast(G.turn === 1 ? t('kostky.toast.waitFoe', { name: foe().name }) : t('kostky.toast.waitRoll'));
+function ended() { toast(t('kostky.toast.over')); }
 // common checks before a player's action; true = the action may go on
 function myMove() {
   if (G.status !== 'playing') { ended(); return false; }
   if (busy || G.turn !== 0) { busyMsg(); return false; }
-  if (G.phase === 'bust') { toast('Nic nebodovalo, teď hraje soupeř'); return false; }
+  if (G.phase === 'bust') { toast(t('kostky.toast.bustWait')); return false; }
   return true;
 }
 $('#roll').addEventListener('click', e => {
   const b = e.target.closest('.die'); if (!b || !myMove()) return;
   if (G.phase === 'start') { doRoll(); return; } // the dice waiting for the roll: a tap on one rolls (user's wish)
-  if (G.phase !== 'pick') { toast('Nejdřív hoď kostkami'); return; }
+  if (G.phase !== 'pick') { toast(t('kostky.toast.rollFirst')); return; }
   const d = G.dice, i = +b.dataset.i, v = d[i], prev = G.sel.slice();
   if (G.sel.includes(i)) G.sel = G.sel.filter(x => x !== i);
   else if (isStraight(d)) G.sel = [0, 1, 2, 3, 4, 5];
   // three or more of a kind are taken together with one tap (another tap on one of them puts it back)
   else if (counts(d)[v] >= 3 && !G.sel.some(j => d[j] === v)) G.sel = G.sel.concat(d.map((x, j) => x === v ? j : -1).filter(j => j >= 0));
   else if (scoring(d, i)) G.sel = G.sel.concat(i);
-  else { toast(`${FACE1[v]} sama nic nedává. Bodují jen tři stejné.`); return; }
+  else { toast(t('kostky.toast.single', { face: v })); return; }
   G.selUndo.push(prev); buzz(8); save(); render();
 });
 $('#table').addEventListener('click', e => {
@@ -883,21 +888,21 @@ function tapRoll() {
   const prob = selProblem(); if (prob) { toast(prob); return; }
   const hot = G.sel.length === G.dice.length;
   commit();
-  if (hot) toast('Všech šest bodovalo! Házíš znovu všemi kostkami.');
+  if (hot) toast(t('kostky.toast.allScored'));
   doRoll();
 }
 function tapBank() {
   if (!myMove()) return;
-  if (G.phase !== 'pick') { toast(G.turnPts ? 'Nejdřív hoď zbylými kostkami' : 'Nejdřív hoď kostkami'); return; }
+  if (G.phase !== 'pick') { toast(t(G.turnPts ? 'kostky.toast.rollRest' : 'kostky.toast.rollFirst')); return; }
   const prob = selProblem(); if (prob) { toast(prob); return; }
-  const t = G.turnPts + score(G.sel.map(i => G.dice[i]));
-  if (G.sel.length === G.dice.length) { toast('Všechny kostky bodují – musíš hodit znovu všemi šesti'); return; }
-  if (t < MIN_BANK) { toast(`Zapsat můžeš od ${MIN_BANK} bodů, v tahu máš ${fmt(t)}`); return; }
+  const tot = G.turnPts + score(G.sel.map(i => G.dice[i]));
+  if (G.sel.length === G.dice.length) { toast(t('kostky.toast.mustRollAll')); return; }
+  if (tot < MIN_BANK) { toast(t('kostky.toast.minBank', { min: MIN_BANK, n: tot })); return; }
   // the last turn: writing down too little ends the game as a loss, so it asks first
-  if (G.final && G.scores[0] + t <= G.scores[1]) {
+  if (G.final && G.scores[0] + tot <= G.scores[1]) {
     const g0 = G, need = G.scores[1] - G.scores[0] + 50;
-    showModal(`<h2>Opravdu zapsat?</h2><p>Na výhru potřebuješ ${fmt(need)} bodů, máš ${fmt(t)}. Zapsáním hra skončí.</p>`,
-      [{ text: 'Ne, házet dál', cls: '' }, { text: 'Ano, zapsat', cls: 'alt', fn: () => { if (G === g0 && G.phase === 'pick' && G.turn === 0) { commit(); bank(); } } }]);
+    showModal(`<h2>${th('kostky.bank.title')}</h2><p>${th('kostky.bank.text', { need, n: tot })}</p>`,
+      [{ text: th('kostky.bank.no'), cls: '' }, { text: th('kostky.bank.yes'), cls: 'alt', fn: () => { if (G === g0 && G.phase === 'pick' && G.turn === 0) { commit(); bank(); } } }]);
     return;
   }
   commit(); bank();
@@ -908,9 +913,9 @@ $('#btnBank').addEventListener('click', tapBank);
 // and the opponent's turn neither.
 function undo() {
   if (G.status !== 'playing') { ended(); return; }
-  if (busy || G.turn !== 0) { toast(G.turn === 1 ? `Hraje ${foe().name}, tah soupeře vrátit nejde` : 'Chvilku, kostky se ještě kutálejí'); return; }
+  if (busy || G.turn !== 0) { toast(G.turn === 1 ? t('kostky.toast.noUndoFoe', { name: foe().name }) : t('kostky.toast.waitRoll')); return; }
   if (G.phase === 'pick' && G.selUndo.length) { G.sel = G.selUndo.pop(); buzz(); save(); render(); return; }
-  toast(G.rolls ? 'Hozené kostky už vrátit nejde' : 'Zatím není co vrátit');
+  toast(t(G.rolls ? 'kostky.toast.noUndoRoll' : 'common.nothingToUndo'));
 }
 $('#btnUndo').addEventListener('click', undo);
 // the end dialog comes a moment later; a quick tap on Nová hra meanwhile shows it at once instead of
@@ -920,71 +925,69 @@ function showEnd() {
   if (endDue !== G) return;
   endDue = null;
   const g = G, f = foe(g), st = stats[rulesKey(g.rules)], lv = lvName(g.rules.level).toLowerCase();
-  const head = g.status === 'won' ? 'Výhra! 🎉' : g.status === 'lost' ? `Tentokrát ${O.past(f, 'vyhrál', 'vyhrála')} ${f.name}` : 'Remíza';
-  const html = `<h2>${head}</h2><p>Ty <b>${fmt(g.scores[0])}</b> : <b>${fmt(g.scores[1])}</b> ${f.name}</p>`
-    + (st ? `<p>Soupeř ${lv}, hra do ${fmt(g.rules.target)}: výhry <b>${st.won}</b>, prohry <b>${losses(st)}</b>${st.draw ? `, remízy <b>${st.draw}</b>` : ''}</p>` : '');
-  showModal(html, [{ text: 'Nová hra', fn: () => newGame() }, { text: 'Prohlédnout stůl', cls: 'alt' }]);
+  const head = g.status === 'won' ? th('kostky.end.won') : g.status === 'lost' ? th('kostky.end.lost', foeP(f)) : th('kostky.end.draw');
+  const html = `<h2>${head}</h2><p>${th('kostky.end.score', { me: g.scores[0], foe: g.scores[1], name: f.name })}</p>`
+    + (st ? `<p>${th('kostky.end.stats', { level: lv, target: g.rules.target, won: st.won, lost: losses(st), hasDraw: st.draw > 0, draw: st.draw })}</p>` : '');
+  showModal(html, [{ text: th('common.newGame'), fn: () => newGame() }, { text: th('kostky.end.inspect'), cls: 'alt' }]);
 }
 // A new game in the middle of one asks first
 $('#btnNew').addEventListener('click', () => {
   if (inProgress()) {
-    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>', [{ text: 'Ano, nová hra', fn: () => newGame() }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('common.confirmNew.text')}</p>`, [{ text: th('common.confirmNew.yes'), fn: () => newGame() }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
   } else if (endDue === G) showEnd(); // the result dialog of the finished match has not been shown yet: it comes first
   else newGame();
 });
 
 /* ---------- Settings (a separate screen, applied at once, no Save button) ---------- */
 const opt = (act, on, title, desc) => `<button class="opt" data-act="${act}" aria-pressed="${on}"><span class="radio"></span><span><b>${title}</b>${desc ? `<span class="d">${desc}</span>` : ''}</span></button>`;
-const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+const toggleRow = (key, label) => `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${th(S[key] ? 'common.on' : 'common.off')}</button></div>`;
 function renderSettings() {
   const st = stats[rulesKey(S)];
   const changed = S.level !== G.rules.level || S.target !== G.rules.target;
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Kostky<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Soupeř</h3>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.kostky.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('opponents.heading')}</h3>
       <div class="field">
-        ${LEVELS.map((l, i) => opt('level:' + i, S.level === i, lvName(i), l.desc)).join('')}
-        <div class="fnote">Jméno soupeře je v každé hře jiné.</div>
+        ${LEVELS.map((l, i) => opt('level:' + i, S.level === i, lvName(i), th(l.descKey))).join('')}
+        <div class="fnote">${th('kostky.foeNote')}</div>
       </div>
-      <div class="field"><div class="flabel">Hra do</div>
-        ${TARGETS.map(t => opt('target:' + t, S.target === t, `${fmt(t)} bodů`, t === 3000 ? 'Krátká hra.' : t === 5000 ? 'Asi čtvrt hodiny.' : 'Klasika, dlouhá hra.')).join('')}
+      <div class="field"><div class="flabel">${th('kostky.target')}</div>
+        ${TARGETS.map(tg => opt('target:' + tg, S.target === tg, th('kostky.target.points', { n: tg }), th(tg === 3000 ? 'kostky.target.short' : tg === 5000 ? 'kostky.target.medium' : 'kostky.target.long'))).join('')}
       </div>
-      ${changed && !isFresh() ? (inProgress()
-        ? '<div class="notice">Rozehraná hra se dohraje podle původního nastavení. Změna platí od příští hry.</div>'
-        : '<div class="notice">Po návratu do hry začne <b>nová hra</b>.</div>') : ''}
-      <div class="field"><div class="flabel">Jak rychle soupeř hraje</div>
-        ${opt('speed:slow', S.speed === 'slow', 'Pomalu', 'Je dost času všechno sledovat.')}
-        ${opt('speed:normal', S.speed === 'normal', 'Normálně', '')}
-        ${opt('speed:fast', S.speed === 'fast', 'Rychle', '')}
+      ${changed && !isFresh() ? `<div class="notice">${th(inProgress() ? 'kostky.notice.progress' : 'kostky.notice.fresh')}</div>` : ''}
+      <div class="field"><div class="flabel">${th('kostky.speed.label')}</div>
+        ${opt('speed:slow', S.speed === 'slow', th('opponents.speed.slow'), th('kostky.speed.slow.desc'))}
+        ${opt('speed:normal', S.speed === 'normal', th('kostky.speed.normal'), '')}
+        ${opt('speed:fast', S.speed === 'fast', th('opponents.speed.fast'), '')}
       </div>
     </section>
-    <section class="card"><h3>Nápověda</h3>
-      ${toggleRow('hints', 'Ukazovat bodované kostky')}
-      <div class="fnote" style="margin-top:-6px">Kostky, které nic nedávají, jsou ztmavené.</div>
+    <section class="card"><h3>${th('kostky.assist')}</h3>
+      ${toggleRow('hints', th('kostky.hints'))}
+      <div class="fnote" style="margin-top:-6px">${th('kostky.hints.note')}</div>
     </section>
-    <section class="card"><h3>Vzhled</h3>
-      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch" data-theme="${t.id}"><span class="mdie"></span><span class="mdie"></span></span>${t.name}</button>`).join('')}</div>
-      ${toggleRow('vibrate', 'Vibrace')}
+    <section class="card"><h3>${th('common.look')}</h3>
+      <div class="tiles">${THEMES.map(m => `<button class="tile" data-act="theme:${m.id}" aria-pressed="${S.theme === m.id}"><span class="swatch" data-theme="${m.id}"><span class="mdie"></span><span class="mdie"></span></span>${th(m.nameKey)}</button>`).join('')}</div>
+      ${toggleRow('vibrate', th('common.vibrate'))}
     </section>
-    <section class="card"><h3>Statistika</h3>
-      <div class="fnote" style="margin:0 0 6px">Soupeř ${lvName(S.level).toLowerCase()}, hra do ${fmt(S.target)} bodů</div>
-      <div class="srow"><span>Odehrané hry</span><b>${st ? st.played : 0}</b></div>
-      <div class="srow"><span>Výhry</span><b>${st ? st.won : 0}</b></div>
-      <div class="srow"><span>Prohry</span><b>${st ? losses(st) : 0}</b></div>
-      <div class="srow"><span>Remízy</span><b>${st ? st.draw : 0}</b></div>
-      <button class="link" data-act="clearStats">Smazat statistiku</button>
+    <section class="card"><h3>${th('common.stats')}</h3>
+      <div class="fnote" style="margin:0 0 6px">${th('kostky.stat.opp', { level: lvName(S.level).toLowerCase(), target: S.target })}</div>
+      <div class="srow"><span>${th('kostky.stat.played')}</span><b>${st ? st.played : 0}</b></div>
+      <div class="srow"><span>${th('kostky.stat.won')}</span><b>${st ? st.won : 0}</b></div>
+      <div class="srow"><span>${th('kostky.stat.lost')}</span><b>${st ? losses(st) : 0}</b></div>
+      <div class="srow"><span>${th('kostky.stat.draw')}</span><b>${st ? st.draw : 0}</b></div>
+      <button class="link" data-act="clearStats">${th('kostky.stat.clear')}</button>
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
   const [act, arg] = b.dataset.act.split(':');
   if (act === 'close') { closeSettings(); return; }
   if (act === 'clearStats') {
-    showModal('<h2>Smazat statistiku?</h2><p>Smažou se výsledky proti všem soupeřům.</p>', [
-      { text: 'Ano, smazat', fn: () => { stats = {}; save(); renderSettings(); toast('Statistika je smazaná'); } },
-      { text: 'Ne, nechat', cls: 'alt' }]);
+    showModal(`<h2>${th('kostky.stat.clear.title')}</h2><p>${th('kostky.stat.clear.text')}</p>`, [
+      { text: th('kostky.stat.clear.yes'), fn: () => { stats = {}; save(); renderSettings(); toast(t('kostky.toast.statsCleared')); } },
+      { text: th('kostky.stat.clear.no'), cls: 'alt' }]);
     return;
   }
   if (act === 'level') S.level = +arg;
@@ -992,7 +995,7 @@ $('#settingsIn').addEventListener('click', e => {
   else if (act === 'speed') S.speed = arg;
   else if (act === 'theme') S.theme = arg;
   else if (act === 'toggle') S[arg] = !S[arg];
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('common.settingsReset')); }
   normalize(S); buzz(8); applyLook(); save();
   const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
 });
@@ -1001,7 +1004,7 @@ function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hi
 function closeSettings() {
   $('#screenSettings').hidden = true;
   const changed = S.level !== G.rules.level || S.target !== G.rules.target;
-  if (changed && !inProgress()) newGame(!isFresh() ? 'Začala nová hra s novým nastavením' : '');
+  if (changed && !inProgress()) newGame(!isFresh() ? t('kostky.toast.newSettings') : '');
   else { render(); advance(); }
 }
 $('#btnSettings').addEventListener('click', openSettings);
@@ -1010,35 +1013,35 @@ $('#btnSettings').addEventListener('click', openSettings);
 function renderHelp() {
   const f = foe();
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Kostky<small>Jak hrát</small></h2></div>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.kostky.name')}<small>${th('common.help')}</small></h2></div>
     <section class="card help"><ol>
-      <li>Hraješ proti soupeři (teď ${f.name} ${O.stars(G.rules.level, LEVELS.length)}). Střídáte se. Kdo první dosáhne <b>${fmt(G.rules.target)} bodů</b>, vyhrává. Když tam první dojde ten, kdo začínal, druhý má ještě <b>poslední pokus</b>.</li>
-      <li>Ťukni na <b>Hodit</b> (nebo rovnou na kostky). Pak ťukni na kostky, které bodují. Tři stejné se vyberou jedním ťuknutím.</li>
-      <li>Potom se rozhodni: <b>Hodit znovu</b> zbylými kostkami, nebo body z tahu <b>Zapsat</b>. Zapsat jde až od <b>${MIN_BANK} bodů</b> v tahu.</li>
-      <li>Když v hodu nepadne nic, co boduje, <b>body z celého tahu propadnou</b> a hraje soupeř. Proto je dobré vědět, kdy přestat.</li>
-      <li>Když bodují <b>všechny kostky</b>, hází se znovu všemi šesti a body se sčítají dál. Zapsat je hned nejde, musí se hodit.</li>
-      <li>Body platí jen z jednoho hodu: trojice musí padnout najednou.</li>
-      <li><b>Zpět</b> zruší výběr kostek v tomto hodu. Hozené kostky vrátit nejde.</li>
-      <li>Soupeř hraje sám. Když otevřeš Nastavení nebo tuto nápovědu, počká. Nikam se nespěchá.</li>
+      <li>${th('kostky.help.1', { name: f.name, stars: O.stars(G.rules.level, LEVELS.length), target: G.rules.target })}</li>
+      <li>${th('kostky.help.2')}</li>
+      <li>${th('kostky.help.3', { min: MIN_BANK })}</li>
+      <li>${th('kostky.help.4')}</li>
+      <li>${th('kostky.help.5')}</li>
+      <li>${th('kostky.help.6')}</li>
+      <li>${th('kostky.help.7')}</li>
+      <li>${th('kostky.help.8')}</li>
     </ol></section>
-    <section class="card help"><h3>Kolik co dává</h3>
+    <section class="card help"><h3>${th('kostky.help.points')}</h3>
       <table class="pts">
-        <tr><td>Jednička</td><td>100</td></tr>
-        <tr><td>Pětka</td><td>50</td></tr>
-        <tr><td>Tři jedničky</td><td>1 000</td></tr>
-        <tr><td>Tři stejné (dvojky až šestky)</td><td>číslo × 100</td></tr>
-        <tr><td>Čtyři stejné</td><td>2× víc než tři</td></tr>
-        <tr><td>Pět stejných</td><td>4× víc než tři</td></tr>
-        <tr><td>Šest stejných</td><td>8× víc než tři</td></tr>
-        <tr><td>Postupka 1 2 3 4 5 6</td><td>1 500</td></tr>
+        <tr><td>${th('kostky.help.pts.one')}</td><td>${fmt(100)}</td></tr>
+        <tr><td>${th('kostky.help.pts.five')}</td><td>${fmt(50)}</td></tr>
+        <tr><td>${th('kostky.help.pts.threeOnes')}</td><td>${fmt(1000)}</td></tr>
+        <tr><td>${th('kostky.help.pts.three')}</td><td>${th('kostky.help.pts.threeVal')}</td></tr>
+        <tr><td>${th('kostky.help.pts.four')}</td><td>${th('kostky.help.pts.fourVal')}</td></tr>
+        <tr><td>${th('kostky.help.pts.fiveKind')}</td><td>${th('kostky.help.pts.fiveVal')}</td></tr>
+        <tr><td>${th('kostky.help.pts.six')}</td><td>${th('kostky.help.pts.sixVal')}</td></tr>
+        <tr><td>${th('kostky.help.pts.straight')}</td><td>${fmt(1500)}</td></tr>
       </table>
-      <p class="fnote">Příklad: tři šestky = 600, čtyři šestky = 1 200, čtyři jedničky = 2 000. Tři dvojice se nepočítají.</p>
+      <p class="fnote">${th('kostky.help.pts.example')}</p>
     </section>
-    <section class="card help"><h3>Soupeři</h3>
-      ${LEVELS.map((x, i) => `<p><b>${lvName(i)}:</b> ${x.desc}</p>`).join('')}
-      <p>Soupeř má v každé hře jiné jméno. Jak dobře hraje, ukazují hvězdičky u jména a volí se v Nastavení.</p>
+    <section class="card help"><h3>${th('kostky.help.foes')}</h3>
+      ${LEVELS.map((x, i) => `<p><b>${lvName(i)}:</b> ${th(x.descKey)}</p>`).join('')}
+      <p>${th('kostky.help.foesNote')}</p>
     </section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -1070,6 +1073,8 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+// the static texts (data-t*), <title> and <html lang> in the player's language
+I18N.apply();
 // ask for persistent storage so the browser does not delete the saved game by itself
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 const saved = load();
@@ -1083,7 +1088,7 @@ if (saved && saved.stats && typeof saved.stats === 'object') {
 if (saved && validGame(saved.game)) {
   G = saved.game;
   // a new opponent or target chosen just before the app was closed: applied now, as closing Settings would
-  if ((S.level !== G.rules.level || S.target !== G.rules.target) && !inProgress()) newGame(!isFresh() ? 'Začala nová hra s novým nastavením' : '');
+  if ((S.level !== G.rules.level || S.target !== G.rules.target) && !inProgress()) newGame(!isFresh() ? t('kostky.toast.newSettings') : '');
   else { render(); advance(); }
 }
 else newGame();

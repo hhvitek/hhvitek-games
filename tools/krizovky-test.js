@@ -19,6 +19,14 @@ const m = src.match(/\/\* -{10} Engine -{10} \*\/([\s\S]*?)\/\* -{10} Engine end
 if (!m) { console.error('No Engine block in ' + file); process.exit(1); }
 const E = new Function(m[1] + '\nreturn KrizovkyEngine();')();
 
+// the names of the pictures are texts (games/malovane-krizovky/texts.js, next to the game file): each puzzle has nameKey
+const TEXTS = {};
+{
+  const tf = [path.join(path.dirname(file), 'texts.js'), path.join(__dirname, '..', 'games', 'malovane-krizovky', 'texts.js')].find(f => fs.existsSync(f));
+  if (tf) try { new Function('I18N', fs.readFileSync(tf, 'utf8'))({ add: o => Object.assign(TEXTS, o) }); } catch (e) { console.error('texts.js does not load: ' + e.message); }
+}
+const nameOf = p => (TEXTS[p.nameKey] && TEXTS[p.nameKey].cs) || '';
+
 let failed = 0, warned = 0;
 const ok = (cond, msg) => { if (!cond) { failed++; console.log('  FAIL ' + msg); } return cond; };
 const warn = msg => { warned++; console.log('  WARN ' + msg); };
@@ -51,7 +59,7 @@ P.forEach((p, k) => {
   ok(typeof p.id === 'string' && /^p\d{2,}$/.test(p.id), tag + ': id looks like p01');
   ok(p.id === 'p' + String(k + 1).padStart(2, '0'), tag + ': ids go p01, p02, … in order');
   ok(!ids.has(p.id), tag + ': id is unique'); ids.add(p.id);
-  ok(typeof p.name === 'string' && p.name.trim().length > 0, tag + ': has a name');
+  ok(p.nameKey === 'malovane-krizovky.puzzle.' + p.id && nameOf(p).trim().length > 0, tag + ': has a name (nameKey malovane-krizovky.puzzle.<id> with cs in texts.js)');
   ok(E.SIZES.includes(p.w) && p.w === p.h, tag + ': size is one of SIZES and square');
   ok(Array.isArray(p.rows) && p.rows.length === p.h && p.rows.every(r => typeof r === 'string' && r.length === p.w),
     tag + ': rows are h strings of length w');
@@ -153,7 +161,7 @@ for (const p of P) {
   const cl = E.cluesOf(p), sol = solutionOf(p);
   const r = E.solveGrid(cl, p.w, p.h);
   const good = r.ok && r.done && same(r.cells, sol);
-  if (!ok(good, p.id + ' ' + p.name + ': line logic from an empty grid reaches the drawing' +
+  if (!ok(good, p.id + ' ' + nameOf(p) + ': line logic from an empty grid reaches the drawing' +
     (r.ok ? ' (' + r.cells.filter(v => v === 0).length + ' cells left unknown)' : ' (contradiction)'))) {
     for (let y = 0; y < p.h; y++) console.log('     ' + r.cells.slice(y * p.w, y * p.w + p.w).map((v, x) => v === 0 ? '?' : p.rows[y][x]).join(' '));
   }
@@ -161,7 +169,7 @@ for (const p of P) {
   const half = sol.map(v => rnd() < 0.5 ? v : 0);
   const r2 = E.solveGrid(cl, p.w, p.h, half);
   ok(r2.ok && r2.done && same(r2.cells, sol), p.id + ': solveGrid from a correct partial start reaches the drawing');
-  table.push([p.id, p.w + '×' + p.h, p.name, r.passes, E.difficulty(p)]);
+  table.push([p.id, p.w + '×' + p.h, nameOf(p), r.passes, E.difficulty(p)]);
 }
 {
   // a wrong mark gives a contradiction (a hand-made heart with its top-left filled cell crossed)

@@ -65,7 +65,7 @@
 //                            flap: bool (cat flap in the hall door), weather: null|'rain'|'snow', beds: 4|6 (garden:
 //                            how many beds, see bedSpots) }. Holiday ids: advent,
 //                            mikulas, vanoce, silvestr, masopust, velikonoce, carodejnice, dusicky, narozeniny.
-//   rooms                    { id: { name (Czech), spots: { name: {x, y} } } } for the four places (room coordinates,
+//   rooms                    { id: { spots: { name: {x, y} } } } for the four places (room coordinates,
 //                            where an item or Koxa stands): living (Obývák: rug, bed, window, chair = armchair seat, sun),
 //                            kitchen (Kuchyně: bowl, water, counter, window), hall (Předsíň: litter, door, shoe, mat),
 //                            garden (Zahrada: door, gate, tree, branch, branch2, bench, feeder, yard, bed1..bed4).
@@ -85,9 +85,9 @@
 //   Tricks and more poses: trickSit, trickPaw (dej pac), trickSpin (turns round by CSS), trickBeg (panáček), inBox, onFence.
 //   itemSize[name] = { w, h }  the item's 100 × 100 box in room units; itemPoints: rod / wand tip, cat-tree platforms.
 //   mouseHole(), mousePeek(phase 0..1), fish(kind) (fishes: goldfish, carp, perch), marker(done)  minigame pieces.
-//   shop(), shopSpots       Obchůdek (400×600 slice) and where goods go on the counter.
+//   shop(sign), shopSpots   Obchůdek (400×600 slice; sign = the text on its sign, from the UI) and where goods go on the counter.
 //   postcardFrame(caption), postcardHole (viewBox 300×200), photoFrame(), photoHole (200×236)  frames over a photo.
-//   neighbour(id, pose, opts), neighbours = { id: { name, size } }  the visitors (mourek, liza, bivoj, ciperka, pacicka,
+//   neighbour(id, pose, opts), neighbours = { id: { size } }  the visitors (mourek, liza, bivoj, ciperka, pacicka,
 //                            rambo, sedivka, fousek) in any pose; usually sit, walk, loaf, onFence (rooms.garden.spots.fence).
 //                            opts.coat = a neighbour id whose coat to wear (neighbour('k1', 'sit', { coat: 'liza', kit: 1 })).
 //   Kittens: opts.kit 0..1 in cat(), neighbour(), regions(), mouth() (0 or missing = a grown cat, exactly as without it;
@@ -1458,7 +1458,6 @@ function KockaArt() {
   }
   const PLACES = {
     living: {
-      name: 'Obývák',
       spots: { rug: { x: 200, y: 534 }, bed: { x: 316, y: 562 }, window: { x: 130, y: 268 }, chair: { x: 332, y: 396 }, sun: sunPatch(0.5) },
       draw(c) {
         const g = nid();
@@ -1474,7 +1473,6 @@ function KockaArt() {
       },
     },
     kitchen: {
-      name: 'Kuchyně',
       spots: { bowl: { x: 64, y: 472 }, water: { x: 44, y: 566 }, counter: { x: 282, y: 322 }, window: { x: 116, y: 254 } },
       draw(c) {
         const g = nid();
@@ -1499,7 +1497,6 @@ function KockaArt() {
       },
     },
     hall: {
-      name: 'Předsíň',
       spots: { litter: { x: 330, y: 500 }, door: { x: 180, y: 404 }, shoe: { x: 84, y: 548 }, mat: { x: 180, y: 432 } },
       draw(c) {
         let s = wallFill('#e6d4b4') + panelling();
@@ -1522,7 +1519,6 @@ function KockaArt() {
       },
     },
     garden: {
-      name: 'Zahrada',
       spots: {
         door: { x: 44, y: 404 }, gate: { x: 278, y: 390 }, tree: { x: 344, y: 444 }, branch: { x: 278, y: 226 }, branch2: { x: 360, y: 186 },
         bench: { x: 184, y: 420 }, feeder: { x: 108, y: 266 }, yard: { x: 200, y: 470 },
@@ -1600,7 +1596,7 @@ function KockaArt() {
     return `<svg class="kx-room" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${P.draw(c)}</svg>`;
   }
   const rooms = {};
-  for (const k of Object.keys(PLACES)) rooms[k] = { name: PLACES[k].name, spots: JSON.parse(JSON.stringify(PLACES[k].spots)) };
+  for (const k of Object.keys(PLACES)) rooms[k] = { spots: JSON.parse(JSON.stringify(PLACES[k].spots)) };
   // the old single-room spots (the living room with the bowls, the litter box and the door where they used to be)
   const spotsAt = { bowl: { x: 64, y: 472 }, water: { x: 44, y: 566 }, litter: { x: 340, y: 474 }, bed: { x: 316, y: 562 }, window: { x: 130, y: 268 }, door: { x: 342, y: 402 } };
 
@@ -1699,9 +1695,9 @@ function KockaArt() {
 
   /* ---------- Obchůdek paní Novákové (400 × 600, slice): shelves of cat things, the counter, only her apron and hands ---------- */
   const shopSpots = { counter: { x: 200, y: 382 } };   // the middle of the counter top, where goods are put down
-  function shop() {
+  function shop(sign) {
     const it = (name, x, y, k) => `<g transform="translate(${x} ${y}) scale(${k})">${quiet(ITEMS[name])}</g>`;
-    let s = wallFill('#eadcc0') + '<rect x="120" y="14" width="160" height="44" rx="8" fill="#7a4520" stroke="#3f220e" stroke-width="3"/><text x="200" y="45" text-anchor="middle" font-family="Georgia,serif" font-size="25" font-weight="700" fill="#f4e6c8">Obchůdek</text>';
+    let s = wallFill('#eadcc0') + '<rect x="120" y="14" width="160" height="44" rx="8" fill="#7a4520" stroke="#3f220e" stroke-width="3"/><text x="200" y="45" text-anchor="middle" font-family="Georgia,serif" font-size="25" font-weight="700" fill="#f4e6c8">' + escXml(sign) + '</text>';
     for (const y of [138, 228, 318]) s += `<rect x="14" y="${y}" width="372" height="10" rx="2" fill="#8a5a32" stroke="#5a3a20" stroke-width="2"/>`;
     s += it('foodBag', 20, 78, 0.6) + it('foodBag', 70, 78, 0.6) + it('tunaPack', 128, 84, 0.56) + it('pouchPack', 186, 84, 0.56) + it('treatBag', 248, 80, 0.6) + it('treatBag', 296, 80, 0.6) + it('chickenPack', 336, 88, 0.52);
     s += it('mouse', 22, 178, 0.5) + it('catnipMouse', 66, 178, 0.5) + it('yarn', 112, 172, 0.56) + it('ballBell', 164, 176, 0.52) + it('featherWand', 210, 166, 0.62) + it('bowl', 268, 180, 0.5) + it('waterBowl', 322, 180, 0.5);
@@ -1747,14 +1743,14 @@ function KockaArt() {
   // a coat changes the palette (C) and these: pattern 'tortie'|'tabby'|'patches'|'none', blaze, socks (paw colour),
   // torn (a notch in the right ear), size, fluff (shaggy outline), whisk (whisker length), old (heavy lids)
   const NEIGHBOURS = {
-    mourek: { name: 'Mourek', pattern: 'tabby', c: { fur: '#7d7f82', fur2: '#6a6c6f', edge: '#4a4c4f', patch: '#4a4b4e', patch2: '#5a5b5e', eye: '#9cc56a', earIn: '#c49a96' } },
-    liza: { name: 'Líza', pattern: 'patches', c: { fur: '#f4f1ec', fur2: '#e2ddd5', edge: '#bdb5aa', ol: '#5a4d44', patch: '#8d8f94', patch2: '#a9abb0', eye: '#7cc0e8', earIn: '#e8b4b0', lid: '#6a5a50', nose: '#e8a0a0' } },
-    bivoj: { name: 'Bivoj', pattern: 'tabby', torn: true, size: 1.12, c: { fur: '#d9822b', fur2: '#c47424', edge: '#9a5a1e', patch: '#b5631c', patch2: '#c97424', eye: '#e8b64a', earIn: '#e8a08a', lid: '#5a3a20', nose: '#c46a5a' } },
-    ciperka: { name: 'Čiperka', pattern: 'patches', size: 0.84, c: { fur: '#f6f1e8', fur2: '#e6dfd2', edge: '#c0b6a8', ol: '#5a4d44', patch: '#2a2420', patch2: '#d9822b', eye: '#c8d24a', earIn: '#e8b4b0', lid: '#6a5a50', nose: '#e8a0a0' } },
-    pacicka: { name: 'Pacička', pattern: 'none', socks: '#f6f1e8', c: { eye: '#e6c84a' } },
-    rambo: { name: 'Rambo', pattern: 'tabby', fluff: 7, c: { fur: '#6e5236', fur2: '#5e452c', edge: '#4a3420', patch: '#3e2a18', patch2: '#4a3420', eye: '#d9a43a', earIn: '#b07a6a' } },
-    sedivka: { name: 'Šedivka', pattern: 'patches', old: true, c: { fur: '#a7a9ad', fur2: '#96989c', edge: '#6a6c70', patch: '#c4c6ca', patch2: '#d4d6da', eye: '#b8d48a', earIn: '#c9a6a2', lid: '#3e3e42' } },
-    fousek: { name: 'Fousek', pattern: 'none', fluff: 4, whisk: 1.45, c: { fur: '#f7f4ef', fur2: '#e8e3db', edge: '#c6bdb0', ol: '#5a4d44', eye: '#86b8e8', earIn: '#ecb8b4', lid: '#5a4d44', nose: '#eaa2a2' } },
+    mourek: { pattern: 'tabby', c: { fur: '#7d7f82', fur2: '#6a6c6f', edge: '#4a4c4f', patch: '#4a4b4e', patch2: '#5a5b5e', eye: '#9cc56a', earIn: '#c49a96' } },
+    liza: { pattern: 'patches', c: { fur: '#f4f1ec', fur2: '#e2ddd5', edge: '#bdb5aa', ol: '#5a4d44', patch: '#8d8f94', patch2: '#a9abb0', eye: '#7cc0e8', earIn: '#e8b4b0', lid: '#6a5a50', nose: '#e8a0a0' } },
+    bivoj: { pattern: 'tabby', torn: true, size: 1.12, c: { fur: '#d9822b', fur2: '#c47424', edge: '#9a5a1e', patch: '#b5631c', patch2: '#c97424', eye: '#e8b64a', earIn: '#e8a08a', lid: '#5a3a20', nose: '#c46a5a' } },
+    ciperka: { pattern: 'patches', size: 0.84, c: { fur: '#f6f1e8', fur2: '#e6dfd2', edge: '#c0b6a8', ol: '#5a4d44', patch: '#2a2420', patch2: '#d9822b', eye: '#c8d24a', earIn: '#e8b4b0', lid: '#6a5a50', nose: '#e8a0a0' } },
+    pacicka: { pattern: 'none', socks: '#f6f1e8', c: { eye: '#e6c84a' } },
+    rambo: { pattern: 'tabby', fluff: 7, c: { fur: '#6e5236', fur2: '#5e452c', edge: '#4a3420', patch: '#3e2a18', patch2: '#4a3420', eye: '#d9a43a', earIn: '#b07a6a' } },
+    sedivka: { pattern: 'patches', old: true, c: { fur: '#a7a9ad', fur2: '#96989c', edge: '#6a6c70', patch: '#c4c6ca', patch2: '#d4d6da', eye: '#b8d48a', earIn: '#c9a6a2', lid: '#3e3e42' } },
+    fousek: { pattern: 'none', fluff: 4, whisk: 1.45, c: { fur: '#f7f4ef', fur2: '#e8e3db', edge: '#c6bdb0', ol: '#5a4d44', eye: '#86b8e8', earIn: '#ecb8b4', lid: '#5a4d44', nose: '#eaa2a2' } },
   };
   function withCoat(coat, fn) {
     const save = COAT;
@@ -1773,7 +1769,7 @@ function KockaArt() {
     return withCoat(nb, () => cat(pose, x)).replace('class="koxa ', `class="koxa kx-nb kx-nb-${cid} `);
   }
   const neighbours = {};
-  for (const k of Object.keys(NEIGHBOURS)) neighbours[k] = { name: NEIGHBOURS[k].name, size: NEIGHBOURS[k].size || 1 };
+  for (const k of Object.keys(NEIGHBOURS)) neighbours[k] = { size: NEIGHBOURS[k].size || 1 };
 
   /* ---------- motion ---------- */
   const css = `

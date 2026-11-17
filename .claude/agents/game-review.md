@@ -27,7 +27,10 @@ Read-only: never edit, create or delete files; Bash only for reading (grep, node
    - player texts: Czech, informal "ty", gender-neutral; controls work as the help says (gestures, long presses and
      time pressure are allowed since 2026-11-12, but they must be explained in the help and work reliably);
    - layout: sizes computed from the room left; nothing sized in `%` of a parent that is much bigger than the element;
-   - Czech texts (help, settings, toasts, README row, registry description) true about what the game does.
+   - Czech texts (help, settings, toasts, README row, `game.<id>.desc` in `i18n/games.js`) true about what the game does;
+   - texts (CLAUDE.md "Texts and languages"): no hard-coded player text (look at a `?lang=pseudo` screenshot or the code: text that stays
+     plain is hard-coded), no sentence glued from fragments, plurals with all four Czech forms, `th()` for HTML and `t()` for plain text
+     (params escaped in HTML), engines return codes and not text, no key built from data at run time.
 4. High bar: only what a real player would hit. No style, naming, refactors or "could be simpler".
 
 Reply with at most 8 findings, most important first. Each: `file:line`, what happens vs what should happen, the exact

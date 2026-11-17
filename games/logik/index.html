@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,16 +34,20 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
-
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="texts.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f2f2ef">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Logik">
-<title>Logik</title>
+<title data-t="game.logik.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234b2a15'/%3E%3Ccircle cx='20' cy='20' r='10' fill='%23e0302a'/%3E%3Ccircle cx='44' cy='20' r='10' fill='%23ffd31a'/%3E%3Ccircle cx='20' cy='44' r='10' fill='%232fa84f'/%3E%3Ccircle cx='44' cy='44' r='10' fill='%231f5fd6'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes (board colours) ---------- */
@@ -313,29 +317,29 @@ a.round{text-decoration:none}
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app" class="wood">
   <header class="topbar">
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Logik</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.logik.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
   <div class="play" id="play">
     <div class="main">
-      <section class="secret" id="secret" role="button" aria-label="Schovaný tajný kód – ťuknutí ukáže kód a hra skončí">
+      <section class="secret" id="secret" role="button" data-t-aria="logik.secret.hidden">
         <div class="row secret-row"><div class="fb" id="secretFb"></div><div class="holes" id="secretHoles"></div></div>
       </section>
       <main class="board" id="board"><div class="rows" id="rows"></div></main>
     </div>
     <aside class="side" id="side">
-      <button id="btnGiveUp" class="undo giveup" aria-label="Vzdát se a ukázat tajný kód"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2.5h2V22H5z"/><path d="M8 3.5h11.5l-3 4.75 3 4.75H8z"/></svg></button>
+      <button id="btnGiveUp" class="undo giveup" data-t-aria="logik.giveUp"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2.5h2V22H5z"/><path d="M8 3.5h11.5l-3 4.75 3 4.75H8z"/></svg></button>
       <div class="side-mid" id="sideMid"></div>
-      <button id="btnUndo" class="undo" aria-label="Zpět"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
-      <button id="btnCheck" class="big" aria-label="Zkontrolovat"></button>
+      <button id="btnUndo" class="undo" data-t-aria="common.undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+      <button id="btnCheck" class="big" data-t-aria="logik.check"></button>
     </aside>
   </div>
   <footer class="tray" id="tray">
@@ -386,18 +390,20 @@ a.round{text-decoration:none}
 'use strict';
 const $ = s => document.querySelector(s);
 const root = document.documentElement;
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 
 /* ---------- Constants ---------- */
 // the first six in the order of the old Logik the player knows (user's decision); rim: an outline for the white and the black
 const COLORS = [
-  { name: 'červená',  c: '#e0302a', t: '#fff' },
-  { name: 'bílá',     c: '#f2f2f0', t: '#2b2b2b', rim: 'rgba(0,0,0,.45)' },
-  { name: 'zelená',   c: '#2fa84f', t: '#fff' },
-  { name: 'černá',    c: '#262c3a', t: '#fff', rim: 'rgba(255,255,255,.55)' },
-  { name: 'modrá',    c: '#3d8ef0', t: '#062246' },
-  { name: 'žlutá',    c: '#ffd31a', t: '#3a2a00' },
-  { name: 'oranžová', c: '#ff8a1c', t: '#3a1a00' },
-  { name: 'fialová',  c: '#8e3bc4', t: '#fff' },
+  { nameKey: 'logik.color.red',  c: '#e0302a', t: '#fff' },
+  { nameKey: 'logik.color.white',     c: '#f2f2f0', t: '#2b2b2b', rim: 'rgba(0,0,0,.45)' },
+  { nameKey: 'logik.color.green',   c: '#2fa84f', t: '#fff' },
+  { nameKey: 'logik.color.black',    c: '#262c3a', t: '#fff', rim: 'rgba(255,255,255,.55)' },
+  { nameKey: 'logik.color.blue',    c: '#3d8ef0', t: '#062246' },
+  { nameKey: 'logik.color.yellow',    c: '#ffd31a', t: '#3a2a00' },
+  { nameKey: 'logik.color.orange', c: '#ff8a1c', t: '#3a1a00' },
+  { nameKey: 'logik.color.purple',  c: '#8e3bc4', t: '#fff' },
 ];
 // the pictures of the right-column buttons (also shown in the help)
 const ICON_CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"/></svg>';
@@ -405,31 +411,31 @@ const ICON_NEW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a
 const ICON_UNDO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 const ICON_FLAG = '<svg viewBox="0 0 24 24" aria-hidden="true" class="fill"><path d="M5 2.5h2V22H5z"/><path d="M8 3.5h11.5l-3 4.75 3 4.75H8z"/></svg>';
 const THEMES = [
-  { id: 'classic',    name: 'Klasika', meta: '#f2f2ef' }, // the default: the look of the old Logik
+  { id: 'classic',    nameKey: 'logik.theme.classic', meta: '#f2f2ef' }, // the default: the look of the old Logik
   // wood
-  { id: 'dark-wood',  name: 'Tmavé dřevo', meta: '#2f1a0c' },
-  { id: 'walnut',     name: 'Ořech', meta: '#4a2e1a' },
-  { id: 'cherry',     name: 'Třešeň', meta: '#5a2a17' },
-  { id: 'ebony',      name: 'Eben', meta: '#1f1612' },
-  { id: 'light-wood', name: 'Světlé dřevo', meta: '#8a5a32' },
-  { id: 'maple',      name: 'Javor', meta: '#c9a26b' },
-  { id: 'driftwood',  name: 'Naplavené dřevo', meta: '#57524a' },
-  { id: 'plastic',    name: 'Hnědý plast', meta: '#3e3129' },
+  { id: 'dark-wood',  nameKey: 'logik.theme.darkWood', meta: '#2f1a0c' },
+  { id: 'walnut',     nameKey: 'logik.theme.walnut', meta: '#4a2e1a' },
+  { id: 'cherry',     nameKey: 'logik.theme.cherry', meta: '#5a2a17' },
+  { id: 'ebony',      nameKey: 'logik.theme.ebony', meta: '#1f1612' },
+  { id: 'light-wood', nameKey: 'logik.theme.lightWood', meta: '#8a5a32' },
+  { id: 'maple',      nameKey: 'logik.theme.maple', meta: '#c9a26b' },
+  { id: 'driftwood',  nameKey: 'logik.theme.driftwood', meta: '#57524a' },
+  { id: 'plastic',    nameKey: 'logik.theme.plastic', meta: '#3e3129' },
   // felt
-  { id: 'green',      name: 'Zelená plsť', meta: '#1f4a31' },
-  { id: 'navy',       name: 'Modrá plsť', meta: '#1a3554' },
-  { id: 'burgundy',   name: 'Vínová plsť', meta: '#4a1621' },
-  { id: 'lavender',   name: 'Levandule', meta: '#54476f' },
+  { id: 'green',      nameKey: 'logik.theme.green', meta: '#1f4a31' },
+  { id: 'navy',       nameKey: 'logik.theme.navy', meta: '#1a3554' },
+  { id: 'burgundy',   nameKey: 'logik.theme.burgundy', meta: '#4a1621' },
+  { id: 'lavender',   nameKey: 'logik.theme.lavender', meta: '#54476f' },
   // stone and night
-  { id: 'slate',      name: 'Břidlice', meta: '#2f3840' },
-  { id: 'marble',     name: 'Mramor', meta: '#d8d4cd' },
-  { id: 'paper',      name: 'Papír', meta: '#f4ebdf' },
-  { id: 'night',      name: 'Noc', meta: '#16181c' },
+  { id: 'slate',      nameKey: 'logik.theme.slate', meta: '#2f3840' },
+  { id: 'marble',     nameKey: 'logik.theme.marble', meta: '#d8d4cd' },
+  { id: 'paper',      nameKey: 'common.theme.paper', meta: '#f4ebdf' },
+  { id: 'night',      nameKey: 'logik.theme.night', meta: '#16181c' },
 ];
 const MODES = [
-  { id: 'drag', name: 'Přetahování prstem', desc: 'Barvu přetáhni prstem do jamky. Kolíček přetažený mimo řádek zmizí.' },
-  { id: 'tap',  name: 'Ťuknout na barvu', desc: 'Barva se sama vloží na další volné místo. Ťuknutí na kolíček ho zase vyndá.' },
-  { id: 'slot', name: 'Nejdřív místo, pak barva', desc: 'Ťukni na jamku a potom na barvu, která tam má být.' },
+  { id: 'drag', nameKey: 'logik.mode.drag', descKey: 'logik.mode.drag.desc' },
+  { id: 'tap',  nameKey: 'logik.mode.tap', descKey: 'logik.mode.tap.desc' },
+  { id: 'slot', nameKey: 'logik.mode.slot', descKey: 'logik.mode.slot.desc' },
 ];
 const LIMITS = { colors: [4, 8], pegs: [4, 6], attempts: [6, 12] };
 // maxRepeat: 1 = no colour twice in the code, 0 = unlimited
@@ -478,7 +484,7 @@ function normalize(s) {
   s.attempts = clamp(+s.attempts || DEFAULTS.attempts, LIMITS.attempts);
   s.maxRepeat = Math.max(0, +s.maxRepeat || 0);
   if (!MODES.some(m => m.id === s.mode)) s.mode = DEFAULTS.mode;
-  if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
+  if (!THEMES.some(m => m.id === s.theme)) s.theme = DEFAULTS.theme;
   s.nums = !!s.nums; s.vibrate = !!s.vibrate; s.palRight = !!s.palRight; s.hints = !!s.hints; s.look = 2;
   let adjusted = false;
   if (s.maxRepeat >= s.pegs) s.maxRepeat = 0;
@@ -544,7 +550,7 @@ function newGame() {
 /* ---------- Helpers ---------- */
 function pegHTML(c) {
   const col = COLORS[c];
-  return `<span class="peg" style="--c:${col.c};--ct:${col.t}${col.rim ? ';--rim:' + col.rim : ''}" aria-label="${col.name}"><b>${c + 1}</b></span>`;
+  return `<span class="peg" style="--c:${col.c};--ct:${col.t}${col.rim ? ';--rim:' + col.rim : ''}" aria-label="${th(col.nameKey)}"><b>${c + 1}</b></span>`;
 }
 function buzz(ms = 12) { if (S.vibrate && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) {} } }
 let toastT;
@@ -559,8 +565,8 @@ function whenFree(g0, ms, fn) {
   }, ms);
 }
 function toast(msg, ms = 2600) {
-  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hide'), ms);
+  const el = $('#toast'); el.textContent = msg; el.classList.remove('hide');
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.add('hide'), ms);
 }
 function nextEmpty(from) {
   const p = G.current.length;
@@ -577,12 +583,12 @@ function setSlot(i, c) {
   if (c !== null) o.push(i);
 }
 function undo() {
-  if (G.status !== 'playing') { toast('Hra skončila – ťukni na Nová hra'); return; }
+  if (G.status !== 'playing') { toast(t('logik.toast.over')); return; }
   const o = ord().filter(i => G.current[i] !== null);
   G.order = o;
   let i = o.length ? o[o.length - 1] : -1;
   if (i < 0) for (let k = G.current.length - 1; k >= 0; k--) if (G.current[k] !== null) { i = k; break; }
-  if (i < 0) { toast('Řádek je prázdný'); return; }
+  if (i < 0) { toast(t('logik.toast.rowEmpty')); return; }
   setSlot(i, null);
   if (S.mode === 'slot') sel = i;
   buzz(); commit();
@@ -597,8 +603,8 @@ function applyLook() {
   root.classList.toggle('no-hints', !S.hints);
   const host = S.palRight ? $('#sideMid') : $('#tray');
   if ($('#palette').parentElement !== host) host.appendChild($('#palette'));
-  const th = THEMES.find(t => t.id === S.theme);
-  document.querySelector('meta[name="theme-color"]').content = th.meta;
+  const theme = THEMES.find(m => m.id === S.theme);
+  document.querySelector('meta[name="theme-color"]').content = theme.meta;
 }
 
 function rowHTML(i) {
@@ -637,7 +643,7 @@ function render() {
   $('#secretFb').innerHTML = '<i class="fbh"></i>'.repeat(r.pegs);
   $('#secret').classList.toggle('open', ended && opened !== G);
   if (ended) opened = G;
-  $('#secret').setAttribute('aria-label', ended ? 'Tajný kód' : 'Schovaný tajný kód – ťuknutí ukáže kód a hra skončí');
+  $('#secret').setAttribute('aria-label', t(ended ? 'logik.secret.open' : 'logik.secret.hidden'));
 
   // Board: rows from bottom to top
   let html = '';
@@ -646,7 +652,7 @@ function render() {
 
   // Palette
   let pal = '';
-  for (let c = 0; c < r.colors; c++) pal += `<button class="pbtn" data-c="${c}" aria-label="${COLORS[c].name}">${pegHTML(c)}</button>`;
+  for (let c = 0; c < r.colors; c++) pal += `<button class="pbtn" data-c="${c}" aria-label="${th(COLORS[c].nameKey)}">${pegHTML(c)}</button>`;
   $('#palette').innerHTML = pal;
 
   // Hint and button
@@ -654,17 +660,17 @@ function render() {
   const btn = $('#btnCheck');
   let hint;
   // the button shows a picture only: a tick to check, round arrows for a new game after the end
-  const icon = ended ? ICON_NEW : ICON_CHECK, label = ended ? 'Nová hra' : 'Zkontrolovat';
+  const icon = ended ? ICON_NEW : ICON_CHECK, label = t(ended ? 'common.newGame' : 'logik.check');
   if (btn.dataset.icon !== label) { btn.innerHTML = icon; btn.setAttribute('aria-label', label); btn.dataset.icon = label; }
-  if (G.status === 'won') { hint = 'Vyřešeno! 🎉'; btn.classList.remove('dim'); }
-  else if (G.status === 'lost') { hint = G.gaveUp ? 'Tajný kód je odkrytý' : 'Konec hry'; btn.classList.remove('dim'); }
+  if (G.status === 'won') { hint = t('logik.hint.won'); btn.classList.remove('dim'); }
+  else if (G.status === 'lost') { hint = t(G.gaveUp ? 'logik.hint.revealed' : 'logik.hint.over'); btn.classList.remove('dim'); }
   else {
     btn.classList.toggle('dim', !full);
     const left = G.current.filter(x => x === null).length;
-    if (full) hint = 'Hotovo? Ťukni na fajfku vpravo';
-    else if (S.mode === 'tap') hint = left === r.pegs ? `Ťukni na barvy ${S.palRight ? 'vpravo' : 'dole'}` : `Vyber ještě ${left} ${left === 1 ? 'barvu' : left <= 4 ? 'barvy' : 'barev'}`;
-    else if (S.mode === 'slot') hint = 'Vyber barvu pro označenou jamku';
-    else hint = 'Přetáhni barvy do jamek';
+    if (full) hint = t('logik.hint.done');
+    else if (S.mode === 'tap') hint = left === r.pegs ? t('logik.hint.tapAll', { pal: S.palRight ? 'right' : 'bottom' }) : t('logik.hint.tapLeft', { n: left });
+    else if (S.mode === 'slot') hint = t('logik.hint.slot');
+    else hint = t('logik.hint.drag');
   }
   $('#hint').textContent = hint;
   $('#btnGiveUp').classList.toggle('dim', G.status !== 'playing');
@@ -806,14 +812,14 @@ function alignPalette() {
 
 /* ---------- Controls: tapping ---------- */
 function placeColor(c) {
-  if (G.status !== 'playing') { toast('Hra skončila – ťukni na Nová hra'); return; }
+  if (G.status !== 'playing') { toast(t('logik.toast.over')); return; }
   if (S.mode === 'slot') {
-    if (sel === null) { toast('Ťukni nejdřív na jamku, která se má změnit'); return; }
+    if (sel === null) { toast(t('logik.toast.pickSlot')); return; }
     setSlot(sel, c);
     sel = nextEmpty(sel);
   } else {
     const i = G.current.indexOf(null);
-    if (i < 0) { toast('Řádek je plný – ťukni na fajfku vpravo'); return; }
+    if (i < 0) { toast(t('logik.toast.rowFull')); return; }
     setSlot(i, c);
   }
   buzz(); commit();
@@ -825,7 +831,7 @@ $('#palette').addEventListener('click', e => {
 });
 $('#rows').addEventListener('click', e => {
   if (S.mode === 'drag') return;
-  if (G.status !== 'playing') { if (e.target.closest('.slot')) toast('Hra skončila – ťukni na Nová hra'); return; }
+  if (G.status !== 'playing') { if (e.target.closest('.slot')) toast(t('logik.toast.over')); return; }
   const sl = e.target.closest('.slot.act'); if (!sl) return;
   const i = +sl.dataset.i;
   if (S.mode === 'tap') { if (G.current[i] !== null) { setSlot(i, null); buzz(); commit(); } }
@@ -838,7 +844,7 @@ function holeSize() { return parseFloat(getComputedStyle(root).getPropertyValue(
 window.addEventListener('pointerdown', e => {
   if (S.mode !== 'drag' || drag) return;
   if (!$('#modal').hidden || !$('#screenSettings').hidden || !$('#screenHelp').hidden) return;
-  if (G.status !== 'playing') { if (e.target.closest('.pbtn, #rows .slot')) toast('Hra skončila – ťukni na Nová hra'); return; }
+  if (G.status !== 'playing') { if (e.target.closest('.pbtn, #rows .slot')) toast(t('logik.toast.over')); return; }
   const pb = e.target.closest('#palette .pbtn');
   const sl = e.target.closest('.slot.act');
   let color, from = null;
@@ -880,7 +886,7 @@ function endDrag(e, cancel) {
     if (d.from === null) { placeColor(d.color); return; }
     setSlot(d.from, null);
   } else if (d.target !== null) {
-    if (d.from !== null && d.from !== d.target) { const t = G.current[d.target]; setSlot(d.target, d.color); setSlot(d.from, t); }
+    if (d.from !== null && d.from !== d.target) { const prev = G.current[d.target]; setSlot(d.target, d.color); setSlot(d.from, prev); }
     else setSlot(d.target, d.color);
   } else if (d.from !== null) setSlot(d.from, null);
   else { render(); return; }
@@ -893,9 +899,9 @@ window.addEventListener('pointercancel', e => endDrag(e, true));
 let endT = 0; // the end-of-game dialog is about to open
 function endSoon() { const g = G; clearTimeout(endT); endT = setTimeout(() => { endT = 0; whenFree(g, 0, showEnd); }, 900); }
 $('#btnCheck').addEventListener('click', () => {
-  if (G.status !== 'playing') { if (endT) toast('Chvilku, hned ukážu výsledek'); else newGame(); return; }
+  if (G.status !== 'playing') { if (endT) toast(t('logik.toast.wait')); else newGame(); return; }
   const missing = G.current.filter(x => x === null).length;
-  if (missing) { toast(missing === 1 ? 'Chybí ještě 1 barva' : `Chybí ještě ${missing} ${missing <= 4 ? 'barvy' : 'barev'}`); return; }
+  if (missing) { toast(t('logik.toast.missing', { n: missing })); return; }
   const { black, white } = evaluate(G.current, G.code);
   G.guesses.push({ g: G.current.slice(), b: black, w: white });
   G.current = new Array(G.rules.pegs).fill(null); G.order = [];
@@ -911,10 +917,10 @@ function showEnd() {
   const code = `<div class="codeview">${G.code.map(pegHTML).join('')}</div>`;
   const won = G.status === 'won';
   showModal(
-    won ? `<h2>Výborně! 🎉</h2><p>Kód je vyřešený na <b>${G.guesses.length}. pokus</b>.</p>${code}`
-        : G.gaveUp ? `<h2>Tajný kód</h2><p>Schovaný kód byl:</p>${code}`
-        : `<h2>Tentokrát to nevyšlo</h2><p>Tajný kód byl:</p>${code}`,
-    [{ text: 'Nová hra', fn: newGame }, { text: 'Prohlédnout desku', cls: 'alt' }]
+    won ? `<h2>${th('logik.end.won')}</h2><p>${th('logik.end.wonText', { n: G.guesses.length })}</p>${code}`
+        : G.gaveUp ? `<h2>${th('logik.secret.open')}</h2><p>${th('logik.end.gaveUpText')}</p>${code}`
+        : `<h2>${th('logik.end.lost')}</h2><p>${th('logik.end.lostText')}</p>${code}`,
+    [{ text: th('common.newGame'), fn: newGame }, { text: th('logik.end.inspect'), cls: 'alt' }]
   );
 }
 
@@ -939,21 +945,21 @@ function giveUp() {
   endSoon();
 }
 function askGiveUp() {
-  if (G.status !== 'playing') { toast('Hra už skončila – ťukni na Nová hra'); return; }
-  showModal('<h2>Vzdát se?</h2><p>Ukáže se tajný kód a tahle hra skončí.</p>',
-    [{ text: 'Ano, ukázat kód', fn: giveUp }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+  if (G.status !== 'playing') { toast(t('logik.toast.alreadyOver')); return; }
+  showModal(`<h2>${th('logik.giveUp.title')}</h2><p>${th('logik.giveUp.text')}</p>`,
+    [{ text: th('logik.giveUp.yes'), fn: giveUp }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
 }
 $('#btnGiveUp').addEventListener('click', askGiveUp);
 // a tap on the hidden code does the same as the flag (user's decision)
 $('#secret').addEventListener('click', () => {
-  if (G.status !== 'playing') { toast(endT ? 'Chvilku, hned ukážu výsledek' : 'Tajný kód už je odkrytý'); return; }
+  if (G.status !== 'playing') { toast(t(endT ? 'logik.toast.wait' : 'logik.toast.codeShown')); return; }
   askGiveUp();
 });
 
 $('#btnNew').addEventListener('click', () => {
   if (G.status === 'playing' && !isFresh()) {
-    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>',
-      [{ text: 'Ano, nová hra', fn: newGame }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('common.confirmNew.text')}</p>`,
+      [{ text: th('common.confirmNew.yes'), fn: newGame }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
   } else newGame();
 });
 
@@ -962,14 +968,14 @@ $('#btnNew').addEventListener('click', () => {
 function stepper(key, label, value, decWhy, incWhy, note) {
   const btn = (act, aria, sign, why) => `<button class="sbtn${why ? ' dim' : ''}" data-act="${act}:${key}" aria-label="${aria}"${why ? ` data-why="${why}"` : ''}>${sign}</button>`;
   return `<div class="field"><div class="flabel">${label}</div><div class="stepper">
-    ${btn('dec', 'Méně', '−', decWhy)}
+    ${btn('dec', t('logik.less'), '−', decWhy)}
     <div class="sval">${value}</div>
-    ${btn('inc', 'Více', '+', incWhy)}
+    ${btn('inc', t('logik.more'), '+', incWhy)}
   </div>${note || ''}</div>`;
 }
-function repeatLabel(v) { return v === 1 ? 'Ne' : v === 0 ? 'Bez omezení' : `Max. ${v}× stejná`; }
+function repeatLabel(v) { return v === 1 ? t('logik.repeat.no') : v === 0 ? t('logik.repeat.unlimited') : t('logik.repeat.max', { n: v }); }
 function toggleRow(key, label) {
-  return `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${S[key] ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+  return `<div class="field trow"><div class="flabel">${label}</div><button class="sw" data-act="toggle:${key}" aria-pressed="${S[key]}">${t(S[key] ? 'common.on' : 'common.off')}</button></div>`;
 }
 
 function renderSettings() {
@@ -977,56 +983,57 @@ function renderSettings() {
   const repValid = v => v === 0 || v >= mr;
   let dots = ''; for (let c = 0; c < S.colors; c++) dots += pegHTML(c);
   const repNote = mr > 1
-    ? `<div class="fnote">Při ${S.colors} barvách a ${S.pegs} kolíčcích se barvy musí opakovat.</div>`
-    : `<div class="fnote">${S.maxRepeat === 1 ? 'Každá barva je v kódu nejvýš jednou.' : S.maxRepeat === 0 ? 'Barvy se v kódu mohou libovolně opakovat.' : `Jedna barva může být v kódu nejvýš ${S.maxRepeat}×.`}</div>`;
+    ? `<div class="fnote">${th('logik.set.repeatForced', { colors: S.colors, pegs: S.pegs })}</div>`
+    : `<div class="fnote">${S.maxRepeat === 1 ? th('logik.set.repeatOnce') : S.maxRepeat === 0 ? th('logik.set.repeatAny') : th('logik.set.repeatMax', { n: S.maxRepeat })}</div>`;
+  const pal = S.palRight ? 'right' : 'bottom';
 
   // a game in progress keeps going unless the secret code must change; a finished game is replaced by any rule change
   let pending = '';
   if (!isFresh() && G.status === 'playing' && !sameCodeRules(rulesOf(S), G.rules)) {
-    pending = `<div class="notice">Změna barev, kolíčků nebo opakování potřebuje nový tajný kód. Po návratu do hry začne <b>nová hra</b>.</div>`;
+    pending = `<div class="notice">${th('logik.set.pendingCode')}</div>`;
   } else if (!isFresh() && G.status !== 'playing' && !sameRules(rulesOf(S), G.rules)) {
-    pending = `<div class="notice">Po návratu do hry začne <b>nová hra</b> s novými pravidly.</div>`;
+    pending = `<div class="notice">${th('logik.set.pendingRules')}</div>`;
   }
 
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Logik<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Ovládání</h3>
-      ${MODES.map(m => `<button class="opt" data-act="mode:${m.id}" aria-pressed="${S.mode === m.id}"><span class="radio"></span><span><b>${m.name}</b><span class="d">${m.desc}</span></span></button>`).join('')}
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.logik.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('logik.set.control')}</h3>
+      ${MODES.map(m => `<button class="opt" data-act="mode:${m.id}" aria-pressed="${S.mode === m.id}"><span class="radio"></span><span><b>${th(m.nameKey)}</b><span class="d">${th(m.descKey)}</span></span></button>`).join('')}
       <div style="height:10px"></div>
-      ${toggleRow('palRight', 'Barvy ve sloupci vpravo')}
-      <div class="fnote" style="margin-top:-6px">${S.palRight ? 'Barvy jsou vpravo pod sebou, stejně velké jako jamky.' : 'Barvy jsou dole pod hrací deskou.'}</div>
-      ${toggleRow('hints', 'Řádek s nápovědou')}
-      <div class="fnote" style="margin-top:-6px">${S.palRight ? 'Dole pod deskou' : 'Nad barvami'} krátce napíše, co udělat dál, třeba „Přetáhni barvy do jamek“.</div>
+      ${toggleRow('palRight', th('logik.set.palRight'))}
+      <div class="fnote" style="margin-top:-6px">${th(S.palRight ? 'logik.set.palRight.on' : 'logik.set.palRight.off')}</div>
+      ${toggleRow('hints', th('logik.set.hints'))}
+      <div class="fnote" style="margin-top:-6px">${th('logik.set.hints.note', { pal })}</div>
     </section>
-    <section class="card"><h3>Pravidla hry</h3>
-      ${stepper('colors', 'Počet barev', S.colors,
-        S.colors > LIMITS.colors[0] ? null : `Méně než ${LIMITS.colors[0]} barvy nejde`,
-        S.colors < LIMITS.colors[1] ? null : `Víc než ${LIMITS.colors[1]} barev nejde`, `<div class="dots">${dots}</div>`)}
-      ${stepper('pegs', 'Počet kolíčků v kódu', S.pegs,
-        S.pegs > LIMITS.pegs[0] ? null : `Méně než ${LIMITS.pegs[0]} kolíčky nejde`,
-        S.pegs < LIMITS.pegs[1] ? null : `Víc než ${LIMITS.pegs[1]} kolíčků nejde`)}
-      ${stepper('repeat', 'Mohou se barvy v kódu opakovat?', repeatLabel(S.maxRepeat),
-        ri <= 0 ? 'Přísněji to nejde, každá barva je v kódu nejvýš jednou' : repValid(opts[ri - 1]) ? null : `Při ${S.colors} barvách a ${S.pegs} kolíčcích se barvy musí opakovat víc`,
-        ri < opts.length - 1 ? null : 'Volněji to nejde, barvy se mohou opakovat libovolně', repNote)}
-      ${stepper('attempts', 'Počet pokusů', S.attempts,
-        S.attempts > LIMITS.attempts[0] ? null : `Méně než ${LIMITS.attempts[0]} pokusů nejde`,
-        S.attempts < LIMITS.attempts[1] ? null : `Víc než ${LIMITS.attempts[1]} pokusů nejde`,
-        '<div class="fnote">Víc pokusů nebo kolíčků = menší jamky, na které se hůř trefuje.</div>')}
+    <section class="card"><h3>${th('logik.set.rules')}</h3>
+      ${stepper('colors', th('logik.set.colors'), S.colors,
+        S.colors > LIMITS.colors[0] ? null : t('logik.why.colorsMin', { n: LIMITS.colors[0] }),
+        S.colors < LIMITS.colors[1] ? null : t('logik.why.colorsMax', { n: LIMITS.colors[1] }), `<div class="dots">${dots}</div>`)}
+      ${stepper('pegs', th('logik.set.pegs'), S.pegs,
+        S.pegs > LIMITS.pegs[0] ? null : t('logik.why.pegsMin', { n: LIMITS.pegs[0] }),
+        S.pegs < LIMITS.pegs[1] ? null : t('logik.why.pegsMax', { n: LIMITS.pegs[1] }))}
+      ${stepper('repeat', th('logik.set.repeat'), repeatLabel(S.maxRepeat),
+        ri <= 0 ? t('logik.why.repeatMin') : repValid(opts[ri - 1]) ? null : t('logik.why.repeatForced', { colors: S.colors, pegs: S.pegs }),
+        ri < opts.length - 1 ? null : t('logik.why.repeatMax'), repNote)}
+      ${stepper('attempts', th('logik.set.attempts'), S.attempts,
+        S.attempts > LIMITS.attempts[0] ? null : t('logik.why.attemptsMin', { n: LIMITS.attempts[0] }),
+        S.attempts < LIMITS.attempts[1] ? null : t('logik.why.attemptsMax', { n: LIMITS.attempts[1] }),
+        `<div class="fnote">${th('logik.set.attempts.note')}</div>`)}
       ${pending}
     </section>
-    <section class="card"><h3>Vzhled</h3>
-      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}"><span class="swatch wood" data-theme="${t.id}"><span class="slot">${pegHTML(0)}</span><span class="slot">${pegHTML(4)}</span><span class="slot"></span></span>${t.name}</button>`).join('')}</div>
-      ${toggleRow('nums', 'Čísla na kolíčcích')}
-      <div class="fnote" style="margin-top:-6px">Pomůže, když se barvy špatně rozlišují.</div>
-      ${toggleRow('vibrate', 'Vibrace')}
+    <section class="card"><h3>${th('common.look')}</h3>
+      <div class="tiles">${THEMES.map(m => `<button class="tile" data-act="theme:${m.id}" aria-pressed="${S.theme === m.id}"><span class="swatch wood" data-theme="${m.id}"><span class="slot">${pegHTML(0)}</span><span class="slot">${pegHTML(4)}</span><span class="slot"></span></span>${th(m.nameKey)}</button>`).join('')}</div>
+      ${toggleRow('nums', th('logik.set.nums'))}
+      <div class="fnote" style="margin-top:-6px">${th('logik.set.nums.note')}</div>
+      ${toggleRow('vibrate', th('common.vibrate'))}
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
-  if (b.classList.contains('dim')) { buzz(30); toast(b.dataset.why || 'Tohle teď nejde'); return; }
+  if (b.classList.contains('dim')) { buzz(30); toast(b.dataset.why || t('logik.toast.cannot')); return; }
   const [act, arg] = b.dataset.act.split(':');
   let adjusted = false;
   if (act === 'inc' || act === 'dec') {
@@ -1043,10 +1050,10 @@ $('#settingsIn').addEventListener('click', e => {
   } else if (act === 'mode') { S.mode = arg; sel = null; }
   else if (act === 'theme') { S.theme = arg; }
   else if (act === 'toggle') { S[arg] = !S[arg]; }
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); toast(t('common.settingsReset')); }
   else if (act === 'close') { closeSettings(); return; }
   buzz(8);
-  if (adjusted) toast('Opakování barev bylo upraveno, aby se kód dal sestavit');
+  if (adjusted) toast(t('logik.toast.repeatAdjusted'));
   applyLook(); save(); renderSettings();
 });
 
@@ -1060,13 +1067,13 @@ function closeSettings() {
   if (needNew) {
     const hadProgress = !isFresh(); // also after a finished game
     newGame();
-    if (hadProgress) toast('Začala nová hra s novými pravidly');
+    if (hadProgress) toast(t('logik.toast.newRules'));
     return;
   }
   if (playing && G.rules.attempts !== S.attempts) {
     G.rules.attempts = Math.max(S.attempts, G.guesses.length + 1);
     scrollToActive = true; save();
-    if (G.rules.attempts !== S.attempts) toast(`Pokusů už bylo ${G.guesses.length}, rozehraná hra jich proto má ${G.rules.attempts}`, 4000);
+    if (G.rules.attempts !== S.attempts) toast(t('logik.toast.attempts', { used: G.guesses.length, n: G.rules.attempts }), 4000);
   }
   render();
 }
@@ -1075,31 +1082,27 @@ $('#btnSettings').addEventListener('click', openSettings);
 /* ---------- Help ---------- */
 function renderHelp() {
   const r = G && G.rules ? G.rules : rulesOf(S); // the rules of the game in progress (changed settings apply to the next one)
-  const where = S.palRight ? 'vpravo' : 'dole';
-  const how = {
-    tap: `ťukej na barevná tlačítka ${where} – barvy se postupně vloží do řádku. Při chybě ťukni na kolíček v řádku a zmizí.`,
-    slot: `ťukni na jamku v řádku a potom na barvu ${where}.`,
-    drag: `přetáhni barvy prstem ${S.palRight ? 'z pravého sloupce' : 'z dolní řady'} do jamek v řádku.`,
-  }[S.mode];
-  const ic = svg => `<span class="hicon">${svg}</span>`;
-  const rep = r.maxRepeat === 1 ? 'Každá barva je v kódu nejvýš jednou.' : 'Barvy se v kódu mohou opakovat.';
+  const pal = S.palRight ? 'right' : 'bottom';
+  const ICONS = { undo: ICON_UNDO, check: ICON_CHECK, flag: ICON_FLAG, new: ICON_NEW };
+  // a help text with button pictures: [undo] etc. in the message become the picture
+  const hf = (key, params) => th(key, params).replace(/\[(\w+)\]/g, (m, k) => ICONS[k] ? `<span class="hicon">${ICONS[k]}</span>` : m);
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Logik<small>Jak hrát</small></h2></div>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.logik.name')}<small>${th('common.help')}</small></h2></div>
     <section class="card help">
       <ol>
-        <li>Počítač schoval tajný kód z <b>${r.pegs} barevných kolíčků</b>. Je nahoře pod tmavými víčky s otazníkem. ${rep}</li>
-        <li>Zkus kód uhodnout: ${how} Šipka ${ic(ICON_UNDO)} vpravo vrátí naposledy položenou barvu.</li>
-        <li>Pak ťukni na fajfku ${ic(ICON_CHECK)} vpravo dole – řádek se zkontroluje.</li>
-        <li>Vlevo od řádku se objeví malé kolíčky:
-          <div class="legend"><i class="fbh b"></i><span><b>černý</b> = správná barva na správném místě</span></div>
-          <div class="legend"><i class="fbh w"></i><span><b>bílý</b> = správná barva, ale na jiném místě</span></div>
-          Na pořadí malých kolíčků nezáleží.</li>
-        <li>Na uhodnutí je <b>${r.attempts} pokusů</b>. Hodně štěstí!</li>
-        <li>Když už to dál nejde, ťukni na vlajku ${ic(ICON_FLAG)} vpravo nahoře (nebo na víčka) – ukáže se tajný kód. Po konci hry začne kruhová šipka ${ic(ICON_NEW)} novou hru.</li>
-        <li>Barvy mohou být dole, nebo ve sloupci vpravo: v Nastavení „Barvy ve sloupci vpravo“.</li>
+        <li>${th('logik.help.1', { n: r.pegs, once: r.maxRepeat === 1 })}</li>
+        <li>${hf({ tap: 'logik.help.2.tap', slot: 'logik.help.2.slot', drag: 'logik.help.2.drag' }[S.mode], { pal })}</li>
+        <li>${hf('logik.help.3')}</li>
+        <li>${th('logik.help.4')}
+          <div class="legend"><i class="fbh b"></i><span>${th('logik.help.4.black')}</span></div>
+          <div class="legend"><i class="fbh w"></i><span>${th('logik.help.4.white')}</span></div>
+          ${th('logik.help.4.note')}</li>
+        <li>${th('logik.help.5', { n: r.attempts })}</li>
+        <li>${hf('logik.help.6')}</li>
+        <li>${th('logik.help.7')}</li>
       </ol>
     </section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => {
@@ -1134,6 +1137,7 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+I18N.apply(); // the static texts (data-t*), <title> and <html lang> in the player's language
 const saved = load();
 // rule: only the known settings are taken over from the save
 const savedSettings = saved && typeof saved === 'object' && saved.settings && typeof saved.settings === 'object' ? saved.settings : {};

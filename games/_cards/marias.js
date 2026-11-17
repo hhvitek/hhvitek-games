@@ -1,7 +1,9 @@
 // Mariáš cards (32 cards, the single-headed Czech look) for Prší and Oko bere: the suit signs, the pip cards with
 // Roman numerals, the standing spodek and svršek, the king as a big crowned bust and the aces with one big sign.
 // Load it after cards.js:  <script src="../_cards/marias.js"></script>  (cards.js gives the frame, faces and backs)
-// It adds its CSS to the page and sets globalThis.MARIAS = { faceHTML, symSVG, artSVG }.
+// It adds its CSS to the page and sets globalThis.MARIAS = { faceHTML, symSVG, artSVG, cardName }.
+// cardName(c): the card's name in the player's language ("eso srdce", "Ace of Hearts"), the message cards.marias.card
+// in i18n/cards.js (load the texts scripts first, see cards.js).
 // card = number 0–31; suit = c >> 3 (0 srdce, 1 zelené/listy, 2 kule, 3 žaludy), rank = c & 7:
 //   0 sedma, 1 osma, 2 devítka, 3 desítka, 4 spodek, 5 svršek, 6 král, 7 eso.
 // No letters on the cards (user's decision): the number cards carry VII–X like real mariášky, the figures are told
@@ -188,5 +190,8 @@ const faceHTML = c => `<div class="fc"><svg class="mz" viewBox="-4 -4 108 148" a
 // a suit sign alone (badges, the suit chooser); needs data-face on the page for its colours
 const symSVG = (s, cls = '') => `<svg class="mzs${cls ? ' ' + cls : ''}" viewBox="0 0 100 100" aria-hidden="true">${SIGN[s]}</svg>`;
 
-globalThis.MARIAS = { faceHTML, symSVG, artSVG };
+// the name of a card (aria-label), from the texts
+const cardName = c => I18N.t('cards.marias.card', { suit: c >> 3, rank: c & 7 });
+
+globalThis.MARIAS = { faceHTML, symSVG, artSVG, cardName };
 })();

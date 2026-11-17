@@ -7,7 +7,7 @@
 //                                            (a value replaced by a wrong type, a list cut or lengthened, a number
 //                                            off by one, a key removed), and every exception is reported
 //   node tools/saves-test.js --saves N       broken saves per game (default 200)
-//   node tools/saves-test.js --ids a,b       only these games
+//   node tools/saves-test.js --ids a,b       only these games (_template works too)
 // It finds crashes in loading and in the first moments after it (timers run for about 3 s of game time), not
 // wrong behaviour; a game the fake page cannot run at all is listed as skipped. Only Node's built-in modules.
 // Exit code 1 when something fails.
@@ -48,10 +48,12 @@ function stub() {
     has() { return true; },
   });
 }
-// the game's scripts in order: shared files (src) and the inline ones
+// the game's scripts in order: its local files (src: the texts runtime and messages in i18n/, its texts.js, the
+// shared card, opponent and image scripts) and the inline ones, all in the same context as on the page
 function scriptsOf(id) {
   const file = path.join(ROOT, 'games', id, 'index.html'), src = fs.readFileSync(file, 'utf8'), out = [];
   for (const m of src.matchAll(/<script(\s+src="([^"]+)")?>([\s\S]*?)<\/script>/g)) {
+    if (m[2] && /^([a-z]+:)?\/\//i.test(m[2])) continue; // never anything from the network (tools/check.js forbids it anyway)
     if (m[2]) out.push({ name: m[2], code: fs.readFileSync(path.resolve(path.dirname(file), m[2]), 'utf8') });
     else out.push({ name: 'inline', code: m[3] });
   }

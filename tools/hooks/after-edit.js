@@ -20,9 +20,12 @@ function targetsOf(rel) {
       return fs.existsSync(f) && fs.readFileSync(f, 'utf8').includes(`../${shared[1]}.js`);
     });
   }
+  // a game file, its texts.js too (games/<id>/texts.js)
   const m = /^games\/([^/]+)\//.exec(rel);
   if (m) return [m[1]];
   if (rel === 'games/registry.js' || rel === 'README.md' || rel === 'tools/check.js') return ['']; // '' = everything
+  // the shared texts and the texts checker: every game (and the shared texts, checked with the launcher)
+  if (/^i18n\/[^/]+\.(js|json)$/.test(rel) || rel === 'tools/i18n.js') return [''];
   if (rel === 'index.html' || rel === 'sw.js') return ['launcher'];
   return null;
 }

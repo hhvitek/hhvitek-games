@@ -8,17 +8,17 @@
   const KEY = 'games.errors', KEEP_STATES = 3, MAX_STATE = 60000;
   const GAME = (location.pathname.match(/\/games\/([^/]+)\//) || [])[1] || 'launcher';
   const VERSION = (() => { try { const v = JSON.parse(localStorage.getItem('games.launcher.install')); return v && v.version || ''; } catch (e) { return ''; } })();
-  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'neznámá platforma'})`;
+  const DEVICE = `${navigator.userAgent} (${navigator.platform || 'unknown platform'})`;
   // the game's last saved state (usually the one before the move that failed), so the error can be repeated
   function savedState() {
     if (GAME === 'launcher') return '';
-    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(zkráceno)' : s; } catch (e) { return ''; }
+    try { const s = localStorage.getItem(`games.${GAME}.state`) || ''; return s.length > MAX_STATE ? s.slice(0, MAX_STATE) + ' …(truncated)' : s; } catch (e) { return ''; }
   }
   let writes = 0;
   function log(type, message, where, stack) {
     if (writes >= 20) return;
     writes++;
-    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Neznámá chyba').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
+    const entry = { game: GAME, v: VERSION, t: new Date().toISOString(), type, msg: String(message || 'Unknown error').slice(0, 1000), where: String(where || '').slice(0, 500), stack: String(stack || '').slice(0, 3000), device: DEVICE };
     let list = [];
     try { const saved = JSON.parse(localStorage.getItem(KEY) || '[]'); if (Array.isArray(saved)) list = saved.filter(x => x && typeof x === 'object'); } catch (e) {}
     const last = list[list.length - 1];
@@ -34,16 +34,20 @@
   addEventListener('error', e => { if (e.message || e.error) log('error', e.message || (e.error && e.error.message), `${e.filename || location.href}:${e.lineno || 0}:${e.colno || 0}`, e.error && e.error.stack); });
   addEventListener('unhandledrejection', e => { const r = e.reason; log('unhandledrejection', r && (r.message || r.stack) || r, location.href, r && r.stack); });
   // test: open any game or the launcher with ?testError to record one test error
-  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Testovací chyba (?testError)'); });
+  if (/[?&]testError\b/.test(location.search)) setTimeout(() => { throw new Error('Test error (?testError)'); });
 })();
 </script>
-
+<script src="../../i18n/languages.js"></script>
+<script src="../../i18n/i18n.js"></script>
+<script src="../../i18n/common.js"></script>
+<script src="../../i18n/games.js"></script>
+<script src="texts.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f4ebdf">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Skládání kostek">
-<title>Skládání kostek</title>
+<title data-t="game.skladani-kostek.name"></title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231d2b52'/%3E%3Crect x='8' y='8' width='22' height='22' rx='5' fill='%23f5c518'/%3E%3Crect x='34' y='8' width='22' height='22' rx='5' fill='%2322b8cf'/%3E%3Crect x='8' y='34' width='22' height='22' rx='5' fill='%23e8453c'/%3E%3Crect x='34' y='34' width='22' height='22' rx='5' fill='%2343b649'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes ---------- */
@@ -219,25 +223,25 @@ a.round{text-decoration:none}
 </style>
 </head>
 <body>
-<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b>Otoč telefon na výšku</b><span>Hra počká, nic se neztratí.</span></div>
+<div id="rotate" class="paper" role="status"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="22" y="6" width="20" height="36" rx="4"/><path d="M29 36h6"/><path d="M12 46a22 22 0 0 0 40 0"/><path d="m52 46-1.5 7M52 46l-7 2"/></svg><b data-t="common.rotate.title"></b><span data-t="common.rotate.text"></span></div>
 <div id="app">
   <header class="topbar">
-    <a id="btnHome" class="round" href="../../index.html" aria-label="Zpět na výběr her" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
-    <button id="btnNew" class="pill">Nová hra</button>
-    <h1>Skládání kostek</h1>
+    <a id="btnHome" class="round" href="../../index.html" data-t-aria="common.home" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11.2 12 4l8.5 7.2V20a1 1 0 0 1-1 1H15v-5.5H9V21H4.5a1 1 0 0 1-1-1z"/></svg></a>
+    <button id="btnNew" class="pill" data-t="common.newGame"></button>
+    <h1 data-t="game.skladani-kostek.name"></h1>
     <div class="top-right">
-      <button id="btnHelp" class="round" aria-label="Jak hrát">?</button>
-      <button id="btnSettings" class="round" aria-label="Nastavení"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
+      <button id="btnHelp" class="round" data-t-aria="common.help">?</button>
+      <button id="btnSettings" class="round" data-t-aria="common.settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill-rule="evenodd" d="M9.79 5.57L10.31 3.06A9.1 9.1 0 0 1 13.69 3.06L14.21 5.57A6.8 6.8 0 0 1 16.46 6.87L18.9 6.07A9.1 9.1 0 0 1 20.59 8.99L18.67 10.7A6.8 6.8 0 0 1 18.67 13.3L20.59 15.01A9.1 9.1 0 0 1 18.9 17.93L16.46 17.13A6.8 6.8 0 0 1 14.21 18.43L13.69 20.94A9.1 9.1 0 0 1 10.31 20.94L9.79 18.43A6.8 6.8 0 0 1 7.54 17.13L5.1 17.93A9.1 9.1 0 0 1 3.41 15.01L5.33 13.3A6.8 6.8 0 0 1 5.33 10.7L3.41 8.99A9.1 9.1 0 0 1 5.1 6.07L7.54 6.87A6.8 6.8 0 0 1 9.79 5.57ZM12 8.9a3.1 3.1 0 1 0 0 6.2a3.1 3.1 0 1 0 0 -6.2z"/></svg></button>
     </div>
   </header>
-  <div class="score" aria-live="polite"><b id="score">0</b><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v2h3v3a4.5 4.5 0 0 1-4.3 4.5A5 5 0 0 1 13 15.9V18h3.5v3h-9v-3H11v-2.1a5 5 0 0 1-3.7-3.4A4.5 4.5 0 0 1 3 8V5h3zm0 4H5v1a2.5 2.5 0 0 0 1.2 2.1A6 6 0 0 1 6 9zm12 0v2c0 .4 0 .8-.2 1.1A2.5 2.5 0 0 0 19 8V7z"/></svg>rekord <i id="best" style="font-style:normal">0</i></span></div>
+  <div class="score" aria-live="polite"><b id="score">0</b><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v2h3v3a4.5 4.5 0 0 1-4.3 4.5A5 5 0 0 1 13 15.9V18h3.5v3h-9v-3H11v-2.1a5 5 0 0 1-3.7-3.4A4.5 4.5 0 0 1 3 8V5h3zm0 4H5v1a2.5 2.5 0 0 0 1.2 2.1A6 6 0 0 1 6 9zm12 0v2c0 .4 0 .8-.2 1.1A2.5 2.5 0 0 0 19 8V7z"/></svg><span data-t="skladani-kostek.record"></span> <i id="best" style="font-style:normal">0</i></span></div>
   <main class="play" id="play"><div class="board" id="board"></div></main>
   <div class="hint" id="hint"></div>
   <div class="tray" id="tray"></div>
   <footer class="actions">
-    <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>Zpět</button>
-    <button id="btnPlace" class="big" hidden>Položit</button>
-    <button id="btnAgain" class="big" hidden>Nová hra</button>
+    <button id="btnUndo" class="undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span data-t="common.undo"></span></button>
+    <button id="btnPlace" class="big" data-t="skladani-kostek.place" hidden></button>
+    <button id="btnAgain" class="big" data-t="common.newGame" hidden></button>
   </footer>
 </div>
 
@@ -284,6 +288,8 @@ a.round{text-decoration:none}
 'use strict';
 const $ = s => document.querySelector(s);
 const root = document.documentElement;
+// Texts (CLAUDE.md, Texts and languages): t() plain text, th() HTML with escaped params; whole messages, never pieces
+const t = I18N.t, th = I18N.th;
 const GUT = 12; // side margin in px, the same as --gut in the CSS
 
 /* ---------- Constants ---------- */
@@ -305,16 +311,16 @@ const FAMILIES = [
   ['s',   '110/011',     0, 1, 2, true],
 ];
 const THEMES = [
-  { id: 'night',    name: 'Noc',             meta: '#1d2b52' },
-  { id: 'wood',     name: 'Dřevo',           meta: '#6a4325' },
-  { id: 'paper',    name: 'Papír',           meta: '#f4ebdf' },
-  { id: 'green',    name: 'Zelená plsť',     meta: '#2f6b47' },
-  { id: 'slate',    name: 'Břidlice',        meta: '#3d4852' },
-  { id: 'contrast', name: 'Vysoký kontrast', meta: '#000000' },
+  { id: 'night',    nameKey: 'skladani-kostek.theme.night',             meta: '#1d2b52' },
+  { id: 'wood',     nameKey: 'skladani-kostek.theme.wood',           meta: '#6a4325' },
+  { id: 'paper',    nameKey: 'common.theme.paper',           meta: '#f4ebdf' },
+  { id: 'green',    nameKey: 'skladani-kostek.theme.green',     meta: '#2f6b47' },
+  { id: 'slate',    nameKey: 'skladani-kostek.theme.slate',        meta: '#3d4852' },
+  { id: 'contrast', nameKey: 'skladani-kostek.theme.contrast', meta: '#000000' },
 ];
 const DIFFS = [
-  { id: 'easy',   name: 'Snadná',    desc: 'Víc malých kostek. Každá nová trojice se dá celá položit, když se dobře zvolí místa.' },
-  { id: 'normal', name: 'Normální',  desc: 'Náhodné kostky, víc velkých. Jako v klasické hře.' },
+  { id: 'easy',   nameKey: 'skladani-kostek.diff.easy', descKey: 'skladani-kostek.diff.easy.desc' },
+  { id: 'normal', nameKey: 'skladani-kostek.diff.normal', descKey: 'skladani-kostek.diff.normal.desc' },
 ];
 const SIZES = [8, 9, 10];
 // the default theme is Papír (user's decision, see CLAUDE.md)
@@ -524,12 +530,12 @@ function whenFree(g0, ms, fn) {
   }, ms);
 }
 function toast(msg) {
-  const t = $('#toast'); t.textContent = msg; t.classList.remove('hide');
+  const el = $('#toast'); el.textContent = msg; el.classList.remove('hide');
   // just below the score row, never over it (the CSS top is the fallback)
-  const row = document.querySelector('.score').getBoundingClientRect(); if (row.height) t.style.top = Math.round(row.bottom + 8) + 'px';
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hide'), 2600);
+  const row = document.querySelector('.score').getBoundingClientRect(); if (row.height) el.style.top = Math.round(row.bottom + 8) + 'px';
+  clearTimeout(toastT); toastT = setTimeout(() => el.classList.add('hide'), 2600);
 }
-const fmt = n => n.toLocaleString('cs-CZ');
+const fmt = n => I18N.num(n);
 function pieceHTML(p) {
   return `<div class="pc" style="--w:${p.w};--h:${p.h}">` +
     p.cells.map(([r, c]) => `<i class="blk" style="grid-area:${r + 1}/${c + 1};--c:${COLORS[p.color]}"></i>`).join('') + '</div>';
@@ -548,11 +554,11 @@ function doPlace(i, r, c) {
   const { cells, count } = fullLines(G.board, N, G.rules.boxes);
   const cleared = [...cells].map(k => [k, G.board[k]]);
   for (const k of cells) G.board[k] = -1;
-  let bonus = 0, msg = '';
+  let bonus = 0, msg = 'plain'; // msg: which praise message (skladani-kostek.praise.*)
   if (count) {
     bonus = 10 * count * count;
-    msg = count >= 2 ? 'Výborně! ' : '';
-    if (G.board.every(v => v < 0)) { bonus += 100; msg = 'Prázdná deska! '; }
+    msg = count >= 2 ? 'great' : 'plain';
+    if (G.board.every(v => v < 0)) { bonus += 100; msg = 'empty'; }
   }
   G.score += p.n + bonus;
   if (G.tray.every(x => x === null)) G.tray = genTray(G.board, N, G.rules.boxes, G.rules.diff);
@@ -565,7 +571,7 @@ function doPlace(i, r, c) {
     cellEls[k].appendChild(fx); setTimeout(() => fx.remove(), 450);
   }
   const sc = $('#score'); sc.classList.remove('bump'); void sc.offsetWidth; sc.classList.add('bump');
-  if (count) praise(msg + '+' + fmt(bonus));
+  if (count) praise(t({ great: 'skladani-kostek.praise.great', empty: 'skladani-kostek.praise.empty', plain: 'skladani-kostek.praise.plain' }[msg], { n: bonus }));
   buzz(count ? [30, 40, 30] : 15);
   if (G.status === 'over') whenFree(G, 900, () => { if (G.status === 'over') showOver(); });
   return true;
@@ -576,7 +582,7 @@ function praise(text) {
   el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
 }
 function undo() {
-  if (!G.history.length) { toast('Zatím není co vracet'); return; }
+  if (!G.history.length) { toast(t('skladani-kostek.toast.nothingToUndo')); return; }
   const h = G.history.pop();
   G.board = h.b; G.tray = h.t; G.score = h.s; G.status = 'playing';
   if (Number.isInteger(h.seed)) G.seed = h.seed;
@@ -589,7 +595,7 @@ function undo() {
 let cellEls = [], builtKey = '', pvIdx = [];
 function applyLook() {
   root.dataset.theme = S.theme;
-  document.querySelector('meta[name="theme-color"]').content = THEMES.find(t => t.id === S.theme).meta;
+  document.querySelector('meta[name="theme-color"]').content = THEMES.find(m => m.id === S.theme).meta;
 }
 function buildBoard() {
   const N = G.rules.size, key = N + ':' + G.rules.boxes;
@@ -645,7 +651,7 @@ function render() {
   for (let i = 0; i < 3; i++) {
     const id = G.tray[i];
     const cls = id === null ? '' : (S.dimNoFit && !pieceFits(i) ? ' nofit' : '') + (sel === i ? ' sel' : '');
-    html += `<div class="slot${cls}" data-i="${i}" role="button" aria-label="Kostka ${i + 1}">${id === null ? '' : pieceHTML(PIECES[id])}</div>`;
+    html += `<div class="slot${cls}" data-i="${i}" role="button" aria-label="${th('skladani-kostek.piece', { n: i + 1 })}">${id === null ? '' : pieceHTML(PIECES[id])}</div>`;
   }
   $('#tray').innerHTML = html;
 
@@ -655,11 +661,11 @@ function render() {
 
   // Hint and buttons
   let hint;
-  if (over) hint = 'Už se nic nevejde';
-  else if (sel === null) hint = 'Přetáhni kostku na desku, nebo na ni ťukni';
-  else if (!pv) hint = 'Teď ťukni na desku, kam ji dát';
-  else if (pv.ok) hint = 'Ťukni na ni znovu nebo na Položit';
-  else hint = 'Sem se nevejde – ťukni jinam';
+  if (over) hint = t('skladani-kostek.hint.over');
+  else if (sel === null) hint = t('skladani-kostek.hint.pick');
+  else if (!pv) hint = t('skladani-kostek.hint.where');
+  else if (pv.ok) hint = t('skladani-kostek.hint.confirm');
+  else hint = t('skladani-kostek.hint.noFit');
   $('#hint').textContent = hint;
   $('#btnUndo').classList.toggle('dim', !G.history.length);
   $('#btnPlace').hidden = sel === null || over;
@@ -749,7 +755,7 @@ function endDrag(e, cancel) {
   if (d.pos && G.tray[d.i] === d.id && doPlace(d.i, d.pos.r, d.pos.c)) return;
   const p = PIECES[d.id], s = px('--cs');
   const cy = d.touch ? d.y - s * 1.1 - (p.h * s) / 2 : d.y;
-  if (overBoard(d.x, cy)) toast(fitsNow ? 'Sem se kostka nevejde' : 'Tahle kostka se teď nikam nevejde');
+  if (overBoard(d.x, cy)) toast(t(fitsNow ? 'skladani-kostek.toast.dropNoFit' : 'skladani-kostek.toast.pieceNoFit'));
   render();
 }
 window.addEventListener('pointerup', e => endDrag(e, false));
@@ -759,8 +765,8 @@ window.addEventListener('pointercancel', e => endDrag(e, true));
 // A tap on a piece in the tray (a press without moving) selects it; then a tap on the board places it
 function selectPiece(i) {
   if (G.tray[i] === null) return;
-  if (G.status === 'over') { toast('Už se nic nevejde – ťukni na Zpět nebo Nová hra'); return; }
-  if (!pieceFits(i)) { toast('Tahle kostka se teď nikam nevejde'); render(); return; }
+  if (G.status === 'over') { toast(t('skladani-kostek.toast.over')); return; }
+  if (!pieceFits(i)) { toast(t('skladani-kostek.toast.pieceNoFit')); render(); return; }
   sel = sel === i ? null : i; pv = null;
   buzz(8); render();
 }
@@ -778,8 +784,8 @@ function tapPos(p, r0, c0) {
 }
 $('#board').addEventListener('click', e => {
   const cell = e.target.closest('.cell'); if (!cell) return;
-  if (G.status === 'over') { toast('Už se nic nevejde – ťukni na Zpět nebo Nová hra'); return; }
-  if (sel === null) { toast('Přetáhni kostku zespodu na desku, nebo na ni nejdřív ťukni'); return; }
+  if (G.status === 'over') { toast(t('skladani-kostek.toast.over')); return; }
+  if (sel === null) { toast(t('skladani-kostek.toast.pickFirst')); return; }
   const N = G.rules.size, k = +cell.dataset.k, r0 = k / N | 0, c0 = k % N, p = PIECES[G.tray[sel]];
   // the second tap: on the preview, or on the very cell tapped before (a shape with an empty corner, e.g. the
   // big L, is centred on the tapped cell, which may be its empty corner)
@@ -788,9 +794,9 @@ $('#board').addEventListener('click', e => {
   buzz(8); render();
 });
 $('#btnPlace').addEventListener('click', () => {
-  if (sel === null) { toast('Nejdřív ťukni na kostku dole'); return; }
-  if (!pv) { toast('Nejdřív ťukni na desku, kam kostku dát'); return; }
-  if (!pv.ok) { toast('Sem se kostka nevejde – ťukni jinam'); return; }
+  if (sel === null) { toast(t('skladani-kostek.toast.tapPiece')); return; }
+  if (!pv) { toast(t('skladani-kostek.toast.tapBoard')); return; }
+  if (!pv.ok) { toast(t('skladani-kostek.toast.cellNoFit')); return; }
   doPlace(sel, pv.r, pv.c);
 });
 
@@ -808,26 +814,26 @@ function showModal(html, buttons) {
 }
 function showOver() {
   showModal(
-    `<h2>Už se nic nevejde</h2><p class="pts">${fmt(G.score)}</p><p>${endRec ? '<b>Nový rekord! 🎉</b>' : `bodů · rekord ${fmt(best)}`}</p>`
-      + (endCounted ? '' : '<p>Tahle hra už jednou skončila, do rekordu se znovu nepočítá.</p>'),
-    [{ text: 'Nová hra', fn: newGame }, { text: 'Vrátit tah', cls: 'alt', fn: undo }, { text: 'Prohlédnout desku', cls: 'alt' }]
+    `<h2>${th('skladani-kostek.over.title')}</h2><p class="pts">${fmt(G.score)}</p><p>${endRec ? `<b>${th('skladani-kostek.over.newRecord')}</b>` : th('skladani-kostek.over.points', { best })}</p>`
+      + (endCounted ? '' : `<p>${th('skladani-kostek.over.notCounted')}</p>`),
+    [{ text: th('common.newGame'), fn: newGame }, { text: th('common.undoMove'), cls: 'alt', fn: undo }, { text: th('skladani-kostek.over.inspect'), cls: 'alt' }]
   );
 }
 $('#btnUndo').addEventListener('click', undo);
 $('#btnAgain').addEventListener('click', newGame);
 $('#btnNew').addEventListener('click', () => {
   if (G.status === 'playing' && !isFresh()) {
-    showModal('<h2>Začít novou hru?</h2><p>Rozehraná hra se ztratí.</p>',
-      [{ text: 'Ano, nová hra', fn: newGame }, { text: 'Ne, hrát dál', cls: 'alt' }]);
+    showModal(`<h2>${th('common.confirmNew.title')}</h2><p>${th('common.confirmNew.text')}</p>`,
+      [{ text: th('common.confirmNew.yes'), fn: newGame }, { text: th('common.confirmNew.no'), cls: 'alt' }]);
   } else newGame();
 });
 
 /* ---------- Settings ---------- */
 function toggleRow(key, label, off) {
-  return `<div class="field trow${off ? ' off' : ''}"><div class="flabel">${label}</div><button class="sw${off ? ' off' : ''}" data-act="toggle:${key}" aria-pressed="${S[key] && !off}">${S[key] && !off ? 'Zapnuto' : 'Vypnuto'}</button></div>`;
+  return `<div class="field trow${off ? ' off' : ''}"><div class="flabel">${label}</div><button class="sw${off ? ' off' : ''}" data-act="toggle:${key}" aria-pressed="${S[key] && !off}">${th(S[key] && !off ? 'common.on' : 'common.off')}</button></div>`;
 }
 function opts(key, list) {
-  return list.map(m => `<button class="opt" data-act="${key}:${m.id}" aria-pressed="${S[key] === m.id}"><span class="radio"></span><span><b>${m.name}</b><span class="d">${m.desc}</span></span></button>`).join('');
+  return list.map(m => `<button class="opt" data-act="${key}:${m.id}" aria-pressed="${S[key] === m.id}"><span class="radio"></span><span><b>${th(m.nameKey)}</b><span class="d">${th(m.descKey)}</span></span></button>`).join('');
 }
 function swatch(t) {
   const fill = { 0: 2, 1: 2, 4: 4, 8: 0, 9: 0, 13: 5, 14: 5, 15: 5 };
@@ -838,30 +844,30 @@ function swatch(t) {
 function renderSettings() {
   const si = SIZES.indexOf(S.size);
   const pending = !sameRules(rulesOf(S), G.rules) && !isFresh()
-    ? '<div class="notice">Změna mřížky nebo obtížnosti potřebuje novou hru. Po návratu do hry začne <b>nová hra</b>.</div>' : '';
+    ? `<div class="notice">${th('skladani-kostek.set.pending')}</div>` : '';
   $('#settingsIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Skládání kostek<small>Nastavení</small></h2></div>
-    <section class="card"><h3>Pravidla hry</h3>
-      <div class="field"><div class="flabel">Velikost mřížky</div><div class="stepper">
-        <button class="sbtn${si > 0 ? '' : ' off'}" data-act="size:-1" aria-label="Menší">−</button>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.skladani-kostek.name')}<small>${th('common.settings')}</small></h2></div>
+    <section class="card"><h3>${th('skladani-kostek.set.rules')}</h3>
+      <div class="field"><div class="flabel">${th('skladani-kostek.set.size')}</div><div class="stepper">
+        <button class="sbtn${si > 0 ? '' : ' off'}" data-act="size:-1" aria-label="${th('skladani-kostek.set.smaller')}">−</button>
         <div class="sval">${S.size} × ${S.size}</div>
-        <button class="sbtn${si < SIZES.length - 1 ? '' : ' off'}" data-act="size:1" aria-label="Větší">+</button>
-      </div><div class="fnote">Menší mřížka má větší políčka.</div></div>
-      ${toggleRow('boxes', 'Mazat i čtverce 3 × 3', S.size !== 9)}
-      <div class="fnote" style="margin-top:-6px">Jen u mřížky 9 × 9: zmizí i plný čtverec 3 × 3 (čtverce jsou na desce odlišené).</div>
+        <button class="sbtn${si < SIZES.length - 1 ? '' : ' off'}" data-act="size:1" aria-label="${th('skladani-kostek.set.bigger')}">+</button>
+      </div><div class="fnote">${th('skladani-kostek.set.size.note')}</div></div>
+      ${toggleRow('boxes', th('skladani-kostek.set.boxes'), S.size !== 9)}
+      <div class="fnote" style="margin-top:-6px">${th('skladani-kostek.set.boxes.note')}</div>
       ${pending}
-      <div class="field"><div class="flabel">Obtížnost</div>${opts('diff', DIFFS)}</div>
+      <div class="field"><div class="flabel">${th('skladani-kostek.set.diff')}</div>${opts('diff', DIFFS)}</div>
     </section>
-    <section class="card"><h3>Pomocníci</h3>
-      ${toggleRow('hlLines', 'Ukázat řady, které zmizí')}
-      ${toggleRow('dimNoFit', 'Ztlumit kostky, které se nevejdou')}
+    <section class="card"><h3>${th('skladani-kostek.set.helpers')}</h3>
+      ${toggleRow('hlLines', th('skladani-kostek.set.hlLines'))}
+      ${toggleRow('dimNoFit', th('skladani-kostek.set.dimNoFit'))}
     </section>
-    <section class="card"><h3>Vzhled</h3>
-      <div class="tiles">${THEMES.map(t => `<button class="tile" data-act="theme:${t.id}" aria-pressed="${S.theme === t.id}">${swatch(t)}${t.name}</button>`).join('')}</div>
-      ${toggleRow('vibrate', 'Vibrace')}
+    <section class="card"><h3>${th('common.look')}</h3>
+      <div class="tiles">${THEMES.map(m => `<button class="tile" data-act="theme:${m.id}" aria-pressed="${S.theme === m.id}">${swatch(m)}${th(m.nameKey)}</button>`).join('')}</div>
+      ${toggleRow('vibrate', th('common.vibrate'))}
     </section>
-    <button class="big" data-act="close">Zpět ke hře</button>
-    <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;
+    <button class="big" data-act="close">${th('common.backToGame')}</button>
+    <button class="link" data-act="reset">${th('common.resetSettings')}</button>`;
 }
 $('#settingsIn').addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -869,15 +875,15 @@ $('#settingsIn').addEventListener('click', e => {
   if (act === 'close') { closeSettings(); return; }
   if (act === 'size') {
     const si = SIZES.indexOf(S.size) + +arg;
-    if (si < 0) { toast('Menší mřížka už není'); return; }
-    if (si >= SIZES.length) { toast('Větší mřížka už není'); return; }
+    if (si < 0) { toast(t('skladani-kostek.toast.noSmaller')); return; }
+    if (si >= SIZES.length) { toast(t('skladani-kostek.toast.noBigger')); return; }
     S.size = SIZES[si];
   } else if (act === 'toggle') {
-    if (arg === 'boxes' && S.size !== 9) { toast('Čtverce 3 × 3 jdou jen u mřížky 9 × 9'); return; }
+    if (arg === 'boxes' && S.size !== 9) { toast(t('skladani-kostek.toast.boxesOnly9')); return; }
     S[arg] = !S[arg];
   } else if (act === 'diff') S.diff = arg;
   else if (act === 'theme') S.theme = arg;
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); sel = null; pv = null; toast('Nastavení je zase výchozí'); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS); sel = null; pv = null; toast(t('common.settingsReset')); }
   buzz(8); applyLook(); save(); renderSettings();
 });
 function openSettings() { hideToast(); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
@@ -887,7 +893,7 @@ function closeSettings() {
   if (!sameRules(rulesOf(S), G.rules)) {
     const had = !isFresh(); // also after a finished game: it could still be revived by Undo
     newGame();
-    if (had) toast('Začala nová hra s novým nastavením');
+    if (had) toast(t('skladani-kostek.toast.newSettings'));
     return;
   }
   render();
@@ -896,8 +902,6 @@ $('#btnSettings').addEventListener('click', openSettings);
 
 /* ---------- Help ---------- */
 function renderHelp() {
-  const how = 'Kostku <b>přetáhni prstem</b> na desku: při tažení je nad prstem a na desce je vidět, kam dopadne. '
-    + 'Nebo <b>ťukni na kostku</b> dole a potom na místo na desce. Objeví se náhled – ťukni na něj znovu nebo na <b>Položit</b>.';
   const cols = [0, 1, 2, 3, 4, 5];
   let demo = '';
   for (let r = 0; r < 3; r++) for (const c of cols) {
@@ -905,19 +909,19 @@ function renderHelp() {
       : (r === 0 && c === 1) || (r === 2 && (c === 3 || c === 4)) ? `<i class="cell blk" style="--c:${COLORS[r ? 7 : 4]}"></i>` : '<i class="cell"></i>';
   }
   $('#helpIn').innerHTML = `
-    <div class="screen-head"><button class="back" data-act="close">‹ Zpět</button><h2>Skládání kostek<small>Jak hrát</small></h2></div>
+    <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.skladani-kostek.name')}<small>${th('common.help')}</small></h2></div>
     <section class="card help">
       <ol>
-        <li>Dole jsou vždy <b>tři kostky</b>. Polož je na desku v libovolném pořadí. ${how}</li>
-        <li>Plný <b>řádek</b> nebo <b>sloupec</b>${G.rules.boxes ? ' (nebo čtverec 3 × 3)' : ''} zmizí a uvolní místo.
-          <div class="demo"><span class="mini">${demo}</span><span>tenhle řádek je plný – zmizí</span></div></li>
-        <li>Po položení všech tří kostek přijdou nové. Kostky se neotáčejí, nic nepadá a nikam se nespěchá.</li>
-        <li>Body: 1 za každý položený čtvereček. Za zmizelé řady je víc, když zmizí naráz: 1 řada 10 bodů, 2 řady 40, 3 řady 90.${G.rules.boxes ? ' Plný čtverec 3 × 3 se počítá jako řada.' : ''} Když po tahu zůstane deska celá prázdná, je navíc 100 bodů.</li>
-        <li>Hra končí, když se už žádná kostka nevejde. Tlačítko <b>Zpět</b> vrátí poslední tah – i na konci hry.</li>
-        <li>Do rekordu se počítají jen dohrané hry: body se zapíšou, až se už nic nevejde. Když hru po konci vrátíš tlačítkem Zpět a dohraješ znovu, rekord se už nezmění.</li>
+        <li>${th('skladani-kostek.help.1')}</li>
+        <li>${th('skladani-kostek.help.2', { boxes: !!G.rules.boxes })}
+          <div class="demo"><span class="mini">${demo}</span><span>${th('skladani-kostek.help.2.demo')}</span></div></li>
+        <li>${th('skladani-kostek.help.3')}</li>
+        <li>${th('skladani-kostek.help.4', { boxes: !!G.rules.boxes })}</li>
+        <li>${th('skladani-kostek.help.5')}</li>
+        <li>${th('skladani-kostek.help.6')}</li>
       </ol>
     </section>
-    <button class="big" data-act="close">Rozumím, hrát</button>`;
+    <button class="big" data-act="close">${th('common.gotIt')}</button>`;
 }
 function openHelp() { hideToast(); renderHelp(); $('#screenHelp').hidden = false; $('#screenHelp').scrollTop = 0; }
 $('#helpIn').addEventListener('click', e => { if (e.target.closest('[data-act="close"]')) $('#screenHelp').hidden = true; });
@@ -949,6 +953,7 @@ $('#btnHelp').addEventListener('click', openHelp);
 })();
 
 /* ---------- Start ---------- */
+I18N.apply(); // the static texts (data-t*), <title> and <html lang> in the player's language
 // Persistent storage: the browser won't evict settings or the saved game on its own
 try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) {}
 // One-time migration from the old storage key (the folder was renamed from skladaniKostek to skladani-kostek)
