@@ -1,7 +1,16 @@
 // The app version, shown in the launcher's Nastavení and used by sw.js to name its cache.
 // Written by tools/release.js from CHANGELOG.md: never edit by hand.
-globalThis.APP_VERSION = { version: '1.0.25', date: '2026-11-14' };
+globalThis.APP_VERSION = { version: '1.0.26', date: '2026-11-17' };
 globalThis.APP_CHANGES = [
+  {
+    "version": "1.0.26",
+    "date": "2026-11-17",
+    "items": [
+      "Kočka: miska je teď opravdová. Nasypané jídlo a voda v misce počkají a Koxa jí a pije sama, když dostane hlad nebo žízeň – sytost roste, až když jí. Když uslyší šustot granulí, přiběhne (sytá ani nehne brvou), pamatuje si, kdy ji obvykle krmíš, a čeká u misky. Je vidět, jak chodí na záchod, spí ve své krabici nebo na polštářku, po probuzení se protáhne a ve spánku nemňouká.",
+      "Kočka: Koxa spí jako kočka – přes den si několikrát zdřímne, ráno a večer je čilá a v noci se občas projde. Na zavolání nepřijde vždycky hned: podle nálady přiběhne, přijde až za chvíli, nebo dělá, že neslyší. Sousedovy kočky ji rozladí, jen když o nich ví. Když ji necháš na zahradě, najdeš ji tam. Z toulek se vrací vždycky „hladová“ a žebrá u misky.",
+      "Kočka: když prší, Koxa se na zahradě neprochází jako by nic. Schová se pod novou stříšku u zadních dveří nebo pod strom, přikrčí se se staženýma ušima, otřepává se a mňouká, že chce domů."
+    ]
+  },
   {
     "version": "1.0.25",
     "date": "2026-11-14",
