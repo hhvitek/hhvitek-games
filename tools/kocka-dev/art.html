@@ -17,6 +17,8 @@ h2{margin:24px 0 8px;font-size:18px}
 .reg path{fill-opacity:.35;stroke:#000;stroke-width:.6}
 .still *{animation-play-state:paused!important}
 .frame .kx-drops path{animation-delay:-.6s!important;animation-play-state:paused!important}
+.boltf .kx-bolt{animation-delay:-8.01s!important;animation-play-state:paused!important}
+.nomo .kx-room *{animation:none!important}
 .frame2 .kx-achoo{animation-delay:-.22s!important;animation-play-state:paused!important}
 </style>
 </head>
@@ -108,6 +110,7 @@ for (const [p, o, l] of [['climb', 'calm', 'climb'], ['onBranch', 'happy', 'onBr
   h += cell(A.cat(p, o), l) ;
 h += '</div>';
 // the four places × day phases, the garden by season and weather
+function onLapW(o, pose, mo) { const L = A.lapSpot, k = L.size / 200; return `<div><div class="room">${A.lap(o)}<div style="position:absolute;left:${(L.x - 100 * k) / 4}%;top:${(L.y - 186 * k) / 6}%;width:${L.size / 4}%;aspect-ratio:1">${A.cat(pose, mo)}</div></div>${pose} ${o.place || 'chair'} ${o.weather || ''} ${o.phase} ${o.temp != null ? o.temp + ' °C' : ''}</div>`; }
 const placeCell = (o, l) => `<div><div class="room">${A.room(o)}</div>${l}</div>`;
 h += '<h2>Places × day phases (Obývák, Kuchyně, Předsíň, Zahrada)</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';
 for (const id of Object.keys(A.rooms)) for (const ph of ['morning', 'day', 'evening', 'night']) h += placeCell({ id, phase: ph, season: 'autumn', sunX: 0.6 }, `${id} – ${ph}`);
@@ -116,6 +119,31 @@ for (const [o, l] of [[{ season: 'spring', phase: 'morning', sunX: 0.1 }, 'sprin
   [{ season: 'summer', phase: 'night' }, 'summer night (fireflies)'], [{ season: 'winter', phase: 'evening' }, 'winter evening'], [{ id: 'hall', season: 'winter', phase: 'day', flap: true, holiday: 'vanoce', weather: 'snow' }, 'Předsíň: flap, Vánoce, snow'], [{ id: 'kitchen', season: 'spring', phase: 'day', weather: 'rain' }, 'Kuchyně: rain']])
   h += placeCell(Object.assign({ id: 'garden' }, o), l);
 h += '</div>';
+// the weather (room/lap option weather and temp): every weather × day phase in the garden and the living room, the
+// kitchen and the hall by day, frost and heat, the lap; "lightning frame" freezes every storm at the flash
+const WX = ['clear', 'cloudy', 'fog', 'rain', 'storm', 'snow'], PHS = ['morning', 'day', 'evening', 'night'];
+h += '<h2 id="weather">Weather × day phase <label><input type="checkbox" id="boltf"> lightning frame</label> <label><input type="checkbox" id="nomo"> reduced motion (no animation)</label> <span style="font-weight:normal;font-size:13px">jump: <a href="#wx-garden">garden</a> <a href="#wx-living">living</a> <a href="#wx-other">kitchen, hall</a> <a href="#wx-temp">frost, heat</a> <a href="#wx-lap">lap</a></span></h2><div id="wxs">';
+for (const id of ['garden', 'living']) {
+  h += `<h2 id="wx-${id}">${id}: rows = weather, columns = ${PHS.join(', ')}</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">`;
+  for (const wx of WX) for (const ph of PHS) h += placeCell({ id, phase: ph, season: wx === 'snow' ? 'winter' : 'autumn', sunX: 0.6, weather: wx }, `${id} ${wx} ${ph}`);
+  h += '</div>';
+}
+h += '<h2 id="wx-other">Kuchyně and Předsíň by day and evening</h2><div class="grid" style="grid-template-columns:repeat(6,1fr)">';
+for (const id of ['kitchen', 'hall']) for (const ph of ['day', 'evening']) for (const wx of WX) h += placeCell({ id, phase: ph, season: 'spring', weather: wx }, `${id} ${wx} ${ph}`);
+h += '</div><h2 id="wx-temp">temp: frost (−8 °C) and heat (32 °C)</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';
+for (const [o, l] of [[{ id: 'garden', season: 'winter', phase: 'morning', temp: -8 }, 'garden winter clear −8'], [{ id: 'garden', season: 'autumn', phase: 'day', weather: 'fog', temp: -5 }, 'garden autumn fog −5 (hoarfrost)'],
+  [{ id: 'living', season: 'winter', phase: 'day', temp: -8, sunX: 0.3 }, 'living winter −8'], [{ id: 'living', season: 'winter', phase: 'night', weather: 'cloudy', temp: -12 }, 'living night cloudy −12'],
+  [{ id: 'hall', season: 'winter', phase: 'day', weather: 'snow', temp: -4 }, 'hall snow −4'], [{ id: 'kitchen', season: 'winter', phase: 'evening', temp: -3 }, 'kitchen evening −3'],
+  [{ id: 'garden', season: 'summer', phase: 'day', temp: 32, sunX: 0.4 }, 'garden summer heat 32'], [{ id: 'garden', season: 'summer', phase: 'evening', temp: 30 }, 'garden summer evening 30'],
+  [{ id: 'living', season: 'summer', phase: 'day', temp: 32, sunX: 0.5 }, 'living heat 32 (stronger sun patch)'], [{ id: 'garden', season: 'summer', phase: 'night', temp: 29 }, 'garden summer night 29 (no shimmer)'],
+  [{ id: 'garden', season: 'summer', phase: 'day', weather: 'cloudy', temp: 30 }, 'garden cloudy 30'], [{ id: 'garden', season: 'spring', phase: 'day', temp: 12 }, 'garden spring 12 (nothing)']])
+  h += placeCell(o, l);
+h += '</div><h2 id="wx-lap">Lap with weather: bench and armchair</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';
+for (const [o, p] of [[{ place: 'bench', phase: 'day', season: 'autumn', weather: 'rain' }, 'lapLoaf'], [{ place: 'bench', phase: 'evening', season: 'summer', weather: 'storm' }, 'lapCurl'], [{ place: 'bench', phase: 'day', season: 'autumn', weather: 'fog' }, 'lapLoaf'],
+  [{ place: 'bench', phase: 'morning', season: 'winter', weather: 'snow', temp: -5 }, 'lapCurl'], [{ place: 'bench', phase: 'morning', season: 'autumn', temp: -4 }, 'lapLoaf'], [{ place: 'bench', phase: 'day', season: 'summer', temp: 31 }, 'lapBelly'],
+  [{ phase: 'day', season: 'autumn', weather: 'cloudy' }, 'lapLoaf'], [{ phase: 'night', season: 'summer', weather: 'storm' }, 'lapCurl']])
+  h += onLapW(o, p, 'calm');
+h += '</div></div>';
 // spots of every place with their names
 h += '<h2>Spots of the places (red dots)</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';
 for (const id of Object.keys(A.rooms)) h += `<div><div class="room">${A.room({ id, phase: 'day', season: 'summer' })}<svg viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" style="position:absolute;inset:0;width:100%;height:100%">${Object.entries(A.rooms[id].spots).map(([k, p]) => `<circle cx="${p.x}" cy="${p.y}" r="5" fill="red"/><text x="${p.x + 7}" y="${p.y - 4}" font-size="13" fill="#000" stroke="#fff" stroke-width="3" paint-order="stroke">${k}</text>`).join('')}</svg></div>${id}</div>`;
@@ -257,6 +285,8 @@ const drawTease = () => {
   document.getElementById('flick').onclick = () => { for (const el of tease.querySelectorAll('.flk')) { el.classList.remove('kx-flick'); void el.offsetWidth; el.classList.add('kx-flick'); setTimeout(() => el.classList.remove('kx-flick'), 450); } };
 };
 drawTease();
+for (const [box, cls] of [['boltf', 'boltf'], ['nomo', 'nomo']]) document.getElementById(box).onchange = e => document.getElementById('wxs').classList.toggle(cls, e.target.checked);
+if (/boltframe/.test(location.search)) { document.getElementById('boltf').checked = true; document.getElementById('wxs').classList.add('boltf'); }
 const st = document.getElementById('step'); st.oninput = () => { document.getElementById('gait').style.setProperty('--kx-step', st.value + 's'); document.getElementById('stepv').textContent = st.value + ' s'; };
 </script>
 </body>

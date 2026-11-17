@@ -3,7 +3,8 @@
 //
 // API of KockaArt():
 //   css                      keyframes and classes (blink, ear twitch, tail sway by mood, sleep breathing, purr shiver,
-//                            sneeze, wriggle, Zzz, fleas, gait, weather, Škádlení); prefers-reduced-motion turns it off.
+//                            sneeze, wriggle, Zzz, fleas, gait, weather and lightning, Škádlení); prefers-reduced-motion
+//                            turns it off (the lightning then never shows).
 //                            Inject once. The class kx-flick on any ancestor of a cat (or on the svg): her right ear twitches
 //                            once (~.4 s; for a tap on a sleeping cat: add it, remove it after ~450 ms).
 //   cat(pose, opts)          <svg class="koxa"> viewBox 0 0 200 200, the cat stands on y≈186 (centre x 100; see anchors).
@@ -62,9 +63,17 @@
 //   room(o) / room(phase, season)  <svg> viewBox 0 0 400 600, preserveAspectRatio xMidYMid slice.
 //                            o = { id: 'living'|'kitchen'|'hall'|'garden', phase: 'morning'|'day'|'evening'|'night',
 //                            season: 'spring'|'summer'|'autumn'|'winter', sunX: 0..1, holiday: null | id | [ids],
-//                            flap: bool (cat flap in the hall door), weather: null|'rain'|'snow', beds: 4|6 (garden:
-//                            how many beds, see bedSpots) }. Holiday ids: advent,
+//                            flap: bool (cat flap in the hall door), weather, temp, beds: 4|6 (garden: how many beds,
+//                            see bedSpots) }. Holiday ids: advent,
 //                            mikulas, vanoce, silvestr, masopust, velikonoce, carodejnice, dusicky, narozeniny.
+//                            weather: 'clear'|'cloudy'|'fog'|'rain'|'storm'|'snow' (null or anything else = clear) in
+//                            the garden and every window view: clear = sun / moon and stars, sun patches on the floor;
+//                            cloudy = a grey overcast sky with heavy clouds, no sun, moon, stars or sun patches, a
+//                            flatter light; fog = a pale veil, the far things (hills, castle, fence, gate, tree) fading,
+//                            no sun; rain = overcast, falling rain, puddles; storm = darker, heavier rain and a lightning
+//                            flash every 9 s (CSS kx-bolt; none under prefers-reduced-motion); snow = overcast, falling
+//                            snow. temp: °C or null: ≤ −2 frost ferns on the window glass, a frosty lawn and a frozen
+//                            pond; ≥ 28 a stronger sun, a warm haze and a heat shimmer in the garden (not at night).
 //   rooms                    { id: { spots: { name: {x, y} } } } for the four places (room coordinates,
 //                            where an item or Koxa stands): living (Obývák: rug, bed, window, chair = armchair seat, sun),
 //                            kitchen (Kuchyně: bowl, water, counter, window), hall (Předsíň: litter, door, shoe, mat),
@@ -73,7 +82,10 @@
 //                            from bond level Parťačka): [{ x, y, w }] (x = middle, y = the spot's foot, w = width).
 //   spots                    the old single-room spots { bowl, water, litter, bed, window, door }, kept for old code.
 //   sunPatch(sunX)           {x, y}: the middle of the living-room sun patch on the floor (x 95…235), for a sun nap.
-//   lap({ phase, season, place: 'chair'|'bench' })  the lap close-up (400×600, slice); lapSpot = { x, y, size }: her
+//   lap({ phase, season, place: 'chair'|'bench', weather, temp })  the lap close-up (400×600, slice); weather and temp
+//                            as in room(): on the bench the rain, snow, fog, frosty grass and heat are drawn over the
+//                            scene (the cat's box goes on top, so it falls behind her); in the armchair only the light
+//                            (flatter when grey, the storm's faint flash). lapSpot = { x, y, size }: her
 //                            box is size × size, its point (100, 186) at (x, y).
 //   crop(name, stage 0..3)   a plant in a bed (viewBox 0 0 100 100, standing on y≈90); crops = names (plant, radish,
 //                            carrot, strawberry, tomato, catnip); cropSlot = where a produce drawing can sit on 'plant'.
@@ -1340,34 +1352,85 @@ function KockaArt() {
   const HILL = { spring: '#a6cf86', summer: '#79ad5e', autumn: '#c7a25a', winter: '#dbe6ee' };
   const GROUND = { spring: '#86bd5c', summer: '#5f9e3e', autumn: '#b88d44', winter: '#f2f6f9' };
   const GX = 68, GY = 88, GW = 124, GH = 174;   // the living-room window glass; outside() draws for it, view() maps it elsewhere
-  // falling rain or snow over a box: a tiled pattern that the CSS moves down by exactly one tile (seamless)
+  // the weather of a scene from the options: wx = one of WEATHERS (anything else = clear), frost (temp ≤ −2 °C), heat (≥ 28 °C)
+  const WEATHERS = ['clear', 'cloudy', 'fog', 'rain', 'storm', 'snow'];
+  function wxOf(o) {
+    const t = Number.isFinite(o.temp) ? o.temp : null;
+    return { wx: WEATHERS.includes(o.weather) ? o.weather : 'clear', frost: t !== null && t <= -2, heat: t !== null && t >= 28 };
+  }
+  // an overcast sky: the veil's colour by weather (in the evening and at night by the phase), its opacity and the two
+  // cloud tones (top, underside) by weather
+  const OVC = { veil: { cloudy: '#b2bac2', snow: '#c3cad1', rain: '#8e99a4', storm: '#5c6672', evening: '#6c6478', night: '#1e2636' }, op: { cloudy: 0.78, snow: 0.74, rain: 0.82, storm: 0.88 },
+    cl: { cloudy: ['#c9cfd5', '#a9b2ba'], snow: ['#dde2e7', '#c2cad1'], rain: ['#a3adb7', '#8995a0'], storm: ['#6d7884', '#525c68'] } };
+  const MIST = { morning: '#eee6dc', day: '#e3e7ea', evening: '#b8a8b2', night: '#56607a' };   // fog by day phase
+  const FLAT = { cloudy: 0.08, snow: 0.04, rain: 0.18, storm: 0.28 };   // the flatter light over a landscape (#5c6670)
+  const veil = (x, y, w, h, col, op) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${col}" opacity="${op}"/>`;
+  // the grey sky with heavy clouds: lumps = [[cx, cy, rx, ry]] (each a darker underside, a top and a bump)
+  function overcast(c, x, y, w, h, lumps) {
+    const { ph, wx } = c, night = ph === 'night', ev = ph === 'evening';
+    const [top, low] = night ? (wx === 'storm' ? ['#1f2735', '#171d29'] : ['#2c3546', '#222a38']) : ev ? (wx === 'storm' ? ['#5a5468', '#47425a'] : ['#8f8498', '#726a80']) : OVC.cl[wx] || OVC.cl.cloudy;
+    return veil(x, y, w, h, OVC.veil[night || ev ? ph : wx] || OVC.veil.cloudy, OVC.op[wx] || 0.78) + `<g fill="${low}">${lumps.map(([cx, cy, rx, ry]) => `<ellipse cx="${cx}" cy="${r1(cy + ry * 0.4)}" rx="${rx}" ry="${r1(ry * 0.8)}"/>`).join('')}</g>` +
+      `<g fill="${top}">${lumps.map(([cx, cy, rx, ry]) => `<ellipse cx="${cx}" cy="${cy}" rx="${r1(rx * 0.9)}" ry="${ry}"/><ellipse cx="${r1(cx - rx * 0.3)}" cy="${r1(cy - ry * 0.5)}" rx="${r1(rx * 0.45)}" ry="${r1(ry * 0.8)}"/>`).join('')}</g>`;
+  }
+  // a lightning flash: invisible (opacity 0) unless the CSS animates it (kx-bolt, a double flash every 9 s), so
+  // prefers-reduced-motion never flashes; inner = what lights up (with its own fill-opacity)
+  const bolt = inner => `<g class="kx-bolt" opacity="0">${inner}</g>`;
+  const boltPath = d => `<path d="${d}" fill="none" stroke="#fffbe0" stroke-width="7" stroke-linejoin="round" opacity=".35"/><path d="${d}" fill="none" stroke="#fffbe0" stroke-width="2.4" stroke-linejoin="round"/>`;
+  // frost ferns growing from the corners of a glass box (clipped by its caller)
+  function ferns(x, y, w, h) {
+    const k = Math.min(w, h) / 124, sprig = (x0, y0, a, len) => {
+      const q = a * Math.PI / 180, dx = Math.cos(q), dy = Math.sin(q);
+      let d = `M${r1(x0)} ${r1(y0)}l${r1(dx * len)} ${r1(dy * len)}`;
+      for (let i = 1; i <= 3; i++) {
+        const t = i / 4, px = x0 + dx * len * t, py = y0 + dy * len * t, l = len * (1 - t) * 0.6;
+        for (const sg of [-1, 1]) { const q2 = q + sg * 0.75; d += `M${r1(px)} ${r1(py)}l${r1(Math.cos(q2) * l)} ${r1(Math.sin(q2) * l)}`; }
+      }
+      return d;
+    };
+    const L = 50 * k, b = y + h, R = x + w, sw = Math.max(1, 2 * k);
+    const d = [[x, b, -25, L], [x, b, -55, L * 0.85], [x + 6 * k, b, -85, L * 0.6], [R, b, -155, L], [R, b, -125, L * 0.85], [R - 6 * k, b, -95, L * 0.55],
+      [x, y, 35, L * 0.5], [x, y, 70, L * 0.4], [R, y, 145, L * 0.5], [R, y, 110, L * 0.4]].map(a => sprig(...a)).join('');
+    return `<g fill="#f4fbff" opacity=".7"><circle cx="${x}" cy="${b}" r="${r1(36 * k)}"/><circle cx="${R}" cy="${b}" r="${r1(36 * k)}"/><circle cx="${x}" cy="${y}" r="${r1(16 * k)}"/><circle cx="${R}" cy="${y}" r="${r1(16 * k)}"/></g>` +
+      `<g fill="none" stroke-linecap="round"><path d="${d}" stroke="#8fb2cc" stroke-width="${r1(sw + 1.4 * k)}" opacity=".5"/><path d="${d}" stroke="#fff" stroke-width="${r1(sw)}"/></g>`;
+  }
+  // falling rain, storm rain or snow over a box: a tiled pattern that the CSS moves down by exactly one tile (seamless)
   function weatherFx(weather, x, y, w, h) {
-    if (weather !== 'rain' && weather !== 'snow') return '';
-    const id = nid(), rain = weather === 'rain', tw = rain ? 40 : 60, th = rain ? 60 : 80;
-    const tile = rain ? '<path d="M30 0l-6 18M12 30l-6 18M36 40l-5 15" stroke="#d6e8f4" stroke-width="1.6" stroke-linecap="round" opacity=".8"/>'
-      : '<g fill="#fff"><circle cx="10" cy="12" r="2.4"/><circle cx="40" cy="30" r="1.8"/><circle cx="24" cy="56" r="2.2"/><circle cx="52" cy="70" r="1.6"/></g>';
+    if (weather !== 'rain' && weather !== 'snow' && weather !== 'storm') return '';
+    const id = nid(), cls = { rain: 'kx-rain', storm: 'kx-storm', snow: 'kx-snow' }[weather], snow = weather === 'snow', tw = snow ? 60 : 40, th = snow ? 80 : 60;
+    const tile = weather === 'rain' ? '<path d="M30 0l-6 18M12 30l-6 18M36 40l-5 15" stroke="#d6e8f4" stroke-width="1.6" stroke-linecap="round" opacity=".8"/>'
+      : weather === 'storm' ? '<path d="M30 0l-9 26M12 30l-9 26M36 38l-8 22M22 6l-7 19M4 8l-6 16M20 44l-6 16" stroke="#d6e8f4" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>'
+        : '<g fill="#fff"><circle cx="10" cy="12" r="2.4"/><circle cx="40" cy="30" r="1.8"/><circle cx="24" cy="56" r="2.2"/><circle cx="52" cy="70" r="1.6"/></g>';
     return `<defs><pattern id="${id}" width="${tw}" height="${th}" patternUnits="userSpaceOnUse">${tile}</pattern><clipPath id="${id}c"><rect x="${x}" y="${y}" width="${w}" height="${h}"/></clipPath></defs>` +
-      `<g clip-path="url(#${id}c)"><rect class="${rain ? 'kx-rain' : 'kx-snow'}" x="${x - tw}" y="${y - th}" width="${w + 2 * tw}" height="${h + 2 * th}" fill="url(#${id})"/></g>`;
+      `<g clip-path="url(#${id}c)"><rect class="${cls}" x="${x - tw}" y="${y - th}" width="${w + 2 * tw}" height="${h + 2 * th}" fill="url(#${id})"/></g>`;
   }
   function outside(c, id) {
-    const { ph, se, hol } = c;
+    const { ph, se, hol, wx } = c, clear = wx === 'clear', sun = clear && ph !== 'night';
     let s = `<linearGradient id="${id}s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${SKY[ph][0]}"/><stop offset="1" stop-color="${SKY[ph][1]}"/></linearGradient>`;
     s = `<defs>${s}<clipPath id="${id}c"><rect x="${GX}" y="${GY}" width="${GW}" height="${GH}"/></clipPath></defs><g clip-path="url(#${id}c)"><rect x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="url(#${id}s)"/>`;
-    if (ph === 'day' && !c.weather) s += '<g fill="#fff" opacity=".9"><ellipse cx="102" cy="122" rx="18" ry="7"/><ellipse cx="112" cy="116" rx="11" ry="8"/><ellipse cx="168" cy="146" rx="15" ry="6"/></g>';
-    if (ph === 'morning') s += '<circle cx="168" cy="196" r="13" fill="#fff0c0"/>';
-    if (ph === 'evening') s += '<circle cx="104" cy="212" r="22" fill="#ffb066" opacity=".5"/><circle cx="104" cy="212" r="14" fill="#ffc77a"/>';
+    if (ph === 'day' && clear) s += '<g fill="#fff" opacity=".9"><ellipse cx="102" cy="122" rx="18" ry="7"/><ellipse cx="112" cy="116" rx="11" ry="8"/><ellipse cx="168" cy="146" rx="15" ry="6"/></g>';
+    if (ph === 'morning' && sun) s += (c.heat ? '<circle cx="168" cy="196" r="24" fill="#fff0c0" opacity=".35"/>' : '') + '<circle cx="168" cy="196" r="13" fill="#fff0c0"/>';
+    if (ph === 'evening' && sun) s += '<circle cx="104" cy="212" r="22" fill="#ffb066" opacity=".5"/><circle cx="104" cy="212" r="14" fill="#ffc77a"/>';
+    if (wx === 'fog') s += veil(GX, GY, GW, GH, MIST[ph], 0.55);
+    else if (!clear) s += overcast(c, GX, GY, GW, 130, [[96, 108, 34, 10], [158, 98, 42, 12], [186, 132, 28, 9], [112, 142, 34, 9]]);
     s += `<path d="M68 214Q100 194 136 205T192 199V262H68Z" fill="${HILL[se]}"/>`;
     s += '<g fill="#d9ccb0"><rect x="146" y="191" width="20" height="11"/><rect x="157" y="181" width="5" height="12"/></g><g fill="#a8513a"><path d="M144 192h24l-4-5h-16z"/><path d="M156 182h7l-3.5-6z"/></g>';
+    if (wx === 'fog') s += veil(GX, GY, GW, GH, MIST[ph], 0.55);
     s += `<path d="M68 238Q118 227 192 235V262H68Z" fill="${GROUND[se]}"/>`;
     s += '<path d="M96 242V200M96 214L84 200M96 208L108 194" stroke="#6b4a2e" stroke-width="5" stroke-linecap="round" fill="none"/>';
     s += crown(se, 96, 186, 1);
     if (se === 'winter') s += '<g fill="#fff"><circle cx="80" cy="110" r="2"/><circle cx="120" cy="132" r="1.6"/><circle cx="150" cy="104" r="2"/><circle cx="176" cy="160" r="1.6"/><circle cx="100" cy="160" r="1.8"/><circle cx="140" cy="176" r="1.6"/><circle cx="182" cy="122" r="1.8"/></g><path d="M68 262V253Q90 246 112 252T152 250T192 253V262Z" fill="#fff"/>';
-    if (c.weather) s += `<rect x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="#6a7a8a" opacity=".25"/>` + weatherFx(c.weather, GX, GY, GW, GH);
+    if (c.frost && se !== 'winter') s += '<path d="M68 262V246Q118 236 192 243V262Z" fill="#eef4f8" opacity=".5"/>';
+    if (wx === 'fog') s += veil(GX, GY, GW, GH, MIST[ph], 0.3);
+    else if (!clear) s += veil(GX, GY, GW, GH, '#5c6670', FLAT[wx]);
+    s += weatherFx(wx, GX, GY, GW, GH);
+    if (c.heat && ph !== 'night') s += veil(GX, GY, GW, GH, '#ffb84a', 0.1);
     if (ph === 'evening') s += `<rect x="${GX}" y="180" width="${GW}" height="90" fill="#ff7a3a" opacity=".16"/>`;
-    if (ph === 'night') s += `<rect x="${GX}" y="156" width="${GW}" height="110" fill="#0a1430" opacity=".66"/>` +
-      '<g fill="#fff"><circle cx="82" cy="102" r="1.3"/><circle cx="104" cy="96" r="1"/><circle cx="126" cy="112" r="1.4"/><circle cx="96" cy="128" r="1"/><circle cx="140" cy="140" r="1.1"/><circle cx="182" cy="150" r="1.2"/><circle cx="118" cy="150" r="1"/></g><circle cx="165" cy="116" r="12" fill="#f4ecc8"/><circle cx="171" cy="111" r="11" fill="#0d1838"/>';
+    if (ph === 'night') s += `<rect x="${GX}" y="156" width="${GW}" height="110" fill="#0a1430" opacity=".66"/>`;
+    if (ph === 'night' && clear) s += '<g fill="#fff"><circle cx="82" cy="102" r="1.3"/><circle cx="104" cy="96" r="1"/><circle cx="126" cy="112" r="1.4"/><circle cx="96" cy="128" r="1"/><circle cx="140" cy="140" r="1.1"/><circle cx="182" cy="150" r="1.2"/><circle cx="118" cy="150" r="1"/></g><circle cx="165" cy="116" r="12" fill="#f4ecc8"/><circle cx="171" cy="111" r="11" fill="#0d1838"/>';
     if (hol.includes('silvestr') && (ph === 'evening' || ph === 'night')) s += [[104, 120, '#ffd04a'], [158, 146, '#ff6a8a'], [130, 104, '#7ad0ff']].map(([x, y, col]) => burst(x, y, 13, col)).join('');
     if (hol.includes('carodejnice') && (ph === 'evening' || ph === 'night')) s += '<ellipse cx="120" cy="206" rx="12" ry="7" fill="#ffb347" opacity=".55"/><path d="M114 210l6-12 6 12z" fill="#ff8a2a"/>';
+    if (wx === 'storm') s += bolt(`<rect x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="#eef3ff" fill-opacity=".55"/>${boltPath('M162 100L152 132L160 134L146 172L156 174L144 204')}`);
+    if (c.frost) s += ferns(GX, GY, GW, GH);
     return s + '</g>';
   }
   const burst = (x, y, r, col) => `<g stroke="${col}" stroke-width="2" stroke-linecap="round">${[0, 45, 90, 135, 180, 225, 270, 315].map(a => { const q = a * Math.PI / 180; return `<path d="M${r1(x + Math.cos(q) * r * 0.3)} ${r1(y + Math.sin(q) * r * 0.3)}L${r1(x + Math.cos(q) * r)} ${r1(y + Math.sin(q) * r)}"/>`; }).join('')}</g>`;
@@ -1401,14 +1464,19 @@ function KockaArt() {
     return `<rect y="400" width="400" height="200" fill="#a87442"/><rect y="396" width="400" height="10" fill="#6e4a2c"/><path d="${pl}" stroke="#8e5f34" stroke-width="2"/>`;
   }
   const hangLamp = (x, lit) => `<path d="M${x} 0V38" stroke="#3a2a1e" stroke-width="2"/><circle cx="${x}" cy="64" r="6" fill="${lit ? '#fff6d0' : '#efe2c0'}"/><path d="M${x - 18} 38H${x + 18}L${x + 30} 62H${x - 30}Z" fill="${lit ? '#f6c766' : '#d99a3e'}" stroke="#8a5a22" stroke-width="1.5" stroke-linejoin="round"/><path d="M${x - 29} 58H${x + 29}" stroke="#8a5a22" stroke-width="3"/>`;
-  // the light of the day phase over a whole place; the lamp glows in the evening; glass (c.holes) stays bright at night
+  // the light of the day phase over a whole place; the lamp glows in the evening; glass (c.holes) stays bright at night;
+  // a grey day makes the light flatter, a hot one warmer, and a storm's lightning lights the room up faintly
   function light(c, lx, ly) {
-    const id = nid();
-    if (c.ph === 'morning') return '<rect width="400" height="600" fill="#ffb36b" opacity=".06"/>';
-    if (c.ph === 'evening') return `<defs><radialGradient id="${id}"><stop offset="0" stop-color="#ffd27a" stop-opacity=".62"/><stop offset=".45" stop-color="#ffc060" stop-opacity=".22"/><stop offset="1" stop-color="#ffb050" stop-opacity="0"/></radialGradient></defs>` +
-      `<rect width="400" height="600" fill="#3a1a08" opacity=".2"/><circle cx="${lx}" cy="${ly}" r="320" fill="url(#${id})"/><ellipse cx="${lx}" cy="500" rx="180" ry="56" fill="#ffcf80" opacity=".14"/>`;
-    if (c.ph === 'night') return `<path d="M0 0H400V600H0Z${c.holes.map(([x, y, w, h]) => `M${x} ${y}V${y + h}H${x + w}V${y}Z`).join('')}" fill="#3e4c86" style="mix-blend-mode:multiply" fill-rule="evenodd"/>`;
-    return '';
+    const id = nid(), dim = { cloudy: 0.06, fog: 0.04, rain: 0.09, storm: 0.15, snow: 0.03 }[c.wx];
+    let s = '';
+    if (c.ph === 'morning') s = '<rect width="400" height="600" fill="#ffb36b" opacity=".06"/>';
+    if (c.ph === 'evening') s = `<defs><radialGradient id="${id}"><stop offset="0" stop-color="#ffd27a" stop-opacity=".62"/><stop offset=".45" stop-color="#ffc060" stop-opacity=".22"/><stop offset="1" stop-color="#ffb050" stop-opacity="0"/></radialGradient></defs>` +
+      `<rect width="400" height="600" fill="#3a1a08" opacity="${c.wx === 'storm' ? 0.3 : 0.2}"/><circle cx="${lx}" cy="${ly}" r="320" fill="url(#${id})"/><ellipse cx="${lx}" cy="500" rx="180" ry="56" fill="#ffcf80" opacity=".14"/>`;
+    if (c.ph === 'night') s = `<path d="M0 0H400V600H0Z${c.holes.map(([x, y, w, h]) => `M${x} ${y}V${y + h}H${x + w}V${y}Z`).join('')}" fill="#3e4c86" style="mix-blend-mode:multiply" fill-rule="evenodd"/>`;
+    if ((c.ph === 'morning' || c.ph === 'day') && dim) s += `<rect width="400" height="600" fill="#5c6670" opacity="${dim}"/>`;
+    if ((c.ph === 'morning' || c.ph === 'day') && c.heat && c.wx === 'clear') s += '<rect width="400" height="600" fill="#ffb84a" opacity=".05"/>';
+    if (c.wx === 'storm') s += bolt('<rect width="400" height="600" fill="#eef3ff" fill-opacity=".16"/>');
+    return s;
   }
   const sunX0 = x => 20 + Math.min(1, Math.max(0, Number(x) || 0)) * 140;
   // the middle of the sun patch on the living-room floor for sunX (room units): where a sun nap belongs
@@ -1465,10 +1533,11 @@ function KockaArt() {
         s += `<path d="M34 66H226" stroke="#5a3a20" stroke-width="5" stroke-linecap="round"/><g fill="url(#${g})" stroke="#9a4a3a" stroke-width="1.5"><path d="M38 66H76C72 120 66 170 70 218C74 250 68 288 60 300H40C36 230 34 150 38 66Z"/><path d="M222 66H184C188 120 194 170 190 218C186 250 192 288 200 300H220C224 230 226 150 222 66Z"/></g>`;
         s += '<rect x="234" y="96" width="54" height="46" fill="#6b4426"/><rect x="239" y="101" width="44" height="36" fill="#bfe0f0"/><path d="M239 128q20-10 44-4v13h-44z" fill="#79ad5e"/><g fill="#efe4cc"><rect x="252" y="114" width="20" height="10"/><rect x="263" y="105" width="5" height="11"/></g><path d="M250 115h24l-3-4h-18zM262 106h7l-3.5-5z" fill="#a8513a"/>';
         s += hangLamp(232, c.ph === 'evening') + planks() + rug();
-        if ((c.ph === 'day' || c.ph === 'morning') && !c.weather) s += panes(sunX0(c.sunX), c.ph === 'morning' ? '#ffd79a' : '#fff1b8', c.ph === 'morning' ? 0.42 : 0.5);
+        // the sun patch only under a clear sky (stronger on a hot day), the moonlight only on a clear night
+        if ((c.ph === 'day' || c.ph === 'morning') && c.wx === 'clear') s += panes(sunX0(c.sunX), c.ph === 'morning' ? '#ffd79a' : '#fff1b8', (c.ph === 'morning' ? 0.42 : 0.5) + (c.heat ? 0.14 : 0));
         const hp = holidayProps(c.hol);
         s += armchair() + hp.s + light(c, 232, 66);
-        if (c.ph === 'night') s += panes(150, '#bcd0ff', 0.12);
+        if (c.ph === 'night' && c.wx === 'clear') s += panes(150, '#bcd0ff', 0.12);
         return s + hp.glow;
       },
     },
@@ -1526,22 +1595,25 @@ function KockaArt() {
         bed1: { x: 59, y: 566 }, bed2: { x: 155, y: 566 }, bed3: { x: 251, y: 566 }, bed4: { x: 347, y: 566 }, pond: { x: 280, y: 478 }, fence: { x: 120, y: 308 },
       },
       draw(c) {
-        const { ph, se } = c, id = nid(), snow = se === 'winter', dusk = ph === 'evening' || ph === 'night';
+        const { ph, se, wx } = c, id = nid(), snow = se === 'winter', dusk = ph === 'evening' || ph === 'night', clear = wx === 'clear', fog = wx === 'fog';
         let s = `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${SKY[ph][0]}"/><stop offset="1" stop-color="${SKY[ph][1]}"/></linearGradient></defs><rect width="400" height="400" fill="url(#${id})"/>`;
-        // sun, moon, clouds, hills with the castle far away
-        const sx = r1(40 + Math.min(1, Math.max(0, Number(c.sunX) || 0)) * 320);
-        if ((ph === 'day' || ph === 'morning') && !c.weather) s += `<circle cx="${sx}" cy="${ph === 'morning' ? 190 : 80}" r="20" fill="#fff3c0"/><circle cx="${sx}" cy="${ph === 'morning' ? 190 : 80}" r="30" fill="#fff3c0" opacity=".3"/>`;
-        if (ph === 'evening') s += '<circle cx="330" cy="250" r="26" fill="#ffc77a"/><circle cx="330" cy="250" r="40" fill="#ffb066" opacity=".35"/>';
-        if (ph === 'night') s += '<g fill="#fff"><circle cx="40" cy="40" r="1.4"/><circle cx="120" cy="70" r="1.2"/><circle cx="190" cy="30" r="1.5"/><circle cx="250" cy="90" r="1.1"/><circle cx="90" cy="130" r="1.2"/><circle cx="210" cy="150" r="1"/><circle cx="160" cy="100" r="1.1"/></g><circle cx="230" cy="60" r="16" fill="#f4ecc8"/><circle cx="238" cy="54" r="15" fill="#0d1838"/>';
-        if (ph === 'day' && !c.weather) s += '<g fill="#fff" opacity=".9"><ellipse cx="150" cy="90" rx="30" ry="10"/><ellipse cx="166" cy="80" rx="18" ry="12"/><ellipse cx="60" cy="150" rx="22" ry="8"/></g>';
-        if (c.weather) s += '<rect width="400" height="400" fill="#7a8794" opacity=".45"/><g fill="#b9c3cc" opacity=".8"><ellipse cx="90" cy="60" rx="70" ry="22"/><ellipse cx="240" cy="40" rx="90" ry="26"/><ellipse cx="360" cy="80" rx="60" ry="20"/></g>';
+        // sun, moon, clouds (only under a clear sky; a grey one hides them), hills with the castle far away
+        const sx = r1(40 + Math.min(1, Math.max(0, Number(c.sunX) || 0)) * 320), sy = ph === 'morning' ? 190 : 80;
+        if ((ph === 'day' || ph === 'morning') && clear) s += (c.heat ? `<circle cx="${sx}" cy="${sy}" r="50" fill="#fff3c0" opacity=".22"/>` : '') + `<circle cx="${sx}" cy="${sy}" r="20" fill="#fff3c0"/><circle cx="${sx}" cy="${sy}" r="30" fill="#fff3c0" opacity=".3"/>`;
+        if (ph === 'evening' && clear) s += '<circle cx="330" cy="250" r="26" fill="#ffc77a"/><circle cx="330" cy="250" r="40" fill="#ffb066" opacity=".35"/>';
+        if (ph === 'night' && clear) s += '<g fill="#fff"><circle cx="40" cy="40" r="1.4"/><circle cx="120" cy="70" r="1.2"/><circle cx="190" cy="30" r="1.5"/><circle cx="250" cy="90" r="1.1"/><circle cx="90" cy="130" r="1.2"/><circle cx="210" cy="150" r="1"/><circle cx="160" cy="100" r="1.1"/></g><circle cx="230" cy="60" r="16" fill="#f4ecc8"/><circle cx="238" cy="54" r="15" fill="#0d1838"/>';
+        if (ph === 'day' && clear) s += '<g fill="#fff" opacity=".9"><ellipse cx="150" cy="90" rx="30" ry="10"/><ellipse cx="166" cy="80" rx="18" ry="12"/><ellipse cx="60" cy="150" rx="22" ry="8"/></g>';
+        if (fog) s += veil(0, 0, 400, 400, MIST[ph], 0.55);
+        else if (!clear) s += overcast(c, 0, 0, 400, 400, [[90, 58, 84, 24], [240, 38, 104, 28], [372, 76, 72, 22], [160, 120, 92, 22], [322, 146, 82, 20], [36, 156, 62, 18]]);
         s += `<path d="M0 300Q80 240 170 268T400 250V400H0Z" fill="${HILL[se]}"/><g fill="#d9ccb0"><rect x="212" y="246" width="30" height="16"/><rect x="228" y="232" width="7" height="16"/></g><path d="M209 248h36l-6-7h-24zM227 233h10l-5-8z" fill="#a8513a"/>`;
+        if (fog) s += veil(0, 0, 400, 400, MIST[ph], 0.6);   // the hills and the castle all but gone
         // the fence with the gate
         const posts = [8, 60, 112, 164, 216, 320, 372];
         s += `<g fill="#b08a5a" stroke="#6b4a2e" stroke-width="2"><rect x="0" y="322" width="400" height="9"/><rect x="0" y="356" width="400" height="9"/>${posts.map(x => `<rect x="${x}" y="300" width="14" height="92" rx="2"/>`).join('')}` +
           Array.from({ length: 20 }, (_, i) => 10 + i * 20).filter(x => x < 238 || x > 316).map(x => `<path d="M${x} 392V312l6-8 6 8V392Z"/>`).join('') + '</g>';
         s += '<g stroke="#5a3a20" stroke-width="2.5" stroke-linejoin="round"><rect x="240" y="306" width="10" height="88" fill="#8a5a32"/><rect x="306" y="306" width="10" height="88" fill="#8a5a32"/><rect x="252" y="316" width="52" height="72" fill="#c49a62"/><path d="M252 384L304 320M252 316H304M252 352H304M252 388H304" fill="none"/></g><circle cx="298" cy="352" r="3.5" fill="#3a3f44"/>';
         if (snow) s += '<path d="M0 320H400v4H0Z" fill="#fff"/>' + posts.map(x => `<ellipse cx="${x + 7}" cy="300" rx="9" ry="4" fill="#fff"/>`).join('');
+        if (fog) s += veil(0, 0, 400, 400, MIST[ph], 0.35);   // the fence and the gate softer
         // the house with the back door and a window
         s += `<rect x="0" y="118" width="88" height="292" fill="#efe2c8" stroke="#a8946a" stroke-width="2"/><path d="M-6 120L96 104V124L-6 136Z" fill="#a8513a" stroke="#6a2a1a" stroke-width="2"/>${snow ? '<path d="M-6 118L96 102V108L-6 124Z" fill="#fff"/>' : ''}` +
           `<rect x="22" y="146" width="44" height="50" fill="#7c4f2c"/><rect x="27" y="151" width="34" height="40" fill="${dusk ? '#ffd27a' : '#9fc6dc'}"/><path d="M44 151V191M27 171H61" stroke="#7c4f2c" stroke-width="3"/>` +
@@ -1552,13 +1624,16 @@ function KockaArt() {
         // grass, stepping stones
         s += `<rect y="386" width="400" height="214" fill="${GROUND[se]}"/>`;
         if (!snow) s += `<g stroke="${se === 'autumn' ? '#8f6e30' : '#3f7a2c'}" stroke-width="2" stroke-linecap="round" opacity=".55">${[[30, 440], [120, 452], [228, 446], [320, 470], [70, 488], [180, 482], [370, 432], [260, 492]].map(([x, y]) => `<path d="M${x} ${y}l-3-8M${x + 4} ${y}l1-9M${x + 8} ${y}l4-7"/>`).join('')}</g>`;
+        // hoarfrost on the lawn: a pale icy tint with glints
+        if (c.frost && !snow) s += `<rect y="386" width="400" height="214" fill="#e8f1f7" opacity=".5"/><g fill="#fff">${[[40, 432], [96, 470], [168, 444], [214, 490], [284, 438], [350, 486], [130, 520], [310, 530], [24, 506], [380, 446]].map(([x, y]) => `<path d="M${x - 3} ${y}h6M${x} ${y - 3}v6" stroke="#fff" stroke-width="1.4"/>`).join('')}</g>`;
         s += `<g fill="${snow ? '#dfe7ee' : '#b8b2a4'}" stroke="${snow ? '#b8c6d2' : '#8a8478'}" stroke-width="2">${[[50, 424, 18], [100, 418, 16], [150, 412, 15], [206, 406, 14], [254, 400, 13]].map(([x, y, r]) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r1(r * 0.42)}"/>`).join('')}</g>`;
         if (se === 'spring' || se === 'summer') s += `<g>${[[24, 470, '#f4d03f'], [140, 476, '#f7b6c8'], [214, 466, '#fff'], [300, 478, '#f4d03f'], [380, 462, '#f7b6c8'], [90, 456, '#fff']].map(([x, y, col]) => `<circle cx="${x}" cy="${y}" r="3.4" fill="${col}" stroke="#2e2118" stroke-width=".8"/>`).join('')}</g>`;
         if (se === 'autumn') s += `<g>${[[40, 450, '#d98a2b'], [150, 470, '#c0552c'], [230, 460, '#e6b040'], [300, 486, '#d98a2b'], [372, 470, '#c0552c'], [100, 480, '#e6b040']].map(([x, y, col], i) => `<ellipse cx="${x}" cy="${y}" rx="5" ry="2.6" fill="${col}" transform="rotate(${i * 37} ${x} ${y})"/>`).join('')}</g>`;
         if (snow) s += `<g fill="#b8c6d2">${Array.from({ length: 9 }, (_, i) => { const x = 74 + i * 22, y = 430 + Math.sin(i * 1.3) * 8 + i * 2; return `<circle cx="${r1(x)}" cy="${r1(y)}" r="2.2"/><circle cx="${r1(x - 3)}" cy="${r1(y - 4)}" r="1.1"/><circle cx="${r1(x + 1)}" cy="${r1(y - 5)}" r="1.1"/><circle cx="${r1(x + 4)}" cy="${r1(y - 3)}" r="1.1"/>`; }).join('')}</g>`;
         // the pond (Rybaření): stones round the water, a lily pad and reeds; frozen in winter
-        s += `<ellipse cx="280" cy="478" rx="50" ry="17" fill="#9a958a" stroke="#6a665e" stroke-width="2"/><ellipse cx="280" cy="478" rx="42" ry="12" fill="${snow ? '#d8eaf4' : '#4f8fb8'}"/>` +
-          (snow ? '<path d="M256 474l10 4 8-5M292 480l12-3" stroke="#fff" stroke-width="2" fill="none"/>' : '<path d="M254 474q10-3 20 0M286 482q8-3 16 0" stroke="#bfe0f0" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M296 470a8 4 0 1 0 12 2l-6 0z" fill="#5f9e3e" stroke="#2e5a20" stroke-width="1.2"/>') +
+        const ice = snow || c.frost;   // the pond freezes in winter and on a frosty day
+        s += `<ellipse cx="280" cy="478" rx="50" ry="17" fill="#9a958a" stroke="#6a665e" stroke-width="2"/><ellipse cx="280" cy="478" rx="42" ry="12" fill="${ice ? '#d8eaf4' : '#4f8fb8'}"/>` +
+          (ice ? '<path d="M256 474l10 4 8-5M292 480l12-3" stroke="#fff" stroke-width="2" fill="none"/>' : '<path d="M254 474q10-3 20 0M286 482q8-3 16 0" stroke="#bfe0f0" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M296 470a8 4 0 1 0 12 2l-6 0z" fill="#5f9e3e" stroke="#2e5a20" stroke-width="1.2"/>') +
           (snow ? '' : '<g stroke="#4c7a3a" stroke-width="2.4" stroke-linecap="round"><path d="M318 476l-2-20M322 476l2-16M326 478l6-14"/></g><g fill="#6b4a2e"><ellipse cx="316" cy="455" rx="2.4" ry="5"/><ellipse cx="324" cy="459" rx="2.4" ry="5"/></g>');
         // the bird feeder
         s += `<path d="M108 412V292" stroke="#6b4a2e" stroke-width="6"/><path d="M84 276L108 258L132 276Z" fill="#a8513a" stroke="#6a2a1a" stroke-width="2"/><rect x="90" y="276" width="36" height="20" fill="#e9d6b0" stroke="#6b4a2e" stroke-width="2"/><rect x="84" y="294" width="48" height="6" rx="2" fill="#8a5a32"/>${snow ? '<path d="M82 274L108 256L134 274" stroke="#fff" stroke-width="4" fill="none"/>' : ''}`;
@@ -1569,30 +1644,37 @@ function KockaArt() {
           '<path d="M334 248Q300 236 262 230" stroke="#6b4a2e" stroke-width="12" stroke-linecap="round"/><path d="M350 204Q370 192 396 182" stroke="#6b4a2e" stroke-width="10" stroke-linecap="round"/>';
         if (snow) s += '<path d="M262 226Q300 232 330 242M354 198Q372 188 394 178" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none"/>' + crown('winter', 340, 140, 3.2);
         else s += `<g opacity="${se === 'autumn' ? 0.95 : 1}">${crown(se, 336, 132, 3.4)}</g>`;
+        // fog: a veil thinning towards the front, so the tree, the house and the fence stay softer than the beds
+        if (fog) s += `<defs><linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${MIST[ph]}" stop-opacity=".45"/><stop offset=".62" stop-color="${MIST[ph]}" stop-opacity=".3"/><stop offset="1" stop-color="${MIST[ph]}" stop-opacity=".04"/></linearGradient></defs><rect width="400" height="600" fill="url(#${id}f)"/>`;
         // the beds (záhony): wooden edges, soil, snow in winter
         for (const b of bedSpots(c.beds)) {
           const x = b.x - b.w / 2, w = b.w;
           s += `<rect x="${x}" y="508" width="${w}" height="72" rx="6" fill="#8a5a32" stroke="#4a2e18" stroke-width="2.5"/><rect x="${x + 7}" y="515" width="${w - 14}" height="58" rx="4" fill="${snow ? '#f2f6f9' : '#5a3a22'}"/>` +
             (snow ? '' : `<path d="M${x + 12} 530H${x + w - 12}M${x + 12} 546H${x + w - 12}M${x + 12} 562H${x + w - 12}" stroke="#46301c" stroke-width="2"/>`);
         }
+        // the weather's light: flatter under a grey sky, a warm haze with a heat shimmer on a hot day
+        if (!clear && !fog) s += veil(0, 0, 400, 600, '#5c6670', FLAT[wx]);
+        if (c.heat && ph !== 'night') s += `<rect width="400" height="600" fill="#ffb84a" opacity=".1"/><g class="kx-shimmer" fill="none" stroke="#fff4d6" stroke-width="2" stroke-linecap="round" opacity=".35">` +
+          [262, 290, 380].map((y, i) => `<path d="M${-10 + i * 14} ${y}${'q12-5 24 0t24 0'.repeat(9)}"/>`).join('') + '</g>';
         // the light of the day phase; fireflies on summer nights; the weather
         if (ph === 'morning') s += '<rect width="400" height="600" fill="#ffb36b" opacity=".08"/>';
         if (ph === 'evening') s += '<rect width="400" height="600" fill="#ff8a3a" opacity=".12"/><rect width="400" height="600" fill="#3a1a08" opacity=".14"/>';
         if (ph === 'night') s += '<path d="M0 0H400V600H0ZM27 151V191H61V151Z" fill="#33407a" style="mix-blend-mode:multiply" fill-rule="evenodd"/>';
         if (ph === 'night' && se === 'summer') s += `<g class="kx-flies">${[[60, 440, 0], [150, 360, 0.7], [240, 470, 1.4], [320, 380, 0.4], [370, 500, 1.1], [110, 520, 1.8], [210, 300, 2.2]].map(([x, y, d]) =>
           `<g style="animation-delay:${d}s"><circle cx="${x}" cy="${y}" r="7" fill="#f6f08a" opacity=".3"/><circle cx="${x}" cy="${y}" r="2.4" fill="#fbf7b0"/></g>`).join('')}</g>`;
-        if (c.weather === 'rain') s += '<rect width="400" height="600" fill="#5a6a7a" opacity=".18"/><g fill="#9fb4c6" opacity=".55"><ellipse cx="120" cy="450" rx="30" ry="6"/><ellipse cx="300" cy="500" rx="24" ry="5"/></g>';
-        s += weatherFx(c.weather, 0, 0, 400, 600);
+        if (wx === 'rain' || wx === 'storm') s += `<g fill="#9fb4c6" opacity=".55"><ellipse cx="120" cy="450" rx="30" ry="6"/><ellipse cx="300" cy="500" rx="24" ry="5"/>${wx === 'storm' ? '<ellipse cx="200" cy="530" rx="34" ry="6"/><ellipse cx="40" cy="482" rx="20" ry="4"/>' : ''}</g>`;
+        s += weatherFx(wx, 0, 0, 400, 600);
+        if (wx === 'storm') s += bolt(`<rect width="400" height="600" fill="#eef3ff" fill-opacity=".22"/><rect width="400" height="300" fill="#eef3ff" fill-opacity=".3"/>${boltPath('M262 66L246 118L258 122L236 176L249 180L228 238')}`);
         return s;
       },
     },
   };
-  // room({ id, phase, season, sunX, holiday, flap, weather }) or the old room(phase, season) = the living room
+  // room({ id, phase, season, sunX, holiday, flap, weather, temp, beds }) or the old room(phase, season) = the living room
   function room(a, b) {
     const o = typeof a === 'string' ? { phase: a, season: b } : Object.assign({}, a);
     const P = PLACES[o.id] || PLACES.living;
-    const c = { ph: SKY[o.phase] ? o.phase : 'day', se: HILL[o.season] ? o.season : 'summer', sunX: Number.isFinite(o.sunX) ? Math.min(1, Math.max(0, o.sunX)) : 0.5,
-      hol: [].concat(o.holiday || []), flap: !!o.flap, weather: o.weather === 'rain' || o.weather === 'snow' ? o.weather : null, beds: o.beds === 6 ? 6 : 4, holes: [] };
+    const c = Object.assign({ ph: SKY[o.phase] ? o.phase : 'day', se: HILL[o.season] ? o.season : 'summer', sunX: Number.isFinite(o.sunX) ? Math.min(1, Math.max(0, o.sunX)) : 0.5,
+      hol: [].concat(o.holiday || []), flap: !!o.flap, beds: o.beds === 6 ? 6 : 4, holes: [] }, wxOf(o));
     return `<svg class="kx-room" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${P.draw(c)}</svg>`;
   }
   const rooms = {};
@@ -1604,10 +1686,11 @@ function KockaArt() {
   const lapSpot = { x: 200, y: 452, size: 380 };   // her box is size × size scene units, its point (100, 186) at (x, y)
   function lap(o) {
     o = Object.assign({}, o);
-    const c = { ph: SKY[o.phase] ? o.phase : 'day', se: HILL[o.season] ? o.season : 'summer', hol: [], holes: [] }, bench = o.place === 'bench', id = nid();
+    const c = Object.assign({ ph: SKY[o.phase] ? o.phase : 'day', se: HILL[o.season] ? o.season : 'summer', hol: [], holes: [] }, wxOf(o)), bench = o.place === 'bench', id = nid();
     let s = '';
     if (bench) {
       s += `<rect width="400" height="600" fill="${GROUND[c.se]}"/><g stroke="#3f7a2c" stroke-width="2.4" opacity=".5" stroke-linecap="round">${[[30, 60], [360, 90], [50, 300], [370, 330], [20, 520], [380, 560]].map(([x, y]) => `<path d="M${x} ${y}l-4-10M${x + 5} ${y}l1-11M${x + 10} ${y}l5-9"/>`).join('')}</g>` +
+        (c.frost && c.se !== 'winter' ? '<rect width="400" height="600" fill="#e8f1f7" opacity=".5"/>' : '') +
         '<g fill="#b07a42" stroke="#5a3a20" stroke-width="3">' + [150, 250, 350, 450, 550].map(y => `<rect x="-10" y="${y}" width="420" height="80" rx="6"/>`).join('') + '</g>';
     } else {
       s += `<rect width="400" height="600" fill="#a87442"/><path d="M0 40H400M0 90H400M0 140H400" stroke="#8e5f34" stroke-width="3"/><rect y="150" width="400" height="450" fill="${AC.fab}"/>` +
@@ -1618,7 +1701,14 @@ function KockaArt() {
     s += '<g fill="#4f6f91" stroke="#2e4560" stroke-width="3" stroke-linejoin="round"><path d="M84 600L80 214Q82 136 140 132Q196 132 198 210L200 600Z"/><path d="M316 600L320 214Q318 136 260 132Q204 132 202 210L200 600Z"/></g>' +
       '<g fill="#6f8fb1" opacity=".55"><ellipse cx="140" cy="172" rx="34" ry="22"/><ellipse cx="260" cy="172" rx="34" ry="22"/></g><path d="M200 210V600" stroke="#2e4560" stroke-width="4"/><path d="M96 260Q100 420 96 600M304 260Q300 420 304 600" stroke="#c9a85a" stroke-width="2" stroke-dasharray="6 5" fill="none" opacity=".8"/>';
     if (c.se === 'winter') s += `<defs>${gingham(id)}</defs><path d="M70 380Q200 360 330 380V600H70Z" fill="url(#${id})" stroke="#9a4a3a" stroke-width="2"/><path d="M70 380Q200 360 330 380" stroke="#c0503a" stroke-width="6" fill="none"/>`;
-    s += bench ? (c.ph === 'night' ? '<rect width="400" height="600" fill="#33407a" style="mix-blend-mode:multiply"/>' : c.ph === 'evening' ? '<rect width="400" height="600" fill="#ff8a3a" opacity=".14"/>' : '') : light(c, 200, -40);
+    if (bench) {   // outside: the weather's light, then the day phase, then what falls and flashes
+      if (c.wx === 'fog') s += veil(0, 0, 400, 600, MIST[c.ph], 0.3);
+      else if (c.wx !== 'clear') s += veil(0, 0, 400, 600, '#5c6670', FLAT[c.wx]);
+      if (c.heat && c.ph !== 'night') s += '<rect width="400" height="600" fill="#ffb84a" opacity=".1"/>';
+      s += c.ph === 'night' ? '<rect width="400" height="600" fill="#33407a" style="mix-blend-mode:multiply"/>' : c.ph === 'evening' ? '<rect width="400" height="600" fill="#ff8a3a" opacity=".14"/>' : '';
+      s += weatherFx(c.wx, 0, 0, 400, 600);
+      if (c.wx === 'storm') s += bolt('<rect width="400" height="600" fill="#eef3ff" fill-opacity=".25"/>');
+    } else s += light(c, 200, -40);
     return `<svg class="kx-room" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${s}</svg>`;
   }
 
@@ -1809,6 +1899,9 @@ function KockaArt() {
 .kx-drip path{animation:kx-drip 1.6s ease-in infinite}
 .kx-rain{animation:kx-rain .5s linear infinite}
 .kx-snow{animation:kx-snow 4s linear infinite}
+.kx-storm{animation:kx-rain .3s linear infinite}
+.kx-bolt{animation:kx-bolt 9s linear -3s infinite}
+.kx-shimmer{animation:kx-shimmer 2.4s ease-in-out infinite alternate}
 .kx-flies>g{animation:kx-fly 2.6s ease-in-out infinite}
 .kx-spin{animation:kx-spin 1.6s ease-in-out infinite}
 .kx-tumble{animation:kx-tumble 2.2s ease-in-out infinite}
@@ -1859,6 +1952,8 @@ function KockaArt() {
 @keyframes kx-drip{0%{opacity:0;transform:translate(0,0)}20%{opacity:1}100%{opacity:0;transform:translate(0,18px)}}
 @keyframes kx-rain{to{transform:translate(0,60px)}}
 @keyframes kx-snow{to{transform:translate(0,80px)}}
+@keyframes kx-bolt{0%,88%{opacity:0}89%{opacity:1}90.5%{opacity:.12}92%{opacity:.85}94.5%,100%{opacity:0}}
+@keyframes kx-shimmer{from{transform:translate(-6px,0);opacity:.2}to{transform:translate(6px,-2px);opacity:.45}}
 @keyframes kx-fly{0%,100%{opacity:.25;transform:translate(0,0)}50%{opacity:1;transform:translate(4px,-6px)}}
 @keyframes kx-float{0%{opacity:0;transform:translateY(6px) scale(.7)}15%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-34px) scale(1.1)}}
 @keyframes kx-swing{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}

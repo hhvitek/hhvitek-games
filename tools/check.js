@@ -215,7 +215,18 @@ for (const id of ids) {
     else if (!/^(\.\.\/\.\.\/images\/sets\.js|\.\.\/_cards\/cards\.js|\.\.\/_cards\/marias\.js|\.\.\/_opponents\/opponents\.js|\.\.\/\.\.\/index\.html|\.\.\/\.\.\/i18n\/[a-z0-9]+\.js$|texts\.js$|data:)/.test(u)) P.push(`unexpected file: ${u}`);
   }
   need(!/url\(\s*['"]?(https?:)?\/\//.test(styles) && !/@import/.test(styles), 'no external CSS (url(http…) or @import)');
-  need(!/fetch\(|XMLHttpRequest|import\(/.test(html.replace(/<style[\s\S]*?<\/style>/g, '')), 'no fetch()/XMLHttpRequest/import(): the game must work from file://');
+  // the one exception (user's decision 2026-11-17): Kočka's opt-in real weather may fetch Open-Meteo, only inside its
+  // "Real weather" block, and that block names no other address
+  let netHtml = html.replace(/<style[\s\S]*?<\/style>/g, '');
+  if (id === 'kocka') {
+    const wx = /\/\* -{10} Real weather -{10} \*\/[\s\S]*?\/\* -{10} Real weather end -{10} \*\//.exec(netHtml);
+    if (wx) {
+      for (const u of wx[0].match(/https?:\/\/[^\s'"`)]*/g) || []) if (!u.startsWith('https://api.open-meteo.com/')) P.push(`the Real weather block may reach only https://api.open-meteo.com/, not ${u}`);
+      need(!/XMLHttpRequest|import\(/.test(wx[0]), 'the Real weather block uses fetch() only');
+      netHtml = netHtml.replace(wx[0], '');
+    }
+  }
+  need(!/fetch\(|XMLHttpRequest|import\(/.test(netHtml), 'no fetch()/XMLHttpRequest/import(): the game must work from file://');
   if (/\bCARDS\b/.test(html)) need(usesCards, 'uses CARDS but does not load ../_cards/cards.js');
   if (/\bMARIAS\b/.test(html)) need(usesCards && html.includes('<script src="../_cards/marias.js"></script>') && html.indexOf('../_cards/marias.js') > html.indexOf('../_cards/cards.js'), 'uses MARIAS but does not load ../_cards/marias.js after ../_cards/cards.js');
   if (/\bI18N\b/.test(html.replace(ERRLOG, ''))) need(converted, 'uses I18N but does not load the texts scripts and texts.js (copy them from the template)');

@@ -238,6 +238,9 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 .tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-top:6px}
 .tile{border-radius:16px;border:3px solid var(--pline);padding:8px;background:var(--popt);font-size:18px;font-weight:700;display:flex;flex-direction:column;gap:8px;color:var(--pink)}
 .tile[aria-pressed="true"]{border-color:var(--pbtn);background:var(--popt-on)}
+.cities .tile{min-height:56px;justify-content:center;text-align:center}
+.wxinfo p + p{margin-top:8px}
+.wxinfo b{color:var(--pink)}
 .swatch{height:56px;border-radius:10px;background:var(--page);box-shadow:inset 0 0 0 1px rgba(0,0,0,.2)}
 .notice{background:color-mix(in srgb,var(--pon) 18%,var(--pp));border:2px solid var(--pon);border-radius:14px;padding:14px;margin-top:12px;font-size:18px;line-height:1.35}
 .link{display:block;margin:18px auto 0;padding:12px 16px;font-size:18px;color:var(--psoft);text-decoration:underline}
@@ -403,7 +406,8 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 //
 // API of KockaArt():
 //   css                      keyframes and classes (blink, ear twitch, tail sway by mood, sleep breathing, purr shiver,
-//                            sneeze, wriggle, Zzz, fleas, gait, weather, Škádlení); prefers-reduced-motion turns it off.
+//                            sneeze, wriggle, Zzz, fleas, gait, weather and lightning, Škádlení); prefers-reduced-motion
+//                            turns it off (the lightning then never shows).
 //                            Inject once. The class kx-flick on any ancestor of a cat (or on the svg): her right ear twitches
 //                            once (~.4 s; for a tap on a sleeping cat: add it, remove it after ~450 ms).
 //   cat(pose, opts)          <svg class="koxa"> viewBox 0 0 200 200, the cat stands on y≈186 (centre x 100; see anchors).
@@ -462,9 +466,17 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 //   room(o) / room(phase, season)  <svg> viewBox 0 0 400 600, preserveAspectRatio xMidYMid slice.
 //                            o = { id: 'living'|'kitchen'|'hall'|'garden', phase: 'morning'|'day'|'evening'|'night',
 //                            season: 'spring'|'summer'|'autumn'|'winter', sunX: 0..1, holiday: null | id | [ids],
-//                            flap: bool (cat flap in the hall door), weather: null|'rain'|'snow', beds: 4|6 (garden:
-//                            how many beds, see bedSpots) }. Holiday ids: advent,
+//                            flap: bool (cat flap in the hall door), weather, temp, beds: 4|6 (garden: how many beds,
+//                            see bedSpots) }. Holiday ids: advent,
 //                            mikulas, vanoce, silvestr, masopust, velikonoce, carodejnice, dusicky, narozeniny.
+//                            weather: 'clear'|'cloudy'|'fog'|'rain'|'storm'|'snow' (null or anything else = clear) in
+//                            the garden and every window view: clear = sun / moon and stars, sun patches on the floor;
+//                            cloudy = a grey overcast sky with heavy clouds, no sun, moon, stars or sun patches, a
+//                            flatter light; fog = a pale veil, the far things (hills, castle, fence, gate, tree) fading,
+//                            no sun; rain = overcast, falling rain, puddles; storm = darker, heavier rain and a lightning
+//                            flash every 9 s (CSS kx-bolt; none under prefers-reduced-motion); snow = overcast, falling
+//                            snow. temp: °C or null: ≤ −2 frost ferns on the window glass, a frosty lawn and a frozen
+//                            pond; ≥ 28 a stronger sun, a warm haze and a heat shimmer in the garden (not at night).
 //   rooms                    { id: { spots: { name: {x, y} } } } for the four places (room coordinates,
 //                            where an item or Koxa stands): living (Obývák: rug, bed, window, chair = armchair seat, sun),
 //                            kitchen (Kuchyně: bowl, water, counter, window), hall (Předsíň: litter, door, shoe, mat),
@@ -473,7 +485,10 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 //                            from bond level Parťačka): [{ x, y, w }] (x = middle, y = the spot's foot, w = width).
 //   spots                    the old single-room spots { bowl, water, litter, bed, window, door }, kept for old code.
 //   sunPatch(sunX)           {x, y}: the middle of the living-room sun patch on the floor (x 95…235), for a sun nap.
-//   lap({ phase, season, place: 'chair'|'bench' })  the lap close-up (400×600, slice); lapSpot = { x, y, size }: her
+//   lap({ phase, season, place: 'chair'|'bench', weather, temp })  the lap close-up (400×600, slice); weather and temp
+//                            as in room(): on the bench the rain, snow, fog, frosty grass and heat are drawn over the
+//                            scene (the cat's box goes on top, so it falls behind her); in the armchair only the light
+//                            (flatter when grey, the storm's faint flash). lapSpot = { x, y, size }: her
 //                            box is size × size, its point (100, 186) at (x, y).
 //   crop(name, stage 0..3)   a plant in a bed (viewBox 0 0 100 100, standing on y≈90); crops = names (plant, radish,
 //                            carrot, strawberry, tomato, catnip); cropSlot = where a produce drawing can sit on 'plant'.
@@ -1740,34 +1755,85 @@ function KockaArt() {
   const HILL = { spring: '#a6cf86', summer: '#79ad5e', autumn: '#c7a25a', winter: '#dbe6ee' };
   const GROUND = { spring: '#86bd5c', summer: '#5f9e3e', autumn: '#b88d44', winter: '#f2f6f9' };
   const GX = 68, GY = 88, GW = 124, GH = 174;   // the living-room window glass; outside() draws for it, view() maps it elsewhere
-  // falling rain or snow over a box: a tiled pattern that the CSS moves down by exactly one tile (seamless)
+  // the weather of a scene from the options: wx = one of WEATHERS (anything else = clear), frost (temp ≤ −2 °C), heat (≥ 28 °C)
+  const WEATHERS = ['clear', 'cloudy', 'fog', 'rain', 'storm', 'snow'];
+  function wxOf(o) {
+    const t = Number.isFinite(o.temp) ? o.temp : null;
+    return { wx: WEATHERS.includes(o.weather) ? o.weather : 'clear', frost: t !== null && t <= -2, heat: t !== null && t >= 28 };
+  }
+  // an overcast sky: the veil's colour by weather (in the evening and at night by the phase), its opacity and the two
+  // cloud tones (top, underside) by weather
+  const OVC = { veil: { cloudy: '#b2bac2', snow: '#c3cad1', rain: '#8e99a4', storm: '#5c6672', evening: '#6c6478', night: '#1e2636' }, op: { cloudy: 0.78, snow: 0.74, rain: 0.82, storm: 0.88 },
+    cl: { cloudy: ['#c9cfd5', '#a9b2ba'], snow: ['#dde2e7', '#c2cad1'], rain: ['#a3adb7', '#8995a0'], storm: ['#6d7884', '#525c68'] } };
+  const MIST = { morning: '#eee6dc', day: '#e3e7ea', evening: '#b8a8b2', night: '#56607a' };   // fog by day phase
+  const FLAT = { cloudy: 0.08, snow: 0.04, rain: 0.18, storm: 0.28 };   // the flatter light over a landscape (#5c6670)
+  const veil = (x, y, w, h, col, op) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${col}" opacity="${op}"/>`;
+  // the grey sky with heavy clouds: lumps = [[cx, cy, rx, ry]] (each a darker underside, a top and a bump)
+  function overcast(c, x, y, w, h, lumps) {
+    const { ph, wx } = c, night = ph === 'night', ev = ph === 'evening';
+    const [top, low] = night ? (wx === 'storm' ? ['#1f2735', '#171d29'] : ['#2c3546', '#222a38']) : ev ? (wx === 'storm' ? ['#5a5468', '#47425a'] : ['#8f8498', '#726a80']) : OVC.cl[wx] || OVC.cl.cloudy;
+    return veil(x, y, w, h, OVC.veil[night || ev ? ph : wx] || OVC.veil.cloudy, OVC.op[wx] || 0.78) + `<g fill="${low}">${lumps.map(([cx, cy, rx, ry]) => `<ellipse cx="${cx}" cy="${r1(cy + ry * 0.4)}" rx="${rx}" ry="${r1(ry * 0.8)}"/>`).join('')}</g>` +
+      `<g fill="${top}">${lumps.map(([cx, cy, rx, ry]) => `<ellipse cx="${cx}" cy="${cy}" rx="${r1(rx * 0.9)}" ry="${ry}"/><ellipse cx="${r1(cx - rx * 0.3)}" cy="${r1(cy - ry * 0.5)}" rx="${r1(rx * 0.45)}" ry="${r1(ry * 0.8)}"/>`).join('')}</g>`;
+  }
+  // a lightning flash: invisible (opacity 0) unless the CSS animates it (kx-bolt, a double flash every 9 s), so
+  // prefers-reduced-motion never flashes; inner = what lights up (with its own fill-opacity)
+  const bolt = inner => `<g class="kx-bolt" opacity="0">${inner}</g>`;
+  const boltPath = d => `<path d="${d}" fill="none" stroke="#fffbe0" stroke-width="7" stroke-linejoin="round" opacity=".35"/><path d="${d}" fill="none" stroke="#fffbe0" stroke-width="2.4" stroke-linejoin="round"/>`;
+  // frost ferns growing from the corners of a glass box (clipped by its caller)
+  function ferns(x, y, w, h) {
+    const k = Math.min(w, h) / 124, sprig = (x0, y0, a, len) => {
+      const q = a * Math.PI / 180, dx = Math.cos(q), dy = Math.sin(q);
+      let d = `M${r1(x0)} ${r1(y0)}l${r1(dx * len)} ${r1(dy * len)}`;
+      for (let i = 1; i <= 3; i++) {
+        const t = i / 4, px = x0 + dx * len * t, py = y0 + dy * len * t, l = len * (1 - t) * 0.6;
+        for (const sg of [-1, 1]) { const q2 = q + sg * 0.75; d += `M${r1(px)} ${r1(py)}l${r1(Math.cos(q2) * l)} ${r1(Math.sin(q2) * l)}`; }
+      }
+      return d;
+    };
+    const L = 50 * k, b = y + h, R = x + w, sw = Math.max(1, 2 * k);
+    const d = [[x, b, -25, L], [x, b, -55, L * 0.85], [x + 6 * k, b, -85, L * 0.6], [R, b, -155, L], [R, b, -125, L * 0.85], [R - 6 * k, b, -95, L * 0.55],
+      [x, y, 35, L * 0.5], [x, y, 70, L * 0.4], [R, y, 145, L * 0.5], [R, y, 110, L * 0.4]].map(a => sprig(...a)).join('');
+    return `<g fill="#f4fbff" opacity=".7"><circle cx="${x}" cy="${b}" r="${r1(36 * k)}"/><circle cx="${R}" cy="${b}" r="${r1(36 * k)}"/><circle cx="${x}" cy="${y}" r="${r1(16 * k)}"/><circle cx="${R}" cy="${y}" r="${r1(16 * k)}"/></g>` +
+      `<g fill="none" stroke-linecap="round"><path d="${d}" stroke="#8fb2cc" stroke-width="${r1(sw + 1.4 * k)}" opacity=".5"/><path d="${d}" stroke="#fff" stroke-width="${r1(sw)}"/></g>`;
+  }
+  // falling rain, storm rain or snow over a box: a tiled pattern that the CSS moves down by exactly one tile (seamless)
   function weatherFx(weather, x, y, w, h) {
-    if (weather !== 'rain' && weather !== 'snow') return '';
-    const id = nid(), rain = weather === 'rain', tw = rain ? 40 : 60, th = rain ? 60 : 80;
-    const tile = rain ? '<path d="M30 0l-6 18M12 30l-6 18M36 40l-5 15" stroke="#d6e8f4" stroke-width="1.6" stroke-linecap="round" opacity=".8"/>'
-      : '<g fill="#fff"><circle cx="10" cy="12" r="2.4"/><circle cx="40" cy="30" r="1.8"/><circle cx="24" cy="56" r="2.2"/><circle cx="52" cy="70" r="1.6"/></g>';
+    if (weather !== 'rain' && weather !== 'snow' && weather !== 'storm') return '';
+    const id = nid(), cls = { rain: 'kx-rain', storm: 'kx-storm', snow: 'kx-snow' }[weather], snow = weather === 'snow', tw = snow ? 60 : 40, th = snow ? 80 : 60;
+    const tile = weather === 'rain' ? '<path d="M30 0l-6 18M12 30l-6 18M36 40l-5 15" stroke="#d6e8f4" stroke-width="1.6" stroke-linecap="round" opacity=".8"/>'
+      : weather === 'storm' ? '<path d="M30 0l-9 26M12 30l-9 26M36 38l-8 22M22 6l-7 19M4 8l-6 16M20 44l-6 16" stroke="#d6e8f4" stroke-width="1.8" stroke-linecap="round" opacity=".8"/>'
+        : '<g fill="#fff"><circle cx="10" cy="12" r="2.4"/><circle cx="40" cy="30" r="1.8"/><circle cx="24" cy="56" r="2.2"/><circle cx="52" cy="70" r="1.6"/></g>';
     return `<defs><pattern id="${id}" width="${tw}" height="${th}" patternUnits="userSpaceOnUse">${tile}</pattern><clipPath id="${id}c"><rect x="${x}" y="${y}" width="${w}" height="${h}"/></clipPath></defs>` +
-      `<g clip-path="url(#${id}c)"><rect class="${rain ? 'kx-rain' : 'kx-snow'}" x="${x - tw}" y="${y - th}" width="${w + 2 * tw}" height="${h + 2 * th}" fill="url(#${id})"/></g>`;
+      `<g clip-path="url(#${id}c)"><rect class="${cls}" x="${x - tw}" y="${y - th}" width="${w + 2 * tw}" height="${h + 2 * th}" fill="url(#${id})"/></g>`;
   }
   function outside(c, id) {
-    const { ph, se, hol } = c;
+    const { ph, se, hol, wx } = c, clear = wx === 'clear', sun = clear && ph !== 'night';
     let s = `<linearGradient id="${id}s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${SKY[ph][0]}"/><stop offset="1" stop-color="${SKY[ph][1]}"/></linearGradient>`;
     s = `<defs>${s}<clipPath id="${id}c"><rect x="${GX}" y="${GY}" width="${GW}" height="${GH}"/></clipPath></defs><g clip-path="url(#${id}c)"><rect x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="url(#${id}s)"/>`;
-    if (ph === 'day' && !c.weather) s += '<g fill="#fff" opacity=".9"><ellipse cx="102" cy="122" rx="18" ry="7"/><ellipse cx="112" cy="116" rx="11" ry="8"/><ellipse cx="168" cy="146" rx="15" ry="6"/></g>';
-    if (ph === 'morning') s += '<circle cx="168" cy="196" r="13" fill="#fff0c0"/>';
-    if (ph === 'evening') s += '<circle cx="104" cy="212" r="22" fill="#ffb066" opacity=".5"/><circle cx="104" cy="212" r="14" fill="#ffc77a"/>';
+    if (ph === 'day' && clear) s += '<g fill="#fff" opacity=".9"><ellipse cx="102" cy="122" rx="18" ry="7"/><ellipse cx="112" cy="116" rx="11" ry="8"/><ellipse cx="168" cy="146" rx="15" ry="6"/></g>';
+    if (ph === 'morning' && sun) s += (c.heat ? '<circle cx="168" cy="196" r="24" fill="#fff0c0" opacity=".35"/>' : '') + '<circle cx="168" cy="196" r="13" fill="#fff0c0"/>';
+    if (ph === 'evening' && sun) s += '<circle cx="104" cy="212" r="22" fill="#ffb066" opacity=".5"/><circle cx="104" cy="212" r="14" fill="#ffc77a"/>';
+    if (wx === 'fog') s += veil(GX, GY, GW, GH, MIST[ph], 0.55);
+    else if (!clear) s += overcast(c, GX, GY, GW, 130, [[96, 108, 34, 10], [158, 98, 42, 12], [186, 132, 28, 9], [112, 142, 34, 9]]);
     s += `<path d="M68 214Q100 194 136 205T192 199V262H68Z" fill="${HILL[se]}"/>`;
     s += '<g fill="#d9ccb0"><rect x="146" y="191" width="20" height="11"/><rect x="157" y="181" width="5" height="12"/></g><g fill="#a8513a"><path d="M144 192h24l-4-5h-16z"/><path d="M156 182h7l-3.5-6z"/></g>';
+    if (wx === 'fog') s += veil(GX, GY, GW, GH, MIST[ph], 0.55);
     s += `<path d="M68 238Q118 227 192 235V262H68Z" fill="${GROUND[se]}"/>`;
     s += '<path d="M96 242V200M96 214L84 200M96 208L108 194" stroke="#6b4a2e" stroke-width="5" stroke-linecap="round" fill="none"/>';
     s += crown(se, 96, 186, 1);
     if (se === 'winter') s += '<g fill="#fff"><circle cx="80" cy="110" r="2"/><circle cx="120" cy="132" r="1.6"/><circle cx="150" cy="104" r="2"/><circle cx="176" cy="160" r="1.6"/><circle cx="100" cy="160" r="1.8"/><circle cx="140" cy="176" r="1.6"/><circle cx="182" cy="122" r="1.8"/></g><path d="M68 262V253Q90 246 112 252T152 250T192 253V262Z" fill="#fff"/>';
-    if (c.weather) s += `<rect x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="#6a7a8a" opacity=".25"/>` + weatherFx(c.weather, GX, GY, GW, GH);
+    if (c.frost && se !== 'winter') s += '<path d="M68 262V246Q118 236 192 243V262Z" fill="#eef4f8" opacity=".5"/>';
+    if (wx === 'fog') s += veil(GX, GY, GW, GH, MIST[ph], 0.3);
+    else if (!clear) s += veil(GX, GY, GW, GH, '#5c6670', FLAT[wx]);
+    s += weatherFx(wx, GX, GY, GW, GH);
+    if (c.heat && ph !== 'night') s += veil(GX, GY, GW, GH, '#ffb84a', 0.1);
     if (ph === 'evening') s += `<rect x="${GX}" y="180" width="${GW}" height="90" fill="#ff7a3a" opacity=".16"/>`;
-    if (ph === 'night') s += `<rect x="${GX}" y="156" width="${GW}" height="110" fill="#0a1430" opacity=".66"/>` +
-      '<g fill="#fff"><circle cx="82" cy="102" r="1.3"/><circle cx="104" cy="96" r="1"/><circle cx="126" cy="112" r="1.4"/><circle cx="96" cy="128" r="1"/><circle cx="140" cy="140" r="1.1"/><circle cx="182" cy="150" r="1.2"/><circle cx="118" cy="150" r="1"/></g><circle cx="165" cy="116" r="12" fill="#f4ecc8"/><circle cx="171" cy="111" r="11" fill="#0d1838"/>';
+    if (ph === 'night') s += `<rect x="${GX}" y="156" width="${GW}" height="110" fill="#0a1430" opacity=".66"/>`;
+    if (ph === 'night' && clear) s += '<g fill="#fff"><circle cx="82" cy="102" r="1.3"/><circle cx="104" cy="96" r="1"/><circle cx="126" cy="112" r="1.4"/><circle cx="96" cy="128" r="1"/><circle cx="140" cy="140" r="1.1"/><circle cx="182" cy="150" r="1.2"/><circle cx="118" cy="150" r="1"/></g><circle cx="165" cy="116" r="12" fill="#f4ecc8"/><circle cx="171" cy="111" r="11" fill="#0d1838"/>';
     if (hol.includes('silvestr') && (ph === 'evening' || ph === 'night')) s += [[104, 120, '#ffd04a'], [158, 146, '#ff6a8a'], [130, 104, '#7ad0ff']].map(([x, y, col]) => burst(x, y, 13, col)).join('');
     if (hol.includes('carodejnice') && (ph === 'evening' || ph === 'night')) s += '<ellipse cx="120" cy="206" rx="12" ry="7" fill="#ffb347" opacity=".55"/><path d="M114 210l6-12 6 12z" fill="#ff8a2a"/>';
+    if (wx === 'storm') s += bolt(`<rect x="${GX}" y="${GY}" width="${GW}" height="${GH}" fill="#eef3ff" fill-opacity=".55"/>${boltPath('M162 100L152 132L160 134L146 172L156 174L144 204')}`);
+    if (c.frost) s += ferns(GX, GY, GW, GH);
     return s + '</g>';
   }
   const burst = (x, y, r, col) => `<g stroke="${col}" stroke-width="2" stroke-linecap="round">${[0, 45, 90, 135, 180, 225, 270, 315].map(a => { const q = a * Math.PI / 180; return `<path d="M${r1(x + Math.cos(q) * r * 0.3)} ${r1(y + Math.sin(q) * r * 0.3)}L${r1(x + Math.cos(q) * r)} ${r1(y + Math.sin(q) * r)}"/>`; }).join('')}</g>`;
@@ -1801,14 +1867,19 @@ function KockaArt() {
     return `<rect y="400" width="400" height="200" fill="#a87442"/><rect y="396" width="400" height="10" fill="#6e4a2c"/><path d="${pl}" stroke="#8e5f34" stroke-width="2"/>`;
   }
   const hangLamp = (x, lit) => `<path d="M${x} 0V38" stroke="#3a2a1e" stroke-width="2"/><circle cx="${x}" cy="64" r="6" fill="${lit ? '#fff6d0' : '#efe2c0'}"/><path d="M${x - 18} 38H${x + 18}L${x + 30} 62H${x - 30}Z" fill="${lit ? '#f6c766' : '#d99a3e'}" stroke="#8a5a22" stroke-width="1.5" stroke-linejoin="round"/><path d="M${x - 29} 58H${x + 29}" stroke="#8a5a22" stroke-width="3"/>`;
-  // the light of the day phase over a whole place; the lamp glows in the evening; glass (c.holes) stays bright at night
+  // the light of the day phase over a whole place; the lamp glows in the evening; glass (c.holes) stays bright at night;
+  // a grey day makes the light flatter, a hot one warmer, and a storm's lightning lights the room up faintly
   function light(c, lx, ly) {
-    const id = nid();
-    if (c.ph === 'morning') return '<rect width="400" height="600" fill="#ffb36b" opacity=".06"/>';
-    if (c.ph === 'evening') return `<defs><radialGradient id="${id}"><stop offset="0" stop-color="#ffd27a" stop-opacity=".62"/><stop offset=".45" stop-color="#ffc060" stop-opacity=".22"/><stop offset="1" stop-color="#ffb050" stop-opacity="0"/></radialGradient></defs>` +
-      `<rect width="400" height="600" fill="#3a1a08" opacity=".2"/><circle cx="${lx}" cy="${ly}" r="320" fill="url(#${id})"/><ellipse cx="${lx}" cy="500" rx="180" ry="56" fill="#ffcf80" opacity=".14"/>`;
-    if (c.ph === 'night') return `<path d="M0 0H400V600H0Z${c.holes.map(([x, y, w, h]) => `M${x} ${y}V${y + h}H${x + w}V${y}Z`).join('')}" fill="#3e4c86" style="mix-blend-mode:multiply" fill-rule="evenodd"/>`;
-    return '';
+    const id = nid(), dim = { cloudy: 0.06, fog: 0.04, rain: 0.09, storm: 0.15, snow: 0.03 }[c.wx];
+    let s = '';
+    if (c.ph === 'morning') s = '<rect width="400" height="600" fill="#ffb36b" opacity=".06"/>';
+    if (c.ph === 'evening') s = `<defs><radialGradient id="${id}"><stop offset="0" stop-color="#ffd27a" stop-opacity=".62"/><stop offset=".45" stop-color="#ffc060" stop-opacity=".22"/><stop offset="1" stop-color="#ffb050" stop-opacity="0"/></radialGradient></defs>` +
+      `<rect width="400" height="600" fill="#3a1a08" opacity="${c.wx === 'storm' ? 0.3 : 0.2}"/><circle cx="${lx}" cy="${ly}" r="320" fill="url(#${id})"/><ellipse cx="${lx}" cy="500" rx="180" ry="56" fill="#ffcf80" opacity=".14"/>`;
+    if (c.ph === 'night') s = `<path d="M0 0H400V600H0Z${c.holes.map(([x, y, w, h]) => `M${x} ${y}V${y + h}H${x + w}V${y}Z`).join('')}" fill="#3e4c86" style="mix-blend-mode:multiply" fill-rule="evenodd"/>`;
+    if ((c.ph === 'morning' || c.ph === 'day') && dim) s += `<rect width="400" height="600" fill="#5c6670" opacity="${dim}"/>`;
+    if ((c.ph === 'morning' || c.ph === 'day') && c.heat && c.wx === 'clear') s += '<rect width="400" height="600" fill="#ffb84a" opacity=".05"/>';
+    if (c.wx === 'storm') s += bolt('<rect width="400" height="600" fill="#eef3ff" fill-opacity=".16"/>');
+    return s;
   }
   const sunX0 = x => 20 + Math.min(1, Math.max(0, Number(x) || 0)) * 140;
   // the middle of the sun patch on the living-room floor for sunX (room units): where a sun nap belongs
@@ -1865,10 +1936,11 @@ function KockaArt() {
         s += `<path d="M34 66H226" stroke="#5a3a20" stroke-width="5" stroke-linecap="round"/><g fill="url(#${g})" stroke="#9a4a3a" stroke-width="1.5"><path d="M38 66H76C72 120 66 170 70 218C74 250 68 288 60 300H40C36 230 34 150 38 66Z"/><path d="M222 66H184C188 120 194 170 190 218C186 250 192 288 200 300H220C224 230 226 150 222 66Z"/></g>`;
         s += '<rect x="234" y="96" width="54" height="46" fill="#6b4426"/><rect x="239" y="101" width="44" height="36" fill="#bfe0f0"/><path d="M239 128q20-10 44-4v13h-44z" fill="#79ad5e"/><g fill="#efe4cc"><rect x="252" y="114" width="20" height="10"/><rect x="263" y="105" width="5" height="11"/></g><path d="M250 115h24l-3-4h-18zM262 106h7l-3.5-5z" fill="#a8513a"/>';
         s += hangLamp(232, c.ph === 'evening') + planks() + rug();
-        if ((c.ph === 'day' || c.ph === 'morning') && !c.weather) s += panes(sunX0(c.sunX), c.ph === 'morning' ? '#ffd79a' : '#fff1b8', c.ph === 'morning' ? 0.42 : 0.5);
+        // the sun patch only under a clear sky (stronger on a hot day), the moonlight only on a clear night
+        if ((c.ph === 'day' || c.ph === 'morning') && c.wx === 'clear') s += panes(sunX0(c.sunX), c.ph === 'morning' ? '#ffd79a' : '#fff1b8', (c.ph === 'morning' ? 0.42 : 0.5) + (c.heat ? 0.14 : 0));
         const hp = holidayProps(c.hol);
         s += armchair() + hp.s + light(c, 232, 66);
-        if (c.ph === 'night') s += panes(150, '#bcd0ff', 0.12);
+        if (c.ph === 'night' && c.wx === 'clear') s += panes(150, '#bcd0ff', 0.12);
         return s + hp.glow;
       },
     },
@@ -1926,22 +1998,25 @@ function KockaArt() {
         bed1: { x: 59, y: 566 }, bed2: { x: 155, y: 566 }, bed3: { x: 251, y: 566 }, bed4: { x: 347, y: 566 }, pond: { x: 280, y: 478 }, fence: { x: 120, y: 308 },
       },
       draw(c) {
-        const { ph, se } = c, id = nid(), snow = se === 'winter', dusk = ph === 'evening' || ph === 'night';
+        const { ph, se, wx } = c, id = nid(), snow = se === 'winter', dusk = ph === 'evening' || ph === 'night', clear = wx === 'clear', fog = wx === 'fog';
         let s = `<defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${SKY[ph][0]}"/><stop offset="1" stop-color="${SKY[ph][1]}"/></linearGradient></defs><rect width="400" height="400" fill="url(#${id})"/>`;
-        // sun, moon, clouds, hills with the castle far away
-        const sx = r1(40 + Math.min(1, Math.max(0, Number(c.sunX) || 0)) * 320);
-        if ((ph === 'day' || ph === 'morning') && !c.weather) s += `<circle cx="${sx}" cy="${ph === 'morning' ? 190 : 80}" r="20" fill="#fff3c0"/><circle cx="${sx}" cy="${ph === 'morning' ? 190 : 80}" r="30" fill="#fff3c0" opacity=".3"/>`;
-        if (ph === 'evening') s += '<circle cx="330" cy="250" r="26" fill="#ffc77a"/><circle cx="330" cy="250" r="40" fill="#ffb066" opacity=".35"/>';
-        if (ph === 'night') s += '<g fill="#fff"><circle cx="40" cy="40" r="1.4"/><circle cx="120" cy="70" r="1.2"/><circle cx="190" cy="30" r="1.5"/><circle cx="250" cy="90" r="1.1"/><circle cx="90" cy="130" r="1.2"/><circle cx="210" cy="150" r="1"/><circle cx="160" cy="100" r="1.1"/></g><circle cx="230" cy="60" r="16" fill="#f4ecc8"/><circle cx="238" cy="54" r="15" fill="#0d1838"/>';
-        if (ph === 'day' && !c.weather) s += '<g fill="#fff" opacity=".9"><ellipse cx="150" cy="90" rx="30" ry="10"/><ellipse cx="166" cy="80" rx="18" ry="12"/><ellipse cx="60" cy="150" rx="22" ry="8"/></g>';
-        if (c.weather) s += '<rect width="400" height="400" fill="#7a8794" opacity=".45"/><g fill="#b9c3cc" opacity=".8"><ellipse cx="90" cy="60" rx="70" ry="22"/><ellipse cx="240" cy="40" rx="90" ry="26"/><ellipse cx="360" cy="80" rx="60" ry="20"/></g>';
+        // sun, moon, clouds (only under a clear sky; a grey one hides them), hills with the castle far away
+        const sx = r1(40 + Math.min(1, Math.max(0, Number(c.sunX) || 0)) * 320), sy = ph === 'morning' ? 190 : 80;
+        if ((ph === 'day' || ph === 'morning') && clear) s += (c.heat ? `<circle cx="${sx}" cy="${sy}" r="50" fill="#fff3c0" opacity=".22"/>` : '') + `<circle cx="${sx}" cy="${sy}" r="20" fill="#fff3c0"/><circle cx="${sx}" cy="${sy}" r="30" fill="#fff3c0" opacity=".3"/>`;
+        if (ph === 'evening' && clear) s += '<circle cx="330" cy="250" r="26" fill="#ffc77a"/><circle cx="330" cy="250" r="40" fill="#ffb066" opacity=".35"/>';
+        if (ph === 'night' && clear) s += '<g fill="#fff"><circle cx="40" cy="40" r="1.4"/><circle cx="120" cy="70" r="1.2"/><circle cx="190" cy="30" r="1.5"/><circle cx="250" cy="90" r="1.1"/><circle cx="90" cy="130" r="1.2"/><circle cx="210" cy="150" r="1"/><circle cx="160" cy="100" r="1.1"/></g><circle cx="230" cy="60" r="16" fill="#f4ecc8"/><circle cx="238" cy="54" r="15" fill="#0d1838"/>';
+        if (ph === 'day' && clear) s += '<g fill="#fff" opacity=".9"><ellipse cx="150" cy="90" rx="30" ry="10"/><ellipse cx="166" cy="80" rx="18" ry="12"/><ellipse cx="60" cy="150" rx="22" ry="8"/></g>';
+        if (fog) s += veil(0, 0, 400, 400, MIST[ph], 0.55);
+        else if (!clear) s += overcast(c, 0, 0, 400, 400, [[90, 58, 84, 24], [240, 38, 104, 28], [372, 76, 72, 22], [160, 120, 92, 22], [322, 146, 82, 20], [36, 156, 62, 18]]);
         s += `<path d="M0 300Q80 240 170 268T400 250V400H0Z" fill="${HILL[se]}"/><g fill="#d9ccb0"><rect x="212" y="246" width="30" height="16"/><rect x="228" y="232" width="7" height="16"/></g><path d="M209 248h36l-6-7h-24zM227 233h10l-5-8z" fill="#a8513a"/>`;
+        if (fog) s += veil(0, 0, 400, 400, MIST[ph], 0.6);   // the hills and the castle all but gone
         // the fence with the gate
         const posts = [8, 60, 112, 164, 216, 320, 372];
         s += `<g fill="#b08a5a" stroke="#6b4a2e" stroke-width="2"><rect x="0" y="322" width="400" height="9"/><rect x="0" y="356" width="400" height="9"/>${posts.map(x => `<rect x="${x}" y="300" width="14" height="92" rx="2"/>`).join('')}` +
           Array.from({ length: 20 }, (_, i) => 10 + i * 20).filter(x => x < 238 || x > 316).map(x => `<path d="M${x} 392V312l6-8 6 8V392Z"/>`).join('') + '</g>';
         s += '<g stroke="#5a3a20" stroke-width="2.5" stroke-linejoin="round"><rect x="240" y="306" width="10" height="88" fill="#8a5a32"/><rect x="306" y="306" width="10" height="88" fill="#8a5a32"/><rect x="252" y="316" width="52" height="72" fill="#c49a62"/><path d="M252 384L304 320M252 316H304M252 352H304M252 388H304" fill="none"/></g><circle cx="298" cy="352" r="3.5" fill="#3a3f44"/>';
         if (snow) s += '<path d="M0 320H400v4H0Z" fill="#fff"/>' + posts.map(x => `<ellipse cx="${x + 7}" cy="300" rx="9" ry="4" fill="#fff"/>`).join('');
+        if (fog) s += veil(0, 0, 400, 400, MIST[ph], 0.35);   // the fence and the gate softer
         // the house with the back door and a window
         s += `<rect x="0" y="118" width="88" height="292" fill="#efe2c8" stroke="#a8946a" stroke-width="2"/><path d="M-6 120L96 104V124L-6 136Z" fill="#a8513a" stroke="#6a2a1a" stroke-width="2"/>${snow ? '<path d="M-6 118L96 102V108L-6 124Z" fill="#fff"/>' : ''}` +
           `<rect x="22" y="146" width="44" height="50" fill="#7c4f2c"/><rect x="27" y="151" width="34" height="40" fill="${dusk ? '#ffd27a' : '#9fc6dc'}"/><path d="M44 151V191M27 171H61" stroke="#7c4f2c" stroke-width="3"/>` +
@@ -1952,13 +2027,16 @@ function KockaArt() {
         // grass, stepping stones
         s += `<rect y="386" width="400" height="214" fill="${GROUND[se]}"/>`;
         if (!snow) s += `<g stroke="${se === 'autumn' ? '#8f6e30' : '#3f7a2c'}" stroke-width="2" stroke-linecap="round" opacity=".55">${[[30, 440], [120, 452], [228, 446], [320, 470], [70, 488], [180, 482], [370, 432], [260, 492]].map(([x, y]) => `<path d="M${x} ${y}l-3-8M${x + 4} ${y}l1-9M${x + 8} ${y}l4-7"/>`).join('')}</g>`;
+        // hoarfrost on the lawn: a pale icy tint with glints
+        if (c.frost && !snow) s += `<rect y="386" width="400" height="214" fill="#e8f1f7" opacity=".5"/><g fill="#fff">${[[40, 432], [96, 470], [168, 444], [214, 490], [284, 438], [350, 486], [130, 520], [310, 530], [24, 506], [380, 446]].map(([x, y]) => `<path d="M${x - 3} ${y}h6M${x} ${y - 3}v6" stroke="#fff" stroke-width="1.4"/>`).join('')}</g>`;
         s += `<g fill="${snow ? '#dfe7ee' : '#b8b2a4'}" stroke="${snow ? '#b8c6d2' : '#8a8478'}" stroke-width="2">${[[50, 424, 18], [100, 418, 16], [150, 412, 15], [206, 406, 14], [254, 400, 13]].map(([x, y, r]) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r1(r * 0.42)}"/>`).join('')}</g>`;
         if (se === 'spring' || se === 'summer') s += `<g>${[[24, 470, '#f4d03f'], [140, 476, '#f7b6c8'], [214, 466, '#fff'], [300, 478, '#f4d03f'], [380, 462, '#f7b6c8'], [90, 456, '#fff']].map(([x, y, col]) => `<circle cx="${x}" cy="${y}" r="3.4" fill="${col}" stroke="#2e2118" stroke-width=".8"/>`).join('')}</g>`;
         if (se === 'autumn') s += `<g>${[[40, 450, '#d98a2b'], [150, 470, '#c0552c'], [230, 460, '#e6b040'], [300, 486, '#d98a2b'], [372, 470, '#c0552c'], [100, 480, '#e6b040']].map(([x, y, col], i) => `<ellipse cx="${x}" cy="${y}" rx="5" ry="2.6" fill="${col}" transform="rotate(${i * 37} ${x} ${y})"/>`).join('')}</g>`;
         if (snow) s += `<g fill="#b8c6d2">${Array.from({ length: 9 }, (_, i) => { const x = 74 + i * 22, y = 430 + Math.sin(i * 1.3) * 8 + i * 2; return `<circle cx="${r1(x)}" cy="${r1(y)}" r="2.2"/><circle cx="${r1(x - 3)}" cy="${r1(y - 4)}" r="1.1"/><circle cx="${r1(x + 1)}" cy="${r1(y - 5)}" r="1.1"/><circle cx="${r1(x + 4)}" cy="${r1(y - 3)}" r="1.1"/>`; }).join('')}</g>`;
         // the pond (Rybaření): stones round the water, a lily pad and reeds; frozen in winter
-        s += `<ellipse cx="280" cy="478" rx="50" ry="17" fill="#9a958a" stroke="#6a665e" stroke-width="2"/><ellipse cx="280" cy="478" rx="42" ry="12" fill="${snow ? '#d8eaf4' : '#4f8fb8'}"/>` +
-          (snow ? '<path d="M256 474l10 4 8-5M292 480l12-3" stroke="#fff" stroke-width="2" fill="none"/>' : '<path d="M254 474q10-3 20 0M286 482q8-3 16 0" stroke="#bfe0f0" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M296 470a8 4 0 1 0 12 2l-6 0z" fill="#5f9e3e" stroke="#2e5a20" stroke-width="1.2"/>') +
+        const ice = snow || c.frost;   // the pond freezes in winter and on a frosty day
+        s += `<ellipse cx="280" cy="478" rx="50" ry="17" fill="#9a958a" stroke="#6a665e" stroke-width="2"/><ellipse cx="280" cy="478" rx="42" ry="12" fill="${ice ? '#d8eaf4' : '#4f8fb8'}"/>` +
+          (ice ? '<path d="M256 474l10 4 8-5M292 480l12-3" stroke="#fff" stroke-width="2" fill="none"/>' : '<path d="M254 474q10-3 20 0M286 482q8-3 16 0" stroke="#bfe0f0" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M296 470a8 4 0 1 0 12 2l-6 0z" fill="#5f9e3e" stroke="#2e5a20" stroke-width="1.2"/>') +
           (snow ? '' : '<g stroke="#4c7a3a" stroke-width="2.4" stroke-linecap="round"><path d="M318 476l-2-20M322 476l2-16M326 478l6-14"/></g><g fill="#6b4a2e"><ellipse cx="316" cy="455" rx="2.4" ry="5"/><ellipse cx="324" cy="459" rx="2.4" ry="5"/></g>');
         // the bird feeder
         s += `<path d="M108 412V292" stroke="#6b4a2e" stroke-width="6"/><path d="M84 276L108 258L132 276Z" fill="#a8513a" stroke="#6a2a1a" stroke-width="2"/><rect x="90" y="276" width="36" height="20" fill="#e9d6b0" stroke="#6b4a2e" stroke-width="2"/><rect x="84" y="294" width="48" height="6" rx="2" fill="#8a5a32"/>${snow ? '<path d="M82 274L108 256L134 274" stroke="#fff" stroke-width="4" fill="none"/>' : ''}`;
@@ -1969,30 +2047,37 @@ function KockaArt() {
           '<path d="M334 248Q300 236 262 230" stroke="#6b4a2e" stroke-width="12" stroke-linecap="round"/><path d="M350 204Q370 192 396 182" stroke="#6b4a2e" stroke-width="10" stroke-linecap="round"/>';
         if (snow) s += '<path d="M262 226Q300 232 330 242M354 198Q372 188 394 178" stroke="#fff" stroke-width="4" stroke-linecap="round" fill="none"/>' + crown('winter', 340, 140, 3.2);
         else s += `<g opacity="${se === 'autumn' ? 0.95 : 1}">${crown(se, 336, 132, 3.4)}</g>`;
+        // fog: a veil thinning towards the front, so the tree, the house and the fence stay softer than the beds
+        if (fog) s += `<defs><linearGradient id="${id}f" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${MIST[ph]}" stop-opacity=".45"/><stop offset=".62" stop-color="${MIST[ph]}" stop-opacity=".3"/><stop offset="1" stop-color="${MIST[ph]}" stop-opacity=".04"/></linearGradient></defs><rect width="400" height="600" fill="url(#${id}f)"/>`;
         // the beds (záhony): wooden edges, soil, snow in winter
         for (const b of bedSpots(c.beds)) {
           const x = b.x - b.w / 2, w = b.w;
           s += `<rect x="${x}" y="508" width="${w}" height="72" rx="6" fill="#8a5a32" stroke="#4a2e18" stroke-width="2.5"/><rect x="${x + 7}" y="515" width="${w - 14}" height="58" rx="4" fill="${snow ? '#f2f6f9' : '#5a3a22'}"/>` +
             (snow ? '' : `<path d="M${x + 12} 530H${x + w - 12}M${x + 12} 546H${x + w - 12}M${x + 12} 562H${x + w - 12}" stroke="#46301c" stroke-width="2"/>`);
         }
+        // the weather's light: flatter under a grey sky, a warm haze with a heat shimmer on a hot day
+        if (!clear && !fog) s += veil(0, 0, 400, 600, '#5c6670', FLAT[wx]);
+        if (c.heat && ph !== 'night') s += `<rect width="400" height="600" fill="#ffb84a" opacity=".1"/><g class="kx-shimmer" fill="none" stroke="#fff4d6" stroke-width="2" stroke-linecap="round" opacity=".35">` +
+          [262, 290, 380].map((y, i) => `<path d="M${-10 + i * 14} ${y}${'q12-5 24 0t24 0'.repeat(9)}"/>`).join('') + '</g>';
         // the light of the day phase; fireflies on summer nights; the weather
         if (ph === 'morning') s += '<rect width="400" height="600" fill="#ffb36b" opacity=".08"/>';
         if (ph === 'evening') s += '<rect width="400" height="600" fill="#ff8a3a" opacity=".12"/><rect width="400" height="600" fill="#3a1a08" opacity=".14"/>';
         if (ph === 'night') s += '<path d="M0 0H400V600H0ZM27 151V191H61V151Z" fill="#33407a" style="mix-blend-mode:multiply" fill-rule="evenodd"/>';
         if (ph === 'night' && se === 'summer') s += `<g class="kx-flies">${[[60, 440, 0], [150, 360, 0.7], [240, 470, 1.4], [320, 380, 0.4], [370, 500, 1.1], [110, 520, 1.8], [210, 300, 2.2]].map(([x, y, d]) =>
           `<g style="animation-delay:${d}s"><circle cx="${x}" cy="${y}" r="7" fill="#f6f08a" opacity=".3"/><circle cx="${x}" cy="${y}" r="2.4" fill="#fbf7b0"/></g>`).join('')}</g>`;
-        if (c.weather === 'rain') s += '<rect width="400" height="600" fill="#5a6a7a" opacity=".18"/><g fill="#9fb4c6" opacity=".55"><ellipse cx="120" cy="450" rx="30" ry="6"/><ellipse cx="300" cy="500" rx="24" ry="5"/></g>';
-        s += weatherFx(c.weather, 0, 0, 400, 600);
+        if (wx === 'rain' || wx === 'storm') s += `<g fill="#9fb4c6" opacity=".55"><ellipse cx="120" cy="450" rx="30" ry="6"/><ellipse cx="300" cy="500" rx="24" ry="5"/>${wx === 'storm' ? '<ellipse cx="200" cy="530" rx="34" ry="6"/><ellipse cx="40" cy="482" rx="20" ry="4"/>' : ''}</g>`;
+        s += weatherFx(wx, 0, 0, 400, 600);
+        if (wx === 'storm') s += bolt(`<rect width="400" height="600" fill="#eef3ff" fill-opacity=".22"/><rect width="400" height="300" fill="#eef3ff" fill-opacity=".3"/>${boltPath('M262 66L246 118L258 122L236 176L249 180L228 238')}`);
         return s;
       },
     },
   };
-  // room({ id, phase, season, sunX, holiday, flap, weather }) or the old room(phase, season) = the living room
+  // room({ id, phase, season, sunX, holiday, flap, weather, temp, beds }) or the old room(phase, season) = the living room
   function room(a, b) {
     const o = typeof a === 'string' ? { phase: a, season: b } : Object.assign({}, a);
     const P = PLACES[o.id] || PLACES.living;
-    const c = { ph: SKY[o.phase] ? o.phase : 'day', se: HILL[o.season] ? o.season : 'summer', sunX: Number.isFinite(o.sunX) ? Math.min(1, Math.max(0, o.sunX)) : 0.5,
-      hol: [].concat(o.holiday || []), flap: !!o.flap, weather: o.weather === 'rain' || o.weather === 'snow' ? o.weather : null, beds: o.beds === 6 ? 6 : 4, holes: [] };
+    const c = Object.assign({ ph: SKY[o.phase] ? o.phase : 'day', se: HILL[o.season] ? o.season : 'summer', sunX: Number.isFinite(o.sunX) ? Math.min(1, Math.max(0, o.sunX)) : 0.5,
+      hol: [].concat(o.holiday || []), flap: !!o.flap, beds: o.beds === 6 ? 6 : 4, holes: [] }, wxOf(o));
     return `<svg class="kx-room" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${P.draw(c)}</svg>`;
   }
   const rooms = {};
@@ -2004,10 +2089,11 @@ function KockaArt() {
   const lapSpot = { x: 200, y: 452, size: 380 };   // her box is size × size scene units, its point (100, 186) at (x, y)
   function lap(o) {
     o = Object.assign({}, o);
-    const c = { ph: SKY[o.phase] ? o.phase : 'day', se: HILL[o.season] ? o.season : 'summer', hol: [], holes: [] }, bench = o.place === 'bench', id = nid();
+    const c = Object.assign({ ph: SKY[o.phase] ? o.phase : 'day', se: HILL[o.season] ? o.season : 'summer', hol: [], holes: [] }, wxOf(o)), bench = o.place === 'bench', id = nid();
     let s = '';
     if (bench) {
       s += `<rect width="400" height="600" fill="${GROUND[c.se]}"/><g stroke="#3f7a2c" stroke-width="2.4" opacity=".5" stroke-linecap="round">${[[30, 60], [360, 90], [50, 300], [370, 330], [20, 520], [380, 560]].map(([x, y]) => `<path d="M${x} ${y}l-4-10M${x + 5} ${y}l1-11M${x + 10} ${y}l5-9"/>`).join('')}</g>` +
+        (c.frost && c.se !== 'winter' ? '<rect width="400" height="600" fill="#e8f1f7" opacity=".5"/>' : '') +
         '<g fill="#b07a42" stroke="#5a3a20" stroke-width="3">' + [150, 250, 350, 450, 550].map(y => `<rect x="-10" y="${y}" width="420" height="80" rx="6"/>`).join('') + '</g>';
     } else {
       s += `<rect width="400" height="600" fill="#a87442"/><path d="M0 40H400M0 90H400M0 140H400" stroke="#8e5f34" stroke-width="3"/><rect y="150" width="400" height="450" fill="${AC.fab}"/>` +
@@ -2018,7 +2104,14 @@ function KockaArt() {
     s += '<g fill="#4f6f91" stroke="#2e4560" stroke-width="3" stroke-linejoin="round"><path d="M84 600L80 214Q82 136 140 132Q196 132 198 210L200 600Z"/><path d="M316 600L320 214Q318 136 260 132Q204 132 202 210L200 600Z"/></g>' +
       '<g fill="#6f8fb1" opacity=".55"><ellipse cx="140" cy="172" rx="34" ry="22"/><ellipse cx="260" cy="172" rx="34" ry="22"/></g><path d="M200 210V600" stroke="#2e4560" stroke-width="4"/><path d="M96 260Q100 420 96 600M304 260Q300 420 304 600" stroke="#c9a85a" stroke-width="2" stroke-dasharray="6 5" fill="none" opacity=".8"/>';
     if (c.se === 'winter') s += `<defs>${gingham(id)}</defs><path d="M70 380Q200 360 330 380V600H70Z" fill="url(#${id})" stroke="#9a4a3a" stroke-width="2"/><path d="M70 380Q200 360 330 380" stroke="#c0503a" stroke-width="6" fill="none"/>`;
-    s += bench ? (c.ph === 'night' ? '<rect width="400" height="600" fill="#33407a" style="mix-blend-mode:multiply"/>' : c.ph === 'evening' ? '<rect width="400" height="600" fill="#ff8a3a" opacity=".14"/>' : '') : light(c, 200, -40);
+    if (bench) {   // outside: the weather's light, then the day phase, then what falls and flashes
+      if (c.wx === 'fog') s += veil(0, 0, 400, 600, MIST[c.ph], 0.3);
+      else if (c.wx !== 'clear') s += veil(0, 0, 400, 600, '#5c6670', FLAT[c.wx]);
+      if (c.heat && c.ph !== 'night') s += '<rect width="400" height="600" fill="#ffb84a" opacity=".1"/>';
+      s += c.ph === 'night' ? '<rect width="400" height="600" fill="#33407a" style="mix-blend-mode:multiply"/>' : c.ph === 'evening' ? '<rect width="400" height="600" fill="#ff8a3a" opacity=".14"/>' : '';
+      s += weatherFx(c.wx, 0, 0, 400, 600);
+      if (c.wx === 'storm') s += bolt('<rect width="400" height="600" fill="#eef3ff" fill-opacity=".25"/>');
+    } else s += light(c, 200, -40);
     return `<svg class="kx-room" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${s}</svg>`;
   }
 
@@ -2209,6 +2302,9 @@ function KockaArt() {
 .kx-drip path{animation:kx-drip 1.6s ease-in infinite}
 .kx-rain{animation:kx-rain .5s linear infinite}
 .kx-snow{animation:kx-snow 4s linear infinite}
+.kx-storm{animation:kx-rain .3s linear infinite}
+.kx-bolt{animation:kx-bolt 9s linear -3s infinite}
+.kx-shimmer{animation:kx-shimmer 2.4s ease-in-out infinite alternate}
 .kx-flies>g{animation:kx-fly 2.6s ease-in-out infinite}
 .kx-spin{animation:kx-spin 1.6s ease-in-out infinite}
 .kx-tumble{animation:kx-tumble 2.2s ease-in-out infinite}
@@ -2259,6 +2355,8 @@ function KockaArt() {
 @keyframes kx-drip{0%{opacity:0;transform:translate(0,0)}20%{opacity:1}100%{opacity:0;transform:translate(0,18px)}}
 @keyframes kx-rain{to{transform:translate(0,60px)}}
 @keyframes kx-snow{to{transform:translate(0,80px)}}
+@keyframes kx-bolt{0%,88%{opacity:0}89%{opacity:1}90.5%{opacity:.12}92%{opacity:.85}94.5%,100%{opacity:0}}
+@keyframes kx-shimmer{from{transform:translate(-6px,0);opacity:.2}to{transform:translate(6px,-2px);opacity:.45}}
 @keyframes kx-fly{0%,100%{opacity:.25;transform:translate(0,0)}50%{opacity:1;transform:translate(4px,-6px)}}
 @keyframes kx-float{0%{opacity:0;transform:translateY(6px) scale(.7)}15%{opacity:1;transform:translateY(0) scale(1)}100%{opacity:0;transform:translateY(-34px) scale(1.1)}}
 @keyframes kx-swing{0%,100%{transform:rotate(-3deg)}50%{transform:rotate(3deg)}}
@@ -3549,7 +3647,10 @@ function KockaInput() {
 //                                   with walk: false; health().gardenAlone: draw her in the garden); she never stays there in
 //                                   the rain (back { rain: true }, or she comes in with the player). begs: true after every
 //                                   walk the player sees end (watching): she acts starving whatever her hunger (user's wish
-//                                   2026-11-17); back during a long absence (the app closed): false
+//                                   2026-11-17); back during a long absence (the app closed): false. cold: true = a real
+//                                   frost sent her in from the garden alone (§12f)
+//   Real weather (SPEC §12f, opt-in): st.wx = wxParse(Open-Meteo JSON, city, fetchedAt) or set by setWx(st, wx | null);
+//   weather(ms, st) and scareAt follow it hour by hour where it covers ms; sky(ms, st) = { w, temp, real } for the picture
 //   come { late? } / turnBack       a call: she comes (late: true = at st.callAt after a callSlow) / turns her back (offended, once)
 //   callSlow { at, meal }           a call she heard (an ear or the tail turns) but follows later, at `at` (st.callAt): 10–40 s
 //                                   (CALL, by mood and bond), or meal: true = after her meal; then come { late: true }
@@ -3908,13 +4009,130 @@ function KockaEngine() {
   const stormDay = (seed, no, m) => m >= 4 && m <= 7 && rndSeed(seed, no, 5) < (m === 4 ? 0.05 : 0.12);
   // the day's weather from the date and the seed: 'clear' | 'cloudy' | 'rain' | 'snow' (the same all day)
   const WEATHER_P = { winter: [['snow', 0.25], ['cloudy', 0.35]], spring: [['rain', 0.25], ['cloudy', 0.3]], summer: [['rain', 0.1], ['cloudy', 0.2]], autumn: [['rain', 0.3], ['cloudy', 0.35]] };
+  // with real weather (st.wx, SPEC §12f) covering the hour of ms: that hour's weather (it may change hour by hour; a storm
+  // is 'rain', fog 'cloudy'); otherwise the seeded day
   function weather(ms, st) {
     if (typeof ms !== 'number' || !Number.isFinite(ms)) return 'clear';
+    const i = wxIdx(st, ms);
+    if (i >= 0) return WX_DAY[st.wx.w[i]];
     const seed = st && Number.isInteger(st.seed) ? st.seed : 0, [y, m, d] = ymd(ms), no = dayNo(y, m, d);
     if (stormDay(seed, no, m)) return 'rain';
     let r = rndSeed(seed, no, 7);
     for (const [w, p] of WEATHER_P[season(ms)]) { if (r < p) return w; r -= p; }
     return 'clear';
+  }
+  // the seeded storm's moment on a storm day (14:00–20:00 local), else 0 (scareAt and sky agree)
+  function stormAt(seed, y, m, d) {
+    const no = dayNo(y, m, d);
+    return stormDay(seed, no, m) ? new Date(y, m, d, 14).getTime() + Math.floor(rndSeed(seed, no, 6) * 6 * HOUR) : 0;
+  }
+
+  /* --- real weather (SPEC §12f; opt-in: the UI fetches Open-Meteo for a chosen city and stores st.wx) --- */
+  // st.wx = { city, at, h0, w, t }: city id, when fetched (ms), the first hour (ms), one char per hour (c clear, o cloudy,
+  // f fog, r rain, s snow, x thunderstorm) and the whole °C of each hour; at most WX.max hours. Hour i covers
+  // [h0 + i h, h0 + (i + 1) h). Without it (or outside it) everything is seeded exactly as before.
+  const WX = deep({
+    max: 144,              // hours kept (Open-Meteo past_days=2 + forecast_days=3 = 120)
+    tmin: -80, tmax: 60,   // a temperature outside this is broken data
+    gaps: 0.25,            // wxParse: at most this share of null hours (filled from the nearest hour), else invalid
+    frost: -2,             // °C and below: she comes in from the garden after frostAlone min alone, no nap in the garden
+    frostAlone: 30,
+    heat: 28,              // °C and above: thirst ×thirst, no nap in the sun patch or on the window sill
+    thirst: 1.3,
+    stormMin: 40,          // the thunder comes in the first 0–39 min of the first hour of a run of storm hours
+  });
+  const WX_SKY = deep({ c: 'clear', o: 'cloudy', f: 'fog', r: 'rain', s: 'snow', x: 'storm' });
+  const WX_DAY = deep({ c: 'clear', o: 'cloudy', f: 'cloudy', r: 'rain', s: 'snow', x: 'rain' });
+  const okTime = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
+  // a WMO weather code (Open-Meteo weather_code) → one char of st.wx.w
+  function wmoChar(code) {
+    if (code === 0 || code === 1) return 'c';
+    if (code === 45 || code === 48) return 'f';
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return 'r';
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 's';
+    if (code >= 95 && code <= 99) return 'x';
+    return 'o';   // 2, 3 and anything unknown: cloudy
+  }
+  // a valid st.wx (as stored: no extra checks of the time it covers)
+  function wxValid(W) {
+    if (!W || typeof W !== 'object' || Array.isArray(W)) return false;
+    const n = typeof W.w === 'string' ? W.w.length : 0;
+    return typeof W.city === 'string' && W.city.length >= 1 && W.city.length <= 40 && okTime(W.at) &&
+      Number.isInteger(W.h0) && okTime(W.h0) && n >= 1 && n <= WX.max && /^[cofrsx]+$/.test(W.w) &&
+      Array.isArray(W.t) && W.t.length === n && W.t.every(v => Number.isInteger(v) && v >= WX.tmin && v <= WX.tmax);
+  }
+  // the parsed JSON of Open-Meteo's hourly=weather_code,temperature_2m&timeformat=unixtime → a valid st.wx, or null.
+  // Times must be whole seconds, strictly hourly; codes integers, temperatures finite numbers; a null hour takes the
+  // nearest hour's value (the earlier one on a tie) when at most a quarter of the hours are null
+  function wxParse(json, city, at) {
+    const Hh = json && typeof json === 'object' ? json.hourly : null;
+    if (!Hh || typeof Hh !== 'object' || typeof city !== 'string' || !okTime(at)) return null;
+    const time = Hh.time, code = Hh.weather_code, temp = Hh.temperature_2m;
+    if (!Array.isArray(time) || !Array.isArray(code) || !Array.isArray(temp)) return null;
+    const n = time.length;
+    if (n < 1 || n > WX.max || code.length !== n || temp.length !== n) return null;
+    for (let i = 0; i < n; i++) if (!Number.isInteger(time[i]) || (i && time[i] !== time[i - 1] + 3600)) return null;
+    const fill = (a, good) => {
+      let gaps = 0;
+      for (const v of a) if (v === null) gaps++; else if (!good(v)) return null;
+      if (gaps > n * WX.gaps) return null;
+      return a.map((v, i) => {
+        if (v !== null) return v;
+        for (let d = 1; d < n; d++) {
+          if (i - d >= 0 && a[i - d] !== null) return a[i - d];
+          if (i + d < n && a[i + d] !== null) return a[i + d];
+        }
+        return null;
+      });
+    };
+    const C = fill(code, Number.isInteger), T = fill(temp, v => typeof v === 'number' && Number.isFinite(v) && v >= WX.tmin && v <= WX.tmax);
+    if (!C || !T) return null;
+    const W = { city, at, h0: time[0] * 1000, w: C.map(wmoChar).join(''), t: T.map(v => Math.round(v) || 0) };
+    return wxValid(W) ? W : null;
+  }
+  // the index of the hour of st.wx that holds ms, or -1 (no data, outside it, or a broken st.wx: never a crash)
+  function wxIdx(st, ms) {
+    const W = st && st.wx;
+    if (!W || typeof W !== 'object' || typeof W.w !== 'string' || typeof W.h0 !== 'number' || typeof ms !== 'number' || !Number.isFinite(ms)) return -1;
+    const i = Math.floor((ms - W.h0) / HOUR);
+    return i >= 0 && i < W.w.length && 'cofrsx'.includes(W.w[i]) ? i : -1;
+  }
+  // the real temperature at ms (whole °C) or null (no data there)
+  function tempAt(st, ms) {
+    const i = wxIdx(st, ms), v = i >= 0 && Array.isArray(st.wx.t) ? st.wx.t[i] : null;
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  }
+  const frostAt = (st, ms) => { const v = tempAt(st, ms); return v !== null && v <= WX.frost; };
+  const heatAt = (st, ms) => { const v = tempAt(st, ms); return v !== null && v >= WX.heat; };
+  // the sky for the art and the UI: { w: 'clear'|'cloudy'|'fog'|'rain'|'storm'|'snow', temp: °C | null, real }; without
+  // real data the seeded weather, 'storm' from 30 min before the seeded storm's thunder to 60 min after it
+  function sky(ms, st) {
+    const i = wxIdx(st, ms);
+    if (i >= 0) return { w: WX_SKY[st.wx.w[i]], temp: tempAt(st, ms), real: true };
+    const w = weather(ms, st);
+    if (w === 'rain') {
+      const [y, m, d] = ymd(ms), s = stormAt(st && Number.isInteger(st.seed) ? st.seed : 0, y, m, d);
+      if (s && ms >= s - 30 * MIN && ms < s + HOUR) return { w: 'storm', temp: null, real: false };
+    }
+    return { w, temp: null, real: false };
+  }
+  // the thunder of a real storm inside [t, t + dt) (t is covered): the first hour of each run of storm hours, at a seeded
+  // minute of it (from the seed and the hour, so a refreshed series with the same storm keeps the same moment)
+  function wxThunder(st, t, dt) {
+    const W = st.wx, end = t + dt;
+    for (let i = wxIdx(st, t); i >= 0 && i < W.w.length && W.h0 + i * HOUR < end; i++) {
+      if (W.w[i] !== 'x' || (i > 0 && W.w[i - 1] === 'x')) continue;
+      const hs = W.h0 + i * HOUR, at = hs + Math.floor(rndSeed(st.seed, Math.floor(hs / HOUR), 71) * WX.stormMin) * MIN;
+      if (at >= t && at < end) return true;
+    }
+    return false;
+  }
+  // set (a valid series: a canonical copy), or clear (null) the real weather; false (nothing changed) for an invalid one
+  function setWx(st, W) {
+    if (W === null || W === undefined) { delete st.wx; return true; }
+    if (!wxValid(W)) return false;
+    st.wx = { city: W.city, at: W.at, h0: W.h0, w: W.w, t: W.t.slice() };
+    return true;
   }
   // Easter Sunday (Gregorian, anonymous computus): [month 0-based, day]
   function easter(y) {
@@ -4030,7 +4248,8 @@ function KockaEngine() {
       tree: TR && typeof TR === 'object' && okT(TR.since) && TR.since <= t ? { since: TR.since, calls: Math.floor(num(TR.calls, 0, 0, 3)) } : null,
     } : null;
     st.wet = soon(st.wet, GARDEN.wetFor * MIN);
-    const B = Array.isArray(st.beds) ? st.beds : [];
+    if (st.wx !== undefined && !setWx(st, st.wx)) delete st.wx;   // the real weather (§12f): a canonical copy, or none
+    const B =Array.isArray(st.beds) ? st.beds : [];
     st.beds = [];
     const open = bedCount(st);   // from the repaired lvl: a crop on a bed not open yet (a broken save) would be invisible
     for (let i = 0; i < BEDS; i++) {
@@ -4142,7 +4361,7 @@ function KockaEngine() {
     return st;
   }
   const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat', 'guest', 'invDay', 'jealous', 'jealousAt', 'kits', 'litter', 'tease', 'bowl', 'dish', 'meal', 'drink', 'mealLog', 'sleepPlace',
-    'napAt', 'wakeAt', 'stroll', 'callAt', 'playAt'];
+    'napAt', 'wakeAt', 'stroll', 'callAt', 'playAt', 'wx'];
   // the canonical st.tease (SPEC §13.3), after st.wet and st.off were repaired; st.off is never changed here
   function repairTease(Z, st, t) {
     const okT = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
@@ -4515,12 +4734,13 @@ function KockaEngine() {
   // she comes home (letIn or by herself); rain: from the garden, because it began to rain. After a walk she always acts
   // starving (begs: true, user's wish 2026-11-17: she had snacks at the neighbours', but "dělá, že celé dny nejedla"),
   // but only when the player sees her come (watching): back during a long absence she begged to nobody
-  function comeBack(st, t, ev, rain, watching) {
+  // why: 'rain' (back { rain: true }) | 'cold' (a real frost, back { cold: true }) | false
+  function comeBack(st, t, ev, why, watching) {
     const d = t - st.out.since, walk = st.out.walk, flap = walk && !st.out.byPlayer;   // a walk she began by herself: through the cat flap
     st.out = null; st.acc.cold = 0;
     rouse(st, t);   // out, her sleep plan did not run and her old nap moment passed: the next nap is planned from now
     const e = { type: 'back', minutes: Math.round(d / MIN), walk, flap, postcard: null, present: null, begs: walk && !!watching };
-    if (rain) e.rain = true;
+    if (why === 'rain') e.rain = true; else if (why === 'cold') e.cold = true;
     if (walk) {
       // a walk (toulka): a postcard 60 %, a dárek 20 %, nothing 20 %
       if (d > st.walkMax) st.walkMax = d;
@@ -4552,10 +4772,22 @@ function KockaEngine() {
   const bedCount = st => (st.lvl >= 3 ? 6 : 4);
   const bedSleeps = ms => { const m = new Date(ms).getMonth(); return m === 11 || m <= 1; };   // Dec–Feb
   // the end of a local day: every bed watered that day (or rained on) grows one day, never in Dec–Feb
+  // it rained on the beds that local day: with real data for any of its hours 6–20, a rainy (or stormy) one of those;
+  // else the seeded day's weather (the same all day)
+  function rainedOn(st, y, m, d) {
+    let real = false;
+    for (let h = 6; h <= 20; h++) {
+      const ms = new Date(y, m, d, h).getTime();
+      if (wxIdx(st, ms) < 0) continue;
+      real = true;
+      if (weather(ms, st) === 'rain') return true;
+    }
+    return !real && weather(new Date(y, m, d, 12).getTime(), st) === 'rain';
+  }
   function growBeds(st, key, ev) {
     const y = Math.floor(key / 10000), m = Math.floor(key / 100) % 100 - 1, d = key % 100;
     if (m === 11 || m <= 1) return;
-    const rained = weather(new Date(y, m, d, 12).getTime(), st) === 'rain';
+    const rained = rainedOn(st, y, m, d);
     st.beds.forEach((b, i) => {
       if (!b || b.days >= CROPS[b.crop].days || !(b.watered === key || rained)) return;
       b.days++;
@@ -4623,16 +4855,12 @@ function KockaEngine() {
     const age = birthdayAge(st.born, t), y = new Date(t).getFullYear();
     if (age && st.bday < y) { st.bday = y; addBond(st, 10, ev); ev.push({ type: 'birthday', age }); }
   }
-  // a storm (May–Aug afternoons, seeded per day) or the Silvestr fireworks inside [t, t + dt)
+  // a storm (real data covering t: its storm hours, any month; else May–Aug afternoons, seeded per day) or the Silvestr
+  // fireworks inside [t, t + dt)
   function scareAt(st, t, dt) {
     const [y, m, d] = ymd(t);
-    if (m >= 4 && m <= 7) {
-      const no = dayNo(y, m, d);
-      if (stormDay(st.seed, no, m)) {
-        const at = new Date(y, m, d, 14).getTime() + Math.floor(rndDay(st, no, 6) * 6 * HOUR);
-        if (at >= t && at < t + dt) return 'storm';
-      }
-    }
+    if (wxIdx(st, t) >= 0) { if (wxThunder(st, t, dt)) return 'storm'; }
+    else { const at = stormAt(st.seed, y, m, d); if (at && at >= t && at < t + dt) return 'storm'; }
     if (m === 11 && d === 31) { const at = new Date(y, 11, 31, 23, 50).getTime(); if (at >= t && at < t + dt) return 'fireworks'; }
     return null;
   }
@@ -4740,6 +4968,7 @@ function KockaEngine() {
     if (st.held || st.scared > t || st.meal || st.drink) return;
     if (!(N.energy < 25 || t >= st.napAt)) return;
     if (mealDue(st, t)) return;   // hungry at a filled bowl: she eats first (bowlStep starts it), then the nap
+    if (st.yard && frostAt(st, t)) return;   // a real frost (§12f): no nap in the garden, she waits until she is inside
     // played with just now and she wants fun or love: she stays up a little longer (by day)
     if (N.energy >= 25 && !nightHour(hr) && st.playAt && t - st.playAt < SLEEP.play * MIN && (N.fun < SLEEP.wantLow || N.love < SLEEP.wantLow)) {
       const P = SLEEP.postpone;
@@ -4748,10 +4977,11 @@ function KockaEngine() {
     }
     fallAsleep(st, t);
     // where: her box (only when it stands in a room of the house: always with the box quirk, else for a nap), the sill
-    // cushion for a nap, the sun patch for a nap on a clear morning or day, else her bed
-    const ph = dayPhase(t), nap = napping(st);
+    // cushion for a nap, the sun patch for a nap on a clear morning or day, else her bed; a real heat (§12f): neither the
+    // sill nor the sun patch (both by the sunny window), her box or her bed
+    const ph = dayPhase(t), nap = napping(st), hot = heatAt(st, t);
     const sunny = (ph === 'morning' || ph === 'day') && weather(t, st) === 'clear';
-    const place = boxHome(st) && (st.traits.quirk === 'box' || nap) ? 'box' : nap && st.owned.sillCushion ? 'sill' : sunny && nap ? 'sun' : 'bed';
+    const place = boxHome(st) && (st.traits.quirk === 'box' || nap) ? 'box' : nap && st.owned.sillCushion && !hot ? 'sill' : sunny && nap && !hot ? 'sun' : 'bed';
     st.sleepPlace = place;
     if (watching) {
       ev.push({ type: 'sleep', place, nap });
@@ -4776,7 +5006,7 @@ function KockaEngine() {
     const dozing = !!(st.lap && st.lap.doze), k = st.ill ? 1.5 : 1, rest = night || st.asleep || dozing;
     const fall = (n, r) => { N[n] = clamp(N[n] - r * h * k, 0, 100); };
     fall('food', RATE.food[night ? 1 : 0] * (st.out && st.out.walk ? 0.5 : 1));   // on a walk she snacks at the neighbours'
-    fall('water', RATE.water[night ? 1 : 0] * (st.out ? 0.5 : 1));
+    fall('water', RATE.water[night ? 1 : 0] * (st.out ? 0.5 : 1) * (heatAt(st, t) ? WX.thirst : 1));   // a real heat (§12f)
     N.energy = clamp(N.energy + (st.asleep || dozing ? RATE.energy[1] * (st.owned.bedDeluxe ? 1.15 : 1) * h : -RATE.energy[0] * h), 0, 100);
     if (st.out) N.fun = clamp(N.fun + 6 * h, 0, 100);
     else if (st.yard && !st.asleep && !st.yard.tree) N.fun = clamp(N.fun + GARDEN.fun * h, 0, 100);   // outside together
@@ -4829,8 +5059,11 @@ function KockaEngine() {
     // storms and fireworks; coming home by herself
     const s = scareAt(st, t, dt);
     if (s && !st.out) { meet(st, s, t, ev); if (st.yard && s === 'storm' && !st.yard.tree) leaveYard(st, ev, 'house'); }
-    if (st.out && (t + dt >= st.out.until || N.energy < 25 || (!st.out.byPlayer && night && season(t) === 'winter'))) comeBack(st, t + dt, ev, false, watching);
-    else if (st.out && !st.out.walk && weather(t, st) === 'rain') comeBack(st, t, ev, true, watching);   // alone in the garden: never in the rain
+    // alone in the garden in a real frost (§12f): in after WX.frostAlone minutes at most (back { cold: true })
+    const cold = gardenAlone(st) && frostAt(st, t) && t + dt >= Math.min(st.out.until, st.out.since + WX.frostAlone * MIN);
+    if (cold) comeBack(st, t + dt, ev, 'cold', watching);
+    else if (st.out && (t + dt >= st.out.until || N.energy < 25 || (!st.out.byPlayer && night && season(t) === 'winter'))) comeBack(st, t + dt, ev, false, watching);
+    else if (st.out && !st.out.walk && weather(t, st) === 'rain') comeBack(st, t, ev, 'rain', watching);   // alone in the garden: never in the rain
     teaseStep(st, t + dt, watching, ev);
     if (st.off && t >= st.off.until) st.off = null;
     // the day's averages (weight, bond)
@@ -4918,7 +5151,9 @@ function KockaEngine() {
       if (st.yard.tree) ev.push({ type: 'climbDown', by: 'self' });
       leaveYard(st, ev, null);
       if (st.asleep) rouse(st, start);
-      st.out = { since: start, until: start + (GARDEN.alone[0] + Math.floor(rnd(st) * (GARDEN.alone[1] - GARDEN.alone[0]))) * MIN, walk: false, byPlayer: false };
+      const alone = (GARDEN.alone[0] + Math.floor(rnd(st) * (GARDEN.alone[1] - GARDEN.alone[0]))) * MIN;
+      // a real frost (§12f): at most WX.frostAlone minutes (the draw is made anyway, so st.n does not depend on it)
+      st.out = { since: start, until: start + (frostAt(st, start) ? Math.min(alone, WX.frostAlone * MIN) : alone), walk: false, byPlayer: false };
       ev.push({ type: 'out', until: st.out.until, walk: false, garden: true });
     }
     const end = gap > AWAY ? start + AWAY : now;
@@ -6386,6 +6621,7 @@ function KockaEngine() {
     create, valid, repair, rename, advance, act, consumeTreats, minigameResult, shop, tricks,
     mood, moodValue, wants, needs, health, bondLevel, diary,
     dayPhase, season, holiday, easter, weather, postcardAt, bedCount,
+    WX, wmoChar, wxParse, wxValid, setWx, sky,
   };
 }
 /* ---------- Life engine end ---------- */
@@ -6434,7 +6670,9 @@ const THEMES = [
   { id: 'cottage', nameKey: 'kocka.theme.cottage', meta: '#3b2a1e' },
   { id: 'paper', nameKey: 'common.theme.paper', meta: '#f4ebdf' },
 ];
-const DEFAULTS = { name: 'Koxa', theme: 'cottage', vibrate: true, sound: true, mic: false, tilt: true };   // i18n-ignore: her default name, Koxa in every language (user's decision)
+// realWeather: the real weather of the city wxCity (opt-in, off by default); wxAsked: the player has confirmed the
+// dialog that says what it sends (asked only the first time)
+const DEFAULTS = { name: 'Koxa', theme: 'cottage', vibrate: true, sound: true, mic: false, tilt: true, realWeather: false, wxAsked: false, wxCity: 'praha' };   // i18n-ignore: her default name, Koxa in every language (user's decision); a city id
 const A = KockaArt(), I = KockaInput(), E = KockaEngine();
 
 /* ---------- State ---------- */
@@ -6479,7 +6717,9 @@ function saveKept() { let kept = false; try { kept = localStorage.getItem(KEY) !
 function normalize(s) {
   s.name = typeof s.name === 'string' && s.name.trim() ? s.name.trim().slice(0, 20) : DEFAULTS.name;
   if (!THEMES.some(t => t.id === s.theme)) s.theme = DEFAULTS.theme;
-  for (const k of ['vibrate', 'sound', 'mic', 'tilt']) s[k] = !!s[k];
+  for (const k of ['vibrate', 'sound', 'mic', 'tilt', 'realWeather', 'wxAsked']) s[k] = !!s[k];
+  if (!WX_CITIES.some(c => c.id === s.wxCity)) s.wxCity = DEFAULTS.wxCity;
+  if (!s.wxAsked) s.realWeather = false;   // never on without the player's yes in the dialog
 }
 const seed = () => { try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0]; } catch (e) { return (Math.random() * 2 ** 32) >>> 0; } };
 
@@ -6656,11 +6896,15 @@ const bedAt = p => bedSpots(G.view).findIndex((s, i) => inRect(p, bedRect(i)));
 /* ---------- The room and its things ---------- */
 let roomKey = '';
 const sunX = () => { const d = new Date(now()); return Math.round(clamp((d.getHours() + d.getMinutes() / 60 - 6) / 11, 0, 1) * 50) / 50; };
+// what she does: clear | cloudy | rain | snow (a storm counts as rain, fog as cloudy); the picture uses skyNow()
 const weatherNow = () => (typeof E.weather === 'function' ? E.weather(now(), G.st) : 'clear');
+// what the picture shows: { w: clear | cloudy | fog | rain | storm | snow, temp: °C or null } (SPEC §12f: the real
+// weather where a series covers the moment, else the seeded one)
+const skyNow = () => (typeof E.sky === 'function' ? E.sky(now(), G.st) : { w: weatherNow(), temp: null });
 function drawRoom() {
-  const t = now(), phase = E.dayPhase(t);
+  const t = now(), phase = E.dayPhase(t), sk = skyNow();
   const hol = E.holiday(t, G.st).map(x => x === 'birthday' ? 'narozeniny' : x);
-  const o = { id: G.view, phase, season: E.season(t), sunX: sunX(), holiday: hol, flap: !!((G.st.furniture && G.st.furniture.catFlap) || (G.st.owned && G.st.owned.catFlap)), weather: ['rain', 'snow'].includes(weatherNow()) ? weatherNow() : null };
+  const o = { id: G.view, phase, season: E.season(t), sunX: sunX(), holiday: hol, flap: !!((G.st.furniture && G.st.furniture.catFlap) || (G.st.owned && G.st.owned.catFlap)), weather: sk.w, temp: sk.temp };
   if (G.view === 'garden') o.beds = bedsNow();
   const lap = K.lapView ? (G.seat || 'chair') : '';
   const key = JSON.stringify(o) + lap;
@@ -6673,7 +6917,7 @@ function drawRoom() {
 }
 // the lap close-up: the art's picture, or (older art) the room behind a pair of knees
 function lapPicture(o, place) {
-  if (typeof A.lap === 'function') return A.lap({ phase: o.phase, season: o.season, place, weather: o.weather });
+  if (typeof A.lap === 'function') return A.lap({ phase: o.phase, season: o.season, place, weather: o.weather, temp: o.temp });
   return A.room(o).replace('</svg>', '<rect width="400" height="600" fill="#2b1a0e" opacity=".35"/><g fill="#41658a" stroke="#22364c" stroke-width="4"><rect x="40" y="430" width="160" height="240" rx="70"/><rect x="200" y="430" width="160" height="240" rx="70"/></g></svg>');
 }
 const sunSpot = pose => { const p = typeof A.sunPatch === 'function' ? A.sunPatch(sunX()) : { x: 160, y: 458 }; return { room: placeOf('bed') || 'living', pose, fx: clamp(p.x, 95, 240), fy: p.y + 24, ax: 110 }; };
@@ -7661,7 +7905,7 @@ function handle(events) {
         if (places().includes(back)) G.her = back;
         if (ex) { const b = boxOf({ fx: ex.x, fy: Math.max(ex.y + 8, 430) }); setBox(b.bx, b.by, b.sc, 0); }
         showCat(G.her === G.view); say('trill');
-        let msg = I18N.t(ev.flap ? 'kocka.ev.backFlap' : ev.walk ? 'kocka.ev.backWalk' : ev.rain ? 'kocka.ev.backRain' : 'kocka.ev.backGarden', { name: n });
+        let msg = I18N.t(ev.flap ? 'kocka.ev.backFlap' : ev.walk ? 'kocka.ev.backWalk' : ev.rain ? 'kocka.ev.backRain' : ev.cold ? 'kocka.ev.backCold' : 'kocka.ev.backGarden', { name: n });
         if (ev.postcard != null) msg += ' ' + I18N.t('kocka.ev.backPostcard');
         if (ev.present) msg += ' ' + I18N.t('kocka.ev.backPresent', { item: ev.present });
         K.idle = null; K.sulkPlace = null;
@@ -10550,6 +10794,7 @@ function renderSettings() {
       ${S.tilt && tilt.state === 'ask' ? `<button class="big alt" data-act="tiltAsk">${I18N.th('kocka.settings.tiltAsk')}</button>` : ''}
       ${toggleRow('mic', I18N.th('kocka.settings.mic'), I18N.th('kocka.settings.micNote'))}
     </section>
+    ${wxCard()}
     <section class="card"><h3>${I18N.th('kocka.settings.room')}</h3>
       <div class="fnote">${I18N.th('kocka.settings.roomNote')}</div>
       <button class="big alt" data-act="vacuum">${I18N.th('kocka.settings.vacuum')}</button>
@@ -10571,13 +10816,15 @@ $('#settingsIn').addEventListener('click', e => {
   if (act === 'restart') { askRestart(); return; }
   if (act === 'tiltAsk') { I.tilt.askPermission().then(s => {
     if (s === 'none') { S.tilt = false; tilt.wanted = false; I.tilt.stop(); save(); toast(I18N.t('kocka.settings.tiltDenied')); } const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y; }); return; }
+  if (act === 'toggle' && arg === 'realWeather') { wxToggle(); return; }   // its own flow: the first time asks first
   if (act === 'theme') S.theme = arg;
+  else if (act === 'wxCity') { if (arg !== S.wxCity && WX_CITIES.some(c => c.id === arg)) { S.wxCity = arg; wxCityChanged(); } }
   else if (act === 'toggle') {
     S[arg] = !S[arg];
     if (arg === 'mic' && S.mic) askMic();
     if (arg === 'mic' && !S.mic) I.mic.stop();
   }
-  else if (act === 'reset') { S = Object.assign({}, DEFAULTS, { name: G.st.name }); toast(I18N.t('kocka.settings.resetDone')); }
+  else if (act === 'reset') { S = Object.assign({}, DEFAULTS, { name: G.st.name }); wxDrop(); toast(I18N.t('kocka.settings.resetDone')); }
   normalize(S); applySettings(); save();
   const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y;
 });
@@ -10606,6 +10853,102 @@ function restartLife() {
 function openSettings() { hideToast(); if (laser.on && !MODE.game) setLaser(false); renderSettings(); $('#screenSettings').hidden = false; $('#screenSettings').scrollTop = 0; }
 function closeSettings() { normalize(S); E.rename(G.st, S.name); S.name = G.st.name; save(); $('#screenSettings').hidden = true; refresh(); }
 $('#btnSettings').addEventListener('click', openSettings);
+
+/* ---------- Real weather ---------- */
+// Opt-in, off by default (user's decision 2026-11-17, SPEC §12f): her weather follows the real weather of a chosen city.
+// This block is the game's only network access (tools/check.js allows fetch() only here, and only to Open-Meteo).
+// Nothing is sent before the player says yes in the dialog; then a request goes out only while it is on and the page
+// is visible: at the start, on coming back to the page, after switching on or changing the city, and whenever the
+// stored series is an hour old (checked every 5 minutes). Only the city's coordinates are sent. Every failure is
+// quiet (never an error, never a toast): the last series is used while it covers the time, then the seeded weather.
+const WX_CITIES = [   // coordinates are data, not texts
+  { id: 'praha', nameKey: 'kocka.wx.city.praha', lat: 50.0755, lon: 14.4378 },
+  { id: 'nachod', nameKey: 'kocka.wx.city.nachod', lat: 50.4167, lon: 16.1629 },
+  { id: 'hradec', nameKey: 'kocka.wx.city.hradec', lat: 50.2092, lon: 15.8328 },
+  { id: 'brno', nameKey: 'kocka.wx.city.brno', lat: 49.1951, lon: 16.6068 },
+  { id: 'ostrava', nameKey: 'kocka.wx.city.ostrava', lat: 49.8209, lon: 18.2625 },
+  { id: 'plzen', nameKey: 'kocka.wx.city.plzen', lat: 49.7384, lon: 13.3736 },
+];
+const WX_AGE = 60 * 60000, WX_RETRY = 15 * 60000, WX_TIMEOUT = 8000;
+const WXL = { busy: false, err: false, tried: 0, gen: 0, ctl: null };   // the request under way (gen: newer requests win)
+const wxCity = () => WX_CITIES.find(c => c.id === S.wxCity) || WX_CITIES[0];
+// her name in the genitive ("Počasí u Koxy") only where it is safe (names ending in a hard consonant + a), else ''
+const wxGen = n => (caseSafe(n) && !/[šžčřcjďťňľ]a$/i.test(n) ? n.slice(0, -1) + 'y' : '');
+const WX_SKY_SEL = { clear: 'clear', cloudy: 'cloudy', fog: 'fog', rain: 'rain', storm: 'storm', snow: 'snow' };
+function wxStop() { WXL.gen++; try { if (WXL.ctl) WXL.ctl.abort(); } catch (e) {} WXL.ctl = null; WXL.busy = false; }
+// forget the series and any request (switched off, settings reset, another city): the seeded weather is back at once
+function wxDrop() { wxStop(); WXL.err = false; WXL.tried = 0; if (G.st.wx) E.setWx(G.st, null); drawRoom(); }
+function loadWeather(force) {
+  try {
+    if (!S || !G || !S.realWeather || !S.wxAsked || typeof fetch !== 'function') return;
+    const t = Date.now(), W = G.st.wx;
+    if (!force) {
+      if (WXL.busy || document.hidden) return;
+      const fresh = W && W.city === S.wxCity && t - W.at < WX_AGE && W.at <= t + 60000;
+      if (fresh || t - WXL.tried < (WXL.err ? WX_RETRY : 60000)) return;
+    }
+    wxStop();
+    const gen = WXL.gen, c = wxCity(), city = c.id;
+    let ctl = null;
+    try { ctl = new AbortController(); } catch (e) {}
+    Object.assign(WXL, { busy: true, tried: t, ctl });
+    const timer = setTimeout(() => { try { if (ctl) ctl.abort(); } catch (e) {} }, WX_TIMEOUT);
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&hourly=weather_code,temperature_2m&past_days=2&forecast_days=3&timezone=auto&timeformat=unixtime`;
+    new Promise(res => res(fetch(url, { signal: ctl ? ctl.signal : undefined, cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer' })))
+      .then(r => { if (!r || !r.ok) throw new Error('weather: http'); return r.json(); })
+      .then(json => {
+        if (gen !== WXL.gen || !S.realWeather || S.wxCity !== city) return;   // switched off or another city meanwhile
+        const N = E.wxParse(json, city, Date.now());
+        if (!N || !E.setWx(G.st, N)) throw new Error('weather: data');
+        WXL.err = false; save(); drawRoom();
+      })
+      .catch(() => { if (gen === WXL.gen) WXL.err = true; })
+      .then(() => { clearTimeout(timer); if (gen === WXL.gen) { WXL.busy = false; WXL.ctl = null; } wxStatus(); })
+      .catch(() => {});
+    wxStatus();
+  } catch (e) { WXL.busy = false; }
+}
+// the status line of the card (Settings): loading, a failure, and what the series says now
+function wxStatusHTML() {
+  if (!S.realWeather) return '';
+  const W = G.st.wx, sk = skyNow(), has = !!(W && W.city === S.wxCity && sk.real), out = [];
+  if (WXL.busy) out.push(I18N.th('kocka.wx.loading'));
+  else if (WXL.err) out.push(I18N.th(has ? 'kocka.wx.failKept' : 'kocka.wx.failNone'));
+  else if (!has) out.push(I18N.th(W ? 'kocka.wx.ended' : 'kocka.wx.none'));
+  if (has) {
+    const d = new Date(W.at), today = d.toDateString() === new Date().toDateString();
+    const time = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;   // i18n-ignore: a clock time
+    out.push(I18N.th('kocka.wx.now', { city: I18N.t(wxCity().nameKey), w: WX_SKY_SEL[sk.w] || 'cloudy', temp: String(sk.temp).replace('-', '−'), today, date: date(W.at), time }));
+  }
+  return out.join('<br>');
+}
+function wxStatus() { const el = document.getElementById('wxStatus'); if (el) el.innerHTML = wxStatusHTML(); }
+function wxCard() {
+  const n = G.st.name, g = wxGen(n);
+  return `<section class="card"><h3>${I18N.th('kocka.settings.wx')}</h3>
+      <div class="fnote wxinfo"><p>${I18N.th('kocka.wx.what', { has: !!g, gen: g })}</p><p>${I18N.th('kocka.wx.where')}</p><p>${I18N.th('kocka.wx.sees', { name: n })}</p></div>
+      ${toggleRow('realWeather', I18N.th('kocka.wx.switch'))}
+      ${S.realWeather ? `<div class="field"><div class="flabel">${I18N.th('kocka.wx.city')}</div>
+        <div class="tiles cities">${WX_CITIES.map(c => `<button class="tile" data-act="wxCity:${c.id}" aria-pressed="${S.wxCity === c.id}">${I18N.th(c.nameKey)}</button>`).join('')}</div>
+        <div class="fnote" id="wxStatus" aria-live="polite">${wxStatusHTML()}</div></div>` : ''}
+      <div class="fnote">${I18N.th('kocka.wx.credit')}</div>
+    </section>`;
+}
+function wxSettingsRedraw() { if ($('#screenSettings').hidden) return; const y = $('#screenSettings').scrollTop; renderSettings(); $('#screenSettings').scrollTop = y; }
+function wxOn() { S.realWeather = true; S.wxAsked = true; save(); loadWeather(true); wxSettingsRedraw(); }
+// the switch: off at once; on after the dialog the first time (it says what is sent where), later at once
+function wxToggle() {
+  if (S.realWeather) { S.realWeather = false; wxDrop(); save(); wxSettingsRedraw(); return; }
+  if (S.wxAsked) { wxOn(); return; }
+  showModal(`<h2>${I18N.th('kocka.wx.askTitle')}</h2><p>${I18N.th('kocka.wx.askText', { city: I18N.t(wxCity().nameKey) })}</p>`, [
+    { text: I18N.t('kocka.wx.askNo'), cls: 'alt' },
+    { text: I18N.t('kocka.wx.askYes'), fn: wxOn }]);
+}
+// another city: its series is fetched at once, the old one is dropped first so a wrong city is never shown
+function wxCityChanged() { wxDrop(); loadWeather(true); }
+// start: a series kept while switched off or of another city is dropped
+function wxStart() { if (G.st.wx && (!S.realWeather || G.st.wx.city !== S.wxCity)) E.setWx(G.st, null); }
+/* ---------- Real weather end ---------- */
 
 /* ---------- Help (only behind "?", never opens by itself) ---------- */
 const arrow = (x1, y1, x2, y2, c = '#2a8a3a') => { const a = Math.atan2(y2 - y1, x2 - x1), h = 16, p = (d) => `${(x2 + Math.cos(a + d) * h).toFixed(1)} ${(y2 + Math.sin(a + d) * h).toFixed(1)}`;
@@ -10788,6 +11131,7 @@ function renderHelp() {
         I18N.th('kocka.help.tips.each'),
         I18N.th('kocka.help.tips.fear'),
         I18N.th('kocka.help.tips.holidays'),
+        I18N.th('kocka.help.tips.weather'),
         I18N.th('kocka.help.tips.rename'),
       ])}
     </section>
@@ -10843,6 +11187,7 @@ if (saved && typeof saved.kitAsk === 'string' && /^\d{4}-\d{1,2}-\d{1,2}$/.test(
   G.seat = saved && (saved.seat === 'chair' || saved.seat === 'bench') && spot(G.view, saved.seat) ? saved.seat : null;
   if (E.health(G.st).lap && !G.seat) G.seat = G.view === 'garden' ? 'bench' : 'chair'; }
 E.rename(G.st, S.name);
+wxStart();
 { const s = document.createElement('style'); s.textContent = A.css; document.head.appendChild(s); }
 applySettings();
 drawDiaryPill();
@@ -10867,12 +11212,14 @@ K.welcomeAt = perf(); sulkTimer();
 try { if (sessionStorage.getItem(RESTARTED)) { sessionStorage.removeItem(RESTARTED); toast(I18N.t('kocka.restarted', { name: G.st.name }), 3200); } } catch (e) {}
 setInterval(() => { if (document.hidden) return; if (nothingOpen()) tick(); else screenGap = true; }, 30000);
 setInterval(lifeTick, 3000);   // she moves on by herself now and then
+loadWeather();                                   // the real weather (only when switched on; Real weather block)
+setInterval(() => loadWeather(), 5 * 60000);     // fetches only when the series is an hour old
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) { K.welcomeAt = perf(); takeTreats(); tick(); if (hiddenAt && Date.now() - hiddenAt > 60000 && !K.gone && !E.health(G.st).asleep) { say('trill'); bubble(esc(I18N.t('kocka.trill'))); } }
+  if (!document.hidden) { K.welcomeAt = perf(); takeTreats(); tick(); loadWeather(); if (hiddenAt && Date.now() - hiddenAt > 60000 && !K.gone && !E.health(G.st).asleep) { say('trill'); bubble(esc(I18N.t('kocka.trill'))); } }
   else { hiddenAt = Date.now(); screenGap = false; saveKept(); I.sound.purr(false); }
 });
-addEventListener('pageshow', () => { K.welcomeAt = perf(); takeTreats(); tick(); });
+addEventListener('pageshow', () => { K.welcomeAt = perf(); takeTreats(); tick(); loadWeather(); });
 addEventListener('pagehide', () => { screenGap = false; saveKept(); });
 
 window.addEventListener('resize', layout);

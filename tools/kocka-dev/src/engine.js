@@ -46,7 +46,10 @@
 //                                   with walk: false; health().gardenAlone: draw her in the garden); she never stays there in
 //                                   the rain (back { rain: true }, or she comes in with the player). begs: true after every
 //                                   walk the player sees end (watching): she acts starving whatever her hunger (user's wish
-//                                   2026-11-17); back during a long absence (the app closed): false
+//                                   2026-11-17); back during a long absence (the app closed): false. cold: true = a real
+//                                   frost sent her in from the garden alone (§12f)
+//   Real weather (SPEC §12f, opt-in): st.wx = wxParse(Open-Meteo JSON, city, fetchedAt) or set by setWx(st, wx | null);
+//   weather(ms, st) and scareAt follow it hour by hour where it covers ms; sky(ms, st) = { w, temp, real } for the picture
 //   come { late? } / turnBack       a call: she comes (late: true = at st.callAt after a callSlow) / turns her back (offended, once)
 //   callSlow { at, meal }           a call she heard (an ear or the tail turns) but follows later, at `at` (st.callAt): 10–40 s
 //                                   (CALL, by mood and bond), or meal: true = after her meal; then come { late: true }
@@ -405,13 +408,130 @@ function KockaEngine() {
   const stormDay = (seed, no, m) => m >= 4 && m <= 7 && rndSeed(seed, no, 5) < (m === 4 ? 0.05 : 0.12);
   // the day's weather from the date and the seed: 'clear' | 'cloudy' | 'rain' | 'snow' (the same all day)
   const WEATHER_P = { winter: [['snow', 0.25], ['cloudy', 0.35]], spring: [['rain', 0.25], ['cloudy', 0.3]], summer: [['rain', 0.1], ['cloudy', 0.2]], autumn: [['rain', 0.3], ['cloudy', 0.35]] };
+  // with real weather (st.wx, SPEC §12f) covering the hour of ms: that hour's weather (it may change hour by hour; a storm
+  // is 'rain', fog 'cloudy'); otherwise the seeded day
   function weather(ms, st) {
     if (typeof ms !== 'number' || !Number.isFinite(ms)) return 'clear';
+    const i = wxIdx(st, ms);
+    if (i >= 0) return WX_DAY[st.wx.w[i]];
     const seed = st && Number.isInteger(st.seed) ? st.seed : 0, [y, m, d] = ymd(ms), no = dayNo(y, m, d);
     if (stormDay(seed, no, m)) return 'rain';
     let r = rndSeed(seed, no, 7);
     for (const [w, p] of WEATHER_P[season(ms)]) { if (r < p) return w; r -= p; }
     return 'clear';
+  }
+  // the seeded storm's moment on a storm day (14:00–20:00 local), else 0 (scareAt and sky agree)
+  function stormAt(seed, y, m, d) {
+    const no = dayNo(y, m, d);
+    return stormDay(seed, no, m) ? new Date(y, m, d, 14).getTime() + Math.floor(rndSeed(seed, no, 6) * 6 * HOUR) : 0;
+  }
+
+  /* --- real weather (SPEC §12f; opt-in: the UI fetches Open-Meteo for a chosen city and stores st.wx) --- */
+  // st.wx = { city, at, h0, w, t }: city id, when fetched (ms), the first hour (ms), one char per hour (c clear, o cloudy,
+  // f fog, r rain, s snow, x thunderstorm) and the whole °C of each hour; at most WX.max hours. Hour i covers
+  // [h0 + i h, h0 + (i + 1) h). Without it (or outside it) everything is seeded exactly as before.
+  const WX = deep({
+    max: 144,              // hours kept (Open-Meteo past_days=2 + forecast_days=3 = 120)
+    tmin: -80, tmax: 60,   // a temperature outside this is broken data
+    gaps: 0.25,            // wxParse: at most this share of null hours (filled from the nearest hour), else invalid
+    frost: -2,             // °C and below: she comes in from the garden after frostAlone min alone, no nap in the garden
+    frostAlone: 30,
+    heat: 28,              // °C and above: thirst ×thirst, no nap in the sun patch or on the window sill
+    thirst: 1.3,
+    stormMin: 40,          // the thunder comes in the first 0–39 min of the first hour of a run of storm hours
+  });
+  const WX_SKY = deep({ c: 'clear', o: 'cloudy', f: 'fog', r: 'rain', s: 'snow', x: 'storm' });
+  const WX_DAY = deep({ c: 'clear', o: 'cloudy', f: 'cloudy', r: 'rain', s: 'snow', x: 'rain' });
+  const okTime = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
+  // a WMO weather code (Open-Meteo weather_code) → one char of st.wx.w
+  function wmoChar(code) {
+    if (code === 0 || code === 1) return 'c';
+    if (code === 45 || code === 48) return 'f';
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return 'r';
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 's';
+    if (code >= 95 && code <= 99) return 'x';
+    return 'o';   // 2, 3 and anything unknown: cloudy
+  }
+  // a valid st.wx (as stored: no extra checks of the time it covers)
+  function wxValid(W) {
+    if (!W || typeof W !== 'object' || Array.isArray(W)) return false;
+    const n = typeof W.w === 'string' ? W.w.length : 0;
+    return typeof W.city === 'string' && W.city.length >= 1 && W.city.length <= 40 && okTime(W.at) &&
+      Number.isInteger(W.h0) && okTime(W.h0) && n >= 1 && n <= WX.max && /^[cofrsx]+$/.test(W.w) &&
+      Array.isArray(W.t) && W.t.length === n && W.t.every(v => Number.isInteger(v) && v >= WX.tmin && v <= WX.tmax);
+  }
+  // the parsed JSON of Open-Meteo's hourly=weather_code,temperature_2m&timeformat=unixtime → a valid st.wx, or null.
+  // Times must be whole seconds, strictly hourly; codes integers, temperatures finite numbers; a null hour takes the
+  // nearest hour's value (the earlier one on a tie) when at most a quarter of the hours are null
+  function wxParse(json, city, at) {
+    const Hh = json && typeof json === 'object' ? json.hourly : null;
+    if (!Hh || typeof Hh !== 'object' || typeof city !== 'string' || !okTime(at)) return null;
+    const time = Hh.time, code = Hh.weather_code, temp = Hh.temperature_2m;
+    if (!Array.isArray(time) || !Array.isArray(code) || !Array.isArray(temp)) return null;
+    const n = time.length;
+    if (n < 1 || n > WX.max || code.length !== n || temp.length !== n) return null;
+    for (let i = 0; i < n; i++) if (!Number.isInteger(time[i]) || (i && time[i] !== time[i - 1] + 3600)) return null;
+    const fill = (a, good) => {
+      let gaps = 0;
+      for (const v of a) if (v === null) gaps++; else if (!good(v)) return null;
+      if (gaps > n * WX.gaps) return null;
+      return a.map((v, i) => {
+        if (v !== null) return v;
+        for (let d = 1; d < n; d++) {
+          if (i - d >= 0 && a[i - d] !== null) return a[i - d];
+          if (i + d < n && a[i + d] !== null) return a[i + d];
+        }
+        return null;
+      });
+    };
+    const C = fill(code, Number.isInteger), T = fill(temp, v => typeof v === 'number' && Number.isFinite(v) && v >= WX.tmin && v <= WX.tmax);
+    if (!C || !T) return null;
+    const W = { city, at, h0: time[0] * 1000, w: C.map(wmoChar).join(''), t: T.map(v => Math.round(v) || 0) };
+    return wxValid(W) ? W : null;
+  }
+  // the index of the hour of st.wx that holds ms, or -1 (no data, outside it, or a broken st.wx: never a crash)
+  function wxIdx(st, ms) {
+    const W = st && st.wx;
+    if (!W || typeof W !== 'object' || typeof W.w !== 'string' || typeof W.h0 !== 'number' || typeof ms !== 'number' || !Number.isFinite(ms)) return -1;
+    const i = Math.floor((ms - W.h0) / HOUR);
+    return i >= 0 && i < W.w.length && 'cofrsx'.includes(W.w[i]) ? i : -1;
+  }
+  // the real temperature at ms (whole °C) or null (no data there)
+  function tempAt(st, ms) {
+    const i = wxIdx(st, ms), v = i >= 0 && Array.isArray(st.wx.t) ? st.wx.t[i] : null;
+    return typeof v === 'number' && Number.isFinite(v) ? v : null;
+  }
+  const frostAt = (st, ms) => { const v = tempAt(st, ms); return v !== null && v <= WX.frost; };
+  const heatAt = (st, ms) => { const v = tempAt(st, ms); return v !== null && v >= WX.heat; };
+  // the sky for the art and the UI: { w: 'clear'|'cloudy'|'fog'|'rain'|'storm'|'snow', temp: °C | null, real }; without
+  // real data the seeded weather, 'storm' from 30 min before the seeded storm's thunder to 60 min after it
+  function sky(ms, st) {
+    const i = wxIdx(st, ms);
+    if (i >= 0) return { w: WX_SKY[st.wx.w[i]], temp: tempAt(st, ms), real: true };
+    const w = weather(ms, st);
+    if (w === 'rain') {
+      const [y, m, d] = ymd(ms), s = stormAt(st && Number.isInteger(st.seed) ? st.seed : 0, y, m, d);
+      if (s && ms >= s - 30 * MIN && ms < s + HOUR) return { w: 'storm', temp: null, real: false };
+    }
+    return { w, temp: null, real: false };
+  }
+  // the thunder of a real storm inside [t, t + dt) (t is covered): the first hour of each run of storm hours, at a seeded
+  // minute of it (from the seed and the hour, so a refreshed series with the same storm keeps the same moment)
+  function wxThunder(st, t, dt) {
+    const W = st.wx, end = t + dt;
+    for (let i = wxIdx(st, t); i >= 0 && i < W.w.length && W.h0 + i * HOUR < end; i++) {
+      if (W.w[i] !== 'x' || (i > 0 && W.w[i - 1] === 'x')) continue;
+      const hs = W.h0 + i * HOUR, at = hs + Math.floor(rndSeed(st.seed, Math.floor(hs / HOUR), 71) * WX.stormMin) * MIN;
+      if (at >= t && at < end) return true;
+    }
+    return false;
+  }
+  // set (a valid series: a canonical copy), or clear (null) the real weather; false (nothing changed) for an invalid one
+  function setWx(st, W) {
+    if (W === null || W === undefined) { delete st.wx; return true; }
+    if (!wxValid(W)) return false;
+    st.wx = { city: W.city, at: W.at, h0: W.h0, w: W.w, t: W.t.slice() };
+    return true;
   }
   // Easter Sunday (Gregorian, anonymous computus): [month 0-based, day]
   function easter(y) {
@@ -527,7 +647,8 @@ function KockaEngine() {
       tree: TR && typeof TR === 'object' && okT(TR.since) && TR.since <= t ? { since: TR.since, calls: Math.floor(num(TR.calls, 0, 0, 3)) } : null,
     } : null;
     st.wet = soon(st.wet, GARDEN.wetFor * MIN);
-    const B = Array.isArray(st.beds) ? st.beds : [];
+    if (st.wx !== undefined && !setWx(st, st.wx)) delete st.wx;   // the real weather (§12f): a canonical copy, or none
+    const B =Array.isArray(st.beds) ? st.beds : [];
     st.beds = [];
     const open = bedCount(st);   // from the repaired lvl: a crop on a bed not open yet (a broken save) would be invisible
     for (let i = 0; i < BEDS; i++) {
@@ -639,7 +760,7 @@ function KockaEngine() {
     return st;
   }
   const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat', 'guest', 'invDay', 'jealous', 'jealousAt', 'kits', 'litter', 'tease', 'bowl', 'dish', 'meal', 'drink', 'mealLog', 'sleepPlace',
-    'napAt', 'wakeAt', 'stroll', 'callAt', 'playAt'];
+    'napAt', 'wakeAt', 'stroll', 'callAt', 'playAt', 'wx'];
   // the canonical st.tease (SPEC §13.3), after st.wet and st.off were repaired; st.off is never changed here
   function repairTease(Z, st, t) {
     const okT = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
@@ -1012,12 +1133,13 @@ function KockaEngine() {
   // she comes home (letIn or by herself); rain: from the garden, because it began to rain. After a walk she always acts
   // starving (begs: true, user's wish 2026-11-17: she had snacks at the neighbours', but "dělá, že celé dny nejedla"),
   // but only when the player sees her come (watching): back during a long absence she begged to nobody
-  function comeBack(st, t, ev, rain, watching) {
+  // why: 'rain' (back { rain: true }) | 'cold' (a real frost, back { cold: true }) | false
+  function comeBack(st, t, ev, why, watching) {
     const d = t - st.out.since, walk = st.out.walk, flap = walk && !st.out.byPlayer;   // a walk she began by herself: through the cat flap
     st.out = null; st.acc.cold = 0;
     rouse(st, t);   // out, her sleep plan did not run and her old nap moment passed: the next nap is planned from now
     const e = { type: 'back', minutes: Math.round(d / MIN), walk, flap, postcard: null, present: null, begs: walk && !!watching };
-    if (rain) e.rain = true;
+    if (why === 'rain') e.rain = true; else if (why === 'cold') e.cold = true;
     if (walk) {
       // a walk (toulka): a postcard 60 %, a dárek 20 %, nothing 20 %
       if (d > st.walkMax) st.walkMax = d;
@@ -1049,10 +1171,22 @@ function KockaEngine() {
   const bedCount = st => (st.lvl >= 3 ? 6 : 4);
   const bedSleeps = ms => { const m = new Date(ms).getMonth(); return m === 11 || m <= 1; };   // Dec–Feb
   // the end of a local day: every bed watered that day (or rained on) grows one day, never in Dec–Feb
+  // it rained on the beds that local day: with real data for any of its hours 6–20, a rainy (or stormy) one of those;
+  // else the seeded day's weather (the same all day)
+  function rainedOn(st, y, m, d) {
+    let real = false;
+    for (let h = 6; h <= 20; h++) {
+      const ms = new Date(y, m, d, h).getTime();
+      if (wxIdx(st, ms) < 0) continue;
+      real = true;
+      if (weather(ms, st) === 'rain') return true;
+    }
+    return !real && weather(new Date(y, m, d, 12).getTime(), st) === 'rain';
+  }
   function growBeds(st, key, ev) {
     const y = Math.floor(key / 10000), m = Math.floor(key / 100) % 100 - 1, d = key % 100;
     if (m === 11 || m <= 1) return;
-    const rained = weather(new Date(y, m, d, 12).getTime(), st) === 'rain';
+    const rained = rainedOn(st, y, m, d);
     st.beds.forEach((b, i) => {
       if (!b || b.days >= CROPS[b.crop].days || !(b.watered === key || rained)) return;
       b.days++;
@@ -1120,16 +1254,12 @@ function KockaEngine() {
     const age = birthdayAge(st.born, t), y = new Date(t).getFullYear();
     if (age && st.bday < y) { st.bday = y; addBond(st, 10, ev); ev.push({ type: 'birthday', age }); }
   }
-  // a storm (May–Aug afternoons, seeded per day) or the Silvestr fireworks inside [t, t + dt)
+  // a storm (real data covering t: its storm hours, any month; else May–Aug afternoons, seeded per day) or the Silvestr
+  // fireworks inside [t, t + dt)
   function scareAt(st, t, dt) {
     const [y, m, d] = ymd(t);
-    if (m >= 4 && m <= 7) {
-      const no = dayNo(y, m, d);
-      if (stormDay(st.seed, no, m)) {
-        const at = new Date(y, m, d, 14).getTime() + Math.floor(rndDay(st, no, 6) * 6 * HOUR);
-        if (at >= t && at < t + dt) return 'storm';
-      }
-    }
+    if (wxIdx(st, t) >= 0) { if (wxThunder(st, t, dt)) return 'storm'; }
+    else { const at = stormAt(st.seed, y, m, d); if (at && at >= t && at < t + dt) return 'storm'; }
     if (m === 11 && d === 31) { const at = new Date(y, 11, 31, 23, 50).getTime(); if (at >= t && at < t + dt) return 'fireworks'; }
     return null;
   }
@@ -1237,6 +1367,7 @@ function KockaEngine() {
     if (st.held || st.scared > t || st.meal || st.drink) return;
     if (!(N.energy < 25 || t >= st.napAt)) return;
     if (mealDue(st, t)) return;   // hungry at a filled bowl: she eats first (bowlStep starts it), then the nap
+    if (st.yard && frostAt(st, t)) return;   // a real frost (§12f): no nap in the garden, she waits until she is inside
     // played with just now and she wants fun or love: she stays up a little longer (by day)
     if (N.energy >= 25 && !nightHour(hr) && st.playAt && t - st.playAt < SLEEP.play * MIN && (N.fun < SLEEP.wantLow || N.love < SLEEP.wantLow)) {
       const P = SLEEP.postpone;
@@ -1245,10 +1376,11 @@ function KockaEngine() {
     }
     fallAsleep(st, t);
     // where: her box (only when it stands in a room of the house: always with the box quirk, else for a nap), the sill
-    // cushion for a nap, the sun patch for a nap on a clear morning or day, else her bed
-    const ph = dayPhase(t), nap = napping(st);
+    // cushion for a nap, the sun patch for a nap on a clear morning or day, else her bed; a real heat (§12f): neither the
+    // sill nor the sun patch (both by the sunny window), her box or her bed
+    const ph = dayPhase(t), nap = napping(st), hot = heatAt(st, t);
     const sunny = (ph === 'morning' || ph === 'day') && weather(t, st) === 'clear';
-    const place = boxHome(st) && (st.traits.quirk === 'box' || nap) ? 'box' : nap && st.owned.sillCushion ? 'sill' : sunny && nap ? 'sun' : 'bed';
+    const place = boxHome(st) && (st.traits.quirk === 'box' || nap) ? 'box' : nap && st.owned.sillCushion && !hot ? 'sill' : sunny && nap && !hot ? 'sun' : 'bed';
     st.sleepPlace = place;
     if (watching) {
       ev.push({ type: 'sleep', place, nap });
@@ -1273,7 +1405,7 @@ function KockaEngine() {
     const dozing = !!(st.lap && st.lap.doze), k = st.ill ? 1.5 : 1, rest = night || st.asleep || dozing;
     const fall = (n, r) => { N[n] = clamp(N[n] - r * h * k, 0, 100); };
     fall('food', RATE.food[night ? 1 : 0] * (st.out && st.out.walk ? 0.5 : 1));   // on a walk she snacks at the neighbours'
-    fall('water', RATE.water[night ? 1 : 0] * (st.out ? 0.5 : 1));
+    fall('water', RATE.water[night ? 1 : 0] * (st.out ? 0.5 : 1) * (heatAt(st, t) ? WX.thirst : 1));   // a real heat (§12f)
     N.energy = clamp(N.energy + (st.asleep || dozing ? RATE.energy[1] * (st.owned.bedDeluxe ? 1.15 : 1) * h : -RATE.energy[0] * h), 0, 100);
     if (st.out) N.fun = clamp(N.fun + 6 * h, 0, 100);
     else if (st.yard && !st.asleep && !st.yard.tree) N.fun = clamp(N.fun + GARDEN.fun * h, 0, 100);   // outside together
@@ -1326,8 +1458,11 @@ function KockaEngine() {
     // storms and fireworks; coming home by herself
     const s = scareAt(st, t, dt);
     if (s && !st.out) { meet(st, s, t, ev); if (st.yard && s === 'storm' && !st.yard.tree) leaveYard(st, ev, 'house'); }
-    if (st.out && (t + dt >= st.out.until || N.energy < 25 || (!st.out.byPlayer && night && season(t) === 'winter'))) comeBack(st, t + dt, ev, false, watching);
-    else if (st.out && !st.out.walk && weather(t, st) === 'rain') comeBack(st, t, ev, true, watching);   // alone in the garden: never in the rain
+    // alone in the garden in a real frost (§12f): in after WX.frostAlone minutes at most (back { cold: true })
+    const cold = gardenAlone(st) && frostAt(st, t) && t + dt >= Math.min(st.out.until, st.out.since + WX.frostAlone * MIN);
+    if (cold) comeBack(st, t + dt, ev, 'cold', watching);
+    else if (st.out && (t + dt >= st.out.until || N.energy < 25 || (!st.out.byPlayer && night && season(t) === 'winter'))) comeBack(st, t + dt, ev, false, watching);
+    else if (st.out && !st.out.walk && weather(t, st) === 'rain') comeBack(st, t, ev, 'rain', watching);   // alone in the garden: never in the rain
     teaseStep(st, t + dt, watching, ev);
     if (st.off && t >= st.off.until) st.off = null;
     // the day's averages (weight, bond)
@@ -1415,7 +1550,9 @@ function KockaEngine() {
       if (st.yard.tree) ev.push({ type: 'climbDown', by: 'self' });
       leaveYard(st, ev, null);
       if (st.asleep) rouse(st, start);
-      st.out = { since: start, until: start + (GARDEN.alone[0] + Math.floor(rnd(st) * (GARDEN.alone[1] - GARDEN.alone[0]))) * MIN, walk: false, byPlayer: false };
+      const alone = (GARDEN.alone[0] + Math.floor(rnd(st) * (GARDEN.alone[1] - GARDEN.alone[0]))) * MIN;
+      // a real frost (§12f): at most WX.frostAlone minutes (the draw is made anyway, so st.n does not depend on it)
+      st.out = { since: start, until: start + (frostAt(st, start) ? Math.min(alone, WX.frostAlone * MIN) : alone), walk: false, byPlayer: false };
       ev.push({ type: 'out', until: st.out.until, walk: false, garden: true });
     }
     const end = gap > AWAY ? start + AWAY : now;
@@ -2883,5 +3020,6 @@ function KockaEngine() {
     create, valid, repair, rename, advance, act, consumeTreats, minigameResult, shop, tricks,
     mood, moodValue, wants, needs, health, bondLevel, diary,
     dayPhase, season, holiday, easter, weather, postcardAt, bedCount,
+    WX, wmoChar, wxParse, wxValid, setWx, sky,
   };
 }

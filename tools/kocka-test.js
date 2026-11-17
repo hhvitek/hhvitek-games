@@ -3757,6 +3757,227 @@ section('Teasing');
   }
 }
 
+/* ---------- Real weather (SPEC §12f): st.wx from Open-Meteo, the seeded weather outside it ---------- */
+section('Real weather');
+{
+  // a series: w = chars, temps = a number (every hour) or an array
+  const mkWx = (h0, w, temps, city = 'praha') => ({ city, at: h0 + 50 * H, h0, w, t: Array.from(w, (_, i) => Array.isArray(temps) ? temps[i] : temps) });
+  const rep = (c, n) => c.repeat(n);
+  const isStorm = e => (e.type === 'scared' || e.type === 'curious') && e.what === 'storm';
+
+  // WMO codes → chars, every edge
+  const wmo = { c: [0, 1], o: [2, 3, -1, 4, 44, 46, 47, 49, 50, 68, 70, 78, 79, 83, 84, 87, 90, 94, 100, 1000], f: [45, 48],
+    r: [51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82], s: [71, 73, 75, 77, 85, 86], x: [95, 96, 99, 97, 98] };
+  let wmoBad = '';
+  for (const ch of Object.keys(wmo)) for (const code of wmo[ch]) if (E.wmoChar(code) !== ch) wmoBad += ` ${code}→${E.wmoChar(code)}`;
+  ok(!wmoBad, 'WMO mapping: 0–1 c, 2–3 o, 45/48 f, 51–67 and 80–82 r, 71–77 and 85–86 s, 95–99 x, else o' + wmoBad);
+
+  // wxParse: the real sample (Prague, 72 hours) with temperatures added, and broken inputs
+  const T0 = 1794783600;   // 2026-11-15 00:00 CET
+  const codes = [3, 3, 3, 3, 61, 61, 61, 3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 3, 80, 1, 0, 3, 3, 61, 61, 61, 61, 61, 61, 61, 61, 61, 3, 3, 3, 61, 61, 61, 61, 61, 61, 61, 61, 80, 80, 2, 3, 3, 3, 3, 3, 3, 61, 80, 3, 2, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 1, 2, 2];
+  const om = (n = codes.length, f) => {
+    const j = { latitude: 50.08, hourly: { time: [], weather_code: [], temperature_2m: [] } };
+    for (let i = 0; i < n; i++) { j.hourly.time.push(T0 + i * 3600); j.hourly.weather_code.push(codes[i % codes.length]); j.hourly.temperature_2m.push(Math.round((4.3 - 3 * Math.sin(i / 4)) * 10) / 10); }
+    if (f) f(j.hourly);
+    return j;
+  };
+  const fetched = T0 * 1000 + 49 * H;
+  const g = E.wxParse(om(), 'praha', fetched);
+  ok(g && E.wxValid(g) && g.city === 'praha' && g.at === fetched && g.h0 === T0 * 1000 && g.w.length === 72 && g.t.length === 72 &&
+    g.w.slice(0, 8) === 'oooorrro' && g.w[18] === 'r' && g.w[19] === 'c' && g.w[12] === 'o' && g.t.every(Number.isInteger) && Object.keys(g).join() === 'city,at,h0,w,t',
+    'wxParse: the Open-Meteo sample → a valid st.wx ' + (g && g.w.slice(0, 24)));
+  ok(g && g.t[0] === 4 && g.t.includes(1) && g.t.every(v => !Object.is(v, -0)), 'wxParse: temperatures rounded to whole °C (no −0)');
+  const one = E.wxParse(om(1), 'brno', fetched), max = E.wxParse(om(144), 'brno', fetched);
+  ok(one && one.w.length === 1 && max && max.w.length === 144, '1 and 144 hours are fine');
+  const gap1 = E.wxParse(om(72, h => { h.weather_code[10] = null; h.temperature_2m[0] = null; h.temperature_2m[71] = null; }), 'praha', fetched);
+  ok(gap1 && gap1.w[10] === E.wmoChar(codes[9]) && gap1.t[0] === g.t[1] && gap1.t[71] === g.t[70], 'a null hour takes its neighbour');
+  const bad = {
+    'no json': null, 'a string': 'x', 'no hourly': { latitude: 1 }, 'hourly not an object': { hourly: 5 },
+    'no temperatures': om(72, h => { delete h.temperature_2m; }), 'codes shorter': om(72, h => h.weather_code.pop()),
+    'temps longer': om(72, h => h.temperature_2m.push(3)), 'empty': om(0), '145 hours': om(145),
+    'a gap in time': om(72, h => { for (let i = 30; i < 72; i++) h.time[i] += 3600; }), 'time backwards': om(72, h => h.time.reverse()),
+    'time not whole seconds': om(72, h => { h.time = h.time.map(v => v + 0.5); }), 'time as strings': om(72, h => { h.time = h.time.map(String); }),
+    'NaN temperature': om(72, h => { h.temperature_2m[5] = NaN; }), 'Infinity temperature': om(72, h => { h.temperature_2m[5] = Infinity; }),
+    'string temperature': om(72, h => { h.temperature_2m[5] = '4'; }), 'string code': om(72, h => { h.weather_code[5] = '3'; }),
+    'float code': om(72, h => { h.weather_code[5] = 3.5; }), 'temperature 999': om(72, h => { h.temperature_2m[5] = 999; }),
+    'too many nulls': om(72, h => { for (let i = 0; i < 20; i++) h.weather_code[i * 3] = null; }), 'all null': om(4, h => { h.temperature_2m.fill(null); }),
+    'one null hour of one': om(1, h => { h.weather_code[0] = null; }), 'time before 2000': om(3, h => { h.time = [0, 3600, 7200]; }),
+  };
+  let parsedBad = '';
+  for (const k of Object.keys(bad)) { let r; try { r = E.wxParse(bad[k], 'praha', fetched); } catch (e) { r = 'threw ' + e.message; } if (r !== null) parsedBad += ' ' + k; }
+  ok(!parsedBad, 'wxParse: broken inputs give null' + parsedBad);
+  ok(E.wxParse(om(), '', fetched) === null && E.wxParse(om(), 7, fetched) === null && E.wxParse(om(), 'praha', NaN) === null && E.wxParse(om(), 'praha') === null, 'wxParse: a bad city or fetch time gives null');
+  // wxValid
+  const vBad = [null, [], 5, Object.assign({}, g, { w: g.w.slice(0, 71) + 'z' }), Object.assign({}, g, { t: g.t.slice(1) }), Object.assign({}, g, { t: g.t.map((v, i) => i ? v : 1.5) }),
+    Object.assign({}, g, { h0: g.h0 + 0.5 }), Object.assign({}, g, { city: '' }), Object.assign({}, g, { at: 'now' }), Object.assign({}, g, { w: '', t: [] }),
+    mkWx(g.h0, rep('c', 145), 3), Object.assign({}, g, { t: g.t.map(() => 200) }), Object.assign({}, g, { w: 5 })];
+  ok(E.wxValid(g) && vBad.every(v => !E.wxValid(v)), 'wxValid: good and broken series');
+
+  // weather() and sky() inside the series, before and after it, and with no or a broken st.wx
+  const day = at(2026, 11, 20), st = E.create(42, day - D, 'Koxa');
+  const plain = clone(st);
+  st.wx = mkWx(day, rep('c', 6) + 'ofrsx' + rep('c', 13), [5, 5, 5, 5, 5, 5, 4, 3, 2, 1, -3, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+  const wIn = [6, 7, 8, 9, 10].map(h => E.weather(day + h * H + 30 * MIN, st)).join();
+  const sIn = [6, 7, 8, 9, 10].map(h => E.sky(day + h * H + 59 * MIN, st).w).join();
+  ok(wIn === 'cloudy,cloudy,rain,snow,rain' && sIn === 'cloudy,fog,rain,snow,storm', `weather/sky follow the hours: ${wIn} / ${sIn}`);
+  const s10 = E.sky(day + 10 * H, st);
+  ok(s10.temp === -3 && s10.real === true && E.sky(day, st).w === 'clear' && E.sky(day + 24 * H - 1, st).temp === 12, 'sky: the hour\'s temperature, real');
+  let outside = true;
+  for (const t of [day - 1, day - 5 * H, day + 24 * H, day + 30 * H, day + 3 * D]) {
+    const a = E.sky(t, st), b = E.sky(t, plain);
+    if (E.weather(t, st) !== E.weather(t, plain) || a.real || a.temp !== null || a.w !== b.w) outside = false;
+  }
+  ok(outside, 'before h0 and after the last hour: the seeded weather, temp null, real false');
+  let brokenOk = true;
+  for (const wx of [undefined, null, 5, 'x', [], {}, { h0: day, w: 'zzzz', t: [1, 1, 1, 1] }, { h0: 'a', w: 'cccc' }, { h0: day, w: 5 }, { h0: day, w: 'rrrr', t: 'x' }]) {
+    const c = clone(plain); c.wx = wx;
+    try {
+      const t = day + 2 * H + 1, x = E.sky(t, c);
+      if (wx && wx.w === 'rrrr') { if (!(E.weather(t, c) === 'rain' && x.real && x.temp === null)) brokenOk = false; }   // the chars still count, no temp
+      else if (E.weather(t, c) !== E.weather(t, plain) || x.real || x.temp !== null) brokenOk = false;
+      E.advance(c, t + 3 * H);
+    } catch (e) { brokenOk = false; console.log('    ' + e.stack); }
+  }
+  ok(brokenOk, 'no or a broken st.wx: seeded weather, never a crash');
+  ok(E.sky(NaN, st).w === 'clear' && E.sky(day, null).real === false && E.sky(day, undefined).temp === null, 'sky without a cat or with a bad time');
+
+  // a seeded storm day: sky says 'storm' around its thunder, never on a day without one; with real data the storm hours scare
+  const st7 = E.create(7, at(2026, 5, 1), 'Koxa');
+  const stormSky = d0 => { let n = 0; for (let t = d0; t < d0 + D; t += 10 * MIN) if (E.sky(t, st7).w === 'storm') n++; return n; };
+  let stormDay = null, skyAgrees = true, stormDays = 0;
+  for (let d = 0; d < 120; d++) {
+    const s = E.create(7, at(2026, 5, 1 + d, 13), 'Koxa'), d0 = at(2026, 5, 1 + d);
+    const scare = E.advance(s, at(2026, 5, 1 + d, 21)).events.some(isStorm), n = stormSky(d0);
+    if (scare) { stormDays++; if (!stormDay) stormDay = d0; }
+    if (scare ? n !== 9 : n !== 0) skyAgrees = false;
+  }
+  ok(stormDay && skyAgrees && stormSky(at(2026, 11, 2)) === 0, `sky: 'storm' for 1.5 h around the thunder on every seeded storm day (${stormDays} days), never on others`);
+  // real data over the storm day, all clear: no thunder (stormDay ignored while covered)
+  const quiet = E.create(7, stormDay + 13 * H, 'Koxa'); quiet.wx = mkWx(stormDay, rep('c', 24), 22);
+  ok(!E.advance(quiet, stormDay + 21 * H).events.some(isStorm) && E.weather(stormDay + 15 * H, quiet) === 'clear', 'real data covering a seeded storm day: no seeded thunder');
+  // real storm hours in November (never a seeded storm month): one thunder per run of storm hours, in its first 40 min
+  const nov = at(2026, 11, 18), ns = E.create(7, nov + 8 * H, 'Koxa');
+  ns.wx = mkWx(nov, rep('c', 14) + 'xxx' + rep('o', 3) + 'x' + rep('c', 3), 12);
+  const thunders = [];
+  for (let t = nov + 8 * H + 10 * MIN; t <= nov + 24 * H; t += 10 * MIN) for (const e of E.advance(ns, t).events) if (isStorm(e)) thunders.push((t - nov) / H);
+  ok(thunders.length === 2 && thunders[0] > 14 && thunders[0] <= 14 + 50 / 60 && thunders[1] > 20 && thunders[1] <= 20 + 50 / 60, `real storm hours: thunder at the start of each run (${thunders.map(x => x.toFixed(2)).join(', ')} h)`);
+  const ns2 = E.create(7, nov + 8 * H, 'Koxa'); ns2.wx = clone(ns.wx);
+  ok(E.advance(ns2, nov + 23 * H).events.filter(isStorm).length === 2, 'the same thunders in one long advance');
+  // the storm sends her in from the garden, as the seeded one
+  const ng = gardenCat(7, nov + 14 * H); ng.wx = clone(ns.wx); E.act(ng, 'goGarden', null, ng.t);
+  let inside = false; for (let t = ng.t + 5 * MIN; t <= nov + 15 * H; t += 5 * MIN) if (E.advance(ng, t).events.some(e => e.type === 'house')) inside = true;
+  ok(inside && !ng.yard, 'a real storm: she goes in from the garden');
+
+  // beds: rain in one daytime hour of a real day waters them; a real dry day does not, whatever the seeded day says
+  const sp = at(2026, 6, 1, 9);
+  let rainSeed = null, rainDay = null;
+  for (let s = 1; s < 100 && !rainSeed; s++) { const p = E.create(s, sp, 'K'); for (let d = 0; d < 20; d++) if (E.weather(sp + d * D, p) === 'rain') { rainSeed = s; rainDay = at(2026, 6, 1 + d); break; } }
+  const bedCat = (wx) => { const b = E.create(rainSeed, rainDay + 9 * H, 'K'); b.pamlsky = 500; E.act(b, 'sow', { bed: 0, crop: 'carrot' }, b.t); if (wx) b.wx = wx; E.advance(b, rainDay + D + 2 * H); return b.beds[0].days; };
+  ok(bedCat(mkWx(rainDay, rep('c', 24), 18)) === 0 && bedCat(mkWx(rainDay, rep('c', 15) + 'r' + rep('c', 8), 18)) === 1 && bedCat(mkWx(rainDay, rep('c', 15) + 'x' + rep('c', 8), 18)) === 1 &&
+    bedCat(mkWx(rainDay, rep('c', 22) + 'rr', 18)) === 0 && bedCat(undefined) === 1, 'beds: real rain in an hour 6–20 waters them; a real dry day does not (the seeded day said rain)');
+
+  // frost: alone in the garden she comes in after 30 min at most; no nap in the garden
+  const jan = at(2027, 1, 12, 11);
+  const frostCat = (temps, seed = 4) => {
+    const c = gardenCat(seed, jan); c.wx = mkWx(at(2027, 1, 12), rep('c', 24), temps);
+    E.act(c, 'goGarden', null, jan);
+    const ev = E.advance(c, jan + H).events.concat([]);
+    for (let t = jan + H + 10 * MIN; t <= jan + 5 * H && !ev.some(e => e.type === 'back'); t += 10 * MIN) for (const e of E.advance(c, t).events) ev.push(e);
+    return { out: ev.find(e => e.type === 'out' && e.garden), back: ev.find(e => e.type === 'back') };
+  };
+  let frostOk = true, mildOk = true, mins = [];
+  for (let s = 1; s <= 12; s++) {
+    const f = frostCat(-5, s), m = frostCat(-1, s);
+    if (!(f.out && f.out.until - jan === 30 * MIN && f.back && f.back.cold === true && f.back.minutes <= 40)) frostOk = false;
+    if (f.back) mins.push(f.back.minutes);
+    if (!(m.out && m.out.until - jan >= 60 * MIN && (!m.back || (!m.back.cold && m.back.minutes >= 60)))) mildOk = false;
+  }
+  ok(frostOk, `−5 °C: alone in the garden for 30 min, then back { cold: true } (${mins.join(', ')} min)`);
+  ok(mildOk, '−1 °C: no frost, the usual 1–3 h');
+  // frost that begins while she is out there alone: she comes in at its first step
+  const late = gardenCat(4, jan); late.wx = mkWx(at(2027, 1, 12), rep('c', 24), Array.from({ length: 24 }, (_, h) => h < 13 ? 2 : -4));
+  E.act(late, 'goGarden', null, jan);
+  let lb = E.advance(late, jan + 40 * MIN).events.find(e => e.type === 'back'); let lt = late.t;
+  if (late.out) late.out.until = late.out.since + 3 * H;   // a long time alone was drawn
+  for (let t = jan + 50 * MIN; !lb && t <= jan + 4 * H; t += 10 * MIN) { lb = E.advance(late, t).events.find(e => e.type === 'back'); lt = t; }
+  ok(lb && lb.cold && lt <= at(2027, 1, 12, 13, 10), `frost from 13:00: back { cold } at ${new Date(lt).toTimeString().slice(0, 5)}`);
+  // no nap in the garden in a frost; at 5 °C a tired cat naps there
+  const napIn = temps => {
+    const c = gardenCat(9, jan); c.wx = mkWx(at(2027, 1, 12), rep('c', 24), temps); E.act(c, 'goGarden', null, jan);
+    c.needs.energy = 20; c.napAt = jan;
+    let slept = false;
+    for (let t = jan + 10 * MIN; t <= jan + 2 * H; t += 10 * MIN) { E.advance(c, t); if (c.asleep && c.yard) slept = true; if (!c.yard) break; }
+    return slept;
+  };
+  ok(!napIn(-6) && napIn(5), 'a real frost: no nap in the garden (at 5 °C she naps there)');
+
+  // heat: thirst ×1.3, never the sun patch or the sill
+  const hot = at(2026, 7, 15, 10);
+  const thirst = temps => { const c = E.create(21, hot, 'Koxa'); c.dish = 0; c.needs.water = 95; c.wx = mkWx(at(2026, 7, 15), rep('c', 24), temps); E.advance(c, hot + 2 * H); return 95 - c.needs.water; };
+  const dw30 = thirst(30), dw20 = thirst(20), dw28 = thirst(28), dw27 = thirst(27);
+  ok(Math.abs(dw30 / dw20 - 1.3) < 0.01 && Math.abs(dw28 / dw20 - 1.3) < 0.01 && Math.abs(dw27 - dw20) < 1e-6, `heat: water falls ×1.3 from 28 °C (${dw20.toFixed(2)} → ${dw30.toFixed(2)} in 2 h)`);
+  const napPlace = (temps, sill) => {
+    const c = E.create(23, hot - H, 'Koxa'); if (sill) c.owned.sillCushion = true;
+    c.wx = mkWx(at(2026, 7, 15), rep('c', 24), temps);
+    for (let t = hot; t <= hot + 10 * H; t += 30 * MIN) { const e = E.advance(c, t).events.find(x => x.type === 'sleep' && x.nap); if (e) return e.place; }
+    return null;
+  };
+  const places = [napPlace(22, false), napPlace(22, true), napPlace(31, false), napPlace(31, true)].join();
+  ok(places === 'sun,sill,bed,bed', `nap place on a clear summer day: 22 °C sun / sill, 31 °C bed / bed (${places})`);
+
+  // a series that does not cover the time changes nothing (only the key itself)
+  const far = E.create(31, at(2026, 8, 3, 7), 'Koxa'), far2 = clone(far);
+  far2.wx = mkWx(at(2025, 8, 3), rep('x', 144), 35);
+  E.advance(far, at(2026, 8, 5, 19)); E.advance(far2, at(2026, 8, 5, 19));
+  const fx = clone(far2); delete fx.wx;
+  ok(JSON.stringify(fx) === JSON.stringify(far), 'a series outside the time: exactly the seeded behaviour');
+
+  // the launcher's forecast: probes = separate advances, with real weather (storms, frost, heat, rain)
+  {
+    const times = t0 => { const a = []; for (let h = 1.5; h <= 48; h += h < 12 ? 0.5 : 1) a.push(t0 + h * H); return a; };
+    let same = 0, all = 0, diff = '';
+    for (let seed = 1; seed <= 6; seed++) {
+      const tc = at(2026, 1 + seed * 2, 3 + seed, 6 + seed * 2, 7 * seed), s = E.create(seed, tc, 'Koxa');
+      const h0 = Math.floor(tc / H) * H, n = 120;
+      let w = '', tt = [];
+      for (let i = 0; i < n; i++) { w += 'cofrsxrrcc'[Math.floor(i / (1 + seed % 3) + seed) % 10]; tt.push(Math.round(12 * Math.sin((i + seed * 5) / 7)) + (seed % 2 ? 18 : -2)); }
+      s.wx = mkWx(h0, w, tt);
+      if (!E.wxValid(s.wx) || !/x/.test(w) || !tt.some(v => v <= -2 || v >= 28)) ok(false, `probe series ${seed} is valid, with storms and frost or heat`);
+      E.advance(s, tc + seed * 5 * H + 13 * MIN);
+      if (seed % 2) E.act(s, 'feed', { food: 'granule' }, s.t);
+      if (seed % 3 === 0) E.act(s, 'goGarden', {}, s.t);
+      const T = times(s.t), got = new Map();
+      E.advance(clone(s), T[T.length - 1], { at: T, fn: c => got.set(c.t, JSON.stringify(c)) });
+      for (const t of T) {
+        const c = clone(s); E.advance(c, t);
+        all++;
+        if (got.get(t) === JSON.stringify(c)) same++; else if (!diff) diff = `seed ${seed}, +${((t - s.t) / H).toFixed(1)} h`;
+      }
+    }
+    ok(same === all, `with st.wx every probe equals its own advance (${same}/${all})${diff ? ': first difference ' + diff : ''}`);
+  }
+
+  // saving and loading: a valid series survives (canonical), a broken one is dropped, never a crash
+  const sv = E.create(5, day - D, 'Koxa'); sv.wx = clone(st.wx);
+  const loaded = JSON.parse(JSON.stringify(sv)); E.repair(loaded);
+  ok(JSON.stringify(loaded.wx) === JSON.stringify(st.wx), 'a valid st.wx survives saving and loading');
+  invariants(sv, 'with st.wx');
+  const extra = clone(sv); extra.wx.junk = 1; extra.wx.t = extra.wx.t.slice(); E.repair(extra);
+  ok(extra.wx && !('junk' in extra.wx) && Object.keys(extra.wx).join() === 'city,at,h0,w,t', 'repair keeps only the known fields of st.wx');
+  let dropped = 0, threw = '';
+  const breaks = [w => null, w => 5, w => 'x', w => [], w => ({}), w => Object.assign(w, { w: w.w + 'c' }), w => Object.assign(w, { t: w.t.map(String) }), w => Object.assign(w, { h0: NaN }),
+    w => Object.assign(w, { city: null }), w => Object.assign(w, { at: -5 }), w => Object.assign(w, { w: 'q' + w.w.slice(1) }), w => Object.assign(w, { t: null })];
+  for (const b of breaks) {
+    const c = JSON.parse(JSON.stringify(sv)); c.wx = b(c.wx);
+    try { const ok2 = E.valid(c); if (ok2 && !('wx' in c)) dropped++; E.advance(c, c.t + 5 * H); E.sky(c.t, c); } catch (e) { threw += ' ' + e.message; }
+  }
+  ok(dropped === breaks.length && !threw, `a broken st.wx is dropped on load (${dropped}/${breaks.length})${threw}`);
+  const sw = clone(sv);
+  ok(E.setWx(sw, { w: 'c' }) === false && sw.wx.w === sv.wx.w && E.setWx(sw, g) === true && sw.wx.w === g.w && sw.wx.t !== g.t && E.setWx(sw, null) === true && !('wx' in sw),
+    'setWx: invalid → false (unchanged), valid → a copy, null → removed');
+  ok(!('wx' in E.create(1, day, 'K')), 'a new cat has no st.wx');
+}
+
 section('Input: pat runs, rhythm, sounds (the Input block)');
 {
   // the Input block from the same file as the engine (an .html: the "Input" block; a .js: input.js next to it)

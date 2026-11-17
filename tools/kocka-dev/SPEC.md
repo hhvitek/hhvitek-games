@@ -532,6 +532,34 @@ alone she comes in by herself (`back { walk: false, rain: true }`). The house do
 her (`goGarden`) joins her (`garden { joined: true }`, the time alone is over); a call says "Koxa je na zahradě.". She
 sees neighbour cats there (their mood effect applies, reaction never 'away'). Night: the garden is dark with fireflies in summer; she wants to go out at dusk.
 
+### 12f. Počasí: the real weather (opt-in, engine side 2026-11-17)
+The weather may mirror the real weather of a chosen city. The UI fetches Open-Meteo
+(`hourly=weather_code,temperature_2m&past_days=2&forecast_days=3&timezone=auto&timeformat=unixtime`) and stores
+`E.wxParse(json, cityId, fetchedAt)` with `E.setWx(st, wx)` (`setWx(st, null)` switches it off). The engine stays pure:
+everything comes from `st` and the time, so `advance` with a probe still equals separate advances.
+- **`st.wx`** = `{ city, at, h0, w, t }`: city id, fetch time (ms), the first hour (ms), one char per hour, whole °C per
+  hour; 1–144 hours, hour i covers `[h0 + i h, h0 + (i + 1) h)`. Chars from the WMO code (`E.wmoChar`): 0–1 `c` clear,
+  2–3 `o` cloudy, 45/48 `f` fog, 51–67 and 80–82 `r` rain, 71–77 and 85–86 `s` snow, 95–99 `x` thunderstorm, any other `o`.
+- **Validation:** `wxParse` returns null unless the arrays have equal lengths of 1–144, the times are whole seconds
+  exactly 3600 apart, the codes integers and the temperatures finite numbers in −80…60 °C; a null hour takes the
+  nearest hour's value (the earlier on a tie) when at most a quarter of the hours are null. `E.wxValid(wx)` checks a
+  stored series; `repair` keeps a canonical copy of a valid one and deletes a broken one (never a crash).
+- **Fallback:** where the series does not cover the moment (before `h0`, after its last hour, no data, switched off),
+  everything is seeded exactly as before (§12e; the same all day). With data the weather can change hour by hour:
+  `weather(ms, st)` still answers `clear | cloudy | rain | snow` (`x` → rain, `f` → cloudy), so the behaviour code is
+  unchanged. Callers that assumed "the same all day": the beds count as rained on when any covered hour 6–20 of that day
+  rains (`x` too); without data the seeded day as before. The rest asks about the moment itself (the garden step, the
+  sun-patch nap, coming in from the rain, visitors, the start of an absence).
+- **`E.sky(ms, st)`** = `{ w: clear | cloudy | fog | rain | storm | snow, temp: °C | null, real }` for the art and the UI;
+  without data the seeded weather, `storm` from 30 min before to 60 min after the seeded storm's thunder.
+- **Thunder:** where the series covers the moment, the storm scare (`scared`/`curious { what: 'storm' }`, she leaves the
+  garden) comes once per run of `x` hours, at a seeded minute 0–39 of its first hour (any month); the seeded summer
+  storm day is ignored there.
+- **Temperature effects, only with a known temperature** (no data: today's behaviour and balance): **frost** (≤ −2 °C):
+  left alone in the garden she comes in after at most 30 min (`back { cold: true }`; the `out` event's `until` is capped
+  when it is freezing already), and with the player in the garden she does not fall asleep there; **heat** (≥ 28 °C):
+  water falls ×1.3, and a nap is never in the sun patch or on the window sill (her box or her bed). Constants: `E.WX`.
+
 ## 11. Texts and names
 - `nameForms(name)`: Czech cases for the common phrases are avoided by phrasing ("Koxa má hlad", "Zavolat: Koxa",
   "Pohlaď Koxu" only when the accusative is safe: names ending in -a → -u; otherwise "Pohlaď ji").
