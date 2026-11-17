@@ -320,8 +320,10 @@ const goalFor = size => size === 3 ? S.goal / 4 : S.goal;
 const goal = () => goalFor(G ? G.n : S.size); // the goal of the game on the board
 const IMG = globalThis.IMAGE_SETS || {}, IMG_BASE = '../../images/';
 const PIC_LEVELS = 17; // pictures for 2 … 131072
-const TILESETS = [{ id: 'numbers', nameKey: 'spojovani-cisel.tiles.numbers' }].concat(Object.keys(IMG).map(id => ({ id, name: IMG[id].name })));
-const tilesetName = x => x.nameKey ? t(x.nameKey) : x.name; // the picture sets are named in images/sets.js
+// the picture sets' names in the player's language (a set added to images/sets.js without a key here shows its Czech name)
+const SET_KEYS = { cats: 'spojovani-cisel.tiles.cats', nachod: 'spojovani-cisel.tiles.nachod', coats: 'spojovani-cisel.tiles.coats', mushrooms: 'spojovani-cisel.tiles.mushrooms', birds: 'spojovani-cisel.tiles.birds', produce: 'spojovani-cisel.tiles.produce' };
+const TILESETS = [{ id: 'numbers', nameKey: 'spojovani-cisel.tiles.numbers' }].concat(Object.keys(IMG).map(id => ({ id, nameKey: SET_KEYS[id], name: IMG[id].name })));
+const tilesetName = x => x.nameKey ? t(x.nameKey) : x.name;
 const DEFAULTS = { size: 4, goal: 2048, swipe: true, tiles: 'numbers', theme: 'sand', vibrate: true };
 // Saved state under the launcher's games.<id>.* prefix; OLD_KEY is the name used before (read once, then removed)
 const KEY = 'games.spojovani-cisel.state', OLD_KEY = 'spojovani-cisel.v1', BADGE = 'games.spojovani-cisel.inProgress';
@@ -763,7 +765,7 @@ function openCredits() {
   $('#creditsIn').innerHTML = `
     <div class="screen-head"><button class="back" data-act="close">${th('common.back')}</button><h2>${th('game.spojovani-cisel.name')}<small>${th('spojovani-cisel.credits.link')}</small></h2></div>
     <section class="card credits"><p class="fnote" style="margin-top:0">${th('spojovani-cisel.credits.intro')}</p></section>
-    ${Object.keys(IMG).map(id => `<section class="card credits"><h3>${esc(IMG[id].name)}</h3><ol>${IMG[id].items.slice(0, PIC_LEVELS).map((it, i) => creditLine(it, IMG[id].kind === 'drawing', `${2 ** (i + 1)}: `)).join('')}</ol></section>`).join('')}
+    ${Object.keys(IMG).map(id => `<section class="card credits"><h3>${SET_KEYS[id] ? th(SET_KEYS[id]) : esc(IMG[id].name)}</h3><ol>${IMG[id].items.slice(0, PIC_LEVELS).map((it, i) => creditLine(it, IMG[id].kind === 'drawing', `${2 ** (i + 1)}: `)).join('')}</ol></section>`).join('')}
     <button class="big" data-act="close">${th('spojovani-cisel.credits.back')}</button>`;
   $('#screenCredits').hidden = false; $('#screenCredits').scrollTop = 0;
 }

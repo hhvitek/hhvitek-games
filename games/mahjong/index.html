@@ -288,7 +288,9 @@ const SIZES = [
 // Shared image sets from images/sets.js (missing when the game is opened on its own)
 const IMG = globalThis.IMAGE_SETS || {}, IMG_BASE = '../../images/';
 // Names of the two framed groups of a picture set, from images/sets.js: faces 34–37 are group 1, 38–41 group 2 (see kindOf)
-const groupsOf = id => { const it = (IMG[id] && IMG[id].items) || []; return [it[34] && it[34].group, it[38] && it[38].group]; };
+const GROUP_KEYS = { cats: ['mahjong.group.kittens', 'mahjong.group.sleepingCats'], nachod: ['mahjong.group.grandmasValley', 'mahjong.group.rocks'], coats: ['mahjong.group.districtTowns', 'mahjong.group.broumov'],
+  mushrooms: ['mahjong.group.boletes', 'mahjong.group.poisonous'], birds: ['mahjong.group.tits', 'mahjong.group.owls'], produce: ['mahjong.group.berries', 'mahjong.group.roots'] };
+const groupsOf = id => (GROUP_KEYS[id] || []).map(key => t(key));
 const SETS = [
   { id: 'classic',   nameKey: 'mahjong.set.classic', descKey: 'mahjong.set.classic.desc', groups: [t('mahjong.group.flowers'), t('mahjong.group.seasons')], sample: [4, 13, 21, 31] },
   { id: 'pics',      nameKey: 'mahjong.set.pics', descKey: 'mahjong.set.pics.desc', groups: [t('mahjong.group.flowers'), t('mahjong.group.seasons')], sample: [4, 13, 21, 31] },

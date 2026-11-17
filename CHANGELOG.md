@@ -9,6 +9,7 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 - Hry jsou nově i anglicky. Jazyk se řídí telefonem a přepíná se vlajkou nahoře ve výběru her nebo v Nastavení („Jazyk / Language“); čeština zůstává beze změny.
 - Po přepnutí jazyka zůstává rozehraný soupeř stejný (mění se jen jeho jméno).
+- V angličtině už nezůstávají české názvy sad obrázků ve Spojování čísel a skupin v Mahjongu a Spojování obrázků; koťata v Kočce dostávají jména v jazyce hry (dokud je nepojmenuješ).
 - Drobné opravy češtiny: správné tvary čísel (např. „1 bod, 2 body“ ve Věžičkách).
 - Kočka: zatažená obloha už bez slunce a bouřka s blesky. Nově jde v Nastavení zapnout „Skutečné počasí“: Koxa pak má stejné počasí jako vybrané město (Praha, Náchod a další), včetně mlhy, mrazu na oknech a horka. Ve výchozím stavu je vypnuté a karta v Nastavení přesně říká, co se kam posílá.
 

@@ -29,7 +29,7 @@ The user's decisions on how things should be are in CLAUDE.md ("Decisions…" se
 
 - [ ] Release gate: `tools/release.js` should refuse a release when a ready language has debt (`node tools/i18n.js --strict`); not wired yet.
 - [ ] "Co je nového" (`CHANGELOG.md`, `APP_CHANGES`) is Czech only; make it bilingual from now on (English players see a note that the changes are in Czech).
-- [ ] Image names in `images/sets.js` are Czech: move them to `i18n/images.js`.
+- [ ] Image names in `images/sets.js` are Czech: move them to `i18n/images.js`. English players see them on the credits screens (Mahjong, Spojování obrázků, Pexeso, Spoj tři, Spojování čísel), in Kočka's postcards, and the Czech notes in the `author` fields too ("(finská Wikipedie)", "(kód SVG)", "pan BMP podle díla autorů …" in the card games' back credit). The set and group names are already texts of each game (2026-11-17).
 - [ ] `tools/kocka-dev/SPEC.md` still describes the engine's old text fields (`name`, Czech case forms, `text`); the engine now returns ids and codes and the page builds the messages (`games/kocka/texts.js`).
 - [ ] `tools/kocka-dev/SPEC.md` still describes the engine's old text fields (`name`, case forms, `text`); the engine now returns ids and codes and the page builds the messages (see `games/kocka/texts.js`).
 - [ ] The `apple-mobile-web-app-title` meta and the manifest stay Czech (user's decision); revisit only if a language needs them.

@@ -4207,5 +4207,24 @@ section('Art: rearUp lifts her rear right under the finger (the Cat art block)')
   }
 }
 
+/* ---------- Kitten names in the player's language (setKitNames) ---------- */
+section('Kitten names');
+{
+  const cs = E.kitNames();
+  ok(cs.f === E.KIT_NAMES.f && cs.m === E.KIT_NAMES.m && cs.kitten === 'Koťátko', 'the Czech names are the default');
+  const en = { f: ['Daisy', 'Paws', 'Pebble', 'Tabby'], m: ['Tiger', 'Smudge', 'Biscuit', 'Pepper'], girl: 'Kitty', boy: 'Tom', kitten: 'Kitten' };
+  for (const [what, bad] of [['no object', null], ['a short list', { ...en, f: ['A', 'B'] }], ['a duplicate', { ...en, m: ['Tiger', 'tiger', 'C', 'D'] }],
+    ['an empty name', { ...en, f: ['', 'B', 'C', 'D'] }], ['a padded name', { ...en, boy: ' Tom' }], ['a long name', { ...en, kitten: 'x'.repeat(21) }], ['a number', { ...en, girl: 5 }]])
+    ok(E.setKitNames(bad) === false && E.kitNames() === cs, 'setKitNames refuses ' + what + ' and keeps the names');
+  ok(E.setKitNames(en) === true && E.kitNames().f.join() === en.f.join() && E.kitNames().kitten === 'Kitten', 'setKitNames takes a valid set');
+  en.f[0] = 'Changed';
+  ok(E.kitNames().f[0] === 'Daisy', 'setKitNames keeps its own copy');
+  const g = E.create(7, at(2026, 6, 10, 10), 'Koxa');
+  g.kits.push({ id: 'k1', mother: 'liza', name: '', named: false, fem: true, coat: 'liza', born: g.t - 2 * D, trait: 'playful', solo: 0 });
+  E.repair(g);
+  ok(g.kits.length === 1 && g.kits[0].name === 'Kitten', 'repair names a nameless kitten in the language set (' + (g.kits[0] && g.kits[0].name) + ')');
+  ok(E.setKitNames({ f: E.KIT_NAMES.f, m: E.KIT_NAMES.m, girl: 'Kočička', boy: 'Kocourek', kitten: 'Koťátko' }) === true && E.kitNames().kitten === 'Koťátko', 'back to the Czech names');
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -2274,6 +2274,17 @@ function KockaEngine() {
     f: ['Micinka', 'Packa', 'Kulička', 'Mourinka', 'Bětka', 'Fifinka', 'Ťapka', 'Žofka', 'Kapička', 'Lilinka', 'Mína', 'Čiča'],   // i18n-ignore: stored names
     m: ['Tygřík', 'Čertík', 'Mikeš', 'Šmudla', 'Drobek', 'Bobík', 'Fíla', 'Ťapík', 'Uhlík', 'Pepík', 'Mourínek', 'Kulíšek'],   // i18n-ignore: stored names
   });
+  // the names of the player's language: the UI sets them from its texts (setKitNames); the Czech ones above are the default.
+  // Only the choice of a new name depends on them, never the behaviour.
+  let kitNamesNow = { f: KIT_NAMES.f, m: KIT_NAMES.m, girl: 'Kočička', boy: 'Kocourek', kitten: 'Koťátko' };   // i18n-ignore: the default stored names (see KIT_NAMES)
+  const kitNameOk = s => typeof s === 'string' && s.trim() === s && s.length >= 1 && s.length <= 20;
+  function setKitNames(o) {
+    const list = L => Array.isArray(L) && L.length >= 4 && L.length <= 40 && L.every(kitNameOk) && new Set(L.map(s => s.toLowerCase())).size === L.length;
+    if (!o || !list(o.f) || !list(o.m) || !kitNameOk(o.girl) || !kitNameOk(o.boy) || !kitNameOk(o.kitten)) return false;
+    kitNamesNow = { f: o.f.slice(), m: o.m.slice(), girl: o.girl, boy: o.boy, kitten: o.kitten };
+    return true;
+  }
+  const kitNames = () => kitNamesNow;
   // a kitten's trait when not the mother's (30 %): playful ones are the most common, never old
   const KIT_TRAITS = deep({ curious: 2, shy: 1, bold: 1, playful: 3, greedy: 1, grumpy: 0.5, sleepy: 1 });
   // where a young cat (from 21 days) likes a stroke, by its trait (a small kitten likes it everywhere); the UI's help line
@@ -2320,9 +2331,9 @@ function KockaEngine() {
   function kitsNew(st) { return (Array.isArray(st.kits) ? st.kits : []).filter(k => !k.named && kitSeen(st, k)).map(k => visitor(st, k.id)); }
   function kitName(st, fem, r) {
     const used = new Set([st.name].concat(st.kits.map(k => k.name)).map(s => s.toLowerCase()));   // KIT_NAMES has no neighbour's name
-    const L = KIT_NAMES[fem ? 'f' : 'm'], s = Math.floor(r * L.length);
+    const L = kitNamesNow[fem ? 'f' : 'm'], s = Math.floor(r * L.length);
     for (let i = 0; i < L.length; i++) { const nm = L[(s + i) % L.length]; if (!used.has(nm.toLowerCase())) return nm; }
-    return fem ? 'Kočička' : 'Kocourek';   // i18n-ignore: a kitten name stored in the save (see KIT_NAMES)
+    return fem ? kitNamesNow.girl : kitNamesNow.boy;
   }
   // a new local day: a mother the player has 3 hearts with may have kittens (seeded by the day, salts 40–49); she stays
   // away 2–3 days and then comes with them; the kittens are born at the day's midnight
@@ -2948,7 +2959,7 @@ function KockaEngine() {
       ids.add(k.id);
       const born = head ? head.born : k.born, named = typeof k.name === 'string' && !!k.name.trim();
       st.kits.push({
-        id: k.id, mother: k.mother, name: named ? cleanName(k.name) : 'Koťátko',   // i18n-ignore: a kitten name stored in the save (see KIT_NAMES)
+        id: k.id, mother: k.mother, name: named ? cleanName(k.name) : kitNamesNow.kitten,
         named: named && k.named === true, fem: k.fem === true,
         coat: k.coat === k.mother || TOMS.includes(k.coat) ? k.coat : k.mother, born,
         trait: Object.prototype.hasOwnProperty.call(KIT_TRAITS, k.trait) ? k.trait : 'playful',
@@ -3016,7 +3027,7 @@ function KockaEngine() {
   return {
     NEEDS, FOODS, TOYS, REGIONS, FEARS, QUIRKS, ILLS, LEVELS, HOLIDAYS, ACTIONS, CROPS, PRESENTS, WEATHERS, POSTCARDS, BEDS,
     SHOP, GAMES, TRICKS, ROOMS, EARN_CAP, VISITORS, VISIT_ACTS, VISITOR_LIKES, ALBUM_MAX, album, canInvite, visitorLikes,
-    KIT, KIT_NAMES, visitor, visitorIds, kitsNew, TEASE, patTempo, BOWL, DISH, SLEEP_PLACES, bowls, mealTime, mealTimes, SLEEP, CALL, NOTICE,
+    KIT, KIT_NAMES, setKitNames, kitNames, visitor, visitorIds, kitsNew, TEASE, patTempo, BOWL, DISH, SLEEP_PLACES, bowls, mealTime, mealTimes, SLEEP, CALL, NOTICE,
     create, valid, repair, rename, advance, act, consumeTreats, minigameResult, shop, tricks,
     mood, moodValue, wants, needs, health, bondLevel, diary,
     dayPhase, season, holiday, easter, weather, postcardAt, bedCount,

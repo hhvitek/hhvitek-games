@@ -300,7 +300,9 @@ const sizeOf = id => SIZES.find(x => x.id === id) || SIZES[1];
 // Shared image sets from images/sets.js (missing when the game is opened on its own)
 const IMG = globalThis.IMAGE_SETS || {}, IMG_BASE = '../../images/';
 // Names of the two framed groups of a picture set, from images/sets.js: faces 34–37 are group 1, 38–41 group 2 (see kindOf)
-const groupsOf = id => { const it = (IMG[id] && IMG[id].items) || []; return [it[34] && it[34].group, it[38] && it[38].group]; };
+const GROUP_KEYS = { cats: ['spojovani-obrazku.group.kittens', 'spojovani-obrazku.group.sleepingCats'], nachod: ['spojovani-obrazku.group.grandmasValley', 'spojovani-obrazku.group.rocks'], coats: ['spojovani-obrazku.group.districtTowns', 'spojovani-obrazku.group.broumov'],
+  mushrooms: ['spojovani-obrazku.group.boletes', 'spojovani-obrazku.group.poisonous'], birds: ['spojovani-obrazku.group.tits', 'spojovani-obrazku.group.owls'], produce: ['spojovani-obrazku.group.berries', 'spojovani-obrazku.group.roots'] };
+const groupsOf = id => (GROUP_KEYS[id] || []).map(key => t(key));
 const SETS = [
   { id: 'classic',   nameKey: 'spojovani-obrazku.set.classic', descKey: 'spojovani-obrazku.set.classic.desc', groups: [t('spojovani-obrazku.group.flowers'), t('spojovani-obrazku.group.seasons')], sample: [4, 13, 21, 31] },
   { id: 'pics',      nameKey: 'spojovani-obrazku.set.pics', descKey: 'spojovani-obrazku.set.pics.desc', groups: [t('spojovani-obrazku.group.flowers'), t('spojovani-obrazku.group.seasons')], sample: [4, 13, 21, 31] },

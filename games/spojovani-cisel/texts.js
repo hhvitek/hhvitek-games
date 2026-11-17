@@ -1,7 +1,7 @@
 // Texts of Spojování čísel. cs is the source; other languages are filled by the translation pass (CLAUDE.md, Texts and languages).
 // Keys start with the game's id. The name of the game is game.spojovani-cisel.name in i18n/games.js; shared buttons and
 // dialogs are common.* in i18n/common.js.
-// The names of the picture sets and of the pictures in the credits come from images/sets.js.
+// The names of the pictures in the credits come from images/sets.js (Czech for now, TODO.md).
 I18N.add({
   'spojovani-cisel.theme.sand':      { cs: 'Písek', en: 'Sand' },
   'spojovani-cisel.theme.night':     { cs: 'Noc', en: 'Night' },
@@ -11,6 +11,12 @@ I18N.add({
   'spojovani-cisel.goal.512.desc':   { cs: 'Kratší hra, cíl je brzy na dosah.', en: 'A shorter game, the goal is within reach soon.' },
   'spojovani-cisel.goal.1024.desc':  { cs: 'Středně dlouhá hra.', en: 'A medium-length game.' },
   'spojovani-cisel.goal.2048.desc':  { cs: 'Klasický cíl, chce trpělivost.', en: 'The classic goal, it takes patience.' },
+  'spojovani-cisel.tiles.cats':      { cs: 'Kočky', en: 'Cats', note: 'a picture set (photos of cats)' },
+  'spojovani-cisel.tiles.nachod':    { cs: 'Náchodsko', en: 'Náchod region', note: 'a picture set (photos of the Náchod region)' },
+  'spojovani-cisel.tiles.coats':     { cs: 'Znaky obcí', en: 'Municipal coats of arms', note: 'a picture set (coats of arms of towns and villages)' },
+  'spojovani-cisel.tiles.mushrooms': { cs: 'Houby', en: 'Mushrooms', note: 'a picture set (drawn mushrooms)' },
+  'spojovani-cisel.tiles.birds':     { cs: 'Ptáci', en: 'Birds', note: 'a picture set (drawn birds)' },
+  'spojovani-cisel.tiles.produce':   { cs: 'Ovoce a zelenina', en: 'Fruit and vegetables', note: 'a picture set (drawn fruit and vegetables)' },
   'spojovani-cisel.tiles.numbers':   { cs: 'Čísla',
                                        en: 'Numbers', note: 'the tile set with plain numbers (the picture sets are named in images/sets.js)' },
 
