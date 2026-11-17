@@ -1415,7 +1415,11 @@ function KockaEngine() {
     if (T.pay) T.pay = { kind: T.pay.kind, at: T.pay.at + d };
     T.payDay = Math.min(T.payDay, today); T.bondDay = Math.min(T.bondDay, today);
   }
-  function advance(st, now) {
+  // probe (optional) = { at: [times, ascending], fn(copy) }: fn gets, at each of those times, a copy of her exactly as an
+  // advance from the same start to that time alone would leave her (the same steps, then the same tidying at the end).
+  // Only for times more than an hour after the start: a shorter advance is "watching" and steps differently. The launcher's
+  // forecast uses it to get many times in one pass.
+  function advance(st, now, probe) {
     const ev = [];
     if (typeof now !== 'number' || !Number.isFinite(now) || now < T_MIN || now > T_MAX) return { st, events: ev };   // a broken clock
     if (now <= st.t) { shiftTimes(st, now); ensurePlan(st); return { st, events: ev }; }   // the clock moved back: nothing happens
@@ -1436,12 +1440,20 @@ function KockaEngine() {
     const end = gap > AWAY ? start + AWAY : now;
     // steps of 10 minutes on a grid from start (so one long advance and many short ones step alike), also ended at her
     // next planned moment (falling asleep, waking, a late come), so the step length never moves those
+    let pi = 0;
     for (let t = start; t < end;) {
       let dt = Math.min(start + (Math.floor((t - start) / STEP) + 1) * STEP, end) - t;
       const nx = nextMoment(st, t);
       if (nx < t + dt) dt = nx - t;
       step(st, t, dt, t - start >= HELP, watching, ev);
       t += dt;
+      // a probe time on the step grid is reached exactly (others are skipped): the end of an advance to it, on a copy
+      for (; probe && pi < probe.at.length && probe.at[pi] <= t; pi++) {
+        if (probe.at[pi] !== t || t - start <= HOUR) continue;
+        const c = JSON.parse(JSON.stringify(st));
+        c.t = t; teaseTidy(c); ensurePlan(c); syncWant(c);
+        probe.fn(c);
+      }
     }
     st.t = end;
     if (gap > AWAY) {

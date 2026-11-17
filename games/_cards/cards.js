@@ -1,5 +1,5 @@
 // Shared look of the card games (Solitér, FreeCell, Pyramida, Pavouk): table themes, card faces and backs,
-// the pictures in the middle of the cards and the appearance part of their settings.
+// the pictures in the middle of the cards and the appearance part of their settings; also their statistics rule.
 // Load it after images/sets.js:  <script src="../_cards/cards.js"></script>
 // It adds its CSS and the suit symbols (#s0–#s3) to the page and sets globalThis.CARDS.
 // Cards here are described by suit (0 ♠, 1 ♥, 2 ♣, 3 ♦; odd = red) and rank (1 = ace … 13 = king).
@@ -207,5 +207,49 @@ function applyLook(S) {
   if (meta) meta.content = TABLES.find(t => t.id === S.table).meta;
 }
 
-globalThis.CARDS = { TABLES, BACKS, FACES, PICS, CASTLE, COAT, artSVG, faceHTML, appearanceHTML, normalizeLook, applyLook };
+/* ---------- Statistics of the solitaires (Solitér, FreeCell, Pyramida, Pavouk) ---------- */
+// User's rule 2026-11-13: a game counts as played once, at its first end (won, or "Dál to nejde" declared), and never
+// when Poradit was used in it. Its win counts once too, also when Undo got the player out of a declared stuck end.
+// Flags on the game: counted = "played" was added (versions before 1.0.16 added it at the first move, so such a game
+// gets only what is missing), scored = an end was counted, wonCounted = its win was counted, hinted = Poradit was used
+// (kept by Undo and "Od začátku"; a new game starts with all four false).
+// o = { game: () => G, stat: () => the { played, won } of the game's variant, save, toast, hint: () => HINT }
+function statsKit(o) {
+  const NOTE_MS = 2600;
+  // the flags of a loaded game (a won game was counted)
+  function validFlags(g) {
+    g.counted = g.counted === true; g.hinted = g.hinted === true;
+    g.scored = g.scored === true || g.status === 'won'; g.wonCounted = g.wonCounted === true || g.status === 'won';
+  }
+  function countEnd(won) {
+    const g = o.game();
+    if (g.hinted) return;
+    g.scored = true;
+    const st = o.stat();
+    if (!g.counted) { g.counted = true; st.played++; }
+    if (won && !g.wonCounted) { g.wonCounted = true; st.won++; }
+  }
+  // Marks the game as hinted; true the first time while the game can still add something (then the player is told)
+  function markHinted() {
+    const g = o.game();
+    if (g.hinted) return false;
+    g.hinted = true; o.save();
+    return !g.wonCounted;
+  }
+  // the hint's message, the first time after the note that the game no longer counts
+  function hintToast(msg, ms, note) {
+    if (!note) { o.toast(msg, ms); return; }
+    o.toast('S radou se tahle hra nepočítá do statistiky', NOTE_MS);
+    const h = o.hint();
+    setTimeout(() => { const now = o.hint(); if (now && now === h) o.toast(msg, ms); }, NOTE_MS);
+  }
+  return { NOTE_MS, validFlags, countEnd, markHinted, hintToast };
+}
+// Statistics saved before the rule above counted every started game: kept as they are, with a note.
+// stored = the saved stats object, played = how many games it counts in all
+const statsMixed = (stored, played) => stored && typeof stored === 'object' && typeof stored.mixed === 'boolean' ? stored.mixed : played > 0;
+const statsNote = mixed => `<p class="fnote">Počítají se jen dohrané hry (vyhrané, nebo když už nejde žádný tah) bez Poradit.${mixed
+  ? ' Starší čísla zahrnují i hry, které nebyly dohrané: dřív se počítala každá rozehraná hra.' : ''}</p>`;
+
+globalThis.CARDS = { TABLES, BACKS, FACES, PICS, CASTLE, COAT, artSVG, faceHTML, appearanceHTML, normalizeLook, applyLook, statsKit, statsMixed, statsNote };
 })();

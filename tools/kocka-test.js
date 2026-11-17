@@ -3169,6 +3169,31 @@ section("A cat's day: sleep, the garden alone, calls, visitors seen, walks");
   }
 }
 
+/* ---------- The launcher's forecast: one advance with probes = an advance to each time alone ---------- */
+section('Forecast probes (advance with probe = advance to each time alone)');
+{
+  const times = t0 => { const a = []; for (let h = 1.5; h <= 48; h += h < 12 ? 0.5 : 1) a.push(t0 + h * H); return a; };
+  let same = 0, all = 0, diff = '';
+  for (let seed = 1; seed <= 6; seed++) {
+    const tc = at(2026, 1 + seed * 2, 3 + seed, 6 + seed * 2, 7 * seed), st = E.create(seed, tc, 'Koxa');
+    E.advance(st, tc + seed * 5 * H + 13 * MIN);   // she has lived a while: needs, plans, maybe out or asleep
+    if (seed % 2) E.act(st, 'feed', { food: 'granule' }, st.t);
+    if (seed % 3 === 0) E.act(st, 'goGarden', {}, st.t);
+    const T = times(st.t), got = new Map();
+    E.advance(clone(st), T[T.length - 1], { at: T, fn: c => got.set(c.t, JSON.stringify(c)) });
+    for (const t of T) {
+      const c = clone(st); E.advance(c, t);
+      all++;
+      if (got.get(t) === JSON.stringify(c)) same++; else if (!diff) diff = `seed ${seed}, +${((t - st.t) / H).toFixed(1)} h`;
+    }
+  }
+  ok(same === all, `every probe equals its own advance (${same}/${all})${diff ? ': first difference ' + diff : ''}`);
+  // probes in the first hour are skipped (an advance that short is "watching" and steps differently)
+  const st = E.create(3, at(2026, 5, 5, 10), 'Koxa'), seen = [];
+  E.advance(clone(st), st.t + 3 * H, { at: [st.t + 0.5 * H, st.t + H, st.t + 2 * H], fn: c => seen.push((c.t - st.t) / H) });
+  ok(seen.join() === '2', 'probes within the first hour are skipped: ' + seen.join());
+}
+
 /* ---------- Škádlení: teasing out of love (SPEC §13.3) ---------- */
 section('Teasing');
 {

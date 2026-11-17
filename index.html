@@ -340,6 +340,15 @@ function catNow() {
   }
   return c;
 }
+// Kočka's badge ("Rozehráno" while she wants something or is ill) follows her forecast, not only her last save
+const hasBadge = (id, cat) => id === 'kocka' && cat ? !!(cat.wants || cat.ill) : inProgress(id);
+// The launcher shown again (left open in the background): Kočka's badge moves on with her line, the rows stay in place
+function syncCatBadge() {
+  const top = grid.querySelector('.game[data-id="kocka"] .top'); if (!top) return;
+  const on = hasBadge('kocka', catNow()), el = top.querySelector('.badge');
+  if (on && !el) top.querySelector('.name').insertAdjacentHTML('afterend', '<span class="badge">Rozehráno</span>');
+  else if (!on && el) el.remove();
+}
 function renderCat() {
   const el = document.getElementById('catLine'), M = catNow();
   if (!L.catLink || !hasCat() || !M) { el.hidden = true; return; }
@@ -533,8 +542,7 @@ function render() {
   renderDate(); renderCat();
   const games = (globalThis.GAMES || []).map((g, i) => ({ ...g, order: i, plays: plays(g.id) }));
   if (!games.length) { grid.outerHTML = '<p class="empty">Zatím tu nejsou žádné hry.</p>'; return; }
-  // Kočka's badge ("Rozehráno" while she wants something or is ill) follows her forecast, not only her last save
-  const cat = catNow(), badge = id => id === 'kocka' && cat ? !!(cat.wants || cat.ill) : inProgress(id);
+  const cat = catNow(), badge = id => hasBadge(id, cat);
   // Most played first (counting only games opened MIN_PLAYS_TO_RISE+ times); ties keep the order from registry.js
   games.sort((a, b) => rank(b) - rank(a) || a.order - b.order);
   grid.innerHTML = games.map(g => `
@@ -632,7 +640,7 @@ render();
 // (back-forward cache): refresh badges and order. A normal load has already rendered above.
 window.addEventListener('pageshow', e => { if (e.persisted) render(); });
 // The launcher left open overnight: the date is right again when it is shown
-document.addEventListener('visibilitychange', () => { if (!document.hidden) { renderDate(); renderCat(); } });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { renderDate(); renderCat(); syncCatBadge(); } });
 
 // Hosted version: install to home screen and offline mode for all games
 if (/^https?:$/.test(location.protocol)) {

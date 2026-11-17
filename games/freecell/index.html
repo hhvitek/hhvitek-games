@@ -470,7 +470,7 @@ function validGame(g) {
     if (typeof g.init !== 'string' || !validSnap(g, g.init)) g.init = snap(g);
     g.moves = Number.isInteger(g.moves) ? g.moves : 0;
     if (typeof g.stuckAt !== 'number') g.stuckAt = -1;
-    g.counted = g.counted === true; g.hinted = g.hinted === true; g.scored = g.scored === true || g.status === 'won'; // a won game was counted
+    validFlags(g);
     const p = g.plan;
     if (!p || !Array.isArray(p.keys) || !Array.isArray(p.moves) || p.keys.length !== p.moves.length
       || !p.keys.every(k => typeof k === 'string') || !p.moves.every(validMove)) g.plan = null;
@@ -480,7 +480,7 @@ function validGame(g) {
 function validStats(v) {
   const n = x => Number.isInteger(x) && x >= 0 ? x : 0;
   const played = n(v && v.played);
-  return { played, won: Math.min(n(v && v.won), played) };
+  return { played, won: Math.min(n(v && v.won), played), mixed: CARDS.statsMixed(v, played) }; // mixed: counts from before the rule of finished games
 }
 function normalize(s) {
   const pick = (k, list) => { if (!list.includes(s[k])) s[k] = list.includes(DEFAULTS[k]) ? DEFAULTS[k] : list[0]; };
@@ -497,7 +497,7 @@ function newGame(msg) {
   toast('Míchám karty…', 60000);
   setTimeout(async () => {
     const r = await solvableDeck();
-    G = Object.assign(dealFrom(r.deck), { hist: [], status: 'playing', moves: 0, counted: false, hinted: false, scored: false, stuckAt: -1, finTold: false, plan: r.plan });
+    G = Object.assign(dealFrom(r.deck), { hist: [], status: 'playing', moves: 0, counted: false, hinted: false, scored: false, wonCounted: false, stuckAt: -1, finTold: false, plan: r.plan });
     G.init = snap(G);
     busy = false;
     hideToast();
@@ -659,31 +659,8 @@ function shake(cards) {
   buzz(30);
 }
 
-/* ---------- Statistics ---------- */
-// User's rule 2026-11-13: a game counts once, at its first end (won, or "Dál to nejde" declared), and never when
-// Poradit was used in it. G.counted = "played" was added (versions before it added that at the first move, so such a
-// game gets only what is missing), G.scored = the end was counted, G.hinted = Poradit was used (kept by Undo and
-// "Od začátku", a new game resets it).
-function countEnd(won) {
-  if (G.scored || G.hinted) return;
-  G.scored = true;
-  if (!G.counted) { G.counted = true; ST.played++; }
-  if (won) ST.won++;
-}
-// Marks the game as hinted; true the first time in a game whose end was not counted yet (then the player is told)
-function markHinted() {
-  if (G.hinted) return false;
-  G.hinted = true; save();
-  return !G.scored;
-}
-const NOTE_MS = 2600;
-// the hint's message, the first time after the note that the game no longer counts
-function hintToast(msg, ms, note) {
-  if (!note) { toast(msg, ms); return; }
-  toast('S radou se tahle hra nepočítá do statistiky', NOTE_MS);
-  const h = HINT;
-  setTimeout(() => { if (HINT && HINT === h) toast(msg, ms); }, NOTE_MS);
-}
+/* ---------- Statistics (the rule and the game's flags: CARDS.statsKit in games/_cards/cards.js) ---------- */
+const { NOTE_MS, validFlags, countEnd, markHinted, hintToast } = CARDS.statsKit({ game: () => G, stat: () => ST, save, toast, hint: () => HINT });
 
 /* ---------- End of game ---------- */
 // Finish is available once it is enough to move cards only to the foundations
@@ -1121,7 +1098,7 @@ function renderSettings() {
     ${CARDS.appearanceHTML(S, tile, minis, '--cw:56px;--ch:78px', toggleRow('vibrate', 'Vibrace'))}
     <section class="card"><h3>Statistika</h3>
       <p class="stats">Dohrané hry: <b>${ST.played}</b><br>Vyhrané hry: <b>${ST.won}</b></p>
-      <p class="fnote">Počítají se jen dohrané hry (vyhrané, nebo když už nejde žádný tah) bez Poradit.</p>
+      ${CARDS.statsNote(ST.mixed)}
     </section>
     <button class="big" data-act="close">Zpět ke hře</button>
     <button class="link" data-act="reset">Obnovit výchozí nastavení</button>`;

@@ -4917,7 +4917,11 @@ function KockaEngine() {
     if (T.pay) T.pay = { kind: T.pay.kind, at: T.pay.at + d };
     T.payDay = Math.min(T.payDay, today); T.bondDay = Math.min(T.bondDay, today);
   }
-  function advance(st, now) {
+  // probe (optional) = { at: [times, ascending], fn(copy) }: fn gets, at each of those times, a copy of her exactly as an
+  // advance from the same start to that time alone would leave her (the same steps, then the same tidying at the end).
+  // Only for times more than an hour after the start: a shorter advance is "watching" and steps differently. The launcher's
+  // forecast uses it to get many times in one pass.
+  function advance(st, now, probe) {
     const ev = [];
     if (typeof now !== 'number' || !Number.isFinite(now) || now < T_MIN || now > T_MAX) return { st, events: ev };   // a broken clock
     if (now <= st.t) { shiftTimes(st, now); ensurePlan(st); return { st, events: ev }; }   // the clock moved back: nothing happens
@@ -4938,12 +4942,20 @@ function KockaEngine() {
     const end = gap > AWAY ? start + AWAY : now;
     // steps of 10 minutes on a grid from start (so one long advance and many short ones step alike), also ended at her
     // next planned moment (falling asleep, waking, a late come), so the step length never moves those
+    let pi = 0;
     for (let t = start; t < end;) {
       let dt = Math.min(start + (Math.floor((t - start) / STEP) + 1) * STEP, end) - t;
       const nx = nextMoment(st, t);
       if (nx < t + dt) dt = nx - t;
       step(st, t, dt, t - start >= HELP, watching, ev);
       t += dt;
+      // a probe time on the step grid is reached exactly (others are skipped): the end of an advance to it, on a copy
+      for (; probe && pi < probe.at.length && probe.at[pi] <= t; pi++) {
+        if (probe.at[pi] !== t || t - start <= HOUR) continue;
+        const c = JSON.parse(JSON.stringify(st));
+        c.t = t; teaseTidy(c); ensurePlan(c); syncWant(c);
+        probe.fn(c);
+      }
     }
     st.t = end;
     if (gap > AWAY) {
@@ -6451,22 +6463,26 @@ function save(ahead) {
     const w = E.wants(G.st), h = E.health(G.st);
     // contract: "Rozehráno" while she wants something or is ill
     if (w || h.ill) localStorage.setItem(BADGE, '1'); else localStorage.removeItem(BADGE);
-    localStorage.setItem(MOOD, JSON.stringify({ name: G.st.name, mood: E.mood(G.st), wants: w, ill: h.ill, ahead: Array.isArray(ahead) ? ahead : [] }));
+    // a save while the page is hidden (a timer of a page left open in the background) keeps a forecast too
+    const fc = Array.isArray(ahead) ? ahead : document.hidden ? forecast() : [];
+    localStorage.setItem(MOOD, JSON.stringify({ name: G.st.name, mood: E.mood(G.st), wants: w, ill: h.ill, ahead: fc }));
   } catch (e) {} // rule: storage may be full or blocked; the game goes on
 }
 // Her needs go on while the game is closed, but the launcher cannot run the engine: so on leaving, a copy of her is
 // moved on in time (every half hour for 12 h, then every hour up to 48 h) and every change of what the launcher shows
 // is written as [time, mood, wants, ill]; the launcher takes the last one that has come (its line and the badge).
+// The first hour comes from short advances of their own (the engine steps differently while the player watches),
+// the rest from one pass with probes, which gives each time exactly what its own advance from now would.
 function forecast() {
-  const out = [], t0 = G.st.t, status = st => { const h = E.health(st); return [E.mood(st), E.wants(st), h.ill]; };
+  const out = [], t0 = G.st.t, H = 3600000, status = st => { const h = E.health(st); return [E.mood(st), E.wants(st), h.ill]; };
   let last = JSON.stringify(status(G.st));
+  const note = (t, st) => { const s = status(st), k = JSON.stringify(s); if (k !== last) { out.push([t, ...s]); last = k; } };
   try {
-    for (let h = 0.5; h <= 48; h += h < 12 ? 0.5 : 1) {
-      const c = JSON.parse(JSON.stringify(G.st)), t = t0 + h * 3600000;
-      E.advance(c, t);
-      const s = status(c), k = JSON.stringify(s);
-      if (k !== last) { out.push([t, ...s]); last = k; }
-    }
+    const times = [];
+    for (let h = 0.5; h <= 48; h += h < 12 ? 0.5 : 1) times.push(t0 + h * H);
+    for (const t of times.filter(t => t - t0 <= H)) { const c = JSON.parse(JSON.stringify(G.st)); E.advance(c, t); note(t, c); }
+    const rest = times.filter(t => t - t0 > H);
+    E.advance(JSON.parse(JSON.stringify(G.st)), rest[rest.length - 1], { at: rest, fn: c => note(c.t, c) });
   } catch (e) {} // a forecast is only a nicety for the launcher
   return out;
 }
