@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.29 – 2026-11-17
+
 - Hry jsou nově i anglicky. Jazyk se řídí telefonem a přepíná se vlajkou nahoře ve výběru her nebo v Nastavení („Jazyk / Language“); čeština zůstává beze změny. Anglické texty prošly rodilou korekturou, sousedovic kočky v Kočce mají anglická jména.
 - Po přepnutí jazyka zůstává rozehraný soupeř stejný (mění se jen jeho jméno).
 - V angličtině už nezůstávají české názvy sad obrázků ve Spojování čísel a skupin v Mahjongu a Spojování obrázků; koťata v Kočce dostávají jména v jazyce hry (dokud je nepojmenuješ).
