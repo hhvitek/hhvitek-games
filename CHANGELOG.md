@@ -8,6 +8,7 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 ## Nevydáno
 
 - Hry jsou nově i anglicky. Jazyk se řídí telefonem a přepíná se vlajkou nahoře ve výběru her nebo v Nastavení („Jazyk / Language“); čeština zůstává beze změny.
+- Po přepnutí jazyka zůstává rozehraný soupeř stejný (mění se jen jeho jméno).
 - Drobné opravy češtiny: správné tvary čísel (např. „1 bod, 2 body“ ve Věžičkách).
 
 ## 1.0.28 – 2026-11-17

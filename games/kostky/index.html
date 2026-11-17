@@ -50,7 +50,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Kostky">
-<title data-t="game.kostky.name"></title>
+<title data-t="game.kostky.name">Kostky</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232a7346'/%3E%3Crect x='14' y='14' width='36' height='36' rx='7' fill='%23fbfaf6'/%3E%3Ccircle cx='24' cy='24' r='4' fill='%23222'/%3E%3Ccircle cx='40' cy='24' r='4' fill='%23222'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%23222'/%3E%3Ccircle cx='24' cy='40' r='4' fill='%23222'/%3E%3Ccircle cx='40' cy='40' r='4' fill='%23222'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes: a solid colour (felt in a wooden frame); everything below reads these variables ---------- */
@@ -551,7 +551,8 @@ function validGame(g) {
     if (!Array.isArray(g.selUndo) || !g.selUndo.every(s => validSel(s, g.dice.length))) g.selUndo = [];
     if (g.phase !== 'pick') g.selUndo = [];
     g.lost = isPts(g.lost) ? g.lost : 0;
-    g.say = typeof g.say === 'string' ? g.say.slice(0, 120) : '';
+    g.say = typeof g.say === 'string' && g.sayLang === I18N.lang ? g.say.slice(0, 120) : ''; // the bubble is a translated sentence: dropped after a language switch
+    g.sayLang = I18N.lang;
     g.mood = ['calm', 'happy', 'sad', 'think'].includes(g.mood) ? g.mood : 'calm';
     g.counted = g.counted === true;
     if (!O.valid(g.foe)) g.foe = O.create(rnd);
@@ -575,6 +576,7 @@ function newGame(msg) {
   G = { rules: { level: S.level, target: S.target }, scores: [0, 0], turn: starter, starter, final: false,
         foe: foeNew, dice: [], kept: [], sel: [], selUndo: [], turnPts: 0, lost: 0, phase: 'start', plan: null, rolls: 0,
         seed: rnd(2 ** 31), say: '', mood: 'calm', status: 'playing', counted: false };
+  G.sayLang = I18N.lang;
   G.say = t(pick(starter ? ['kostky.say.begin.1', 'kostky.say.begin.2'] : ['kostky.say.youBegin.1', 'kostky.say.youBegin.2']));
   save(); render();
   if (msg) toast(msg);
@@ -642,7 +644,7 @@ const LINES = {
 // The opponent rolled nothing that scores: the name leads (an awkward sentence with every name otherwise)
 const foeBust = g => { const f = foe(g); return g.lost ? t('kostky.hint.foeBustLost', { ...foeP(f), n: g.lost }) : t('kostky.hint.foeBust', foeP(f)); };
 // the bubble: the sentences in `extra` (already texts), then a random line of the kind `key`
-function say(key, mood, ...extra) { G.say = [...extra, key && t(pick(LINES[key]))].filter(Boolean).join(' '); G.mood = mood || 'calm'; }
+function say(key, mood, ...extra) { G.sayLang = I18N.lang; G.say = [...extra, key && t(pick(LINES[key]))].filter(Boolean).join(' '); G.mood = mood || 'calm'; }
 
 /* ---------- Rendering ---------- */
 const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };

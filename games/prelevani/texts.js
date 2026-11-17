@@ -35,6 +35,7 @@ I18N.add({
 
   'prelevani.toast.pouring':    { cs: 'Chvilku, ještě se přelévá', en: 'Hang on, still pouring' },
   'prelevani.toast.preparing':  { cs: 'Chvilku, připravuji hru…', en: 'Hang on, getting the game ready…' },
+  'prelevani.toast.generating': { cs: 'Připravuji hru…', en: 'Getting the game ready…' },
   'prelevani.toast.unverified': { cs: 'Tentokrát se nepodařilo ověřit, že hra jde vyřešit. Když to nepůjde, ťukni na Nová hra.',
                                   en: 'This time the game couldn\'t be checked for solvability. If it can\'t be solved, tap New game.' },
   'prelevani.toast.done':       { cs: 'Hotovo! Ťukni na Další hra', en: 'Done! Tap Next game' },

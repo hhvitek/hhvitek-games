@@ -120,6 +120,7 @@
       if (typeof x === 'string') { s += x; continue; }
       if (x.k === 'hash') { s += n === undefined ? '#' : num(n, lang); continue; }
       const v = params ? params[x.name] : undefined;
+      if ((v === undefined || v === null) && format.key) complain(`missing param ${x.name} for ${format.key}`);
       if (x.k === 'arg') s += v === undefined || v === null ? `{${x.name}}` : typeof v === 'number' ? num(v, lang) : escape(String(v));
       else if (x.k === 'plural') { const q = Number(v); s += format(x.cases['=' + q] || x.cases[category(lang, q)] || x.cases.other, params, lang, escape, q); }
       else s += format(x.cases[String(v)] || x.cases.other, params, lang, escape, n);
@@ -158,9 +159,12 @@
     const m = messages[key];
     if (!m || typeof m[SOURCE] !== 'string') { complain(`missing key ${key}`); return String(key); }
     const lang = I18N.lang;
-    if (lang === PSEUDO) return pseudo(m[SOURCE], params, escape);
-    const own = typeof m[lang] === 'string' && m[lang] !== '';
-    return format(ast(own ? m[lang] : m[SOURCE]), params, own ? lang : SOURCE, escape);
+    format.key = key; // for the warning about a missing param
+    try {
+      if (lang === PSEUDO) return pseudo(m[SOURCE], params, escape);
+      const own = typeof m[lang] === 'string' && m[lang] !== '';
+      return format(ast(own ? m[lang] : m[SOURCE]), params, own ? lang : SOURCE, escape);
+    } finally { format.key = ''; }
   }
   const t = (key, params) => text(key, params, String);
   const th = (key, params) => text(key, params, esc);
@@ -218,6 +222,8 @@
     lang: SOURCE, langs: ready, source: SOURCE,
     add, t, th, num: n => num(n), esc, apply, setLang,
     has: key => key in messages,
+    // one message in one language (undefined when there is none): for translating saved data between languages
+    msg: (key, lang) => { const m = messages[key]; return m && typeof m[lang] === 'string' ? m[lang] : undefined; },
     // for tools/i18n.js: the parser and the formatter of one message text
     parse, format: (src, params, lang = SOURCE, html = false) => format(ast(src), params, lang, html ? esc : String),
   };

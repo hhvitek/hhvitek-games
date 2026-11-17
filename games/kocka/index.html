@@ -53,7 +53,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Kočka">
-<title data-t="game.kocka.name"></title>
+<title data-t="game.kocka.name">Kočka</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%233b2a1e'/%3E%3Ccircle cx='32' cy='36' r='16' fill='%231b1512'/%3E%3Cpath d='M18 28 20 12 30 22zM46 28 44 12 34 22z' fill='%231b1512'/%3E%3Ccircle cx='26' cy='35' r='3' fill='%23b5c93a'/%3E%3Ccircle cx='38' cy='35' r='3' fill='%23b5c93a'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes: a solid colour; everything below reads these variables (rule) ---------- */
@@ -8168,7 +8168,7 @@ function hintText() {
   if (h.offended) return I18N.t('kocka.hint.offended', { name: n });
   if (K.act && K.act.kind === 'litter' && G.her === G.view) return I18N.t('kocka.hint.litter', { name: n });
   if (h.eating) return I18N.t('kocka.hint.eating', { name: n });
-  if (h.coming) return `${n} jde k misce.`;
+  if (h.coming) return I18N.t('kocka.hint.coming', { name: n });
   if (h.drinking) return I18N.t('kocka.hint.drinking', { name: n });
   if (K.place && K.place.p.beg && K.place.until > perf() && G.her === G.view) return I18N.t('kocka.hint.beg', { name: n });
   if (w === 'food' && h.bowl > 0) return I18N.t(h.garden ? 'kocka.hint.hungryGarden' : 'kocka.hint.hungryBowl', { name: n });

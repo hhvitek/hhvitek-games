@@ -21,6 +21,8 @@ const args = process.argv.slice(2);
 const opt = (name, def) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : def; };
 const SAVES = +opt('--saves', 200);
 const ALL = [...fs.readFileSync(path.join(ROOT, 'games', 'registry.js'), 'utf8').matchAll(/id: '([^']+)'/g)].map(m => m[1]);
+// every ready language of i18n/languages.js (the phone's language decides which one a game starts in)
+const LANGS = (() => { try { const c = {}; vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'i18n', 'languages.js'), 'utf8'), c); return c.LANGS.filter(l => l.ready).map(l => l.code); } catch (e) { return ['cs']; } })();
 const IDS = opt('--ids', '') ? opt('--ids').split(',') : ALL;
 
 /* ---------- The fake page ---------- */
@@ -61,7 +63,7 @@ function scriptsOf(id) {
 }
 const where = e => e && e.stack ? `${e.message} @ ${(e.stack.split('\n').find(l => l.includes(' at ')) || '').trim()}` : String(e);
 // starts a game with the given localStorage; timers run only when runTimers is called (game time, not real time)
-function start(id, storage, extra = '') {
+function start(id, storage, extra = '', lang = 'cs') {
   const ls = new Map(Object.entries(storage || {})), errors = [], timers = [];
   let tid = 0, clock = 0;
   const localStorage = {
@@ -81,7 +83,7 @@ function start(id, storage, extra = '') {
     WeakMap, WeakSet, Symbol, Promise, Error, TypeError, RangeError, RegExp, Int8Array, Uint8Array, Int16Array, Uint16Array,
     Int32Array, Uint32Array, Float32Array, Float64Array, BigInt, Proxy, Reflect, parseInt, parseFloat, isNaN, isFinite,
     encodeURIComponent, decodeURIComponent, structuredClone, localStorage, sessionStorage: localStorage, document,
-    navigator: { storage: { persist: () => Promise.resolve(true) }, userActivation: { hasBeenActive: false }, vibrate: () => true },
+    navigator: { language: lang, languages: [lang], storage: { persist: () => Promise.resolve(true) }, userActivation: { hasBeenActive: false }, vibrate: () => true },
     location: { search: '?menu', href: `http://localhost/games/${id}/index.html?menu`, pathname: `/games/${id}/index.html` },
     history: { state: null, pushState() {}, go() {}, back() {}, replaceState() {} },
     matchMedia: () => ({ matches: false, addEventListener() {}, addListener() {} }),
@@ -162,20 +164,22 @@ function breakOne(obj) {
   if (self.errors.length !== 2) { console.log('FAIL self-check: the fake page did not report both test exceptions', self.errors); process.exit(1); }
 
   const skipped = [];
-  console.log(`Broken saves: ${SAVES} per game`);
+  console.log(`Broken saves: ${SAVES} per game, in ${LANGS.join(', ')}`);
+  for (const lang of LANGS) {
+  console.log(`Language ${lang}`);
   for (const id of IDS) {
     const key = `games.${id}.state`;
-    const base = start(id, {});
+    const base = start(id, {}, '', lang);
     await settle(base, 3000);
     try { if (PLAY[id]) PLAY[id](base.ctx); } catch (e) { base.errors.push(`playing: ${where(e)}`); }
     await settle(base, 6000);
     const good = base.ls.get(key);
-    if (base.errors.length || !good) { skipped.push(`${id} (${base.errors[0] || 'nothing saved'})`); continue; }
+    if (base.errors.length || !good) { skipped.push(`${id} [${lang}] (${base.errors[0] || 'nothing saved'})`); continue; }
     const seen = new Map();
     for (let t = 0; t < SAVES; t++) {
       const o = JSON.parse(good), broken = [];
       for (let n = 1 + rnd(3); n > 0; n--) broken.push(breakOne(o));
-      const g = start(id, { [key]: JSON.stringify(o) });
+      const g = start(id, { [key]: JSON.stringify(o) }, '', lang);
       await settle(g, 3000);
       if (!g.ls.has(key)) g.errors.push('the game saved nothing after loading a broken save');
       for (const e of g.errors) { const k = e.replace(/:\d+:\d+\)?$/, ''); if (!seen.has(k)) seen.set(k, { e, broken, n: 0 }); seen.get(k).n++; }
@@ -183,6 +187,7 @@ function breakOne(obj) {
     if (seen.size) failed++;
     console.log(`  ${id.padEnd(20)} ${seen.size ? 'FAIL' : 'ok'}${seen.size ? '' : `  (save ${good.length} characters${PLAY[id] ? ', after some play' : ''})`}`);
     for (const v of seen.values()) console.log(`    ${v.n}× ${v.e}\n       broken: ${v.broken.join(', ')}`);
+    }
   }
   if (skipped.length) console.log(`Skipped (the fake page cannot run them):\n  ${skipped.join('\n  ')}`);
   console.log(failed ? `\n${failed} games FAILED` : '\nall passed');

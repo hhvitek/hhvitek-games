@@ -357,6 +357,7 @@ I18N.add({
                             en: '{name} is alone in the garden. Tap the door to let her in.' },
   'kocka.hint.alone': { cs: '{name} je sama na zahradě. Jdi za ní, nebo ji pusť dveřmi v předsíni.',
                         en: '{name} is alone in the garden. Go to her, or let her in through the door in the hall.' },
+  'kocka.hint.coming': { cs: '{name} jde k misce.', en: '{name} is heading for the bowl.' },
   'kocka.hint.walk': { cs: '{name} je na toulkách. Vrátí se sama.', en: '{name} is out roaming. She\'ll come back on her own.' },
   'kocka.hint.out': { cs: '{name} je venku. Vrátí se sama, nebo klepni na dveře.',
                       en: '{name} is outside. She\'ll come back on her own, or knock on the door.' },

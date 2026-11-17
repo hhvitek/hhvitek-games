@@ -181,5 +181,39 @@ const READY = [{ code: 'cs', name: 'Čeština', ready: true }, { code: 'en', nam
   eq([...u.prefixes].join(), 'e.', 'keys used: a template key is a prefix');
 }
 
+/* ---------- A missing param is reported; the checks of param names, key prefixes and text sinks ---------- */
+{
+  const { I, errors } = runtime();
+  I.add({ 'x.a': { cs: 'Ahoj {name}' } });
+  eq(I.t('x.a', {}), 'Ahoj {name}', 'missing param: printed as written');
+  ok(errors.some(e => /missing param name for x\.a/.test(e)), 'missing param: reported on the console');
+  eq(I.t('x.a', { name: 'Eva' }), 'Ahoj Eva', 'missing param: a passed one is fine');
+  const keys = c => [...tool.objectKeys(c, c.indexOf('{'))].sort().join();
+  eq(keys('t("k", { a, b: 1, "c": f(x, { z: 1 }), d: [1, { y: 2 }], e: `${q}, g: 1` })'), 'a,b,c,d,e', 'objectKeys: shorthand, nested and templates');
+  eq(tool.objectKeys('t("k", { ...p, a })', 8), null, 'objectKeys: a spread cannot be told');
+  const ids = [...tool.messages()].filter(([k, d]) => /\{[a-z]+\}/.test(d.msg.cs)).map(([k]) => k);
+  ok(ids.length, 'a message with a param exists');
+  const k = ids[0];
+  const code = c => ({ file: 'x', owner: 'shared', isScript: true, src: c });
+  ok(tool.codeErrors(code(`t('${k}', { zzz: 1 });`)).some(e => /does not pass/.test(e)), 'params: a missing one is an error');
+  const need = [...new Set([...tool.messages().get(k).msg.cs.matchAll(/\{(\w+)\}/g)].map(m => m[1]))];
+  eq(tool.codeErrors(code(`t('${k}', { ${need.join(', ')} });`)).length, 0, 'params: shorthand names that match are fine');
+  eq(tool.codeErrors(code(`t('${k}', p);`)).length, 0, 'params: a non-literal second argument is skipped');
+  ok(tool.codeErrors(code('t(`nonexistent.prefix.${y}`);')).some(e => /match no defined key/.test(e)), 'prefix: no defined key is an error');
+  eq(tool.codeErrors(code('t(`common.${y}`);')).length, 0, 'prefix: a defined one is fine');
+  const h = (s, isScript = true) => tool.hardCoded(s, isScript).length;
+  eq(h('toast("Hello there friend");'), 1, 'sink: toast with English words');
+  eq(h('toast("OK");'), 0, 'sink: one short word is not a text');
+  eq(h('toast(t("a.b"));'), 0, 'sink: a message is fine');
+  eq(h('el.textContent = "Move one";'), 1, 'sink: textContent');
+  eq(h('el.innerHTML = `<b class="x">Move one</b>`;'), 1, 'sink: innerHTML');
+  eq(h('el.innerHTML = `<svg viewBox="0 0 1 1"></svg>`;'), 0, 'sink: markup is not a text');
+  eq(h('el.textContent = `.a{color:red}`;'), 0, 'sink: CSS is not a text');
+  eq(h(['function hintText() {', '  if (a) {', '    return "Tap a card";', '  }', '}'].join('\n')), 1, 'sink: return of a *hint* function');
+  eq(h(['function other() {', '  return "Tap a card";', '}'].join('\n')), 0, 'sink: return of another function is not checked');
+  eq(h('toast("Move one"); // i18n-ignore'), 0, 'sink: i18n-ignore');
+  eq(h('<title data-t="a.b">Dáma</title>', false), 0, 'title: the fallback inside <title data-t> is exempt');
+}
+
 console.log(`${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

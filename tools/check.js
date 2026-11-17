@@ -268,7 +268,7 @@ if (!ONLY || ONLY === 'launcher') {
   // texts: nothing written in the launcher's code (its keys are launcher.*, common.* and game.* in i18n/),
   // the static texts filled by I18N.apply(), the game names from i18n/games.js, the language kept by the reset
   if (!ERRLOG || !idx.includes(ERRLOG + '\n' + LAUNCHER_TAGS)) P.push(`launcher: right after the Error log block, the texts scripts in this order:\n          ${LAUNCHER_TAGS.split('\n').join('\n          ')}`);
-  if (!idx.includes('<title data-t="launcher.appName"></title>')) P.push('launcher: <title data-t="launcher.appName"></title> (the app name in the player\'s language)');
+  if (!idx.includes('<title data-t="launcher.appName">Vítkovy hry</title>')) P.push('launcher: <title data-t="launcher.appName">Vítkovy hry</title> (the app name in the player\'s language)');
   if (!/I18N\.apply\(\)/.test(idx)) P.push('launcher: I18N.apply() fills the static texts (data-t*) and <html lang>');
   if (!idx.includes('t(`game.${g.id}.name`)')) P.push('launcher: the game names come from the texts: t(`game.${g.id}.name`) (i18n/games.js)');
   const ownKeySrc = (idx.match(/const ownKey = [\s\S]*?\n\};/) || [''])[0];

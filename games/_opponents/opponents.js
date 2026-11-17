@@ -49,9 +49,21 @@ function create(rnd = rndCrypto, avoidNames = [], avoidFaces = []) {
   return { name: NAMES.m[0], fem: false, face: 0 };
 }
 // A saved opponent is taken over only when it is one of ours (extra fields of the game, e.g. a play style, may stay);
-// a name of another language (the player switched it) is not: the game gets a new opponent with a name of this one
-const valid = f => !!f && typeof f === 'object' && typeof f.fem === 'boolean' && (f.fem ? NAMES.f : NAMES.m).includes(f.name)
-  && FACES.includes(f.face) && f.face % 2 === (f.fem ? 1 : 0);
+// a name of another language (the player switched it) is translated in place (same list position, gender, face)
+// A name of another language (the player switched it) is translated in place: the same place in the list of this
+// language, gender and face stay, so a game in progress keeps its opponent. Only an unknown name is not valid.
+function valid(f) {
+  if (!f || typeof f !== 'object' || typeof f.fem !== 'boolean' || !FACES.includes(f.face) || f.face % 2 !== (f.fem ? 1 : 0)) return false;
+  const key = f.fem ? 'opponents.names.f' : 'opponents.names.m', mine = list(key);
+  if (mine.includes(f.name)) return true;
+  for (const lang of (I18N.langs || []).map(l => l.code).concat('cs')) {
+    if (lang === I18N.lang) continue;
+    const src = I18N.msg(key, lang);
+    const i = src ? src.split(',').map(x => x.trim()).filter(Boolean).indexOf(f.name) : -1;
+    if (i >= 0 && i < mine.length) { f.name = mine[i]; return true; }
+  }
+  return false;
+}
 // the games not converted yet: their own Czech words (converted ones use a message with {fem, select, …})
 const past = (f, m, fem) => f && f.fem ? fem : m;
 

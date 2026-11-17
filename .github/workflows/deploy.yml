@@ -42,7 +42,7 @@ jobs:
         run: |
           rsync -a ./ _site/ \
             --exclude '.git*' --exclude '.github/' --exclude '.claude/' --exclude '.playwright-mcp/' --exclude '.idea/' --exclude '.mcp.json' \
-            --exclude 'tools/' --exclude 'docs/' --exclude 'games/_template/' --exclude '*.md' --exclude '_site/'
+            --exclude 'tools/' --exclude 'docs/' --exclude 'games/_template/' --exclude '*.md' --exclude 'i18n/translated.json' --exclude '_site/'
           echo "Files: $(find _site -type f | wc -l)"
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0 (2026-03-25)

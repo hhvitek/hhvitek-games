@@ -49,7 +49,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <!-- the name under the home-screen icon stays Czech in every language, like the manifest (it cannot switch) -->
 <meta name="apple-mobile-web-app-title" content="Vítkovy hry">
-<title data-t="launcher.appName"></title>
+<title data-t="launcher.appName">Vítkovy hry</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -313,7 +313,13 @@ const PROGRESS_KEYS = { level: 'launcher.progress.level', solved: 'launcher.prog
 const progress = id => {
   const v = store.get(`games.${id}.progress`);
   if (typeof v !== 'string' || !v) return '';
-  if (v[0] !== '{') return v.length <= 30 ? v : ''; // an older save: the game's own text
+  if (v[0] !== '{') { // an older save: the game's own Czech text; the two known ones are shown in the player's language
+    let m = /^Úroveň (\d+)$/.exec(v); // i18n-ignore: the old stored text, not shown as it is
+    if (m) return t(PROGRESS_KEYS.level, { n: +m[1] });
+    m = /^Vyřešeno (\d+) z (\d+)$/.exec(v); // i18n-ignore: the old stored text
+    if (m) return t(PROGRESS_KEYS.solved, { n: +m[1], of: +m[2] });
+    return v.length <= 30 ? v : '';
+  }
   try {
     const p = JSON.parse(v), key = p && PROGRESS_KEYS[p.k], n = p && Number(p.n), of = p && Number(p.of);
     if (!key || !Number.isInteger(n) || n < 0 || (p.k === 'solved' && !(Number.isInteger(of) && of > 0))) return '';

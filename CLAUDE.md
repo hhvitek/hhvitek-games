@@ -32,12 +32,12 @@ Every text the player sees is a message in a texts file, never a string in a pag
 
 **Rules for texts**
 - Keys are `<id>.<area>.<name>` (shared ones `common.*`, `opponents.*`, `cards.*`, `launcher.*`, `game.<id>.name` / `.desc`). A game's keys live in `games/<id>/texts.js` and start with its id.
-- `t(key, params)` for plain text (textContent, attributes, toasts), `th(key, params)` for everything that goes into `innerHTML` (the message is trusted HTML, the params are escaped). Static HTML uses `data-t`, `data-t-html`, `data-t-aria`, `data-t-title`; `I18N.apply()` runs first in Start. Never name a local variable `t` or `th`.
+- `t(key, params)` for plain text (textContent, attributes, toasts), `th(key, params)` for everything that goes into `innerHTML` (the message is trusted HTML, the params are escaped). Static HTML uses `data-t`, `data-t-html`, `data-t-aria`, `data-t-title`; `I18N.apply()` runs first in Start. A local variable named `t` or `th` must never be in scope where the message function is called (it would shadow it; `tools/saves-test.js` catches a call of a shadowed `t`). A call `t('key', { a, b })` must pass every param the `cs` message uses (checked; a missing one is also a console warning at run time).
 - Whole sentences with params, never a sentence glued from fragments (Czech has cases). Plurals have all four Czech forms (`one few many other`), gender is `{fem, select, true {…} other {…}}`.
-- Themes, levels and picture sets give `nameKey` / `titleKey` / `descKey`, not a text. No key is built from data at run time: use an explicit map from value to key.
+- Themes, levels and picture sets give `nameKey` / `titleKey` / `descKey`, not a text. Prefer an explicit map from value to key. A key built at run time is allowed only from a template literal (`t(`x.${y}`)`) whose fixed prefix matches defined keys (checked: a prefix that matches none is an error).
 - Picture markers in the help (`[undo]`, `[check]`, …) stay in the message and are replaced after `th()` (copy Logik).
 - Engines return codes and numbers, never text; the UI turns them into messages.
-- A line with `i18n-ignore` is exempt from the hard-coded text check: only for data that is not a text, with the reason in the comment.
+- A line with `i18n-ignore` is exempt from the hard-coded text check: only for data that is not a text, with the reason in the comment. The check also finds a literal with two or more words passed to `toast(` or assigned to `.textContent` / `.innerHTML` or returned from a `*hint*` / `*text*` function, in any language. A static `<title data-t="key">Czech name</title>` keeps the Czech name inside as its fallback (exempt).
 - Script order in `<head>` (checked): the Error log block, `i18n/languages.js`, `i18n/i18n.js`, `i18n/common.js`, `i18n/games.js`, the shared texts the game uses (`i18n/cards.js`, `i18n/opponents.js`), then its own `texts.js`. Its registry line has `texts: true`.
 
 ```js

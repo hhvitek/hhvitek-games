@@ -49,7 +49,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Generál">
-<title data-t="game.general.name"></title>
+<title data-t="game.general.name">Generál</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%237a4520'/%3E%3Crect x='14' y='14' width='36' height='36' rx='7' fill='%23fff'/%3E%3Ccircle cx='24' cy='24' r='4' fill='%232b1a0e'/%3E%3Ccircle cx='32' cy='32' r='4' fill='%232b1a0e'/%3E%3Ccircle cx='40' cy='40' r='4' fill='%232b1a0e'/%3E%3C/svg%3E">
 <style>
 /* ---------- Themes: a solid colour; the score sheet and the dice tray follow the theme ---------- */
@@ -655,7 +655,8 @@ function validGame(g) {
       && Number.isInteger(u.roll) && u.roll >= 1 && u.roll <= 3 && g.sheets[0][u.b] === E.scoreBox(u.b, counts(u.dice)) ? u : null;
     const l = g.last;
     g.last = l && [0, 1].includes(l.p) && Number.isInteger(l.b) && l.b >= 0 && l.b < N && g.sheets[l.p][l.b] !== null ? { p: l.p, b: l.b } : null;
-    g.say = typeof g.say === 'string' ? g.say.slice(0, 120) : '';
+    g.say = typeof g.say === 'string' && g.sayLang === I18N.lang ? g.say.slice(0, 120) : ''; // the bubble is a translated sentence: dropped after a language switch
+    g.sayLang = I18N.lang;
     g.mood = ['calm', 'happy', 'sad', 'think'].includes(g.mood) ? g.mood : 'calm';
     g.counted = g.counted === true;
     if (!O.valid(g.foe)) g.foe = O.create(rnd);
@@ -680,6 +681,7 @@ function newGame(msg) {
         sheets: [emptySheet(), emptySheet()], dice: [], held: [false, false, false, false, false], roll: 0, rolls: 0,
         phase: 'start', plan: null, selUndo: [], undoW: null, last: null, seed: rnd(2 ** 31),
         say: '', mood: 'calm', status: 'playing', counted: false };
+  G.sayLang = I18N.lang;
   G.say = t(pick(starter ? ['general.line.begin.1', 'general.line.begin.2'] : ['general.line.youBegin.1', 'general.line.youBegin.2']));
   save(); render();
   if (msg) toast(msg);
@@ -745,7 +747,7 @@ const LINES = {
   mine: ['general.line.mine.1', 'general.line.mine.2', 'general.line.mine.3'],
 };
 // the bubble: the sentence `extra` (already a text), then a random line of the kind `key`
-function say(key, mood, extra) { G.say = [extra, key && t(pick(LINES[key]))].filter(Boolean).join(' '); G.mood = mood || 'calm'; }
+function say(key, mood, extra) { G.sayLang = I18N.lang; G.say = [extra, key && t(pick(LINES[key]))].filter(Boolean).join(' '); G.mood = mood || 'calm'; }
 // what the opponent says about the dice it keeps
 function holdLine(dice, held) {
   const kept = dice.filter((_, i) => held[i]);

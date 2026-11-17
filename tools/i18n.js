@@ -201,14 +201,23 @@ function hardCoded(src, isScript) {
       }
     }
   };
+  const mark = at => {
+    const line = lineOf(src, at);
+    if (found.has(line) || /i18n-ignore/.test(lines[line - 1] || '')) return;
+    found.set(line, (lines[line - 1] || '').trim().replace(/\s+/g, ' ').slice(0, 90));
+  };
   if (isScript) {
+    for (const x of textSinks(src)) mark(x.at);
     for (const l of jsLiterals(src)) hit(l.text, l.at, l.tpl ? 'tpl' : 'str');
   } else {
     let doc = src.replace(/<!--[\s\S]*?-->/g, blank).replace(/(<style\b[^>]*>)([\s\S]*?)(<\/style>)/gi, (m, a, b, c) => a + blank(b) + c);
+    // <title data-t="key">Czech name</title>: the name inside is only the fallback before I18N.apply()
+    doc = doc.replace(/(<title\b[^>]*\bdata-t=[^>]*>)([\s\S]*?)(<\/title>)/gi, (m, a, b, c) => a + blank(b) + c);
     const scripts = [];
     doc = doc.replace(/(<script\b[^>]*>)([\s\S]*?)(<\/script>)/gi, (m, a, b, c, off) => { scripts.push({ at: off + a.length, code: b }); return a + blank(b) + c; });
     for (const s of scripts) {
       if (s.code.includes(ERRLOG_MARK)) continue; // the shared developer log, compared byte for byte by tools/check.js
+      for (const x of textSinks(s.code)) mark(s.at + x.at);
       for (const l of jsLiterals(s.code)) hit(l.text, s.at + l.at, l.tpl ? 'tpl' : 'str');
       // a display name written as data ({ id: 'night', name: 'Noc' }) is a text even without diacritics: use nameKey
       for (const m of s.code.matchAll(/\b(name|title|desc|label)\s*:\s*(['"`])([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][^'"`\n]*)\2/g)) {
@@ -222,6 +231,37 @@ function hardCoded(src, isScript) {
     }
   }
   return [...found].sort((a, b) => a[0] - b[0]).map(([line, s]) => `line ${line}: ${s}`);
+}
+
+// Text written in the code in a place that is obviously for the player, in any language (a toast, textContent, innerHTML, the
+// return of a function called *hint* / *text*): two or more words, one of 3+ letters. HTML tags and entities do not count.
+// Returns [{ at, text }] (the offset in "code"); "i18n-ignore" on the line exempts it.
+function textSinks(code) {
+  const out = [], lits = new Map();
+  for (const l of jsLiterals(code)) lits.set(l.at, l);
+  const lines = code.split('\n');
+  const wordy = s => { if (/[{};]/.test(s)) return false; const w = s.replace(/<[^>]*>?|&[#\w]+;|\$\{[^}]*\}/g, ' ').match(/[A-Za-z]+/g) || []; return w.length >= 2 && w.some(x => x.length >= 3); };
+  const take = (idx, what) => { const l = lits.get(idx + 1); if (l && wordy(l.text)) out.push({ at: l.at, text: l.text, what }); };
+  for (const m of code.matchAll(/(?<![\w$.])toast\(\s*(['"`])/g)) take(m.index + m[0].length - 1, 'toast');
+  for (const m of code.matchAll(/\.(textContent|innerHTML)\s*=\s*(['"`])/g)) take(m.index + m[0].length - 1, m[1]);
+  // the name of the function a line is in: the nearest line above with less indentation that starts a function
+  const fnName = (lineNo, indent) => {
+    for (let i = lineNo - 1; i >= 0; i--) {
+      const ln = lines[i], ind = ln.length - ln.trimStart().length;
+      if (!ln.trim() || ind >= indent) continue;
+      const f = /^\s*(?:async\s+)?function\s+(\w+)|^\s*(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>|\w+\s*=>)|^\s*(\w+)\s*(?:=|:)\s*(?:async\s*)?(?:function\b|\([^)]*\)\s*=>|\w+\s*=>)|^\s*(\w+)\s*\([^)]*\)\s*\{/.exec(ln);
+      const nm = f && (f[1] || f[2] || f[3] || f[4]);
+      if (nm && !/^(if|for|while|switch|catch|else)$/.test(nm)) return nm;
+      indent = ind;
+    }
+    return '';
+  };
+  for (const m of code.matchAll(/(?<![\w$])return\s+(['"`])/g)) {
+    const at = m.index + m[0].length - 1, lineNo = lineOf(code, at) - 1, ln = lines[lineNo] || '';
+    const name = fnName(lineNo, ln.length - ln.trimStart().length);
+    if (/hint|text/i.test(name)) take(at, 'return of ' + name);
+  }
+  return out;
 }
 
 /* ---------- Keys used in the code ---------- */
@@ -242,6 +282,52 @@ function keysUsed(src, isScript) {
   return { exact, prefixes, strings };
 }
 
+// the top-level keys of an object literal that starts at code[open] === '{': a Set, or null when it cannot be told (spread, computed key)
+function objectKeys(code, open) {
+  const keys = new Set(); let depth = 0, expectKey = false;
+  for (let i = open; i < code.length; i++) {
+    const c = code[i];
+    if (c === '"' || c === "'") {
+      const e = (() => { let j = i + 1; while (j < code.length && code[j] !== c) j += code[j] === '\\' ? 2 : 1; return j; })();
+      if (depth === 1 && expectKey) { keys.add(code.slice(i + 1, e)); expectKey = false; }
+      i = e; continue;
+    }
+    if (c === '`') { // a template: skip to its end, nested ${ } included
+      let d = 0;
+      for (i++; i < code.length; i++) {
+        if (code[i] === '\\') { i++; continue; }
+        if (code[i] === '$' && code[i + 1] === '{') { d++; i++; continue; }
+        if (code[i] === '}' && d) { d--; continue; }
+        if (code[i] === '`' && !d) break;
+      }
+      expectKey = false; continue;
+    }
+    if (c === '/' && code[i + 1] === '/') { while (i < code.length && code[i] !== '\n') i++; continue; }
+    if (c === '/' && code[i + 1] === '*') { i = code.indexOf('*/', i + 2) + 1; continue; }
+    if ('{(['.includes(c)) { depth++; if (depth === 1) expectKey = true; else if (depth === 2) expectKey = false; continue; }
+    if ('})]'.includes(c)) { depth--; if (!depth) return keys; continue; }
+    if (depth !== 1) continue;
+    if (c === ',') { expectKey = true; continue; }
+    if (expectKey) {
+      if (/\s/.test(c)) continue;
+      if (c === '.' || c === '[') return null;
+      const m = /^[\w$]+/.exec(code.slice(i));
+      if (!m) return null;
+      keys.add(m[0]); i += m[0].length - 1; expectKey = false;
+    }
+  }
+  return null;
+}
+// t('key', { a, b: x }) calls: [{ key, at, passed: Set }] (only a second argument that is an object literal)
+function callsWithParams(code) {
+  const out = [];
+  for (const m of code.matchAll(/(?<![\w$])(?:I18N\s*\.\s*)?th?\(\s*(['"])([^'"\n]+)\1\s*,\s*\{/g)) {
+    const passed = objectKeys(code, m.index + m[0].length - 1);
+    if (passed) out.push({ key: m[2], at: m.index, passed });
+  }
+  return out;
+}
+
 /* ---------- Pages and scripts ---------- */
 const isConverted = id => exists(`games/${id}/index.html`) && read(`games/${id}/index.html`).includes('<script src="texts.js"></script>');
 const launcherConverted = () => exists('index.html') && /<script src="i18n\/i18n\.js"><\/script>/.test(read('index.html'));
@@ -257,11 +343,23 @@ function consumers() {
 const useCache = new Map();
 const usesOf = c => { if (!useCache.has(c.file)) useCache.set(c.file, keysUsed(read(c.file), c.isScript)); return useCache.get(c.file); };
 function codeErrors(c) {
-  const P = [], src = read(c.file), u = usesOf(c), defs = db().defs;
+  const P = [], src = c.src !== undefined ? c.src : read(c.file), u = c.src !== undefined ? keysUsed(src, c.isScript) : usesOf(c), defs = db().defs; // c.src: a test passes the code
   const hard = hardCoded(src, c.isScript);
   for (const h of hard.slice(0, 25)) P.push(`${c.file} ${h}  ← text for the player belongs in a texts file (t()/th()/data-t*); "i18n-ignore" on the line if it is not one`);
   if (hard.length > 25) P.push(`${c.file}: … and ${hard.length - 25} more lines with text written in the code`);
   for (const k of u.exact) if (!defs.has(k)) P.push(`${c.file}: the key "${k}" is used but not defined`);
+  // a key built at run time (t(`x.${y}`)) must at least start like a defined key
+  for (const p of u.prefixes) if (![...defs.keys()].some(k => k.startsWith(p))) P.push(`${c.file}: the keys built from "${p}…" match no defined key`);
+  // a param the message needs but the call does not pass (the player would see "{name}")
+  const codes = c.isScript ? [src] : [...src.replace(/<!--[\s\S]*?-->/g, '').matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map(m => m[1]);
+  const seen = new Set();
+  for (const code of codes) for (const call of callsWithParams(code)) {
+    const def = defs.get(call.key);
+    if (!def || !def.msg || typeof def.msg.cs !== 'string') continue;
+    let need; try { need = paramsOf(db().parse(def.msg.cs)).split(',').filter(Boolean); } catch (e) { continue; }
+    const miss = need.filter(p => !call.passed.has(p)), id = call.key + miss.join();
+    if (miss.length && !seen.has(id)) { seen.add(id); P.push(`${c.file}: t('${call.key}', …) does not pass {${miss.join(', ')}} (line ${lineOf(code, call.at)} of its script)`); }
+  }
   return P;
 }
 
@@ -396,7 +494,7 @@ function markTranslated(lang, ids) {
   return n;
 }
 
-module.exports = { checkGame, checkShared, checkLauncher, messages, isConverted, debt, debtLine, todo, markTranslated, hardCoded, jsLiterals, keysUsed, hash };
+module.exports = { checkGame, checkShared, checkLauncher, messages, isConverted, debt, debtLine, todo, markTranslated, codeErrors, objectKeys, callsWithParams, textSinks, hardCoded, jsLiterals, keysUsed, hash };
 
 /* ---------- CLI ---------- */
 if (require.main === module) {
