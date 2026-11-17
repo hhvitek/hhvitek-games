@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.28 – 2026-11-17
+
 - Mlýn: táhne vždycky ten kámen, který máš vybraný. Ťuknutí na bod, kam vybraný kámen nedojde, už nepohne jiným kamenem a ani rada nepřesune jiný kámen, než který máš vybraný.
 - Lodě: Nová hra po začátku bitvy, ještě než vystřelíš, se teď nejdřív zeptá, protože tvoje rozmístěné lodě by se ztratily. Loď držená prstem se už nemůže překrýt s jinou, když druhým prstem ťukneš na Zamíchat nebo Zpět.
 - Malované křížovky: rada zůstane u obrázku i po přepnutí na jiný, když v něm zrovna nic není, takže hvězdičku nedostane. Zapnuté upozorňování na chyby bere hvězdičku až od prvního políčka, ne už prázdnému obrázku.
