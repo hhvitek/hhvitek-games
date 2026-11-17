@@ -30,6 +30,17 @@ const at = (y, m, d, h = 0, mi = 0) => new Date(y, m - 1, d, h, mi).getTime();  
 const clone = o => JSON.parse(JSON.stringify(o));
 // walks (letOut) need bond level Kamarádka (300); the bond itself is reached by care (tested in 'Care only' and 'Balance')
 const friend = st => { st.bond = Math.max(st.bond, 300); st.lvl = Math.max(st.lvl, 2); return st; };
+// the bowl (2026-11-17): a pour fills the bowl and she eats it within about a minute. feedUp pours while she is under
+// `upTo` and the bowl is empty, waiting 2 min after each pour (asleep or away she eats later), and returns the time
+function feedUp(st, t, kind = 'kibble', upTo = 70) {
+  for (let i = 0; i < 4 && st.needs.food < upTo; i++) {
+    if (E.act(st, 'feed', kind, Math.max(t, st.t)).events.some(e => e.type === 'refused')) break;
+    E.advance(st, st.t + 2 * MIN);
+  }
+  return Math.max(t, st.t);
+}
+// pours and lets her eat it at once (2 min later)
+function feedNow(st, kind, t) { const r = E.act(st, 'feed', kind, t); const a = E.advance(st, st.t + 2 * MIN); return r.events.concat(a.events); }
 const MOODS = ['happy', 'calm', 'grumpy', 'sad'];
 const WANTS = [null, 'food', 'water', 'fun', 'love', 'litter', 'coat'];
 
@@ -177,7 +188,7 @@ section('30-day absence (paní Nováková)');
   ok(!st.ill && E.advance(E.create(23, t0, 'Koxa'), t0 + 73 * H).events.every(e => e.type !== 'ill'), 'away > 72 h: not ill (paní Nováková fed her from 24 h on)');
   ok(st.bond >= bond0 - 20 && st.bond >= 0, 'bond falls at most 20 and never below its level');
   const c1 = E.act(st, 'call', null, st.t), c2 = E.act(st, 'call', null, st.t);
-  ok(c1.events.some(e => e.type === 'turnBack') && c2.events.some(e => e.type === 'come'), 'turns her back once when called, then comes');
+  ok(c1.events.some(e => e.type === 'turnBack') && c2.events.some(e => e.type === 'come' || e.type === 'callSlow' || (e.type === 'ignore' && /neslyší|smutně/.test(e.reason))), 'turns her back once when called, then she may come');
   E.advance(st, st.t + 25 * H);
   ok(!E.health(st).offended, 'not offended after 24 h');
   // the same 72 h are simulated; then 0.1 kg for every whole day over 3, at most 0.4
@@ -205,8 +216,8 @@ section('Neglect: never dead or lost');
   ok(st.weight === 3.0, `thin but alive (${st.weight} kg)`);
   ok(kinds.size >= 1, `fell ill (${[...kinds].join(', ')}), never worse`);
   ok(['grumpy', 'sad'].includes(E.mood(st)), 'unhappy');
-  const r = E.act(st, 'feed', 'kibble', st.t);
-  ok(r.events.some(e => e.type === 'ate'), 'and still eats when fed');
+  const ev = feedNow(st, 'kibble', st.t);
+  ok(ev.some(e => e.type === 'poured' && e.comes === 'run') && ev.some(e => e.type === 'ate'), 'and still runs to the bowl and eats');
 }
 
 /* ---------- 6. DST (Europe/Prague) ---------- */
@@ -237,7 +248,8 @@ section('Daylight saving time');
       if (hr === 11 && !st.asleep) awake11++;
     }
     ok(weighed === 10, `${d}.${m}. + 10 days: ${weighed} weighings (10)`);
-    ok(asleep3 === 10 && awake11 >= 9, `${d}.${m}. + 10 days: asleep at 3:00 ${asleep3}×, awake at 11:00 ${awake11}×`);
+    // a cat's sleep (2026-11-17): a rare night stroll, naps by day
+    ok(asleep3 >= 7 && awake11 >= 5, `${d}.${m}. + 10 days: asleep at 3:00 ${asleep3}×, awake at 11:00 ${awake11}×`);
     invariants(st, 'DST');
   }
 }
@@ -272,10 +284,11 @@ section('Holidays and seasons');
 /* ---------- 8. illnesses: every one is cured by the vet and ends by itself after 4 days ---------- */
 section('Illnesses');
 function careAt(st, t, litter = true) {
-  for (let i = 0; i < 3 && st.needs.food < 70; i++) E.act(st, 'feed', 'kibble', t);
+  t = feedUp(st, t);
   E.act(st, 'water', null, t);
   if (litter) E.act(st, 'cleanLitter', null, t);
   for (let i = 0; i < 10; i++) E.act(st, 'stroke', { region: 'back', along: true, speed: 300 }, t);
+  return t;
 }
 function makeIll(kind) {
   const t0 = kind === 'cold' ? at(2026, 12, 2, 21, 30) : at(2026, 9, 1, 8);
@@ -319,8 +332,8 @@ function careRun(full, seed) {
   for (let d = 0; d < 30; d++) for (const hr of [8, 13, 19]) {
     const t = at(2026, 11, 1 + d, hr);
     while (st.t + H < t) for (const e of E.advance(st, st.t + H).events) if (e.type === 'ill') ill++;
-    careAt(st, t);
-    if (full) { E.act(st, 'play', 'mouse', t); if (hr === 19) E.act(st, 'brush', null, t); }
+    const t1 = careAt(st, t);
+    if (full) { E.act(st, 'play', 'mouse', t1); if (hr === 19) E.act(st, 'brush', null, t1); }
     const m = E.mood(st); n++; if (m === 'sad') sad++; if (m === 'happy') happy++;
     if (st.ill) ill++;
     invariants(st, 'care');
@@ -341,21 +354,25 @@ function discover(seed) {
   const st = E.create(seed, t0, 'Koxa'), T = st.traits;
   st.pamlsky = 50;   // her favourite food is bought (kapsička 2, kuře 3, tuňák 4 a serving)
   let t = t0;
+  if (T.quirk === 'box') { E.act(st, 'buy', 'box', t); E.act(st, 'place', { id: 'box', room: 'living', x: 0.2, y: 0.9 }, t); }   // she sleeps in a box only when it stands at home
   const tick = dt => { t += dt; E.advance(st, t); };
+  // she naps by day (2026-11-17): the player waits until she is up
+  const up = () => { for (let i = 0; i < 40 && (st.asleep || st.out); i++) tick(10 * MIN); };
   // the next time it is h o'clock (today or tomorrow), with care on the way
-  const nextDay = h => { const d = new Date(t), n = new Date(d.getFullYear(), d.getMonth(), d.getDate() + (d.getHours() < h ? 0 : 1), h).getTime(); while (t + 6 * H < n) { tick(6 * H); careAt(st, t); } t = n; E.advance(st, t); careAt(st, t); };
+  const nextDay = h => { const d = new Date(t), n = new Date(d.getFullYear(), d.getMonth(), d.getDate() + (d.getHours() < h ? 0 : 1), h).getTime(); while (t + 6 * H < n) { tick(6 * H); t = careAt(st, t); } t = n; E.advance(st, t); t = careAt(st, t); };
   // favourite food 3×
-  for (let i = 0; i < 3; i++) { tick(6 * H); careAt(st, t); st.needs.food = Math.min(st.needs.food, 50); E.act(st, 'feed', T.favFood, t); }
-  nextDay(10);
+  for (let i = 0; i < 3; i++) { tick(6 * H); t = careAt(st, t); st.needs.food = Math.min(st.needs.food, 50); st.bowl = null; E.act(st, 'feed', T.favFood, t); tick(2 * MIN); }
+  nextDay(10); up();
   // her spots, 10 strokes along the fur each
   for (const s of T.spots) for (let i = 0; i < 10; i++) E.act(st, 'stroke', { region: s, along: true, speed: 400 }, t);
   // belly: until 5 welcome rubs
-  for (let i = 0; i < 400 && !st.diary.belly; i++) { E.act(st, 'stroke', { region: 'belly' }, t); if (i % 5 === 0) careAt(st, t); }
+  for (let i = 0; i < 400 && !st.diary.belly; i++) { E.act(st, 'stroke', { region: 'belly' }, t); if (i % 5 === 0) t = careAt(st, t); }
   // her toy 5×
-  for (let i = 0; i < 5; i++) { tick(30 * MIN); E.act(st, 'play', T.toy, t); }
+  for (let i = 0; i < 5; i++) { tick(30 * MIN); up(); E.act(st, 'play', T.toy, t); }
   // teasing (SPEC §13): the flop (8 regular pats at the tail base in her tempo), a nose tap, the can in the garden (a sulk,
   // made up by a stroke), two more splashes (a cross) and her payback back in the house
-  for (let i = 0; i < 5 && !['happy', 'calm'].includes(E.mood(st)); i++) { tick(30 * MIN); careAt(st, t); E.act(st, 'play', T.toy, t); }
+  for (let i = 0; i < 5 && !['happy', 'calm'].includes(E.mood(st)); i++) { tick(30 * MIN); t = careAt(st, t); up(); E.act(st, 'play', T.toy, t); }
+  up();
   const tempo = E.patTempo(st);
   for (let i = 1; i <= 8; i++) { t += tempo; E.act(st, 'pat', { region: 'tailBase', n: i, ms: i > 1 ? tempo : 0, cv: 0 }, t); }
   t += 5000; E.act(st, 'boop', null, t);
@@ -365,18 +382,18 @@ function discover(seed) {
   E.act(st, 'goHouse', null, t);
   for (let i = 0; i < 18 && !st.diary.payback; i++) tick(10 * MIN);
   // a walk
-  friend(st); E.act(st, 'letOut', null, t); tick(H); E.act(st, 'letIn', null, t);
+  up(); friend(st); E.act(st, 'letOut', null, t); tick(H); E.act(st, 'letIn', null, t);
   // her quirk, seen on two days
   for (let d = 0; d < 30 && !st.diary.quirk; d++) {
     if (T.quirk === 'wakesEarly') nextDay(7);
     else if (T.quirk === 'box') { nextDay(10); const n = new Date(t); t = new Date(n.getFullYear(), n.getMonth(), n.getDate(), 23).getTime(); E.advance(st, t); E.act(st, 'stroke', { region: 'back' }, t); }
-    else if (T.quirk === 'socks') { nextDay(18); for (let i = 0; i < 5; i++) E.act(st, 'play', 'mouse', t); }
-    else { nextDay(10); st.needs.water = 20; E.act(st, 'water', null, t); }
+    else if (T.quirk === 'socks') { nextDay(18); up(); for (let i = 0; i < 5; i++) E.act(st, 'play', 'mouse', t); }
+    else { nextDay(10); up(); st.needs.water = 20; st.dish = 50; E.act(st, 'water', null, t); }
   }
   // her fear
   if (T.fear === 'vacuum') E.act(st, 'vacuum', null, t);
-  else if (T.fear === 'storm') for (let d = 0; d < 90 && !st.diary.fear; d++) { for (let h = 0; h < 24; h++) tick(H); careAt(st, t); }
-  else { t = at(2026, 12, 31, 12); E.advance(st, t); careAt(st, t); for (let h = 0; h < 16; h++) tick(H); }
+  else if (T.fear === 'storm') for (let d = 0; d < 90 && !st.diary.fear; d++) { for (let h = 0; h < 24; h++) tick(H); t = careAt(st, t); }
+  else { t = at(2026, 12, 31, 12); E.advance(st, t); t = careAt(st, t); for (let h = 0; h < 16; h++) tick(H); }
   nextDay(8);   // the weight
   return st;
 }
@@ -452,15 +469,18 @@ section('Actions');
 {
   const t0 = at(2026, 11, 12, 10), st = E.create(8, t0, 'Koxa');
   st.needs.food = 30; st.needs.water = 30;
-  ok(E.act(st, 'feed', null, t0).events.some(e => e.type === 'ate' && e.food === 'kibble'), 'feed(null) = granule');
-  ok(E.act(st, 'water', null, t0).events.some(e => e.type === 'drank') && st.needs.water === 100, 'water fills the bowl');
+  const fe = E.act(st, 'feed', null, t0).events;
+  ok(fe.some(e => e.type === 'poured' && e.food === 'kibble' && e.comes === 'run') && st.needs.food === 30 && st.bowl.kind === 'kibble' && st.bowl.amt === 35,
+    'feed(null) = granule into the bowl; she runs to it, the need does not rise at the pour');
+  ok(E.act(st, 'water', null, t0).events.some(e => e.type === 'refused' && e.reason === 'Miska s vodou je plná.'), 'a full water dish: refused (Czech reason)');
+  st.dish = 20; const wf = E.act(st, 'water', null, t0).events.find(e => e.type === 'dishFilled');
+  ok(wf && st.dish === 100 && st.needs.water === (wf.tap ? 60 : 30), 'water fills the dish; the need does not rise (unless she drinks from the tap)');
   const l0 = st.needs.love; E.act(st, 'stroke', null, t0);
   ok(st.needs.love === Math.min(100, l0 + (st.traits.spots.includes('back') ? 4 : 2)), 'stroke(null) = along the back');
-  st.needs.food = 95;
-  ok(E.act(st, 'feed', 'kibble', t0).events.some(e => e.type === 'refused' && /sytá/.test(e.reason)), 'a full cat refuses food (Czech reason)');
+  ok(E.act(st, 'feed', 'kibble', t0).events.some(e => e.type === 'refused' && e.reason === 'V misce ještě je jídlo.'), 'a second pour while food is left: refused (Czech reason)');
   ok(E.act(st, 'dance', null, t0).events[0].type === 'refused', 'unknown action: refused');
-  st.needs.food = 80; const r = E.act(st, 'feed', 'kibble', t0).events.find(e => e.type === 'ate');
-  ok(r && r.left && st.needs.food === 100, 'over 90 she leaves the rest');
+  const r = E.advance(st, t0 + 2 * MIN).events.find(e => e.type === 'ate');
+  ok(r && r.food === 'kibble' && r.gain === 35 && !r.left && st.bowl === null && st.needs.food > 64.5 && st.needs.food < 65, `she ate the bowl within 2 min (${st.needs.food})`);
   // grumpy: the belly always bites
   const g = E.create(8, t0, 'Koxa'); Object.assign(g.needs, { food: 30, water: 30, fun: 30, love: 30 });
   ok(E.mood(g) === 'grumpy', 'grumpy set up');
@@ -504,15 +524,16 @@ section('Actions');
   ok(back && back.minutes >= 120 && back.minutes <= 8 * 60 + 10, `she comes home by herself after 2–8 h (${back && back.minutes} min)`);
   // the bond: levels never lost
   const bnd = E.create(15, t0, 'Koxa'); bnd.bond = 99;
-  const lu = E.act(Object.assign(bnd, { needs: Object.assign(bnd.needs, { food: 20 }) }), 'feed', 'kibble', t0).events.find(e => e.type === 'levelUp');
-  ok(lu && lu.level === 1 && lu.name === 'Známá' && E.bondLevel(bnd).next === 300, 'a satisfied want +1 bond, level up');
+  bnd.needs.food = 20;
+  const lu = feedNow(bnd, 'kibble', t0).find(e => e.type === 'levelUp');
+  ok(lu && lu.level === 1 && lu.name === 'Známá' && E.bondLevel(bnd).next === 300, 'a satisfied want +1 bond (at the end of the meal), level up');
   E.advance(bnd, bnd.t + 5 * D);
   ok(bnd.bond >= 100, 'bond never falls below a level reached');
   // sleeping: refused, phases
   const z = E.create(16, at(2026, 11, 12, 21), 'Koxa'); E.advance(z, at(2026, 11, 13, 2));
   ok(z.asleep && E.act(z, 'play', 'mouse', z.t).events.some(e => e.type === 'refused' && /spí/.test(e.reason)), 'asleep at night; play refused');
-  E.advance(z, at(2026, 11, 13, 9));
-  ok(!z.asleep, 'awake in the morning');
+  E.advance(z, at(2026, 11, 13, 7));
+  ok(!z.asleep, 'awake in the morning (lively at dawn)');
   // rename
   E.rename(z, '  Micka  '); ok(z.name === 'Micka' && E.act(z, 'dance', null, z.t).events.length === 1, 'rename');
   E.rename(z, ''); ok(z.name === 'Koxa', 'an empty name = Koxa');
@@ -523,20 +544,24 @@ section('Actions');
 
 /* ---------- 13. balance: two visits a day with basic care, mood sampled every hour ---------- */
 section('Balance (hourly samples)');
-// basic care: feed until she is full, water, clean the litter, 10 strokes, one play
+// basic care at one moment: fill the bowl (once: a second pour waits until she ate it), the water dish, clean the
+// litter, 10 strokes, one play
 function basicCare(st, t, plays = 1) {
-  for (let i = 0; i < 4; i++) E.act(st, 'feed', 'kibble', t);
+  E.act(st, 'feed', 'kibble', t);
   E.act(st, 'water', null, t); E.act(st, 'cleanLitter', null, t);
   for (let i = 0; i < 10; i++) E.act(st, 'stroke', { region: 'back', along: true, speed: 300 }, t);
   for (let i = 0; i < plays; i++) E.act(st, 'play', 'mouse', t);
+  return t;
 }
+// a visit: fill the bowl until she leaves some (each pour waits 2 min for her meal), then basic care; returns the time
+function visitCare(st, t, plays = 1) { return basicCare(st, feedUp(st, t, 'kibble', 90), plays); }
 // visits at the given local hours for `days` days; returns hourly mood shares, illnesses, weight range
-function visitRun(seed, hours, days, plays = 1) {
+function visitRun(seed, hours, days, plays = 1, once = false) {
   const t0 = at(2026, 9, 1, 7), st = E.create(seed, t0, 'Koxa');
   const c = { happy: 0, calm: 0, grumpy: 0, sad: 0 }; let n = 0, ill = 0, minW = 9, maxW = 0;
   for (let t = t0 + H; t <= t0 + days * D; t += H) {
     for (const e of E.advance(st, t).events) if (e.type === 'ill') ill++;
-    if (hours.includes(new Date(t).getHours())) basicCare(st, t, plays);
+    if (hours.includes(new Date(t).getHours())) (once ? basicCare : visitCare)(st, t, plays);
     c[E.mood(st)]++; n++; minW = Math.min(minW, st.weight); maxW = Math.max(maxW, st.weight);
   }
   return { st, ill, minW, maxW, sad: c.sad / n, good: (c.happy + c.calm) / n, c, n };
@@ -547,6 +572,11 @@ for (const seed of [3, 61, 1234]) {
     `seed ${seed}: 2×/day (8, 20) basic care, 60 days: happy+calm ${Math.round(100 * r.good)} %, sad ${Math.round(100 * r.sad)} %, ill ${r.ill}×, weight ${r.minW}–${r.maxW}`);
   const r0 = visitRun(seed, [8, 20], 30, 0);
   ok(r0.sad < 0.1 && r0.ill === 0, `seed ${seed}: 2×/day without play: sad ${Math.round(100 * r0.sad)} %, never ill`);
+  // the bowl (2026-11-17): one bowl of granule at each of two visits is enough; one a day is neglect
+  const r1 = visitRun(seed, [8, 20], 60, 1, true);
+  ok(r1.sad < 0.1 && r1.good > 0.9 && r1.ill === 0 && r1.minW >= 4.0, `seed ${seed}: one bowl of granule at 8 and 20, 60 days: happy+calm ${Math.round(100 * r1.good)} %, never ill, ${r1.minW}–${r1.maxW} kg`);
+  const r2 = visitRun(seed, [8], 30, 1, true);
+  ok(r2.sad > 0.5 && r2.ill > 0 && r2.minW < 4.0, `seed ${seed}: one bowl a day: sad ${Math.round(100 * r2.sad)} %, ill ${r2.ill}×, thinner (${r2.minW} kg)`);
 }
 {
   // neglect still shows: four days of nothing while the app is open, and four days away
@@ -604,21 +634,21 @@ section('Review regressions');
   ok(visitRun(3, [8], 30).ill === 0, '#3 a visit every 24 h: never ill');
   // 4. weight moves back to normal
   const thin = (() => { const t1 = at(2026, 9, 1, 7), s = E.create(3, t1, 'Koxa'); s.weight = 3.0;
-    for (let t = t1 + H; t <= t1 + 30 * D; t += H) { E.advance(s, t); if ([8, 20].includes(new Date(t).getHours())) basicCare(s, t); } return s; })();
+    for (let t = t1 + H; t <= t1 + 30 * D; t += H) { E.advance(s, t); if ([8, 20].includes(new Date(t).getHours())) visitCare(s, t); } return s; })();
   ok(thin.weight >= 4.0 && !E.health(thin).thin, `#4 a thin cat recovers with care 2×/day (3.0 → ${thin.weight} in 30 days)`);
   const fed = visitRun(3, [7, 11, 15, 19, 22], 60);
   ok(fed.maxW <= 4.5, `#4 feeding 5×/day never makes her heavier than 4.5 (${fed.maxW})`);
   const tr = E.create(3, at(2026, 9, 1, 8), 'Koxa'); tr.weight = 5.2; E.advance(tr, tr.t + H);
-  for (let d2 = 0; d2 < 40; d2++) { const t = at(2026, 9, 2 + d2, 8); E.advance(tr, t); basicCare(tr, t); E.advance(tr, t + 12 * H); basicCare(tr, t + 12 * H); }
+  for (let d2 = 0; d2 < 40; d2++) { const t = at(2026, 9, 2 + d2, 8); E.advance(tr, t); visitCare(tr, t); E.advance(tr, t + 12 * H); visitCare(tr, t + 12 * H); }
   ok(tr.weight <= 4.6, `#4 chubby without treats slims back (5.2 → ${tr.weight})`);
   // 5. no flea loop; the litter box and the coat are told apart
   let vet = 0; const fl = E.create(3, at(2026, 9, 1, 8), 'Koxa');
   for (let d2 = 0; d2 < 30; d2++) for (const h of [7, 22]) {
     const t = at(2026, 9, 1 + d2, h); E.advance(fl, t);
-    for (let i = 0; i < 3 && fl.needs.food < 70; i++) E.act(fl, 'feed', 'kibble', t);
-    E.act(fl, 'water', null, t); E.act(fl, 'cleanLitter', null, t);
-    for (let i = 0; i < 10; i++) E.act(fl, 'stroke', null, t);
-    if (fl.ill) { fl.pamlsky = 99; E.act(fl, 'vetCure', { won: true }, t); vet++; }
+    feedUp(fl, t);
+    E.act(fl, 'water', null, fl.t); E.act(fl, 'cleanLitter', null, fl.t);
+    for (let i = 0; i < 10; i++) E.act(fl, 'stroke', null, fl.t);
+    if (fl.ill) { fl.pamlsky = 99; E.act(fl, 'vetCure', { won: true }, fl.t); vet++; }
   }
   ok(vet <= 1, `#5 2×/day (7, 22) without brushing: vet ${vet}× in 30 days`);
   const fc = E.create(3, t0, 'Koxa'); fc.ill = { kind: 'fleas', since: t0 }; fc.needs.coat = 0;
@@ -743,6 +773,34 @@ function lapSession(seed, needs, stroke, maxMin = 120, strokeMin = maxMin) {
     if (!st.lap) free++;
   }
   ok(tried > 0 && free === tried, `a dozing cat wakes rested and leaves by herself within 12 h (${free}/${tried})`);
+  // her nap plan (2026-11-17): rested (energy 85) but with her nap due in 10 min she dozes off on the lap; with the nap
+  // 3 h away she does not; a doze of 15 min or more is her nap: the next one is planned from its end
+  {
+    const napLap = (seed, inMin) => {
+      const s = E.create(seed, at(2026, 11, 12, 9), 'Koxa'); s.t = at(2026, 11, 12, 13); s.asleep = false; s.wokeAt = s.t - H;
+      Object.assign(s.needs, { food: 85, water: 85, fun: 80, love: 70, energy: 85, litter: 100, coat: 80 }); s.dish = 0;
+      s.napAt = s.t + inMin * MIN; E.repair(s);
+      E.act(s, 'lapOn', null, s.t); E.act(s, 'stroke', good, s.t + 5000);
+      let doze = 0; const s0 = s.t;
+      for (let x = s0 + 10000; x <= s0 + 30 * MIN && s.lap && !doze; x += 10000) if (E.advance(s, x).events.some(e => e.type === 'lapDoze')) doze = x;
+      return { s, doze };
+    };
+    let soon = 0, far = 0, counted = 0, untilOk = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const a = napLap(seed, 10), b = napLap(seed, 180);
+      if (a.doze) {
+        soon++;
+        const st = a.s, until = E.health(st).wakeAt, d0 = st.t;
+        const dz0 = st.lap.dozeAt; if (dz0 <= a.doze && until >= dz0 + 45 * MIN && until <= dz0 + 90 * MIN) untilOk++;
+        let woke = 0; for (let x = d0 + 30000; x <= d0 + 2 * H && !woke; x += 30000) if (E.advance(st, x).events.some(e => e.type === 'wake' && e.lap)) woke = x;
+        if (woke && st.lap && st.wokeAt === until && st.napAt >= st.wokeAt + 45 * MIN) counted++;
+        invariants(st, 'lap nap');
+      }
+      if (b.doze) far++;
+    }
+    ok(soon >= 30 && far <= 2, `on the lap near her nap time she dozes off (${soon}/40), with the nap 3 h away hardly (${far}/40)`);
+    ok(untilOk === soon && counted === soon, `the doze lasts 45–90 min (health().wakeAt) and counts as her nap (${counted}/${soon})`);
+  }
   // a long advance (the app closed) ends the lap
   const lg = lapCat(3); E.act(lg, 'lapOn', null, lg.t); lg.lap.doze = true;
   const rl = E.advance(lg, lg.t + 2 * H);
@@ -767,7 +825,7 @@ function lapSession(seed, needs, stroke, maxMin = 120, strokeMin = maxMin) {
   ok(of.some(e => e.type === 'lapOff') && !l.lap && E.act(l, 'lapOff', null, t0).events[0].type === 'refused', 'lapOff; again: refused');
   E.act(l, 'lapOn', null, t0); l.needs.food = 50;
   const fe = E.act(l, 'feed', 'kibble', t0).events;
-  ok(fe[0].type === 'lapOff' && fe.some(e => e.type === 'ate') && !l.lap, 'feeding means standing up first');
+  ok(fe[0].type === 'lapOff' && fe.some(e => e.type === 'poured' && e.comes) && !l.lap, 'feeding means standing up first; she comes to the bowl');
   // repair
   const g = lapCat(6); E.act(g, 'lapOn', null, t0); const c = clone(g); E.repair(c);
   ok(JSON.stringify(c) === JSON.stringify(g), 'a lap state is canonical');
@@ -989,10 +1047,10 @@ section('Economy');
   st.needs.food = 40; st.pamlsky = 3;
   const r = E.act(st, 'feed', 'tuna', t0).events[0];
   ok(r.type === 'refused' && r.reason === 'Na tuňáka nemáš dost pamlsků (4).', `tuna with 3 pamlsky: "${r.reason}"`);
-  ok(E.act(st, 'feed', 'kibble', t0).events.some(e => e.type === 'ate') && st.pamlsky === 3, 'granule is free');
-  st.needs.food = 40; st.pamlsky = 4; E.act(st, 'feed', 'tuna', t0);
-  ok(st.pamlsky === 0, 'a serving of tuna costs 4');
-  st.pamlsky = 8; E.act(st, 'buy', 'pouch5', t0); st.needs.food = 40; E.act(st, 'feed', 'pouch', t0);
+  ok(E.act(st, 'feed', 'kibble', t0).events.some(e => e.type === 'poured') && st.pamlsky === 3, 'granule is free');
+  st.bowl = null; st.pamlsky = 4; E.act(st, 'feed', 'tuna', t0);
+  ok(st.pamlsky === 0 && st.bowl.kind === 'tuna', 'a serving of tuna costs 4');
+  st.pamlsky = 8; E.act(st, 'buy', 'pouch5', t0); st.bowl = null; E.act(st, 'feed', 'pouch', t0);
   ok(st.pamlsky === 0 && st.stock.pouch === 4, 'a pack of 5 kapsičky (8): feeding takes a serving from the stock');
   for (const [crop, text] of [['radish', 'Na ředkvičku nemáš dost pamlsků (3).'], ['carrot', 'Na mrkev nemáš dost pamlsků (5).'], ['strawberry', 'Na jahody nemáš dost pamlsků (8).'], ['tomato', 'Na rajče nemáš dost pamlsků (9).'], ['catnip', 'Na šantu nemáš dost pamlsků (7).']]) {
     const rs = E.act(st, 'sow', { bed: 0, crop }, t0).events[0];
@@ -1033,7 +1091,7 @@ section('Shop');
     ok(b.needs.fun > a.needs.fun, `kočičí strom: fun falls slower (${a.needs.fun.toFixed(1)} vs ${b.needs.fun.toFixed(1)})`); }, b => { b.owned.catTree = true; });
   pair((a, b) => { for (const s of [a, b]) { s.asleep = true; s.sleepAt = t0; s.needs.energy = 20; E.advance(s, t0 + H); }
     ok(b.needs.energy > a.needs.energy, 'pelíšek deluxe: she rests faster'); }, b => { b.owned.bedDeluxe = true; });
-  const bx = E.create(24, at(2026, 6, 10, 14), 'Koxa'); bx.owned.box = true; bx.needs.energy = 60; bx.wokeAt = bx.t - 3 * H;
+  const bx = E.create(24, at(2026, 6, 10, 14), 'Koxa'); bx.owned.box = true; bx.furniture.box = { room: 'living', x: 0.2, y: 0.9 }; bx.needs.energy = 60; bx.wokeAt = bx.t - 3 * H;
   let place = null; for (let tt = bx.t + MIN; !place && tt < bx.t + H; tt += MIN) { const e = E.advance(bx, tt).events.find(x => x.type === 'sleep'); if (e) place = e.place; }
   ok(place === 'box', `krabice: she naps in the box (${place})`);
   // the cat flap: while the player is away she goes on walks by herself
@@ -1125,12 +1183,12 @@ section('Economy balance (60 days)');
     for (const e of E.advance(st, tt).events) if (e.type === 'ill') ill++;
     const hr = new Date(tt).getHours(), day = Math.floor((tt - t0) / D);
     if (hr === 8) {
-      st.needs.food = Math.min(st.needs.food, 60);
+      st.needs.food = Math.min(st.needs.food, 60); st.bowl = null;   // the leftovers go, the kapsička goes in
       if (E.act(st, 'feed', 'pouch', tt).events.some(e => e.type === 'refused' && /pamlsk/.test(e.reason))) pouchRefused++;
-      basicCare(st, tt);
-      E.minigameResult(st, 'mouse', 15, tt + 5 * MIN);
+      const t1 = visitCare(st, tt);
+      E.minigameResult(st, 'mouse', 15, t1 + 5 * MIN);
     }
-    if (hr === 20) { basicCare(st, tt); E.minigameResult(st, 'feather', 10, tt + 5 * MIN); }
+    if (hr === 20) { const t1 = visitCare(st, tt); E.minigameResult(st, 'feather', 10, t1 + 5 * MIN); }
     if (hr === 21 && day % 7 === 6) { const id = toyList.find(x => !st.owned[x] && E.shop(st).some(i => i.id === x)); if (id && E.act(st, 'buy', id, tt).events.some(e => e.type === 'bought')) toys++; }
     if (firstRich === null && st.pamlsky >= 120) firstRich = day;
     n++; if (E.mood(st) === 'sad') sad++;
@@ -1279,7 +1337,8 @@ section('Visitors');
   E.advance(lg, lg.t + 10 * D); ok(!lg.visit || lg.visit.since >= lg.t - 3 * H, 'a long absence leaves no visitor behind');
   // Koxa's reactions
   const t0 = at(2026, 6, 10, 10);
-  const with_ = (id, friend) => { const s = E.create(62, t0, 'Koxa'); if (friend != null) s.visitors[id] = { friend, met: t0, visits: 1, fed: 0 }; s.visit = { id, since: t0, until: t0 + H, gain: 0 }; return s; };
+  // she saw it through the window (noticed): only then a visitor changes her mood at home (2026-11-17)
+  const with_ = (id, friend) => { const s = E.create(62, t0, 'Koxa'); if (friend != null) s.visitors[id] = { friend, met: t0, visits: 1, fed: 0 }; s.visit = { id, since: t0, until: t0 + H, gain: 0, noticed: t0 }; return s; };
   const base = E.moodValue(E.create(62, t0, 'Koxa'));
   ok(E.moodValue(with_('bivoj')) === base - 10 && E.moodValue(with_('bivoj', 3)) === base + 5, 'Bivoj: she hisses (mood −10) until 3 hearts, then they are friends (+5)');
   ok(E.moodValue(with_('rambo', 1)) === base - 10 && E.moodValue(with_('rambo', 2)) === base, 'Rambo: hissing until 2 hearts');
@@ -1351,6 +1410,7 @@ section('Visitors 2');
   function gardenVisit(st, id, t, minutes, each) {
     while (E.weather(t, st) === 'rain') t += D;
     E.advance(st, t); basicCare(st, t); st.needs.energy = 90;
+    if (st.asleep) { st.asleep = false; st.wokeAt = t; }   // the player waits until she is up (she naps by day, 2026-11-17)
     st.yard = { since: t, snow: false, tree: null };
     st.visit = { id, since: t, until: t + minutes * MIN, gain: 0, palGain: 0, greeted: false, act: { kind: 'arrive', since: t, with: null } };
     const acts = [], events = [], pal0 = st.visitors[id] ? st.visitors[id].pal : 0, love0 = st.needs.love;
@@ -1508,7 +1568,7 @@ section('Visitors 2');
     }
     ok(n >= 4 && found === n && order === n, `old save, 5 hearts: palFirst found (${found}/${n}), never after palGroom / palSnuggle (${order}/${n})`);
   }
-  const vb = E.create(89, at(2026, 6, 10, 10), 'Koxa'); vb.visitors.bivoj = rec(5, 0); vb.visit = { id: 'bivoj', since: vb.t, until: vb.t + H, gain: 0, palGain: 0, greeted: false, act: { kind: 'arrive', since: vb.t, with: null } };
+  const vb = E.create(89, at(2026, 6, 10, 10), 'Koxa'); vb.visitors.bivoj = rec(5, 0); vb.visit = { id: 'bivoj', since: vb.t, until: vb.t + H, gain: 0, palGain: 0, greeted: false, act: { kind: 'arrive', since: vb.t, with: null }, noticed: vb.t };
   const base = E.moodValue(E.create(89, at(2026, 6, 10, 10), 'Koxa'));
   ok(E.moodValue(vb) === base - 10, "Bivoj, the player's best friend: Koxa still hisses (pal 0)");
   vb.visit.act = { kind: 'greet', since: vb.t, with: 'koxa' }; vb.visitors.mourek = rec(0, 3);
@@ -1539,15 +1599,15 @@ section('Visitors 2');
   invariants(cb, 'clock back in a visit');
   // 30 days with the garden twice a day: joint acts only while Koxa is in the garden (never indoors, out or up the tree)
   let bad = 0, joint = 0, checks = 0;
-  for (const seed of [91, 92, 93]) {
+  for (const seed of [91, 92, 93, 94, 95, 96]) {
     const st = E.create(seed, at(2026, 5, 1, 7), 'Koxa'); st.owned.visitorBowl = true; st.furniture.visitorBowl = { room: 'garden', x: 0.5, y: 0.8 };
     st.visitors = { ciperka: rec(1, 1), sedivka: rec(3, 3), mourek: rec(0, 0) };
     for (let t = st.t + 10 * MIN; t <= at(2026, 5, 31, 7); t += 10 * MIN) {
       const hr = new Date(t).getHours(), mi = new Date(t).getMinutes();
       E.advance(st, t);
       if ([8, 20].includes(hr) && mi === 0) basicCare(st, t);
-      if ((hr === 10 || hr === 16) && mi === 0) E.act(st, 'goGarden', null, t);
-      if ((hr === 12 || hr === 18) && mi === 0 && st.yard) { if (st.yard.tree) E.act(st, 'fetchDown', null, t); E.act(st, 'goHouse', null, t); }
+      if ((hr === 10 || hr === 11 || hr === 17 || hr === 18) && !st.yard && !st.asleep) E.act(st, 'goGarden', null, t);   // asleep: the player waits
+      if ((hr === 12 || hr === 19) && mi === 0 && st.yard) { if (st.yard.tree) E.act(st, 'fetchDown', null, t); E.act(st, 'goHouse', null, t); }
       if (hr === 11 && mi === 0 && st.visit) E.act(st, 'strokeVisitor', { id: st.visit.id }, t);
       if (st.visit) {
         checks++;
@@ -1558,7 +1618,7 @@ section('Visitors 2');
       if (mi === 0 && hr % 6 === 0) invariants(st, `garden days seed ${seed}`);
     }
   }
-  ok(bad === 0 && joint > 20, `joint acts only in the garden (${joint} of ${checks} visit steps together, ${bad} wrong)`);
+  ok(bad === 0 && joint > 30, `joint acts only in the garden (${joint} of ${checks} visit steps together, ${bad} wrong)`);
 }
 
 /* ---------- 22. Phase B: the player and the visitor ---------- */
@@ -1666,7 +1726,7 @@ section('Visitors 3');
     const p0 = st.pamlsky;
     let ev = E.act(st, 'treatVisitor', { id: 'pacicka' }, t).events;
     ok(ev.some(e => e.type === 'visitorTreat' && e.id === 'pacicka') && st.pamlsky === p0 - 1 && st.visitors.pacicka.friend === 1, 'treatVisitor: a pamlsek, greedy Pacička +1 heart');
-    ok(E.act(st, 'treatVisitor', { id: 'pacicka' }, t + MIN).events[0].reason === 'Pacička už pamlsek dostala.' && st.pamlsky === p0 - 1, 'once a visit');
+    ok(E.act(st, 'treatVisitor', { id: 'pacicka' }, t + MIN).events.find(e => e.type === 'refused').reason === 'Pacička už pamlsek dostala.' && st.pamlsky === p0 - 1, 'once a visit');
     ok(E.act(st, 'feedVisitor', { id: 'pacicka' }, t + MIN).events[0].reason === 'Pacička už dnes dostala.', 'a treat counts as fed today');
     const m = visiting(104, 'mourek', 0, 0, T0); m.st.pamlsky = 0;
     ok(E.act(m.st, 'treatVisitor', { id: 'mourek' }, m.t).events[0].reason === 'Nemáš žádné pamlsky.' && m.st.visitors.mourek.friend === 0 && m.st.pamlsky === 0, 'no pamlsky: refused');
@@ -2000,10 +2060,10 @@ section('Visitors 4 (kittens)');
     for (let t = st.t + step; t <= end; t += step) {
       const d = new Date(t), hr = d.getHours(), mi = d.getMinutes(), s = d.getSeconds();
       const on = h => hr === h && mi === 0 && s < step / 1000;
+      const ev = E.advance(st, t).events;   // first: a visit that starts now is seen here, not inside an act
       if (on(8) || on(20)) basicCare(st, t);
       if (on(9) || on(15)) E.act(st, 'goGarden', null, t);
       if ((on(13) || on(19)) && st.yard) { if (st.yard.tree) E.act(st, 'fetchDown', null, t); E.act(st, 'goHouse', null, t); }
-      const ev = E.advance(st, t).events;
       if (each) each(st, t, ev);
     }
     return st;
@@ -2120,7 +2180,7 @@ section('Visitors 4 (kittens)');
   function family(t = T) {
     let u = t; const probe = E.create(5, u, 'Koxa'); while (E.weather(u, probe) === 'rain') u += D;
     const st = bowl(E.create(5, u - 100 * D, 'Koxa'));
-    E.advance(st, u - 100 * D + H); st.t = u; st.day = { key: Number(new Date(u).toISOString().slice(0, 10).replace(/-/g, '')), ms: 0, food: 0, mood: 0, minE: 100, treats: 0, ttreats: 0, q: false, acted: false };
+    E.advance(st, u - 100 * D + H); st.t = u; st.asleep = false; st.wokeAt = u; st.day = { key: Number(new Date(u).toISOString().slice(0, 10).replace(/-/g, '')), ms: 0, food: 0, mood: 0, minE: 100, treats: 0, ttreats: 0, q: false, acted: false };
     basicCare(st, u); st.needs.energy = 90; st.lvl = 2; st.bond = 300; st.pamlsky = 20;
     const b5 = midnight(u - 5 * D), b30 = midnight(u - 30 * D), b70 = midnight(u - 70 * D);
     st.kits = [
@@ -2470,6 +2530,645 @@ section('Cat flap installed, shop toys, šanta from the pantry');
   ok(!E.act(co, 'harvest', { bed: 1 }, co.t).events.some(e => e.type === 'catnip') && co.pantry.catnip === 3, 'šanta harvested while she is out: into the pantry');
 }
 
+/* ---------- the bowls, meals, the water dish, her routine (user's wish 2026-11-17) ---------- */
+section('Bowls, meals and routine');
+{
+  const T = at(2026, 6, 10, 10);
+  // an awake Koxa at t (adopted an hour before), her needs set
+  const cat = (seed, needs, t = T) => { const st = E.create(seed, t - H, 'Koxa'); E.advance(st, t); Object.assign(st.needs, needs || {}); st.want = E.wants(st); return st; };
+  const types = ev => ev.map(e => e.type);
+  const seedWith = (k, v, from = 1) => { let s = from; while (E.create(s, T, 'K').traits[k] !== v) s++; return s; };
+  const notFav = st => ['pouch', 'chicken', 'tuna'].find(k => k !== st.traits.favFood);
+  const sec = 1000;
+
+  // A. the pour: the need rises only as she eats; she hears it, walks over and eats about a minute
+  {
+    const st = cat(1, { food: 50 }), l0 = st.needs.love, b0 = st.bond;
+    const ev = E.act(st, 'feed', 'kibble', T).events, p = ev.find(e => e.type === 'poured');
+    ok(p && p.food === 'kibble' && p.comes === 'trot' && p.woke === false && st.needs.food === 50 && st.needs.love === l0 && st.bond === b0 && !types(ev).includes('ate'),
+      'a pour: she trots over (food 50), nothing rises at the pour');
+    ok(st.meal && st.meal.since === T + 8 * sec && E.health(st).coming && !E.health(st).eating && E.bowls(st).bowl.amt === 35, 'the meal starts after the walk (8 s); health: coming');
+    ok(!types(E.advance(st, T + 7 * sec).events).includes('mealStart'), 'no bite before she gets there');
+    const e1 = E.advance(st, T + 20 * sec).events;
+    ok(types(e1).includes('mealStart') && E.health(st).eating && st.needs.food > 61 && st.needs.food < 63 && Math.abs(E.health(st).bowl - 23) <= 1, `mealStart; 12 s of eating: +12 (${st.needs.food.toFixed(2)})`);
+    const e2 = E.advance(st, T + 60 * sec).events, ate = e2.find(e => e.type === 'ate');
+    ok(ate && ate.food === 'kibble' && ate.gain === 35 && ate.left === false && ate.fav === false && !st.meal && st.bowl === null && Math.abs(st.needs.love - l0 - 2) < 0.1,
+      `ate after 35 s: +35, the bowl empty, love +2 at the end (${JSON.stringify(ate)})`);
+    invariants(st, 'after a meal');
+    const r = cat(2, { food: 30 }); E.act(r, 'feed', 'kibble', T);
+    ok(r.meal.since === T + 5 * sec && E.act(cat(2, { food: 30 }), 'feed', 'kibble', T).events.find(e => e.type === 'poured').comes === 'run', 'hungry (under 40): she runs (5 s)');
+    // her favourite food: she runs even when nearly full, eats to 95 and leaves the rest
+    const f = cat(3, { food: 90 }), fav = f.traits.favFood; f.pamlsky = 20;
+    const pf = E.act(f, 'feed', fav, T).events.find(e => e.type === 'poured');
+    const ef = E.advance(f, T + 2 * MIN).events, af = ef.find(e => e.type === 'ate');
+    ok(pf.comes === 'run' && af && af.fav && af.left && af.gain === 5 && f.bowl && Math.abs(f.bowl.amt - (E.FOODS[fav].gain - 5)) < 0.01 && types(ef).includes('purr') && f.cnt.favFood === 1,
+      `her favourite at food 90: she runs, eats 5, leaves ${f.bowl && f.bowl.amt.toFixed(1)}; purr and the favourite count at the end`);
+    // full, not her favourite: she does not come; she eats it later by herself when hungry (under 60), also while away
+    const n = cat(4, { food: 90 }), nk = notFav(n); n.pamlsky = 20;
+    ok(E.act(n, 'feed', nk, T).events.find(e => e.type === 'poured').comes === null && !n.meal, 'full (90), not her favourite: she does not come');
+    E.advance(n, T + 3 * H);
+    ok(n.bowl && n.bowl.amt === E.FOODS[nk].gain && n.needs.food < 90, 'three hours later the bowl is still full (food over 60)');
+    const m = clone(n), m0 = clone(n); m0.bowl = null;
+    E.advance(m, T + 30 * H); E.advance(m0, T + 30 * H);
+    ok(m.bowl === null && m.needs.food > m0.needs.food + 20, `away 30 h: she ate the bowl when she got hungry (${m.needs.food.toFixed(1)} vs ${m0.needs.food.toFixed(1)} without it)`);
+    invariants(m, 'eaten while away');
+  }
+  // A. who hears the pour: the garden, out, asleep (fed / hungry), scared
+  {
+    const y = cat(5, { food: 30 }); E.act(y, 'goGarden', null, T);
+    const py = E.act(y, 'feed', 'kibble', T).events.find(e => e.type === 'poured');
+    E.advance(y, T + 5 * MIN);
+    ok(py && py.comes === null && y.bowl.amt === 35 && y.needs.food < 30, 'in the garden she does not hear it and does not eat');
+    E.act(y, 'goHouse', null, y.t); E.advance(y, y.t + 2 * MIN);
+    ok(y.bowl === null && y.needs.food > 60, 'back in the house (hungry) she eats it by herself');
+    const o = friend(cat(6, { food: 30 })); E.act(o, 'letOut', null, T);
+    ok(E.act(o, 'feed', 'kibble', T + MIN).events.find(e => e.type === 'poured').comes === null && o.bowl.amt === 35, 'out on a walk: the bowl can be filled, she does not hear it');
+    E.act(o, 'letIn', null, T + 2 * MIN); E.advance(o, T + 4 * MIN);
+    ok(o.bowl === null, 'home again: she eats');
+    const night = at(2026, 6, 11, 2);
+    const asleep = food => { const s = cat(7, {}); E.advance(s, night); s.needs.food = food; return s; };
+    const z = asleep(70);
+    const pz = E.act(z, 'feed', 'kibble', night).events.find(e => e.type === 'poured');
+    ok(z.asleep && pz.comes === null && pz.woke === false && z.bowl.amt === 35, 'asleep and fed (70): she sleeps on');
+    let woke = 0, n = 0, order = true;
+    for (let s = 1; s <= 200; s++) {
+      const c = E.create(s, night - 6 * H, 'Koxa'); E.advance(c, night);
+      if (!c.asleep) continue;
+      c.needs.food = 20; n++;
+      const ev = E.act(c, 'feed', 'kibble', night).events, p = ev.find(e => e.type === 'poured');
+      if (p.woke) { woke++; if (!(types(ev).indexOf('wake') < types(ev).indexOf('poured') && p.comes === 'run' && !c.asleep && c.meal)) order = false; }
+      else if (!c.asleep || p.comes !== null) order = false;
+    }
+    ok(n > 100 && woke > n * 0.6 && woke < n * 0.8 && order, `asleep and hungry (20): the rustle wakes her ${woke}/${n} (70 %), then she runs`);
+    const h = cat(8, { food: 30 }); E.act(h, 'pickUp', null, T);
+    const ph = E.act(h, 'feed', 'kibble', T).events.find(e => e.type === 'poured');
+    ok(ph.comes === 'run' && !h.held, 'held: she jumps down and runs to the bowl');
+  }
+  // A. a second pour, a refill, leftovers, interruptions, a sore tummy, a pat while she eats
+  {
+    const st = cat(9, { food: 80 });
+    E.act(st, 'feed', 'kibble', T);
+    ok(E.act(st, 'feed', 'pouch', T + sec).events.some(e => e.type === 'refused' && e.reason === 'V misce ještě je jídlo.') && st.pamlsky === 5, 'a second pour while food is left: refused, nothing paid');
+    E.advance(st, T + MIN);
+    ok(st.bowl && Math.abs(st.bowl.amt - 20) < 0.1 && st.needs.food >= 94.9, `food 80: she eats 15 and leaves 20 (${st.bowl && st.bowl.amt.toFixed(2)})`);
+    st.bowl.amt = 10.5;
+    ok(E.act(st, 'feed', 'kibble', st.t).events.some(e => e.type === 'refused'), 'more than 10 left: refused');
+    st.bowl.amt = 10;
+    ok(E.act(st, 'feed', 'kibble', st.t).events.some(e => e.type === 'poured') && st.bowl.amt === 35, '10 left: a fresh portion');
+    // picked up from the bowl: the meal ends with what she ate, the rest waits
+    const p = cat(10, { food: 30 }); E.act(p, 'feed', 'kibble', T); E.advance(p, T + 20 * sec);
+    const pe = E.act(p, 'pickUp', null, T + 20 * sec).events, pa = pe.find(e => e.type === 'ate');
+    ok(pa && pa.gain === 15 && pa.left && !p.meal && Math.abs(p.bowl.amt - 20) < 0.01, `picked up after 15 s of eating: ate 15, 20 left (${JSON.stringify(pa)})`);
+    E.act(p, 'putDown', null, T + 30 * sec); E.advance(p, T + 2 * MIN);
+    ok(p.bowl === null && p.needs.food > 60, 'put down (still hungry): she finishes it');
+    // a sore tummy: the bowl empties, the need rises half
+    const t2 = cat(11, { food: 30 }); t2.ill = { kind: 'tummy', since: T - H };
+    E.act(t2, 'feed', 'kibble', T); const ta = E.advance(t2, T + 2 * MIN).events.find(e => e.type === 'ate');
+    ok(ta && ta.gain === 18 && t2.bowl === null, `a sore tummy: the bowl of 35 gives +${ta && ta.gain}`);
+    // a pat while she eats: warned, then she leaves the bowl for 2 minutes
+    const q = cat(12, { food: 30 }); E.act(q, 'feed', 'kibble', T); E.advance(q, T + 10 * sec);
+    let tq = T + 10 * sec, out = [];
+    for (let i = 1; i <= 8 && q.meal; i++) { tq += 400; out.push(...E.act(q, 'pat', { region: 'back', n: i, ms: i > 1 ? 400 : 0, cv: 0 }, tq).events); }
+    for (let i = 0; i < 6 && q.meal; i++) { tq += 400; out.push(...E.act(q, 'pat', { region: 'back', n: 9 + i, ms: 400, cv: 0 }, tq).events); }
+    const bu = out.find(e => e.type === 'blowUp');
+    ok(out.some(e => e.type === 'pat' && e.eating && e.stage === 'warn') && bu && bu.why === 'eat' && !q.meal && q.bowl && q.bowl.wait === tq + 2 * MIN,
+      'patted while eating (no UI flag): warned, then she leaves the bowl (blowUp eat)');
+    E.advance(q, tq + 90 * sec);
+    ok(!q.meal && q.bowl, 'she stays away from the bowl for 2 minutes');
+    E.advance(q, tq + 4 * MIN);
+    ok(q.bowl === null, 'then she comes back and finishes it');
+    // a meal in 1-second ticks = one advance
+    const a1 = cat(13, { food: 40 }), a2 = cat(13, { food: 40 });
+    E.act(a1, 'feed', 'tuna', T); E.act(a2, 'feed', 'tuna', T);
+    for (let x = sec; x <= 2 * MIN; x += sec) E.advance(a1, T + x);
+    E.advance(a2, T + 2 * MIN);
+    ok(Math.abs(a1.needs.food - a2.needs.food) < 0.01 && JSON.stringify(a1.bowl) === JSON.stringify(a2.bowl), `a meal in 1-second ticks = one advance (${a1.needs.food.toFixed(3)} / ${a2.needs.food.toFixed(3)})`);
+  }
+  // B. the water dish: filled, refused when nearly full, she drinks in short sessions by herself
+  {
+    const tapSeed = seedWith('quirk', 'socks');
+    const st = cat(tapSeed, { water: 60 }); st.dish = 85;
+    const fe = E.act(st, 'water', null, T).events;
+    ok(fe.some(e => e.type === 'dishFilled' && e.tap === false) && st.dish === 100 && st.needs.water === 60, 'the jug fills the dish; the need does not rise');
+    ok(E.act(st, 'water', null, T).events.some(e => e.type === 'refused' && e.reason === 'Miska s vodou je plná.') && E.act(cat(1), 'water', null, T).events.some(e => e.type === 'refused'), 'a full dish (a new cat: 100): refused');
+    const e1 = E.advance(st, T + 10 * sec).events;
+    ok(types(e1).includes('drinkStart') && E.health(st).drinking && st.needs.water > 74 && st.needs.water < 76, `she drinks by herself (water under 70): 1.5 a second (${st.needs.water.toFixed(2)})`);
+    const e2 = E.advance(st, T + MIN).events;
+    ok(types(e2).includes('drank') && e2.find(e => e.type === 'drank').tap === false && !st.drink && Math.abs(st.needs.water - 90) < 0.1 && Math.abs(st.dish - 70) < 0.1,
+      `a session: +30 in 20 s, the dish −30 (water ${st.needs.water.toFixed(1)}, dish ${st.dish.toFixed(1)})`);
+    E.advance(st, T + 2 * H);
+    ok(!st.drink && Math.abs(st.dish - 70) < 0.1, 'not thirsty (over 70): she does not drink');
+    const low = cat(14, { water: 20 }); low.dish = 10; E.advance(low, T + MIN);
+    ok(low.dish === 0 && low.needs.water > 29.9 && low.needs.water < 30.1, 'she drinks only what is in the dish');
+    const fl = cat(15, { water: 20 }); fl.dish = 0; const w0 = E.advance(clone(fl), T + 10 * H).st.needs.water;
+    ok(w0 < 1, 'an empty dish: she stays thirsty');
+    const o = friend(cat(16, { water: 60 })); E.act(o, 'letOut', null, T); E.advance(o, T + H);
+    ok(o.dish === 100 && o.needs.water < 60, 'out: the water falls, the dish stays');
+    // a long day: sessions while away keep her drinking, the dish runs dry in about a day and a half
+    const d = cat(17, {}); E.advance(d, T + 20 * H);
+    ok(d.needs.water > 35 && d.dish < 60, `20 h alone: water ${d.needs.water.toFixed(0)}, the dish ${d.dish.toFixed(0)}`);
+    // her tap quirk: about half the fills she jumps up to the tap and drinks at once
+    let taps = 0, n = 0, okTap = true;
+    for (let s = 1; s <= 400 && n < 120; s++) {
+      if (E.create(s, T, 'K').traits.quirk !== 'tap') continue;
+      const c = cat(s, { water: 40 }); c.dish = 50; n++;
+      const ev = E.act(c, 'water', null, T).events;
+      if (ev.find(e => e.type === 'dishFilled').tap) { taps++; if (!(c.needs.water === 70 && ev.some(e => e.type === 'drank' && e.tap) && ev.some(e => e.type === 'quirk' && e.id === 'tap'))) okTap = false; }
+      else if (c.needs.water !== 40) okTap = false;
+    }
+    ok(okTap && taps > n * 0.35 && taps < n * 0.65, `the tap quirk: ${taps}/${n} fills she drinks from the tap (+30, quirk seen)`);
+  }
+  // C. her routine: three pours within ±45 min make a meal time; she waits at the empty bowl and asks
+  {
+    const st = cat(18, {}, at(2026, 6, 10, 7, 20));
+    for (const [d, h, mi] of [[10, 7, 20], [11, 7, 40], [12, 8, 0]]) {
+      const t = at(2026, 6, d, h, mi); E.advance(st, t); st.bowl = null; E.act(st, 'feed', 'kibble', t);
+    }
+    ok(st.mealLog.length === 3 && JSON.stringify(E.mealTimes(st)) === '[7.67]', `three pours 7:20, 7:40, 8:00 = a meal time at 7:40 (${JSON.stringify(E.mealTimes(st))}, log ${JSON.stringify(st.mealLog)})`);
+    // three bowls in a row for a hungry cat are one meal: logged once, no meal time
+    const row = cat(18, { food: 10 }, at(2026, 6, 10, 7));
+    for (const mi of [0, 2, 4]) { const t = at(2026, 6, 10, 7, mi); E.advance(row, t); row.bowl = null; row.meal = null; E.act(row, 'feed', 'kibble', t); }
+    ok(row.mealLog.length === 1 && E.mealTimes(row).length === 0, `three bowls within minutes: logged once, no meal time (log ${JSON.stringify(row.mealLog)})`);
+    const gap = cat(18, {}, at(2026, 6, 10, 7));
+    for (const mi of [0, 44, 46]) { const t = at(2026, 6, 10, 7, mi); E.advance(gap, t); gap.bowl = null; gap.meal = null; E.act(gap, 'feed', 'kibble', t); }
+    ok(gap.mealLog.length === 2, `the next pour is logged 45 min after the last logged one (log ${JSON.stringify(gap.mealLog)})`);
+    // three logged pours on one day (7:00, 7:45, 8:30) make no meal time; one more on another day does
+    const day = cat(18, {}); day.mealLog = [[7, 20260610], [7.75, 20260610], [8.5, 20260610]];
+    const two0 = E.mealTimes(day).length; day.mealLog.push([7.5, 20260611]);
+    ok(two0 === 0 && E.mealTimes(day).length === 1, `three pours on one day: no meal time; on two days: one (${JSON.stringify(E.mealTimes(day))})`);
+    ok(E.mealTime(st, at(2026, 6, 13, 7, 11)) === 7.67 && E.mealTime(st, at(2026, 6, 13, 7, 9)) === null && E.mealTime(st, at(2026, 6, 13, 8, 40)) === 7.67 && E.mealTime(st, at(2026, 6, 13, 8, 42)) === null,
+      'the window: 30 min before to 60 min after');
+    const days = hs => hs.map((h, i) => [h, 20260601 + i]);
+    const two = cat(19, {}); two.mealLog = days([7, 7.5, 7.25, 19, 19.5, 18.75, 13]);
+    const one = cat(19, {}); one.mealLog = days([7, 9, 11, 13, 15, 17, 19, 21]);
+    const wrap = cat(19, {}); wrap.mealLog = days([23.5, 0.25, 23.75]);
+    ok(JSON.stringify(E.mealTimes(two)) === '[7.25,19.08]' && E.mealTimes(one).length === 0 && JSON.stringify(E.mealTimes(wrap)) === '[23.83]', 'two meal times; scattered pours: none; across midnight');
+    // the last 8 pours only
+    const lg = cat(20, {}); for (let i = 0; i < 12; i++) { lg.bowl = null; lg.meal = null; E.act(lg, 'feed', 'kibble', T + i * H); }
+    ok(lg.mealLog.length === 8, 'the log keeps the last 8 pours');
+    // at the meal time with an empty bowl: she wants food (and meows) even at sytost 70; not at 85, not with a full bowl
+    const w = clone(st); w.bowl = null; w.meal = null; const tw = at(2026, 6, 13, 7, 30);
+    E.advance(w, tw - 31 * MIN); Object.assign(w.needs, { food: 72, water: 90, fun: 90, love: 90, litter: 100, coat: 90, energy: 90 }); w.asleep = false; w.want = E.wants(w);
+    ok(w.want === null, 'before the window: no want at 72');
+    const ew = E.advance(w, tw).events;
+    ok(E.wants(w) === 'food' && ew.some(e => e.type === 'meow' && e.want === 'food'), 'in the window, the bowl empty: she asks for food (meow)');
+    const w2 = clone(w); w2.needs.food = 85; ok(E.wants(w2) === null, 'at 85 she does not ask');
+    const w3 = clone(w); w3.bowl = { kind: 'kibble', amt: 30, at: tw, wait: 0 }; ok(E.wants(w3) !== 'food', 'with food in the bowl she does not ask');
+    // at the meal time she also eats a bowl she would leave otherwise (sytost 60–80)
+    const w4 = clone(w); w4.needs.food = 72; w4.bowl = { kind: 'kibble', amt: 35, at: tw, wait: 0 };
+    E.advance(w4, tw + MIN);
+    ok(w4.bowl === null || w4.bowl.amt < 35, 'at her meal time she eats at 72');
+    const w5 = clone(w4); w5.bowl = { kind: 'kibble', amt: 35, at: tw, wait: 0 }; w5.meal = null; w5.needs.food = 72; w5.mealLog = [];
+    E.advance(w5, w5.t + MIN);
+    ok(w5.bowl.amt === 35, 'without a meal time she leaves it at 72');
+    // the satisfied want: bond +1 when a hungry cat finished her meal; a pour at her meal time also counts (she asked)
+    const b = cat(21, { food: 30 }); const bb = b.bond;
+    E.act(b, 'feed', 'kibble', T); E.advance(b, T + MIN);
+    ok(b.bond === bb + 1, 'hungry, fed: bond +1 at the end of the meal');
+    // at her meal time she asks at sytost 70, but that is no real want: a stroke (or anything else) gives no bond
+    const mt = clone(w); mt.bowl = null; mt.meal = null; mt.needs.food = 70; mt.wantAt = {};
+    const mb = mt.bond, tm = mt.t + MIN;
+    const wantedFood = (() => { const c = clone(mt); E.advance(c, tm); return E.wants(c) === 'food'; })();
+    E.act(mt, 'stroke', { region: 'back' }, tm);
+    ok(wantedFood && mt.bond === mb && !mt.wantAt.food, `her meal time at sytost 70, an empty bowl, a stroke: bond unchanged (${mb} → ${mt.bond})`);
+  }
+  // D. the litter box: only awake and free; later when asleep, on the lap or held; in the garden she digs by a bed
+  {
+    const st = cat(22, {}); st.litterAt = T + MIN;
+    const ev = E.advance(st, T + 5 * MIN).events;
+    ok(ev.some(e => e.type === 'litter' && !e.garden) && st.needs.litter === 70 && st.litterAt >= T + 7 * H, 'awake at home: she uses the box');
+    const z = cat(23, {}); E.advance(z, at(2026, 6, 11, 2)); z.litterAt = z.t + MIN; const l0 = z.needs.litter;
+    E.advance(z, z.t + 10 * MIN);
+    ok(z.asleep && z.needs.litter === l0 && z.litterAt > z.t + 14 * MIN && z.litterAt <= z.t + 31 * MIN, `asleep: postponed 15–30 min (${(z.litterAt - z.t) / MIN} min)`);
+    E.advance(z, at(2026, 6, 11, 9));
+    ok(!z.asleep && z.needs.litter < l0, 'she goes once she is up');
+    const l = cat(24, { love: 50 }); E.act(l, 'lapOn', null, T); l.litterAt = T + 30 * sec;
+    E.advance(l, T + MIN);
+    ok((!l.lap || l.needs.litter === 100) && (l.lap ? l.litterAt > T + MIN : true), 'on the lap: not on the lap');
+    const g = cat(25, {}); E.act(g, 'goGarden', null, T); g.litterAt = T + 30 * sec;
+    const eg = E.advance(g, T + MIN).events;
+    ok(eg.some(e => e.type === 'litter' && e.garden === true) && g.needs.litter === 100 && g.litterAt > T + 7 * H, 'in the garden: she digs by a bed, the box stays clean');
+  }
+  // E. the meow waits while she sleeps, is out or on the lap
+  {
+    const st = cat(26, {}); st.bowl = null; st.dish = 0;
+    E.advance(st, at(2026, 6, 10, 23, 30));
+    Object.assign(st.needs, { food: 45, water: 90, fun: 90, love: 90, litter: 100, coat: 90 }); st.want = null;
+    let early = 0;
+    for (let t = st.t + 10 * MIN; t <= at(2026, 6, 11, 4); t += 10 * MIN) early += E.advance(st, t).events.filter(e => e.type === 'meow').length;
+    ok(st.asleep && early === 0 && st.want === null && E.wants(st) === 'food', 'asleep and hungry: no meow, the want waits');
+    let meows = [];
+    for (let t = st.t + 10 * MIN; t <= at(2026, 6, 11, 10) && !meows.length; t += 10 * MIN) meows = E.advance(st, t).events.filter(e => e.type === 'meow');
+    ok(!st.asleep && meows.length === 1 && meows[0].want === 'food' && st.want === 'food', 'awake: the meow comes now');
+    const o = friend(cat(27, { food: 45 })); E.act(o, 'letOut', null, T);
+    let om = 0, backEv = null;
+    for (let t = T + 10 * MIN; t <= T + 10 * H && !backEv; t += 10 * MIN) {
+      o.needs.food = 30;
+      const ev = E.advance(o, t).events;
+      if (ev.some(e => e.type === 'back')) backEv = ev; else om += ev.filter(e => e.type === 'meow').length;
+    }
+    ok(om === 0 && backEv && backEv.some(e => e.type === 'meow' && e.want === 'food'), 'out and hungry: no meow; she meows when she comes home');
+    const lp = cat(28, { food: 45, love: 60 }); E.act(lp, 'lapOn', null, T); lp.needs.food = 35;
+    const el = E.advance(lp, T + 20 * sec).events;
+    ok(!lp.lap || (!el.some(e => e.type === 'meow') && lp.want === null), 'on the lap: no meow');
+  }
+  // F. the vacuum while she is out: nothing about her
+  {
+    const o = friend(cat(29, {})); E.act(o, 'letOut', null, T);
+    const ev = E.act(o, 'vacuum', null, T + MIN).events;
+    ok(ev.length === 0, `the vacuum while she is out: no event (${types(ev)})`);
+  }
+  // G. where she sleeps: her box only when she has one, the sun only on a clear day, the sill cushion
+  {
+    const boxSeed = seedWith('quirk', 'box');
+    const placed = (s, own) => { Object.assign(s.owned, own || {}); for (const k of Object.keys(own || {})) s.furniture[k] = { room: 'living', x: 0.3, y: 0.9 }; };
+    const night = (seed, own, put = true) => { const s = E.create(seed, at(2026, 6, 10, 20), 'Koxa'); if (put) placed(s, own); else Object.assign(s.owned, own || {}); let place = null; for (let t = s.t + 10 * MIN; !place && t <= at(2026, 6, 11, 3); t += 10 * MIN) { const e = E.advance(s, t).events.find(x => x.type === 'sleep'); if (e) place = e.place; } return { s, place }; };
+    const nb = night(boxSeed), wb = night(boxSeed, { box: true });
+    ok(nb.place === 'bed' && nb.s.sleepPlace === 'bed' && E.health(nb.s).sleepPlace === 'bed', 'the box quirk without a box: her bed');
+    ok(wb.place === 'box' && E.health(wb.s).sleepPlace === 'box', 'with a box: the box');
+    const q0 = nb.s.cnt.quirk;
+    ok(!E.act(nb.s, 'stroke', { region: 'back' }, nb.s.t).events.some(e => e.type === 'quirk') && nb.s.cnt.quirk === q0, 'stroking her asleep in the bed: the box quirk is not seen');
+    ok(E.act(wb.s, 'stroke', { region: 'back' }, wb.s.t).events.some(e => e.type === 'quirk' && e.id === 'box'), 'asleep in the box: seen');
+    ok(E.health(cat(30)).sleepPlace === null, 'awake: no sleep place');
+    // a box bought but not placed (or put in the garden) is not drawn at home: not her sleep place, no quirk
+    const nbp = night(boxSeed, { box: true }, false);
+    ok(nbp.place === 'bed' && nbp.s.owned.box && !nbp.s.furniture.box, `the box bought but not placed: her bed (${nbp.place})`);
+    const q1 = nbp.s.cnt.quirk;
+    ok(!E.act(nbp.s, 'stroke', { region: 'back' }, nbp.s.t).events.some(e => e.type === 'quirk') && nbp.s.cnt.quirk === q1, 'the box not placed: the box quirk is not seen');
+    const gb = (() => { const s = E.create(boxSeed, at(2026, 6, 10, 20), 'Koxa'); s.owned.box = true; s.furniture.box = { room: 'garden', x: 0.5, y: 0.9 }; let place = null; for (let t = s.t + 10 * MIN; !place && t <= at(2026, 6, 11, 3); t += 10 * MIN) { const e = E.advance(s, t).events.find(x => x.type === 'sleep'); if (e) place = e.place; } return place; })();
+    ok(gb === 'bed', `the box in the garden: her bed (${gb})`);
+    // an afternoon nap: the sun patch on a clear day, never on a cloudy or rainy one; the sill cushion when she has it
+    const nap = (own, want) => {
+      for (let d = 0; d < 60; d++) {
+        const t0 = at(2026, 6, 1 + (d % 28), 12) + Math.floor(d / 28) * 28 * D, probe = E.create(31, t0, 'K');
+        if ((E.weather(t0, probe) === 'clear') !== want) continue;
+        const s = E.create(31, t0 - 3 * H, 'Koxa'); placed(s, own); s.traits.quirk = 'socks';
+        E.advance(s, t0); s.needs.energy = 50;
+        for (let t = t0 + 10 * MIN; t <= t0 + 5 * H; t += 10 * MIN) { const e = E.advance(s, t).events.find(x => x.type === 'sleep'); if (e) return e.place; }
+      }
+      return null;
+    };
+    ok(nap({}, true) === 'sun' && nap({}, false) === 'bed' && nap({ sillCushion: true }, false) === 'sill' && nap({ box: true }, true) === 'box', 'a nap: sun on a clear day, bed otherwise, the sill cushion, a box');
+    const rp = cat(32); rp.sleepPlace = 'moon'; E.repair(rp); ok(rp.sleepPlace === null, 'repair: an unknown sleep place');
+  }
+  // H. "Dnes ráno tě vzbudila": only after a real early wake, the first act within 2 h
+  {
+    const ws = seedWith('quirk', 'wakesEarly');
+    const morning = (actAt, energy = 80) => {
+      const s = E.create(ws, at(2026, 6, 10, 21, 30), 'Koxa'); s.needs.energy = energy;
+      let early = null;
+      for (let t = s.t + 10 * MIN; t <= actAt; t += 10 * MIN) for (const e of E.advance(s, t).events) if (e.type === 'wake' && e.early) early = t;
+      E.advance(s, actAt); if (s.asleep) return { early, quirk: null };
+      return { early, quirk: E.act(s, 'call', null, actAt).events.some(e => e.type === 'quirk' && e.id === 'wakesEarly'), s };
+    };
+    const a = morning(at(2026, 6, 11, 6, 30)), b = morning(at(2026, 6, 11, 7, 40));
+    ok(a.early && new Date(a.early).getHours() === 5 && a.quirk === true, 'woke early at 5, the first act at 6:30: "she woke you"');
+    ok(b.early && b.quirk === false, 'the first act more than 2 h after her early wake: nothing');
+    ok(a.s && !E.act(a.s, 'stroke', null, a.s.t + MIN).events.some(e => e.type === 'quirk'), 'only the first act of the day');
+    const other = E.create(seedWith('quirk', 'socks'), at(2026, 6, 10, 21, 30), 'Koxa'); E.advance(other, at(2026, 6, 11, 6, 30));
+    ok(!E.act(other, 'call', null, at(2026, 6, 11, 6, 30)).events.some(e => e.type === 'quirk'), 'another cat at 6:30: nothing');
+    const late = E.create(ws, at(2026, 6, 11, 6), 'Koxa'); E.advance(late, at(2026, 6, 11, 6, 30));
+    ok(!E.act(late, 'call', null, late.t).events.some(e => e.type === 'quirk'), 'no early wake today (adopted at 6): nothing');
+  }
+  // repair: the new keys
+  {
+    const st = cat(33, { food: 30 }); E.act(st, 'feed', 'kibble', T); E.advance(st, T + 15 * sec);
+    const c = clone(st); E.repair(c);
+    ok(JSON.stringify(c) === JSON.stringify(st) && st.meal && st.bowl, 'a meal in progress is canonical');
+    const bad = clone(st);
+    Object.assign(bad, { bowl: { kind: 'stone', amt: 5 }, dish: 'x', meal: { since: 1 }, drink: [], mealLog: [[7, 20260610], 7, ['a', 20260610], [-1, 20260610], [25, 20260610], [8, 20261399], [8, 20260610, 1], [7.333333, 20260611]], sleepPlace: 3 });
+    E.repair(bad);
+    ok(bad.bowl === null && bad.dish === 60 && bad.meal === null && bad.drink === null && JSON.stringify(bad.mealLog) === '[[7,20260610],[7.33,20260611]]' && bad.sleepPlace === null, 'broken bowl, dish, meal, drink, log, sleep place: defaults');
+    const old = clone(st); for (const k of ['bowl', 'dish', 'meal', 'drink', 'mealLog', 'sleepPlace']) delete old[k]; old.needs.water = 55; delete old.day.early;
+    E.repair(old);
+    ok(old.bowl === null && old.dish === 55 && old.meal === null && Array.isArray(old.mealLog) && old.mealLog.length === 0 && old.day.early === 0, 'an older save: an empty bowl, the dish as full as she was satisfied');
+    invariants(old, 'older save');
+    const fut = clone(st); fut.meal.since = fut.t + H; E.repair(fut); ok(fut.meal === null, 'a meal far in the future: dropped');
+    const back = clone(st); E.advance(back, back.t - 10 * MIN);
+    ok(back.meal && back.meal.since <= back.t && back.bowl.at <= back.t, 'the clock moved back: the meal and the pour move with it');
+    invariants(back, 'bowls clock back');
+  }
+}
+
+/* ---------- a cat, not a scripted human (user's wishes 2026-11-17, round 2) ---------- */
+section("A cat's day: sleep, the garden alone, calls, visitors seen, walks");
+{
+  const has = (ev, type, f) => ev.some(e => e.type === type && (!f || f(e)));
+  const rec = (friend, pal) => ({ friend, pal, met: 0, visits: 1, fed: 0 });
+  const hourOf = ms => new Date(ms).getHours();
+  // 1. a cat's sleep: 16 cats × 21 days, basic care at 8 and 20, watched in 10-minute steps
+  {
+    let days = 0, total = 0, minDay = 99, maxDay = 0, naps = 0, napMin = 0, napMax = 0, napNight = 0, strolls = 0, strollBad = 0, nights = 0, strollNights = 0;
+    let eMin = 100, eSum = 0, eN = 0, perCatBad = 0;
+    const share = Array(24).fill(0), shareN = Array(24).fill(0);
+    for (let seed = 1; seed <= 16; seed++) {
+      const t0 = at(2026, 9, 1, 7), st = E.create(seed, t0, 'Koxa');
+      let dayMin = 0, catMin = 0, catDays = 0, napFrom = null, strollFrom = null, strollNight = false;
+      for (let t = t0 + 10 * MIN; t <= t0 + 21 * D; t += 10 * MIN) {
+        const ev = E.advance(st, t).events, hr = hourOf(t);
+        for (const e of ev) {
+          if (e.type === 'sleep') {
+            if (e.nap) napFrom = st.sleepAt;
+            if (strollFrom !== null) { const len = (st.sleepAt - strollFrom) / MIN; if (len < 20 || len > 45) strollBad++; strollFrom = null; }
+          }
+          if (e.type === 'wake' && e.stroll) { strolls++; strollNight = true; strollFrom = st.wokeAt; if (!(hourOf(st.wokeAt) >= 23 || hourOf(st.wokeAt) < 4)) strollBad++; }
+          if (e.type === 'wake' && !e.stroll && napFrom !== null && st.wokeAt - napFrom < 6 * H) { const len = (st.wokeAt - napFrom) / MIN; naps++; napMin += len; napMax = Math.max(napMax, len); napFrom = null; }
+        }
+        if ([8, 20].includes(hr) && new Date(t).getMinutes() === 0) basicCare(st, t);
+        if (st.asleep) dayMin += 10;
+        if (t >= t0 + D) { share[hr] += st.asleep ? 1 : 0; shareN[hr]++; eMin = Math.min(eMin, st.needs.energy); eSum += st.needs.energy; eN++; }
+        if (hr === 7 && new Date(t).getMinutes() === 0) {
+          if (t > t0 + D) { days++; total += dayMin; catMin += dayMin; catDays++; minDay = Math.min(minDay, dayMin / 60); maxDay = Math.max(maxDay, dayMin / 60); nights++; if (strollNight) strollNights++; }
+          dayMin = 0; strollNight = false;
+        }
+        if (E.health(st).nap && napFrom === null) napNight++;   // a nap is always announced by a sleep { nap: true }
+        if (napFrom !== null && st.asleep && !E.health(st).nap) napFrom = null;   // a late nap ran into the night: not a nap any more
+      }
+      const avg = catMin / catDays / 60; if (avg < 12 || avg > 16) perCatBad++;
+      invariants(st, `sleep days ${seed}`);
+    }
+    const sh = hs => hs.reduce((a, h) => a + share[h], 0) / hs.reduce((a, h) => a + shareN[h], 0);
+    const avg = total / days / 60, mid = sh([11, 12, 13, 14, 15]), dawn = sh([7]), dusk = sh([18, 19]), night = sh([0, 1, 2, 3, 4]);
+    console.log(`  sleep ${avg.toFixed(1)} h a day (${minDay.toFixed(1)}–${maxDay.toFixed(1)}), ${(naps / days).toFixed(1)} naps a day of ${Math.round(napMin / naps)} min (longest ${Math.round(napMax)}), asleep 11–16 h ${Math.round(mid * 100)} %, at 7 ${Math.round(dawn * 100)} %, 18–20 ${Math.round(dusk * 100)} %, 0–5 ${Math.round(night * 100)} %, strolls ${strolls} in ${nights} nights, energy ${Math.round(eSum / eN)} (min ${Math.round(eMin)})`);
+    ok(avg >= 12.5 && avg <= 15 && perCatBad === 0 && minDay >= 8 && maxDay <= 18, `12–16 h of sleep a day on average for every cat (${avg.toFixed(1)} h, days ${minDay.toFixed(1)}–${maxDay.toFixed(1)})`);
+    ok(naps / days >= 2.5 && napMin / naps >= 45 && napMin / naps <= 110 && napMax <= 150 && napNight === 0, `several short naps by day (${(naps / days).toFixed(1)} a day, ${Math.round(napMin / naps)} min, at most ${Math.round(napMax)})`);
+    ok(dawn < mid / 3 && dusk < mid / 2 && night > 0.9, 'lively at dawn and dusk, asleep at night');
+    ok(strollNights > nights * 0.1 && strollNights < nights * 0.45 && strollBad === 0, `night strolls are rare and short (${strollNights}/${nights} nights, 23–4 h, 20–40 min)`);
+    ok(eMin >= 40 && eSum / eN > 70, 'energy stays balanced');
+  }
+  // 2. the step length never moves her sleep: 10-minute and 1-minute advances agree at every 10-minute mark
+  {
+    const mk = () => { const s = E.create(7, at(2026, 9, 3, 9), 'Koxa'); s.dish = 0; s.needs.water = 90; s.needs.food = 90; return s; };
+    const A = mk(), B = mk(), a0 = A.t; let same = 0, n = 0, sleeps = 0;
+    for (let t = a0 + 10 * MIN; t <= a0 + 24 * H; t += 10 * MIN) {
+      E.advance(A, t); for (let x = t - 9 * MIN; x <= t; x += MIN) E.advance(B, x);
+      const k = s => JSON.stringify([s.asleep, s.sleepAt, s.wokeAt, s.wakeAt, s.napAt, s.stroll]);
+      n++; if (k(A) === k(B)) same++; if (A.asleep) sleeps++;
+    }
+    ok(same === n && sleeps > 30, `10-minute and 1-minute steps: the same sleep at every mark (${same}/${n})`);
+  }
+  // 3. playing keeps her up; tired she naps sooner
+  {
+    let kept = 0, slept = 0, n = 0;
+    for (let seed = 1; seed <= 30; seed++) {
+      const s = E.create(seed, at(2026, 9, 3, 9), 'Koxa'); s.dish = 0; Object.assign(s.needs, { food: 90, water: 90, energy: 70, fun: 30, love: 30 });
+      s.wokeAt = s.t; s.napAt = 0; E.repair(s);
+      const nap = s.napAt; if (hourOf(nap) < 9 || hourOf(nap) >= 16) continue;
+      E.advance(s, nap - 2 * MIN);
+      if (s.asleep) continue;
+      n++;
+      const a = clone(s), b = clone(s);
+      E.act(a, 'stroke', { region: 'back', along: true, speed: 300 }, nap - MIN);
+      E.advance(a, nap + MIN); E.advance(b, nap + MIN);
+      if (!a.asleep && a.napAt >= nap + 20 * MIN && a.napAt <= nap + 41 * MIN) kept++;
+      if (b.asleep && b.sleepAt === nap) slept++;
+    }
+    ok(n > 15 && kept === n && slept === n, `stroked just before her nap and wanting love: the nap waits 20–40 min (${kept}/${n}); else she naps right then (${slept}/${n})`);
+    const delay = e => { let sum = 0; for (let seed = 1; seed <= 60; seed++) { const s = E.create(seed, at(2026, 9, 3, 9), 'Koxa'); s.needs.energy = e; s.wokeAt = at(2026, 9, 3, 11); s.t = s.wokeAt; s.napAt = 0; E.repair(s); sum += s.napAt - s.wokeAt; } return sum / 60 / MIN; };
+    const tired = delay(30), fresh = delay(95);
+    ok(tired < fresh * 0.7, `tired she naps sooner (${Math.round(tired)} vs ${Math.round(fresh)} min after waking)`);
+  }
+  // 4. a night stroll: she is up, free (eats from the bowl, drinks), then back to sleep
+  {
+    let found = null;
+    for (let seed = 1; seed <= 200 && !found; seed++) {
+      const s = E.create(seed, at(2026, 9, 3, 21), 'Koxa'); s.needs.food = 45; s.bowl = null;
+      for (let t = s.t + 10 * MIN; t <= at(2026, 9, 4, 6); t += 10 * MIN) {
+        const ev = E.advance(s, t).events;
+        if (has(ev, 'wake', e => e.stroll)) { found = s; break; }
+      }
+    }
+    ok(found && E.health(found).stroll && !found.asleep && found.napAt === found.stroll && found.stroll - found.wokeAt >= 20 * MIN && found.stroll - found.wokeAt <= 40 * MIN, 'a stroll: awake, health().stroll, back to sleep at its end');
+    if (found) {
+      found.needs.food = 45; const ev = E.act(found, 'feed', 'kibble', found.t).events.concat(E.advance(found, found.t + 3 * MIN).events);
+      ok(has(ev, 'poured', e => e.comes) && (found.meal || !found.bowl), 'on a stroll she hears the pour and eats');
+      const end = found.stroll, f0 = found.t, ev2 = []; for (let t = f0 + 5 * MIN; t <= end + 10 * MIN; t += 5 * MIN) ev2.push(...E.advance(found, t).events);
+      ok(found.asleep && !E.health(found).nap && !E.health(found).stroll && has(ev2, 'sleep', e => e.nap === false), 'after the stroll: asleep for the night again');
+      invariants(found, 'stroll');
+    }
+  }
+  // 5. her early wake (quirk) and the morning
+  {
+    const ws = (() => { let s = 1; while (E.create(s, at(2026, 6, 1), 'K').traits.quirk !== 'wakesEarly') s++; return s; })();
+    const e = E.create(ws, at(2026, 6, 10, 23), 'Koxa'); let early = 0;
+    for (let t = e.t + 10 * MIN; t <= at(2026, 6, 11, 6); t += 10 * MIN) for (const x of E.advance(e, t).events) if (x.type === 'wake' && x.early) early = e.wokeAt;
+    ok(early && hourOf(early) === 5 && e.day.early === early, 'wakesEarly: up at 5');
+    const tired = E.create(ws, at(2026, 6, 10, 23), 'Koxa'); tired.needs.energy = 0; E.advance(tired, tired.t + MIN);
+    let te = false; for (let t = tired.t + 10 * MIN; t <= at(2026, 6, 11, 7); t += 10 * MIN) for (const x of E.advance(tired, t).events) if (x.type === 'wake' && x.early) te = true;
+    ok(!te, 'too tired at 5 (energy under 60): no early wake');
+  }
+  // 6. left alone in the garden: in the garden (not away), never in the rain; the player can join her or let her in
+  {
+    const probe = E.create(41, at(2026, 6, 1), 'K');
+    let clear = at(2026, 6, 2, 10); while (E.weather(clear, probe) !== 'clear') clear += D;
+    let rain = at(2026, 6, 2, 10); while (E.weather(rain, probe) !== 'rain') rain += D;
+    const g = E.create(41, clear - H, 'Koxa'); E.advance(g, clear); if (g.asleep) { g.asleep = false; g.wokeAt = g.t; }
+    E.act(g, 'goGarden', null, clear);
+    const ev = E.advance(g, clear + 2 * H).events, h = E.health(g);
+    ok(has(ev, 'out', e => e.garden === true && e.walk === false) && h.gardenAlone && h.out && !h.walk && !h.garden, 'the player went away: health().gardenAlone (out, not a walk)');
+    const c = E.act(clone(g), 'call', null, g.t).events;
+    ok(has(c, 'ignore', e => e.reason === 'Koxa je na zahradě.'), 'a call: "Koxa je na zahradě."');
+    const j = clone(g), je = E.act(j, 'goGarden', null, j.t).events;
+    ok(has(je, 'garden', e => e.joined) && j.yard && !j.out && !E.health(j).gardenAlone, 'goGarden: the player joins her out there');
+    const l = clone(g), le = E.act(l, 'letIn', null, l.t).events;
+    ok(has(le, 'back', e => e.walk === false && e.begs === false) && !l.out, 'the house door: letIn');
+    const vg = clone(g); vg.visitors.bivoj = rec(0, 0); vg.visit = { id: 'bivoj', since: vg.t, until: vg.t + H, gain: 0 }; E.repair(vg);
+    const vb = clone(vg); vb.visit = null;
+    ok(E.moodValue(vg) === E.moodValue(vb) - 10, 'alone in the garden she sees the visitor (Bivoj: −10)');
+    invariants(g, 'garden alone');
+    // rain: she comes in with the player, and alone she comes in when it starts to rain
+    const r = E.create(41, rain - H, 'Koxa'); E.advance(r, rain); if (r.asleep) { r.asleep = false; r.wokeAt = r.t; }
+    E.act(r, 'goGarden', null, rain);
+    const re = E.advance(r, rain + 2 * H).events;
+    ok(has(re, 'house') && !r.out && !r.yard, 'rain: the player goes away, she comes in with the player');
+    const ra = E.create(41, rain - H, 'Koxa'); E.advance(ra, rain); ra.asleep = false; ra.wokeAt = ra.t;
+    ra.out = { since: ra.t, until: ra.t + 3 * H, walk: false, byPlayer: false }; E.repair(ra);
+    const rae = E.advance(ra, rain + 10 * MIN).events;
+    ok(has(rae, 'back', e => e.rain === true && e.walk === false) && !ra.out, 'alone in the garden and it rains: she comes in by herself');
+  }
+  // 7. coming when called: by mood and bond; callSlow comes later; eating first
+  {
+    const mood = (s, m) => { const v = { happy: 100, calm: 70, grumpy: 45 }[m]; Object.assign(s.needs, { food: v, water: v, energy: v, fun: v, love: v, litter: v, coat: v }); };
+    const trial = (m, lvl, n) => {
+      const c = { come: 0, callSlow: 0, ignore: 0 };
+      for (let seed = 1; seed <= n; seed++) {
+        const s = E.create(seed, at(2026, 9, 3, 10), 'Koxa'); s.dish = 0; s.lvl = lvl; s.bond = E.LEVELS[lvl].min; mood(s, m); E.repair(s);
+        if (E.mood(s) !== m) { ok(false, `call setup ${m}: ${E.mood(s)}`); break; }
+        const e = E.act(s, 'call', null, s.t).events.filter(x => c[x.type] !== undefined);
+        if (e.length === 1) c[e[0].type]++;
+      }
+      return c;
+    };
+    const hp = trial('happy', 2, 400), cl = trial('calm', 0, 400), gr = trial('grumpy', 0, 400), gb = trial('grumpy', 4, 400);
+    console.log(`  calls: happy friend ${JSON.stringify(hp)}, calm new ${JSON.stringify(cl)}, grumpy new ${JSON.stringify(gr)}, grumpy best friend ${JSON.stringify(gb)}`);
+    ok(hp.come > 290 && hp.come < 350 && hp.ignore === 0 && hp.come + hp.callSlow === 400, 'happy, Kamarádka: about 80 % come at once, the rest a little later');
+    ok(cl.come > 130 && cl.come < 190 && cl.ignore === 0, 'calm, Nová: about 40 % at once');
+    ok(gr.come > 90 && gr.come < 150 && gr.ignore > 50 && gr.ignore < 120 && gr.callSlow > 150, 'grumpy: about 30 % at once, now and then ignored, mostly later');
+    ok(gb.come > gr.come + 40 && gb.come < 270, 'a better bond: she comes more often (at most 60 % unless happy)');
+    // callSlow: an ear turns now, she comes 10–40 s later, never before
+    let late = 0, n = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const s = E.create(seed, at(2026, 9, 3, 10), 'Koxa'); s.dish = 0; mood(s, 'calm'); E.repair(s);
+      const e = E.act(s, 'call', null, s.t).events.find(x => x.type === 'callSlow');
+      if (!e) continue;
+      n++;
+      const due = e.at, c0 = s.t; let when = 0;
+      if (!(due - c0 >= 10000 && due - c0 <= 40000 && E.health(s).callAt === due)) continue;
+      for (let x = c0 + 1000; x <= c0 + 45000 && !when; x += 1000) if (has(E.advance(s, x).events, 'come', y => y.late)) when = x;
+      if (when === due || (when > due && when - due < 1000)) late++;
+      if (s.callAt) ok(false, 'callAt cleared after she came');
+    }
+    ok(n > 20 && late === n, `callSlow: she comes on her own at callAt, 10–40 s later (${late}/${n})`);
+    // eating: she finishes first
+    const s = E.create(3, at(2026, 9, 3, 10), 'Koxa'); s.dish = 0; s.needs.food = 30; mood(s, 'happy'); s.needs.food = 30;
+    E.act(s, 'feed', 'kibble', s.t); E.advance(s, s.t + 10000);
+    const ce = E.act(s, 'call', null, s.t).events;
+    const ev = [], m0 = s.t; for (let x = m0 + 1000; x <= m0 + 90000; x += 1000) for (const e of E.advance(s, x).events) ev.push(e.type + (e.late ? 'Late' : ''));
+    ok(has(ce, 'callSlow', e => e.meal === true) && ev.indexOf('ate') >= 0 && ev.indexOf('comeLate') > ev.indexOf('ate'), `eating: callSlow { meal }, she comes after the meal (${ev.join()})`);
+    // determinism, asleep, picked up
+    const d1 = E.create(5, at(2026, 9, 3, 10), 'Koxa'); mood(d1, 'calm'); E.repair(d1); const d2 = clone(d1);
+    ok(JSON.stringify(E.act(d1, 'call', null, d1.t).events) === JSON.stringify(E.act(d2, 'call', null, d2.t).events), 'the same state: the same answer');
+    const z = E.create(5, at(2026, 9, 2, 22), 'Koxa'); E.advance(z, at(2026, 9, 3, 3));
+    ok(z.asleep && has(E.act(z, 'call', null, z.t).events, 'ignore', e => e.reason === 'Koxa spí.') && !z.callAt, 'asleep: "Koxa spí."');
+    let pk = null;
+    for (let seed = 1; seed <= 60 && !pk; seed++) { const p = E.create(seed, at(2026, 9, 3, 10), 'Koxa'); mood(p, 'calm'); E.repair(p); if (has(E.act(p, 'call', null, p.t).events, 'callSlow')) pk = p; }
+    E.act(pk, 'pickUp', null, pk.t + 1000);
+    ok(pk.held && !pk.callAt && !has(E.advance(pk, pk.t + 60000).events, 'come'), 'picked up meanwhile: the late come is forgotten');
+  }
+  // 8. neighbour cats change her mood only when she can perceive them
+  {
+    const base = (seed, f) => { const s = E.create(seed, at(2026, 6, 10, 10), 'Koxa'); s.visitors.bivoj = rec(0, 0); if (f) f(s); E.repair(s); return s; };
+    const vis = (s, noticed) => { s.visit = { id: 'bivoj', since: s.t, until: s.t + H, gain: 0, noticed: noticed ? s.t : 0 }; E.repair(s); return s; };
+    const m = s => E.moodValue(s);
+    const awake = base(62), sleep = base(62, s => { s.asleep = true; s.sleepAt = s.t; }), walk = base(62, s => { s.out = { since: s.t, until: s.t + 3 * H, walk: true, byPlayer: true }; }), yard = base(62, s => { s.yard = { since: s.t, snow: false, tree: null }; });
+    ok(m(vis(clone(sleep), true)) === m(sleep) && m(vis(clone(walk), true)) === m(walk), 'asleep in the house or out on a walk: a visitor changes nothing');
+    ok(m(vis(clone(awake), false)) === m(awake) && m(vis(clone(awake), true)) === m(awake) - 10, 'awake at home: only once she noticed it (−10 for Bivoj)');
+    ok(m(vis(clone(yard), false)) === m(yard) - 10, 'in the garden: always');
+    // arrivals over many days: noticed at once only awake at home (by day about 60 %), later visitorNoticed only awake at home
+    let arrHome = 0, seenHome = 0, arrAsleep = 0, seenAsleep = 0, later = 0, laterBad = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const st = E.create(seed, at(2026, 5, 1, 7), 'Koxa'); st.owned.visitorBowl = true; st.furniture.visitorBowl = { room: 'garden', x: 0.5, y: 0.8 };
+      for (let t = st.t + 10 * MIN; t <= at(2026, 5, 21, 7); t += 10 * MIN) {
+        const a0 = st.asleep, ev = E.advance(st, t).events, hr = hourOf(t);
+        if ([8, 20].includes(hr) && new Date(t).getMinutes() === 0) basicCare(st, t);
+        for (const e of ev) {
+          if (e.type === 'visitor' && !st.out && !st.yard && a0 === st.asleep && hr >= 10 && hr < 17) {
+            if (!a0) { arrHome++; if (e.noticed) seenHome++; } else { arrAsleep++; if (e.noticed) seenAsleep++; }
+            if (st.visit && (st.visit.noticed === st.visit.since) !== e.noticed) laterBad++;
+          }
+          // (within the same 10 minutes the visit may end, or she may fall asleep after she heard it)
+          if (e.type === 'visitorNoticed') { later++; if (st.out || st.yard || (st.visit && !(st.visit.noticed > st.visit.since))) laterBad++; }
+        }
+      }
+      invariants(st, `visitors seen ${seed}`);
+    }
+    console.log(`  visitors at home by day: awake ${seenHome}/${arrHome} seen at once, asleep ${seenAsleep}/${arrAsleep}; heard later ${later}`);
+    ok(arrHome > 20 && seenHome > arrHome * 0.4 && seenHome < arrHome * 0.8 && arrAsleep > 5 && seenAsleep === 0 && later > 3 && laterBad === 0,
+      'noticed: awake at home by day about 60 % at once (st.visit.noticed), asleep never; later visitorNoticed only awake at home');
+  }
+  // 9. walks: she snacks at the neighbours' (food falls at half the rate) and always comes back begging
+  {
+    const s = friend(E.create(8, at(2026, 9, 3, 10), 'Koxa')); s.asleep = false; s.wokeAt = s.t; s.needs.food = 80; s.bowl = null; E.repair(s);
+    const home = clone(home0(s)), w = clone(s);
+    function home0(x) { return x; }
+    E.act(w, 'letOut', null, w.t); const f0 = w.needs.food;
+    E.advance(w, w.t + 2 * H); E.advance(home, home.t + 2 * H);
+    const dw = f0 - w.needs.food, dh = 80 - home.needs.food;
+    ok(w.out && w.out.walk && Math.abs(dw - dh / 2) < 0.01, `on a walk food falls at half the rate (${dw.toFixed(2)} vs ${dh.toFixed(2)} at home)`);
+    const back = E.act(w, 'letIn', null, w.t).events.find(e => e.type === 'back');
+    ok(back && back.walk && back.begs === true, 'back from the walk: begs: true, whatever her hunger');
+    const by = friend(E.create(9, at(2026, 9, 3, 10), 'Koxa')); by.asleep = false; by.wokeAt = by.t; E.repair(by); E.act(by, 'letOut', null, by.t);
+    let b2 = null; const y0 = by.t; for (let t = y0 + 10 * MIN; t <= y0 + 9 * H && !b2; t += 10 * MIN) b2 = E.advance(by, t).events.find(e => e.type === 'back');
+    ok(b2 && b2.begs === true && b2.minutes >= 120, `she comes home by herself after 2–8 h, begging (${b2 && b2.minutes} min)`);
+  }
+  // 10. repair: the new keys
+  {
+    const s = E.create(4, at(2026, 9, 3, 10), 'Koxa');
+    const bad = clone(s); Object.assign(bad, { napAt: 'x', wakeAt: -5, stroll: {}, callAt: s.t + H, playAt: s.t + D });
+    E.repair(bad);
+    ok(bad.napAt > bad.t && bad.wakeAt === 0 && bad.stroll === 0 && bad.callAt === 0 && bad.playAt === 0, 'broken sleep plan, call and play: planned again or 0');
+    const old = clone(s); for (const k of ['napAt', 'wakeAt', 'stroll', 'callAt', 'playAt']) delete old[k]; old.asleep = true; old.sleepAt = old.t;
+    E.repair(old);
+    ok(old.wakeAt > old.t && old.napAt === 0 && old.callAt === 0, 'an older save asleep: a wake is planned');
+    invariants(old, 'older save sleep');
+    const vv = clone(s); vv.visit = { id: 'mourek', since: s.t, until: s.t + H, gain: 0, noticed: s.t + H }; E.repair(vv);
+    ok(vv.visit && vv.visit.noticed === 0, 'repair: a visitor noticed in the future = not yet');
+    const bk = clone(s); E.advance(bk, bk.t + 3 * H); const rel = x => [x.asleep ? x.wakeAt - x.t : x.napAt - x.t, x.wokeAt - x.t];
+    const r0 = rel(bk); E.advance(bk, bk.t - H); const r1 = rel(bk);
+    ok(r0[0] === r1[0] && r0[1] === r1[1], 'the clock moved back: the sleep plan moves with it');
+  }
+  // 11. back from out (a walk, alone in the garden): her old nap moment passed out there, so the next nap is planned from
+  // her return (review 2026-11-17: she fell asleep at once, before a meal at a full bowl); begs only when the player watches
+  {
+    // watched 10-minute steps until `until` (or a stop condition); the events in order
+    const watch = (s, until, stop) => { const ev = []; for (let t = s.t + 10 * MIN; t <= until; t += 10 * MIN) { ev.push(...E.advance(s, t).events); if (stop && stop(ev)) break; } return ev; };
+    const firstIdx = (ev, type) => ev.findIndex(e => e.type === type);
+    // a walk; her nap was due 50 min after she left; a bowl filled while she was away; she comes back at 45 food
+    const walker = seed => {
+      const s = friend(E.create(seed, at(2026, 9, 3, 10), 'Koxa')); s.asleep = false; s.wokeAt = s.t - 2 * H; s.needs.energy = 85; s.bowl = null; E.repair(s);
+      s.napAt = s.t + 50 * MIN;
+      E.act(s, 'letOut', null, s.t); E.advance(s, s.t + 3 * H);   // 3 h on the walk (one advance: unwatched)
+      return s;
+    };
+    let staid = 0, ate = 0, n = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const s = walker(seed); if (!s.out) continue;
+      n++;
+      E.act(s, 'feed', 'kibble', s.t); s.needs.food = 45;
+      const t0 = s.t, b = E.act(s, 'letIn', null, t0).events.find(e => e.type === 'back');
+      const plan = s.napAt - t0;
+      const ev = watch(s, t0 + 45 * MIN), ms = firstIdx(ev, 'mealStart'), sl = firstIdx(ev, 'sleep');
+      if (b && b.begs === true && plan >= 45 * MIN && sl < 0 && !s.asleep) staid++;
+      if (ms >= 0 && (sl < 0 || ms < sl)) ate++;
+    }
+    ok(n >= 10 && staid === n, `after a walk her next nap is planned from her return: awake at least 45 min (${staid}/${n})`);
+    ok(n >= 10 && ate === n, `after a walk, food 45 and a filled bowl: she eats (before any nap) (${ate}/${n})`);
+    // very tired (energy under 25) she still sleeps at once: not a lasting rule against sleep
+    {
+      const s = walker(3); s.needs.energy = 20; E.act(s, 'letIn', null, s.t);
+      const ev = watch(s, s.t + 30 * MIN, e => e.some(x => x.type === 'sleep'));
+      ok(has(ev, 'sleep'), 'back from a walk very tired (energy 20): she sleeps soon');
+    }
+    // begs: on a long unwatched absence she came back to nobody; a watched return begs
+    {
+      const u = friend(E.create(8, at(2026, 9, 3, 10), 'Koxa')); u.asleep = false; u.wokeAt = u.t; E.repair(u); E.act(u, 'letOut', null, u.t);
+      const ub = E.advance(u, u.t + 10 * H).events.find(e => e.type === 'back');
+      ok(ub && ub.walk && ub.begs === false && !u.out, 'a walk, then 10 h with the app closed: back { begs: false }');
+      const w = friend(E.create(8, at(2026, 9, 3, 10), 'Koxa')); w.asleep = false; w.wokeAt = w.t; E.repair(w); E.act(w, 'letOut', null, w.t);
+      const wb = watch(w, w.t + 9 * H, ev => has(ev, 'back')).find(e => e.type === 'back');
+      ok(wb && wb.walk && wb.begs === true, 'a walk, the app open (10-minute steps): back { begs: true }');
+      const g = friend(E.create(8, at(2026, 9, 3, 10), 'Koxa')); g.asleep = false; g.wokeAt = g.t; E.repair(g); E.act(g, 'letOut', null, g.t);
+      E.advance(g, g.t + 50 * MIN); g.needs.energy = 20;   // tired: she comes home in the next (watched) step
+      const gb = E.advance(g, g.t + 10 * MIN).events.find(e => e.type === 'back');
+      ok(gb && gb.begs === true, 'tired on a walk, the app open: back { begs: true }');
+    }
+    // the player joins her alone in the garden: her nap is planned from that moment too
+    {
+      const probe = E.create(41, at(2026, 6, 1), 'K');
+      let clear = at(2026, 6, 2, 10); while (E.weather(clear, probe) !== 'clear' || E.weather(clear + 3 * H, probe) !== 'clear') clear += D;
+      const g = E.create(41, clear - H, 'Koxa'); E.advance(g, clear); g.asleep = false; g.wokeAt = g.t; g.needs.energy = 85; E.repair(g);
+      E.act(g, 'goGarden', null, clear); E.advance(g, clear + 2 * H);
+      ok(E.health(g).gardenAlone, 'garden join: she is alone in the garden first');
+      g.napAt = g.t - MIN;   // her nap fell due while she was out there alone (her plan does not run while out)
+      const t0 = g.t; E.act(g, 'goGarden', null, t0);
+      const plan = g.napAt - t0, ev = watch(g, t0 + 45 * MIN);
+      ok(g.yard && plan >= 45 * MIN && g.wokeAt === t0 && !has(ev, 'sleep') && !g.asleep, `garden join: her next nap planned from now (${Math.round(plan / MIN)} min), awake 45 min`);
+      invariants(g, 'garden join');
+    }
+    // in general: a hungry cat at a filled bowl eats before her nap, even when the nap is overdue
+    {
+      const s = E.create(5, at(2026, 9, 3, 14), 'Koxa'); s.asleep = false; s.wokeAt = s.t - 2 * H; s.needs.energy = 70; s.needs.food = 45; E.repair(s);
+      s.napAt = s.t - MIN; s.bowl = { kind: 'kibble', amt: 40, at: s.t - 2 * H, wait: 0 };
+      const ev = watch(s, s.t + 2 * H), ms = firstIdx(ev, 'mealStart'), sl = firstIdx(ev, 'sleep');
+      ok(ms >= 0 && sl > ms, `an overdue nap and a filled bowl at food 45: she eats first, then naps (meal ${ms}, sleep ${sl})`);
+      const f = E.create(5, at(2026, 9, 3, 14), 'Koxa'); f.asleep = false; f.wokeAt = f.t - 2 * H; f.needs.energy = 70; f.needs.food = 90; E.repair(f);
+      f.napAt = f.t - MIN; f.bowl = { kind: 'kibble', amt: 40, at: f.t - 2 * H, wait: 0 };
+      const fe = E.advance(f, f.t + 10 * MIN).events;
+      ok(has(fe, 'sleep') && !has(fe, 'mealStart'), 'full (food 90) at a filled bowl: the overdue nap is not put off');
+    }
+  }
+}
+
 /* ---------- Škádlení: teasing out of love (SPEC §13.3) ---------- */
 section('Teasing');
 {
@@ -2482,7 +3181,7 @@ section('Teasing');
     while (E.weather(t, probe) === 'rain') t += D;
     const st = E.create(seed, t - H, 'Koxa'); E.advance(st, t);
     setMood(st, mood);
-    st.pamlsky = 30;
+    st.pamlsky = 30; st.dish = 0;   // an empty water dish: she does not go to drink, her needs stay as set
     if (E.mood(st) !== mood || st.asleep) ok(false, `teasing setup ${seed}: ${mood} awake (${E.moodValue(st)}, asleep ${st.asleep})`);
     return st;
   }
@@ -2517,7 +3216,7 @@ section('Teasing');
     const tempos = []; for (let s = 1; s <= 300; s++) tempos.push(E.patTempo(E.create(s, T0, 'K')));
     ok(tempos.every(x => Number.isInteger(x) && x >= 400 && x <= 650) && Math.min(...tempos) < 420 && Math.max(...tempos) > 630, `her tempo 400–650 ms from the seed (${Math.min(...tempos)}–${Math.max(...tempos)})`);
     const c = E.create(1, T0, 'Koxa');
-    ok(JSON.stringify(c.tease) === FRESH && Object.keys(c).pop() === 'tease', 'create: the default tease, the last key');
+    ok(JSON.stringify(c.tease) === FRESH && Object.keys(c).indexOf('tease') === Object.keys(c).indexOf('litter') + 1, 'create: the default tease, after the kittens\' litter');
     ok(JSON.stringify(E.create(1, T0, 'Koxa').traits) === JSON.stringify(E.create(1, T0, 'Koxa').traits) && c.n === 0, 'no draws from st.n at creation');
   }
 
@@ -2721,7 +3420,8 @@ section('Teasing');
     ok(E.moodValue(ref) - E.moodValue(st) === 20, `mood while cross: −20 (${E.moodValue(st)})`);
     invariants(st, 'cross');
     ok(!has(E.advance(st, st.tease.until - 1).events, 'crossEnd') && has(E.advance(st, t + 20 * MIN).events, 'crossEnd') && st.tease.kind === null, 'crossEnd after 20 minutes');
-    ok(has(E.act(st, 'call', null, st.t).events, 'come'), 'after the cross she comes when called');
+    const cc = E.act(st, 'call', null, st.t).events;
+    ok(has(cc, 'come') || has(cc, 'callSlow') || (has(cc, 'ignore') && !/schválně/.test(cc[cc.length - 1].reason)), 'after the cross she comes when called (or a little later)');
     invariants(st, 'cross end');
   }
 
@@ -2870,6 +3570,7 @@ section('Teasing');
     const st = tc(232); makeCross(st);
     for (let k = 0; k < 18; k++) E.advance(st, st.t + 10 * MIN);
     ok(st.diary.payback && st.tease.payDay > 0, 'a payback today');
+    if (st.asleep) { st.asleep = false; st.wokeAt = st.t; }   // she may nap meanwhile (2026-11-17)
     makeCross(st);
     ok(st.tease.kind === 'cross' && st.tease.pay === null, 'another cross the same day: no payback planned');
     let more = 0; for (let k = 0; k < 18; k++) more += cnt(E.advance(st, st.t + 10 * MIN).events, 'payback');

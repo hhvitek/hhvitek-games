@@ -1526,6 +1526,7 @@ function KockaArt() {
       spots: {
         door: { x: 44, y: 404 }, gate: { x: 278, y: 390 }, tree: { x: 344, y: 444 }, branch: { x: 278, y: 226 }, branch2: { x: 360, y: 186 },
         bench: { x: 184, y: 420 }, feeder: { x: 108, y: 266 }, yard: { x: 200, y: 470 },
+        porch: { x: 52, y: 414 },   // her shelter from the rain: the step under the little roof of the back door
         bed1: { x: 59, y: 566 }, bed2: { x: 155, y: 566 }, bed3: { x: 251, y: 566 }, bed4: { x: 347, y: 566 }, pond: { x: 280, y: 478 }, fence: { x: 120, y: 308 },
       },
       draw(c) {
@@ -1550,6 +1551,8 @@ function KockaArt() {
           `<rect x="22" y="146" width="44" height="50" fill="#7c4f2c"/><rect x="27" y="151" width="34" height="40" fill="${dusk ? '#ffd27a' : '#9fc6dc'}"/><path d="M44 151V191M27 171H61" stroke="#7c4f2c" stroke-width="3"/>` +
           '<rect x="16" y="246" width="56" height="158" fill="#5a3a20"/><rect x="21" y="251" width="46" height="153" fill="#8e5d35"/><rect x="29" y="262" width="30" height="30" fill="#9fc6dc" stroke="#5a3a20" stroke-width="3"/><circle cx="60" cy="334" r="3.5" fill="#d9b24a"/><rect x="8" y="402" width="72" height="9" fill="#9a958a"/>';
         if (dusk) s += '<circle cx="44" cy="171" r="40" fill="#ffd27a" opacity=".22"/>';
+        // a little roof over the back door (where she hides from the rain)
+        s += '<path d="M18 238l12 14M70 238l-12 14" stroke="#5a3a20" stroke-width="3" stroke-linecap="round"/><path d="M4 224H84L78 240H10Z" fill="#a8513a" stroke="#6a2a1a" stroke-width="2" stroke-linejoin="round"/>' + (snow ? '<path d="M3 225Q44 214 85 225Z" fill="#fff"/>' : '');
         // grass, stepping stones
         s += `<rect y="386" width="400" height="214" fill="${GROUND[se]}"/>`;
         if (!snow) s += `<g stroke="${se === 'autumn' ? '#8f6e30' : '#3f7a2c'}" stroke-width="2" stroke-linecap="round" opacity=".55">${[[30, 440], [120, 452], [228, 446], [320, 470], [70, 488], [180, 482], [370, 432], [260, 492]].map(([x, y]) => `<path d="M${x} ${y}l-3-8M${x + 4} ${y}l1-9M${x + 8} ${y}l4-7"/>`).join('')}</g>`;

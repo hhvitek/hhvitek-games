@@ -37,9 +37,41 @@ Dev pages: `tools/kocka-dev/art.html` (pose and scene sheet), `tools/kocka-dev/f
   `st.t = now`. Deterministic: the same state and the same `now` give the same result.
 - Day phases (local hours): `night` 22–6, `morning` 6–10, `day` 10–17, `evening` 17–22.
   Koxa sleeps most of the night (energy refills), is hungry in the morning, naps in the afternoon sun patch,
+  (superseded by §2a, a cat's sleep, 2026-11-17)
   is playful in the evening (zábava falls faster, play gives more).
 - Seasons: spring Mar–May, summer Jun–Aug, autumn Sep–Nov, winter Dec–Feb.
 - Holidays (§9) from the date; Easter by the Gregorian computus.
+
+### 2a. A cat's sleep (user's wish 2026-11-17: "a cat, not a scripted human"; numbers: `SLEEP` in src/engine.js)
+- **Several short naps through the day** instead of one 13:00 nap: when she wakes (any reason) the engine plans her
+  next nap `st.napAt` at least 45 min later (a new cat: not in its first 2 h) by a seeded hazard per local hour: dawn
+  5–8 h 0.05/h and dusk 17–20 h 0.1/h (lively), 8–11 and 16–17 h 1/h, 11–16 h 2/h, 20–22 h 0.8/h, the night 22–5 h 3/h
+  (she goes to bed); by day ×3 under energy 35, ×1.8 under 55, ×0.8 over 90, with her energy as it will fall. A nap
+  lasts 45–120 min (+30 under energy 40; under 25 until about 75): `st.wakeAt`. Played with (stroke, scratch, play,
+  pat, the lap, tricks…, `st.playAt`) within the last 15 min while fun or love is under 50: the nap waits 20–40 min.
+  Energy under 25: she falls asleep at once. A nap that runs into 22 h becomes the night. Back from out (a walk, alone
+  in the garden: home, or the player joins her), where the plan does not run, counts as a wake: the next nap is planned
+  from that moment. Hungry at a filled bowl (she would start a meal, §6a) she eats first, then naps.
+- **The night**: asleep from 22–23 h until the morning wake 6:00 + 0–40 min (her `wakesEarly` quirk 5:00 + 0–20 min,
+  only with energy ≥ 60, `st.day.early`). Rarely a **night stroll** (0.07/h from 23 to 4 h, an hour after bedtime at the
+  earliest, twice that when hungry or thirsty; about a quarter of nights): awake 20–40 min (`st.stroll`,
+  `wake { stroll: true }`, `health().stroll`), free like any awake cat: she eats from the bowl, drinks, uses the box
+  (litter waits while she sleeps), then back to sleep (`sleep { nap: false }`).
+- A hungry sleeper still wakes at the pour (§6a), by day also when food or water < 15.
+- **Step-free**: every moment is drawn from the seed and the moment it is planned at (never `st.n`), and `advance()`
+  ends its steps at `st.napAt`, `st.wakeAt` and `st.callAt` (10-minute grid from the advance's start), so one long
+  advance and many short ones put her to sleep at the same moments (tested).
+- Measured (`tools/kocka-test.js`, 16 cats × 20 days, care at 8 and 20): 13.2 h of sleep a day (each day 9–16 h),
+  4 naps a day of about 83 min (at most 120), asleep 51 % at 11–16 h, 2 % at 7 h, 8 % at 18–20 h, 98 % at 0–5 h, a
+  stroll in a quarter of the nights, energy 95 on average (never under 68): the balance tests are unchanged.
+- **Dozing on the lap follows the nap plan** (energy is mostly over 90 now): she is sleepy on the lap when her next nap
+  is due within 30 min (or overdue) or energy < 60; the doze rate (0.5/min) doubles when the nap is due soon and again when
+  overdue, ×1.5 in the evening, ×2 at night, and she also nods off in the evening without the 2-minute stroke window. A doze
+  lasts 45–90 min (seeded from its start; 90 under energy 35; `health().wakeAt` while dozing), and `advance()` ends a step
+  at its end. A doze of 15 min or more counts as her nap: when it ends (by itself, stroked awake, the player stands up,
+  she is carried off) her next nap is planned from then. `lapDoze`, `lapLeave` and `wake { lap: true }` are unchanged.
+  Measured: rested (energy 85) with her nap due in 10 min, 31 of 40 cats doze off within 30 min; with it 3 h away, none.
+- For the UI: `sleep { place, nap }`, `wake { early, stroll? }`; `health()` has `nap`, `wakeAt`, `stroll`.
 
 ## 3. Needs (0–100, 100 = fully satisfied)
 | Need | Czech | Falls per hour (day / night) | Refilled by |
@@ -53,7 +85,8 @@ Dev pages: `tools/kocka-dev/art.html` (pose and scene sheet), `tools/kocka-dev/f
 `clean` = min(litter, coat). Values never go below 0 or above 100.
 
 **Tuned after the engine review (these numbers win over the table above; source: `RATE` in src/engine.js):**
-food 4 / 2 per hour, water 3.5 / 2, fun 2.5 (evening 3.5, resting 0.5), love 2 / 0.5; water fills the bowl to 100;
+food 3.5 / 1.75 per hour (70 a day, 2026-11-17: one bowl of granule twice a day feeds her, §6a; before 4 / 2), water
+3.5 / 2, fun 2.5 (evening 3.5, resting 0.5), love 2 / 0.5; food and water rise only while she eats or drinks (§6a);
 she grooms herself up to coat 50 unless ill or outside; `wants` is one of food, water, litter, coat, love, fun
 (`litter` → "Kočičí záchod potřebuje uklidit", `coat` → "Učeš ji"); a satisfied want gives bond +1 at most once an
 hour per need. Weight: average food < 30 → −0.08/day; < 4.2 kg and food ≥ 45 → +0.05 up to 4.2; food > 70 → +0.03
@@ -103,8 +136,8 @@ the UI hints it (she sits by the bowl, brings a toy, meows at the litter box).
 ## 6. Care actions (Etapa 1) — engine `act(st, action, arg, now)`
 | Action | arg | Effect (before mood/trait modifiers) |
 |---|---|---|
-| `feed` | food kind | food + amount, love +2; favourite +5 love, bond +1; when food > 90 she leaves the rest |
-| `water` | — | water +60 |
+| `feed` | food kind | fills the food bowl (§6a); she eats it over time: food rises as she eats, love +2 (favourite +7, bond +1) when the meal ends |
+| `water` | — | fills the water dish to 100 (§6a); she drinks by herself; tap quirk: 50 % she drinks from the tap (+30 at once) |
 | `stroke` | `{ region, along, speed }` | along & speed ok: love +2 (spot: +4, purr); against: love −1, ears back; belly: bite or +6 |
 | `scratch` | `{ region, seconds }` | love +4/s on head/chin/behind ears, purr |
 | `pickUp` / `putDown` | place | love +5 if mood ≥ 10 and energy ≥ 20, else she wriggles free (event `wriggle`) |
@@ -115,7 +148,7 @@ the UI hints it (she sits by the bowl, brings a toy, meows at the litter box).
 | `treat` | — | food +5, love +3, treats today +1 (pamlsky −1) |
 | `vetCure` | `{ won }` | illness cleared, pamlsky −min(15, have) |
 Added in Phase 1 (engine): `call` (Zavolat / microphone: offended → `turnBack` once, asleep or outside → `ignore`,
-else `come`), `vacuum` ("Vysát pokoj", the only way to meet the vacuum fear), `pill` (the extra pill the day after a
+else `come`; since 2026-11-17 see "Coming when called" below), `vacuum` ("Vysát pokoj", the only way to meet the vacuum fear), `pill` (the extra pill the day after a
 lost Pilulka minigame), `rename` (the UI calls `E.rename(st, name)` when the name changes; refusals use `st.name`).
 `letOut` is refused while she is ill; outside she comes back by herself after 2–8 h (seeded) or when energy < 25.
 Added for Škádlení (§13): `pat { region, n, ms, cv, eating }` (a run of taps on her: like, bliss, a warning, then a
@@ -129,10 +162,63 @@ while she is out or up the tree. Sulking (`st.tease.kind`) also changes `stroke`
 first 72 h keeps food, water and litter at 40 (she comes back hungry and offended, not ill), bond −20 on return
 (never below a reached level); bond −5 for a day with average mood < −30; fun and love fall at the night rate while
 she sleeps; how fears and quirks are met: storm (May–Aug, seeded per day) and fireworks (Silvestr) come from
-`advance`, vacuum from `vacuum`; quirks count once a day and need two days (budí ráno: the first act between 5 and
-10 h; krabice: stroking or playing while she sleeps, or watching her fall asleep; ponožky: 30 % on `play`; kohoutek:
+`advance`, vacuum from `vacuum`; quirks count once a day and need two days (budí ráno: the first act within 2 h after
+her early wake, §6a; krabice: stroking or playing while she sleeps in her box, or watching her fall asleep there; ponožky: 30 % on `play`; kohoutek:
 50 % on `water`); the walk entry is found on her first return, the weight entry at the first weighing, the birthday at
 once. Food prices exist (`FOODS[k].price`) but are charged only from Etapa 2 (`CHARGE_FOOD`).
+
+**Coming when called** (user's wish 2026-11-17; `CALL` in src/engine.js): asleep → `ignore` "Koxa spí."; out on a walk →
+"Koxa je venku.", alone in the garden → "Koxa je na zahradě."; up the tree, cross and offended as before; on the lap
+or held → `come`. Eating (or on her way to the bowl) she finishes first: `callSlow { at, meal: true }` with `at` just
+after the meal. Otherwise (seeded, `rnd(st)`): happy with bond level Kamarádka (2) or more `come` 80 %; else
+30 % + 7.5 % per bond level + 15 % happy / 10 % calm, at most 60 %. The rest: grumpy or sad 30 % of it `ignore`
+("Koxa dělá, že neslyší." / "Koxa na tebe jen smutně koukne a zůstane, kde je."), else `callSlow { at, meal: false }`:
+only an ear or the tail turns now, and she comes by herself 10–40 s later (`st.callAt`, `health().callAt`; a second call
+never makes it later): `come { late: true }` at that moment (watching only). Asleep, out, on the lap, held, up the
+tree or hiding meanwhile, it is forgotten. Measured: happy Kamarádka 80 % at once; calm Nová 41 %; grumpy Nová 30 %
+at once, 20 % ignored; grumpy Nejlepší kamarádka 63 % (400 cats each).
+
+### 6a. Bowls, hearing and routine (user's wish 2026-11-17)
+The user (a cat owner) found it odd that pouring food raised the hunger at once and that she "knew" about it from
+anywhere. Satisfaction comes from eating, the bowl is a real thing and she has a routine (numbers: `BOWL`, `DISH` in
+src/engine.js).
+- **Food bowl** `st.bowl = { kind, amt, at, wait } | null` (null = empty). `feed` pays as before and fills it with
+  `FOODS[kind].gain`; refused while more than 10 is left ("V misce ještě je jídlo."), allowed when she is full.
+  The need does not change at the pour. Allowed while she is out (the bowl waits).
+- **She hears it** at the pour (event `poured { food, comes, woke }`) when she is at home (not out, not in the garden,
+  not hiding after a fright): awake and sytost < 85, or awake and it is her favourite food; asleep only when sytost < 35,
+  and then the rustle wakes her with 70 % (seeded). She comes `run` (sytost < 40 or her favourite; 5 s) or `trot` (8 s),
+  jumping down when held (the lap ends because `feed` is not a lap action).
+- **Meal** `st.meal = { since, kind, gain, f0 }`: starts by itself in `advance` when the bowl has food, she is free
+  (awake, at home, not on the lap, not held, not hiding) and sytost < 60 (at a meal time < 80), or after the walk when
+  she heard the pour. She eats 60 units a minute (a portion takes 35–55 s), the need rises as she eats (a sore tummy:
+  half), stops at 95 and leaves the rest; anything that takes her away (picked up, the lap, the garden, a walk, a
+  minigame, sleep) ends the meal. Love +2 (favourite +7, bond +1, the favourite-food count) and the satisfied want
+  (bond +1 when she started under 40) come at the end: `mealStart { food }`, `ate { food, gain, left, fav }`. It works
+  in big steps too, so she eats a filled bowl while the player is away. A pat while she eats (the engine knows it from
+  `st.meal`) ends in `blowUp 'eat'`: she leaves the bowl for 2 minutes (`bowl.wait`).
+- **Water dish** `st.dish` 0–100 (a new cat 100; an older save: as full as she was satisfied). `water` fills it to
+  100, refused at 90 or more ("Miska s vodou je plná."). She drinks by herself in sessions `st.drink = { since, gain, w0 }`
+  when water < 70: up to +30 at 1.5 a second (10–20 s), the dish falls by the same; `drinkStart`, `drank { tap: false }`.
+  The fill itself is `dishFilled { tap }`. Out, water falls as before.
+- **Routine** `st.mealLog`: `[hour, day key]` of the last 8 logged pours; a pour less than 45 min after the last
+  logged one is not logged (a second bowl is the same meal). A learned meal time is the mean of at least 3 logged pours
+  within ±45 min on at least 2 different days (`E.mealTimes(st)`, `E.mealTime(st, t)` = the one whose window, 30 min before to 60 min after, holds
+  t). In the window, with an empty bowl and sytost < 80, `wants()` is `food` (she waits at the bowl and asks), and a
+  bowl is eaten at sytost < 80. That routine want is no real need: an act then gives no satisfied-want bond (only a need
+  under 40 does).
+- **Litter**: the box is used only when she is awake and free at home; asleep, on the lap, held, at the bowl or up the
+  tree it waits 15–30 min; in the garden she digs by a bed (`litter { garden: true }`, the box stays clean).
+- **Meows** come only when she is awake, not out and not on the lap; until then `st.want` keeps the old want, so the
+  meow comes when she wakes up or comes home. The vacuum while she is out: no event at all.
+- **Sleep place** `st.sleepPlace` ('box' only when the box is placed in a room of the house and she is not in the
+  garden: always with the box quirk, else for a nap;
+  'sill' for a nap with the sill cushion; 'sun' by day on a clear day; else 'bed'), shown as `health().sleepPlace`;
+  the box quirk is seen only while she really sleeps in the box.
+- **"Dnes ráno tě vzbudila"** (the wakesEarly quirk event) only when she really woke early today (`st.day.early`) and
+  the player's first act of the day comes within 2 h of it.
+- For the UI: `health()` adds `sleepPlace`, `eating`, `coming`, `drinking`, `bowl` (amount), `bowlKind`, `dish`;
+  `E.bowls(st)` gives the bowl, the dish, the meal and the meal times in one object.
 
 `act` returns `{ st, events: [...] }`; events drive the UI (`purr`, `bite`, `wriggle`, `meow`, `ignore`, `found`
 (deník entry), `ill`, `cured`, `levelUp`, …). Unknown or impossible actions return an event `refused` with a reason.
@@ -178,7 +264,11 @@ Pointer Events on the scene; mouse and pen behave like one finger.
 - **Toulky (Etapa 4):** "Pustit ven" starts a walk of 2–8 h (seeded); with the cat flap (bond 300; `install: true`: buying
   it puts it in the předsíň door at once, repair installs it for older saves that own it) she also goes out by
   herself while the player is away; returns with a postcard (`IMAGE_SETS.nachod` item, no repeat until all 42 are
-  collected; Czech text "Byla jsem u …"), a dárek or nothing. Credits screen `#screenCredits` lists photo authors and
+  collected; Czech text "Byla jsem u …"), a dárek or nothing. On a walk she snacks at the neighbours': food falls at
+  half the home rate (user's wish 2026-11-17; she never comes back early because of it) and every `back` after a walk
+  has `begs: true` when the player sees her come back (an advance of up to an hour; back during a long absence: false,
+  2026-11-17 review): she acts starving whatever her hunger, the UI sends her to the bowl to beg ("dělá, že celé dny
+  nejedla"); with food in the bowl she eats by the usual rules. Credits screen `#screenCredits` lists photo authors and
   licenses (copy from games/mahjong or games/pexeso).
 - **Visitors:** neighbour cats Mourek, Líza, Bivoj, Čiperka, Pacička, Rambo, Šedivka, Fousek (recoloured rig, each a
   trait); they come to the garden when a bowl or cushion is placed there; friendship 0–5 hearts.
@@ -218,6 +308,15 @@ Visitors live in the garden and do things together with Koxa; Koxa has her own f
   lickOther 80 (loaf) / 90 (sideLie) / 100 (sit), sideLie 152, swipe 116 / 150, run 184 (art units). The one with the
   lower feet is drawn in front (the licker when they are level). A toast names joint acts; palUp says "Koxa a Líza:
   ♥♥♥ – jsou kamarádky". Deníček and the visitor's menu show both: "Ty ♥♥♡♡♡" and "S Koxou ♥♥♥♡♡".
+
+- **Only what she perceives** (user's wish 2026-11-17): a visitor's mood effect (`VISIT_MOOD` or the joint act's) applies
+  only while she is in the garden (with the player or alone) or awake at home once she noticed it; asleep in the house
+  or out on a walk nothing. `st.visit.noticed` (a moment, 0 = not yet): in the garden at once; awake at home at the
+  arrival she sees it through the window with 60 % (morning, day), 40 % (evening), 20 % (night) (`visitor { noticed }`),
+  else she hears it about 10 min later (exponential from the arrival, `visitorNoticed { id }`, watching only, only while
+  awake at home); `health().visitNoticed`. The UI sends her to the window only once noticed. (The engine does not know the
+  room, so "likelier in the living room" is left to the UI.) Measured: 43 of 66 daytime arrivals seen at once while awake,
+  none while asleep.
 
 ### Phase B: the player and the visitor (engine 2026-11-13)
 New randomness only from `rndSeed` keyed on the moment (salts 30, 31), never `st.n`; nothing depends on the step of
@@ -410,7 +509,11 @@ until woken). Engine actions: `lapOn` (refused/wriggle when she doesn't want it)
 The house has four places now: **Obývák, Kuchyně, Předsíň, Zahrada**. From the Předsíň the door leads to the
 **Zahrada** (the player goes out too; the arrows include it). The garden scene changes with season, day phase and
 weather (rain in spring/autumn, snow in winter: she hates rain — comes back wet and grumpy, coat −; snow: paw prints,
-she shakes her paws). In the garden:
+she shakes her paws). In the rain she never strolls on the lawn (user's wish 2026-11-17): she runs between two
+shelters, the step under the little roof of the back door (lying hunched, or sitting and meowing to be let in, with a
+tip) and the tree trunk under its crown, ears back and grumpy, now and then shaking the water off; she naps and sulks
+there too, no garden cushion, no birds, no tree climbing (the engine already skips presents and the tree in the rain).
+The bench is too small to hide under. Only the picture changes: the engine still soaks her while she is out. In the garden:
 - **záhony** (beds) from Etapa 3, pulled forward: dig/sow by dragging a seed packet, water by dragging the can once a
   day, harvest by tapping a ripe plant (crops from `IMAGE_SETS.produce`), **šanta kočičí** makes her wild;
 - a **tree** she climbs (and sometimes can't get down: "Koxa je na stromě" → call her / reach up with a long press);
@@ -421,7 +524,13 @@ she shakes her paws). In the garden:
   allowed out — the player decides with "Pustit ji ven" (only when bond ≥ 300 or the cat flap is bought later);
 - the neighbour cats (§8 Visitors) come over the fence.
 Outside together she gains fun fast and gets a little dirtier (coat −); leaving her alone in the garden is like
-letting her out (`letOut`). Night: the garden is dark with fireflies in summer; she wants to go out at dusk.
+letting her out (`letOut`): `st.out = { walk: false }` for 1–3 h. Since 2026-11-17 she is shown **in the garden**, not
+away (`health().gardenAlone`; `out` stays true, `walk` false; the `out` event has `garden: true`): the UI draws her
+napping, sitting or stalking there (the engine keeps her awake and off the tree meanwhile). She never stays out alone
+in the rain: on a rainy day she comes in with the player (`house`), and when it starts to rain while she is out there
+alone she comes in by herself (`back { walk: false, rain: true }`). The house door (`letIn`) lets her in; going out to
+her (`goGarden`) joins her (`garden { joined: true }`, the time alone is over); a call says "Koxa je na zahradě.". She
+sees neighbour cats there (their mood effect applies, reaction never 'away'). Night: the garden is dark with fireflies in summer; she wants to go out at dusk.
 
 ## 11. Texts and names
 - `nameForms(name)`: Czech cases for the common phrases are avoided by phrasing ("Koxa má hlad", "Zavolat: Koxa",

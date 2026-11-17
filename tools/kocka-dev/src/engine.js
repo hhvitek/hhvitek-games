@@ -7,8 +7,23 @@
 // The constants (FOODS, TOYS, …) are frozen and never changed.
 //
 // Events, { type, … } (the UI decides what to show; "watching" = an advance over at most one hour):
-//   ate { food, gain, left, fav }   she ate (left: she left the rest, the bowl was too full)
-//   drank { tap }                   water poured; tap: she drank from the tap instead (quirk)
+//   The bowls (user's wish 2026-11-17): 'feed' fills the food bowl (st.bowl) and 'water' the water dish (st.dish); the
+//   needs rise only while she eats or drinks (st.meal, st.drink), in advance(), also while the player is away:
+//   poured { food, comes, woke }    the bowl was filled; comes: 'run' | 'trot' (she heard it and comes: the meal starts
+//                                   5 / 8 s later) | null (she did not hear it: out, in the garden, asleep, full);
+//                                   woke: the rustle woke her (a wake event comes before it)
+//   mealStart { food }              she starts eating (watching only)
+//   ate { food, gain, left, fav }   a meal ended (watching only): gain = sytost she got; left: food stays in the bowl
+//                                   (she was full, or she left the bowl: picked up, the lap, a pat while eating…)
+//   dishFilled { tap }              the water dish was filled; tap: she jumped up to drink from the tap instead (quirk;
+//                                   a drank { tap: true } follows, water +30 at once)
+//   drinkStart / drank { tap }      a drinking session at the dish starts / ends (watching only; tap false)
+//   For the UI: health() has sleepPlace, eating, coming (walking to the bowl), drinking, bowl (amount), bowlKind, dish;
+//   bowls(st) = { bowl, dish, eating, coming, mealKind, mealSince, drinking, mealTime, mealTimes }; mealTimes(st) = the
+//   learned meal times (local hours, e.g. 7.67), mealTime(st, t) = the one whose window holds t, else null
+//   Round 2 (user's wishes 2026-11-17), health() also has: gardenAlone (in the garden without the player: st.out with
+//   walk false), nap (a daytime nap, not the night), wakeAt (when she wakes, asleep or dozing on the lap), stroll (awake on a night stroll),
+//   callAt (she comes then after a callSlow, else 0), visitNoticed (she knows about the visitor: only then the window)
 //   purr { region?, sleeping? }     a happy stroke, a favourite spot, a welcome belly rub, being held
 //   bite                            a playful nip (belly, grumpy)
 //   earsBack { rough? }             stroked against the fur or too fast
@@ -17,17 +32,35 @@
 //   wriggle                         she does not want to be held
 //   held / put { place }            picked up / put down
 //   played { toy, gain, fav }       a toy worked
-//   ignore { reason }               she ignored a toy or a call (sad, tired, asleep)
+//   ignore { reason }               she ignored a toy or a call (sad, tired, asleep; a call also now and then when grumpy
+//                                   or sad: "dělá, že neslyší" / "jen smutně koukne"; alone in the garden: "je na zahradě")
 //   brushed { gain } / flea         brushing; flea: she has fleas (coat +10 only)
 //   clean                           the litter box was cleaned
-//   litter                          she used the litter box (watching only)
+//   litter { garden? }              she used the litter box (watching only; awake and free only, else 15–30 min later);
+//                                   garden: true: she dug by a bed in the garden, the box stays clean
 //   treat                           she ate a treat (pamlsky −1)
 //   pill                            the extra pill after a lost pill minigame was given
-//   out { until } / back { minutes } let out / came home (letIn or by herself)
-//   come / turnBack                 a call: she comes / turns her back (offended, once)
-//   scared { what } / curious { what }  met a vacuum, a storm, fireworks (scared only when it is her fear)
-//   sleep { place } / wake { early } she fell asleep ('bed' | 'sun' | 'box') / woke up (watching or caused by an act)
-//   meow { want }                   she started to want something (watching only)
+//   out { until, walk, flap?, garden? } / back { minutes, walk, flap, postcard, present, begs, rain? }   let out / came home
+//                                   (letIn or by herself). garden: true = the player left her in the garden alone (st.out
+//                                   with walk: false; health().gardenAlone: draw her in the garden); she never stays there in
+//                                   the rain (back { rain: true }, or she comes in with the player). begs: true after every
+//                                   walk the player sees end (watching): she acts starving whatever her hunger (user's wish
+//                                   2026-11-17); back during a long absence (the app closed): false
+//   come { late? } / turnBack       a call: she comes (late: true = at st.callAt after a callSlow) / turns her back (offended, once)
+//   callSlow { at, meal }           a call she heard (an ear or the tail turns) but follows later, at `at` (st.callAt): 10–40 s
+//                                   (CALL, by mood and bond), or meal: true = after her meal; then come { late: true }
+//                                   (watching; asleep, out, on the lap, held, up the tree or hiding it is forgotten)
+//   scared { what } / curious { what }  met a vacuum, a storm, fireworks (scared only when it is her fear; nothing at all
+//                                   for the vacuum while she is out)
+//   sleep { place, nap } / wake { early, stroll? }   she fell asleep ('box' only when it is placed indoors | 'sill' | 'sun' on
+//                                   a clear day | 'bed'; also st.sleepPlace, health().sleepPlace; nap: a daytime nap, else the
+//                                   night) / woke up (watching or caused by an act; stroll: true = a night stroll of 20–40 min,
+//                                   health().stroll, then she goes back to sleep). A cat's sleep (user's wish 2026-11-17, SLEEP):
+//                                   naps through the day planned when she wakes (st.napAt), each 45–120 min (st.wakeAt), few at
+//                                   dawn and dusk, the night 22–6 with a rare stroll; 12–16 h a day
+//   meow { want }                   she started to want something (watching only; awake, not out, not on the lap: else
+//                                   st.want waits, so she meows when she wakes or comes home). 'food' also at a learned
+//                                   meal time with an empty bowl (mealTime())
 //   ill { kind } / cured { kind, by: 'vet' | 'time', paid?, short? }
 //   weighed { kg, delta }           once a local day
 //   levelUp { level, name }         a new bond level
@@ -37,7 +70,10 @@
 //   lapLeave { reason, minutes }    she jumped down and ran off: 'hungry' | 'thirsty' | 'bored' | 'offended' |
 //                                   'annoyed' | 'scared' | 'restless' (nothing in particular) | 'away' (the app was closed)
 //   lapDoze                         she dozed off on the lap (stays until stroked awake or the player stands up)
-//   garden { weather } / house      she goes out into the garden with the player / back into the house
+//                                   (sleepy when her nap st.napAt is due within 30 min or overdue, or energy < 60; a doze of
+//                                   45–90 min, health().wakeAt; 15 min or more counts as her nap, 2026-11-17)
+//   garden { weather, joined? } / house   she goes out into the garden with the player (joined: she was there alone already)
+//                                   / back into the house
 //   wet / snowPaws                  rain soaked her (grumpy for 2 h, coat −) / she shakes snow off her paws
 //   present { item }                a dárek: 'feather' (pírko) | 'leaf' (lísteček) | 'cone' (šiška); garden or a walk
 //   climbStuck / climbDown { by }   stuck on the tree / down again: 'call' | 'fetch' | 'self' (after 30 min at most)
@@ -49,8 +85,11 @@
 //   perform { trick, ok, shown?, understood?, reason? } / learned { trick } / trickLearned { trick } / trickRefused { trick, reason }
 //                                   Výcvik: a wrong cue = understood false; a refused right cue = understood true with
 //                                   reason 'tired' | 'grumpy' | 'notNow'; trickLearned = training an already learned trick
-//   visitor { id, reaction } / visitorLeave { id, reason: 'time'|'shy'|'night'|'rain' } / visitorFed / visitorPurr /
+//   visitor { id, reaction, noticed } / visitorLeave { id, reason: 'time'|'shy'|'night'|'rain' } / visitorFed / visitorPurr /
 //   visitorHiss / visitorFriend { id, hearts }   neighbour cats; reaction = Koxa's: 'hiss' | 'play' | 'friends' | 'watch' | 'away'
+//   (noticed: Koxa knows about it at once: in the garden, or awake at home and she saw it through the window; reaction is
+//   how she takes it, 'away' only on a walk; her mood changes only while she knows: health().visitNoticed, st.visit.noticed)
+//   visitorNoticed { id }           awake at home she heard the visitor later (about 10 min after it came; watching only)
 //   visitAct { id, kind, with }     the visitor started another act (st.visit.act; watching only, or Koxa left the garden):
 //                                   kind of VISIT_ACTS, with = 'koxa' (together with her) | null (alone); 'arrive' follows 'visitor'
 //   palUp { id, pal }               Koxa's own friendship with a neighbour cat reached another whole heart (pal 1–5)
@@ -79,7 +118,8 @@
 //   photo { n } / photoDeleted { n }   the album
 //   gift { n }                      pamlsky from the launcher link
 //   found { id, text }              a new Deníček entry
-//   quirk { id }                    her quirk was seen
+//   quirk { id }                    her quirk was seen (wakesEarly: the player's first act of the day within 2 h after
+//                                   she really woke early; box: only while she sleeps in her box)
 //   refused { reason }              the action is not possible now (Czech reason)
 // Phase B actions (act): strokeVisitor { id, region?, along?, speed? } (without region: the menu's Pohladit),
 //   treatVisitor { id }, playVisitor { id, caught: 'koxa' | 'visitor' }, invite { id }; photo also takes
@@ -100,7 +140,8 @@
 //   sulkEnd / crossEnd              the time ran out
 //   reconcile { by: 'stroke'|'scratch'|'treat', bond }   made up after a sulk (bond: whether bond +1 was given today)
 //   payback { kind: 'shelf'|'ambush' }   her revenge, at most once a day (watching only, when she is free)
-//   Order inside one action: lapLeave → the cause (blowUp/loveBite/boop/splash) → sulk/cross → found
+//   Order inside one action: lapLeave → the cause (blowUp/loveBite/boop/splash) → sulk/cross → found; a pat while she
+//   eats (st.meal, or the UI's eating flag) and blowUp 'eat': she leaves the bowl (ate first) and comes back after 2 min
 // Teasing actions: pat { region, n, ms, cv, eating }, boop, splash
 function KockaEngine() {
   const MIN = 60000, HOUR = 60 * MIN, DAY = 24 * HOUR, STEP = 10 * MIN;
@@ -110,8 +151,9 @@ function KockaEngine() {
   const T_MIN = Date.UTC(2000, 0, 1), T_MAX = Date.UTC(2200, 0, 1);
   const deep = o => { for (const k of Object.keys(o)) if (o[k] && typeof o[k] === 'object') deep(o[k]); return Object.freeze(o); };
   // needs falling per hour; [day, night or asleep] (fun: [morning/day, evening, night or asleep]); tuned so that two visits
-  // a day with basic care keep her calm or happy (tools/kocka-test.js "Balance")
-  const RATE = deep({ food: [4, 2], water: [3.5, 2], fun: [2.5, 3.5, 0.5], love: [2, 0.5], coat: 0.5, energy: [3, 8] });
+  // a day with basic care keep her calm or happy (tools/kocka-test.js "Balance"); food 3.5 / 1.75 (70 a day, 2026-11-17):
+  // one bowl of granule (35) twice a day keeps her fed now that she eats only what is in the bowl
+  const RATE = deep({ food: [3.5, 1.75], water: [3.5, 2], fun: [2.5, 3.5, 0.5], love: [2, 0.5], coat: 0.5, energy: [3, 8] });
   // the lap (SPEC §12d): leaving is a seeded hazard per minute, so the step length does not matter
   const LAP = deep({
     leave: 0.35,          // per minute when content: a session of about 3 min (median 2), with gentle stroking 0.6× (about 5 min)
@@ -120,10 +162,14 @@ function KockaEngine() {
     annoy: 2,             // + 2× per point of annoyance: against the fur / too fast +1, a belly rub +0.5, a bite +2
     calm: 0.5,            // annoyance fades by 0.5 a minute
     settle: 0.5,          // minutes after settling before she may leave (unless annoyed)
-    doze: 0.5,            // per minute when energy < 60, calm or happy, not annoyed, 20 s – 2 min after the last stroke (or night);
-                          // ×2 when energy < 35, ×2 at night; while dozing she never leaves, wakes when stroked or rested
+    doze: 0.5,            // per minute when sleepy (her nap is due within 30 min or overdue, or energy < 60), calm or happy,
+                          // not annoyed, 20 s – 2 min after the last stroke (or evening, night); ×2 when energy < 35, ×2 when
+                          // the nap is due within 30 min and ×2 more when it is overdue, ×1.5 in the evening, ×2 at night; while dozing she never leaves, wakes when
+                          // stroked or when the doze is over
+    napSoon: 30,          // minutes: her next nap (st.napAt) this close makes her sleepy on the lap (2026-11-17)
     away: 15,             // minutes: an advance longer than this ends the lap (nobody sits in the chair any more)
-    dozeMax: 90,          // minutes: a doze on the lap ends by itself (then she may leave as usual)
+    dozeMin: 45, dozeMax: 90,   // minutes: a doze lasts 45–90 (seeded from its start; 90 when energy < 35), then she may leave
+    napped: 15,           // minutes: a doze this long counts as her nap (her next nap is planned from its end)
   });
   const TARGET_W = 4.2, FED_W = 4.5;   // a thin cat recovers to 4.2; plain food alone never makes her heavier than 4.5
 
@@ -153,6 +199,44 @@ function KockaEngine() {
   const WEATHERS = deep({ clear: { name: 'jasno' }, cloudy: { name: 'zataženo' }, rain: { name: 'déšť' }, snow: { name: 'sníh' } });
   // the garden with the player, per hour: fun rises, the coat suffers; chances of a dárek and of getting stuck on the tree
   const GARDEN = deep({ fun: 10, coat: 1.5, rainCoat: 4, wetFor: 2 * 60, present: 0.2, tree: 0.15, treeMax: 30, alone: [60, 180] });
+  // the food bowl and the water dish (user's wish 2026-11-17: satisfaction comes from eating, not from a full bowl)
+  const BOWL = deep({
+    full: 10,          // a second pour is refused while more than this is left in the bowl
+    eat: 60,           // food units a minute: a portion of 35–55 takes 35–55 s
+    stop: 95,          // she stops at this sytost and leaves the rest
+    hungry: 60,        // she goes to a filled bowl by herself under this
+    routine: 80,       // at a learned meal time: she eats (and asks for food at an empty bowl) under this
+    hear: 85,          // awake: she comes to the rustle under this (her favourite food: always)
+    hearSleep: 35, wakeP: 0.7,   // asleep: the rustle wakes her under this with this chance
+    run: 40,           // she runs (food under this or her favourite food), else she trots
+    walk: { run: 5000, trot: 8000 },   // ms from the pour to the first bite
+    wait: 2 * 60000,   // after leaving the bowl in a huff (a pat while eating) she comes back after this
+    log: 8, near: 0.75, need: 3, days: 2,   // meal times: the last 8 logged pours; 3 within ±45 min on 2+ days make one
+    gap: 0.75,                         // hours: a pour less than this after the last logged one is not logged (a second bowl)
+    before: 0.5, after: 1,             // hours: she waits for her meal from 30 min before to 60 min after it
+  });
+  const DISH = deep({ thirsty: 70, sip: 30, rate: 1.5, full: 90, start: 100, old: 60, tap: 30 });   // rate: water a second (a session 10–20 s)
+  const SLEEP_PLACES = deep(['box', 'sill', 'sun', 'bed']);
+  // a cat's sleep (user's wish 2026-11-17): several short naps by day, few at dawn and dusk, the night mostly asleep with a
+  // rare short stroll. Every moment is planned when she wakes up or falls asleep (st.napAt, st.wakeAt, st.stroll), drawn
+  // from the seed and that moment (never st.n), and advance() splits its steps at them, so the step length never matters.
+  const SLEEP = deep({
+    // the chance per hour to doze off, by local hour 0–23: the night 22–5 (she goes to bed), dawn 5–8 and dusk 17–20 lively
+    rate: [3, 3, 3, 3, 3, 0.05, 0.05, 0.05, 1, 1, 1, 2, 2, 2, 2, 2, 1, 0.1, 0.1, 0.1, 0.8, 0.8, 3, 3],
+    tired: [[35, 3], [55, 1.8]], rested: [90, 0.8],   // by day ×3 under energy 35, ×1.8 under 55, ×0.8 over 90
+    gap: 45,                  // minutes awake at least after any wake
+    born: 120,                // a new cat stays awake this long
+    nap: [45, 120], napTired: 30, napUp: 75,   // a nap 45–120 min, +30 under energy 40; under 25 until about 75
+    play: 15, wantLow: 50, postpone: [20, 40],   // played with in the last 15 min and fun or love under 50: the nap waits 20–40 min
+    morning: [6, 40], early: [5, 20],            // the morning wake 6:00 + 0–40 min; her wakesEarly quirk 5:00 + 0–20 min
+    stroll: 0.07, strollHungry: 2, strollFrom: 23, strollTo: 4, strollLen: [20, 40], strollAfter: 60,   // per hour 23–4, an hour after bedtime
+  });
+  const nightHour = h => h >= 22 || h < 5;
+  // a call (user's wish 2026-11-17): happy with bond level Kamarádka she comes at once 80 %, else 30–60 % by mood and bond;
+  // otherwise she only turns an ear and comes 10–40 s later (callSlow), or, grumpy or sad, now and then ignores it
+  const CALL = deep({ happy: 0.8, lvl: 2, base: 0.3, perLvl: 0.075, mood: { happy: 0.15, calm: 0.1 }, max: 0.6, ignore: 0.3, slow: [10, 40], after: 3000 });
+  // a visitor seen through the window when it arrives (awake at home), by day phase; else she hears it about 10 min later
+  const NOTICE = deep({ morning: 0.6, day: 0.6, evening: 0.4, night: 0.2, hear: 10 });
   const WALK_BOND = 2;             // toulky (letOut) from bond level Kamarádka (300)
   // toys: the four she has from the start (one is her favourite), and shop toys (bought: 'owned'); base = its kind
   const TOYS = deep({
@@ -301,6 +385,10 @@ function KockaEngine() {
   const tomorrow = ms => { const d = new Date(ms); d.setDate(d.getDate() + 1); return dkey(d.getTime()); };
   const dayNo = (y, m, d) => Math.round(Date.UTC(y, m, d) / DAY);                         // calendar day number
   const keyNo = k => dayNo(Math.floor(k / 10000), Math.floor(k / 100) % 100 - 1, k % 100);
+  // the local time of day in hours (7.5 = 7:30); hourKey: as stored in st.mealLog (0.01 h, 0 ≤ h < 24)
+  const hourOf = ms => { const d = new Date(ms); return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600; };
+  const hourKey = h => Math.round(h * 100) / 100 % 24;
+  const hourDist = (a, b) => { const d = Math.abs(a - b) % 24; return Math.min(d, 24 - d); };
   const isKey = k => Number.isInteger(k) && k >= 19000101 && k <= 22001231 && k % 100 >= 1 && k % 100 <= 31 && Math.floor(k / 100) % 100 >= 1 && Math.floor(k / 100) % 100 <= 12;
 
   /* --- calendar --- */
@@ -370,7 +458,7 @@ function KockaEngine() {
       quirk: pick(Object.keys(QUIRKS), 6), toy: pick(BASE_TOYS, 7),
     };
   }
-  const freshDay = ms => ({ key: dkey(ms), ms: 0, food: 0, mood: 0, minE: 100, treats: 0, ttreats: 0, q: false, acted: false });
+  const freshDay = ms => ({ key: dkey(ms), ms: 0, food: 0, mood: 0, minE: 100, treats: 0, ttreats: 0, q: false, acted: false, early: 0 });
 
   /* --- creation --- */
   function create(seed, now, name) {
@@ -387,8 +475,11 @@ function KockaEngine() {
       stock: {}, owned: {}, furniture: {}, records: {}, tricks: {}, earnDay: { key: dkey(now), n: 0 }, train: null,
       visitors: {}, visit: null, album: [], diaryCat: {}, guest: null, invDay: 0, jealous: null, jealousAt: 0,
       kits: [], litter: null, tease: freshTease(),
+      bowl: null, dish: DISH.start, meal: null, drink: null, mealLog: [], sleepPlace: null,
+      napAt: 0, wakeAt: 0, stroll: 0, callAt: 0, playAt: 0,
     };
     for (const k of COUNTS) st.cnt[k] = 0;
+    ensurePlan(st);
     return st;
   }
   function cleanName(s) { return typeof s === 'string' && s.trim() ? s.trim().slice(0, 20) : 'Koxa'; }
@@ -490,6 +581,22 @@ function KockaEngine() {
     st.scared = soon(st.scared, 2 * HOUR);
     st.tease = repairTease(st.tease, st, t);
     st.litterAt = okT(st.litterAt) && st.litterAt >= t - 2 * DAY && st.litterAt <= t + 9 * HOUR ? st.litterAt : t + 8 * HOUR;
+    // the food bowl, the water dish, a meal or a drink in progress, the pour times (older saves: an empty bowl, a dish
+    // as full as she was satisfied)
+    const BW = obj(st.bowl);
+    st.bowl = has(FOODS, BW.kind) && typeof BW.amt === 'number' && BW.amt > 0.5 && BW.amt <= 100 && okT(BW.at) && BW.at <= t
+      ? { kind: BW.kind, amt: BW.amt, at: BW.at, wait: okT(BW.wait) && BW.wait <= t + BOWL.wait ? BW.wait : 0 } : null;
+    st.dish = typeof st.dish === 'number' && Number.isFinite(st.dish) ? clamp(st.dish, 0, 100)
+      : st.dish === undefined && typeof N.water === 'number' && Number.isFinite(N.water) ? clamp(N.water, 0, 100) : DISH.old;
+    const ML = obj(st.meal);
+    st.meal = st.bowl && ML.kind === st.bowl.kind && okT(ML.since) && ML.since <= t + BOWL.walk.trot
+      ? { since: ML.since, kind: ML.kind, gain: num(ML.gain, 0, 0, 100), f0: num(ML.f0, 0, 0, 100) } : null;
+    const DR = obj(st.drink);
+    st.drink = !st.meal && okT(DR.since) && DR.since <= t ? { since: DR.since, gain: num(DR.gain, 0, 0, DISH.sip), w0: num(DR.w0, 0, 0, 100) } : null;
+    // [hour, day key] pairs, oldest first
+    st.mealLog = (Array.isArray(st.mealLog) ? st.mealLog : []).filter(e => Array.isArray(e) && e.length === 2 && typeof e[0] === 'number'
+      && Number.isFinite(e[0]) && e[0] >= 0 && e[0] < 24 && isKey(e[1])).map(e => [hourKey(e[0]), e[1]]).slice(-BOWL.log);
+    st.sleepPlace = SLEEP_PLACES.includes(st.sleepPlace) ? st.sleepPlace : null;
     st.walkMax = num(st.walkMax, 0, 0, 100 * DAY);
     const year = new Date(t).getFullYear();
     st.bday = Number.isInteger(st.bday) && st.bday >= 2000 && st.bday <= year ? st.bday : year;
@@ -512,16 +619,26 @@ function KockaEngine() {
     st.day = d && typeof d === 'object' && isKey(d.key) && d.key <= dkey(t) && typeof d.ms === 'number' && d.ms >= 0 && d.ms <= 26 * HOUR ? {
       key: d.key, ms: num(d.ms, 0, 0, 2 * DAY), food: num(d.food, 0, 0, 200 * DAY), mood: num(d.mood, 0, -200 * DAY, 200 * DAY),
       minE: num(d.minE, 100, 0, 100), treats: Math.floor(num(d.treats, 0, 0, 1000)), ttreats: Math.floor(num(d.ttreats, 0, 0, 1000)), q: d.q === true, acted: d.acted === true,
+      early: okT(d.early) && d.early <= t && dkey(d.early) === d.key ? d.early : 0,
     } : freshDay(t);
     if (st.day.food > st.day.ms * 100 + 1) st.day.food = st.day.ms * 50;
     if (Math.abs(st.day.mood) > st.day.ms * 100 + 1) st.day.mood = 0;
     st.want = NEED_WANTS.includes(st.want) ? st.want : null;
     const W = st.wantAt && typeof st.wantAt === 'object' ? st.wantAt : {};
     st.wantAt = {}; for (const k of Object.keys(W)) if (NEED_WANTS.includes(k) && okT(W[k])) st.wantAt[k] = Math.min(W[k], t);
+    // the sleep plan (after the needs, the traits and st.out): asleep = when she wakes, awake = when she naps, a night
+    // stroll, a call she follows later, the player's last play; a missing or broken plan is planned again from t
+    st.wakeAt = st.asleep && okT(st.wakeAt) && st.wakeAt <= t + 16 * HOUR ? st.wakeAt : 0;
+    st.napAt = !st.asleep && okT(st.napAt) && st.napAt <= t + 48 * HOUR ? st.napAt : 0;
+    st.stroll = !st.asleep && okT(st.stroll) && st.stroll <= t + SLEEP.strollLen[1] * MIN ? st.stroll : 0;
+    st.callAt = !st.asleep && !st.out && okT(st.callAt) && st.callAt <= t + 3 * MIN ? st.callAt : 0;
+    st.playAt = past(st.playAt, 0);
+    ensurePlan(st);
     for (const k of Object.keys(st)) if (!STATE_KEYS.includes(k)) delete st[k];
     return st;
   }
-  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat', 'guest', 'invDay', 'jealous', 'jealousAt', 'kits', 'litter', 'tease'];
+  const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat', 'guest', 'invDay', 'jealous', 'jealousAt', 'kits', 'litter', 'tease', 'bowl', 'dish', 'meal', 'drink', 'mealLog', 'sleepPlace',
+    'napAt', 'wakeAt', 'stroll', 'callAt', 'playAt'];
   // the canonical st.tease (SPEC §13.3), after st.wet and st.off were repaired; st.off is never changed here
   function repairTease(Z, st, t) {
     const okT = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
@@ -570,7 +687,7 @@ function KockaEngine() {
     if (st.wet > st.t) m -= 15;                       // wet from the rain (or the can): grumpy for a while
     const tk = teaseKind(st);                         // teasing: a sulk −10, a cross −20
     if (tk) m += TEASE.mood[tk];
-    if (st.visit && !st.out) {   // a neighbour cat in the garden: what they do together, else how she takes it
+    if (perceives(st)) {   // a neighbour cat in the garden: what they do together, else how she takes it (only when she knows)
       const A = st.visit.act;
       m += A && A.with === 'koxa' && Object.prototype.hasOwnProperty.call(VISIT_ACTS, A.kind) ? VISIT_ACTS[A.kind].mood : VISIT_MOOD[reaction(st, st.visit.id)];
     }
@@ -579,13 +696,67 @@ function KockaEngine() {
     if (st.guest && !st.out && !st.yard) m += 5;      // a friend sleeps over (she is at home with it)
     return Math.round(clamp(m, -100, 100));
   }
+  // she knows about the visitor: in the garden (with the player or alone), or awake at home once she noticed it
+  // (user's wish 2026-11-17: asleep or out on a walk a neighbour cat changes nothing)
+  const gardenAlone = st => !!(st.out && !st.out.walk);
+  const perceives = st => !!st.visit && (!!st.yard || gardenAlone(st) || (!st.out && !st.asleep && !!st.visit.noticed));
   const moodName = v => v >= 50 ? 'happy' : v >= 10 ? 'calm' : v >= -30 ? 'grumpy' : 'sad';
   function mood(st) { return moodName(moodValue(st)); }
   function wants(st) {
     const v = needs(st);
     let best = null;
     for (const k of NEED_WANTS) if (v[k] < 40 && (best === null || v[k] < v[best])) best = k;
+    // her routine: at a learned meal time she waits at the empty bowl and asks
+    if (best === null && v.food < BOWL.routine && !bowlHas(st) && mealTime(st, st.t) !== null) best = 'food';
     return best;
+  }
+  const bowlHas = st => !!(st.bowl && st.bowl.amt >= 1);
+  // st.want follows wants() only while she can meow (awake, not out, not on the lap); otherwise the old want stays, so
+  // the meow comes when she wakes up or comes home. Returns the new want, or undefined when it was kept.
+  function syncWant(st) {
+    if (st.asleep || st.out || st.lap) return undefined;
+    return (st.want = wants(st));
+  }
+  // the box quirk is seen only when she really sleeps in her box
+  function boxSeen(st, t, ev) { if (st.asleep && st.sleepPlace === 'box' && boxHome(st)) seenQuirk(st, 'box', t, ev); }
+  // her box can be slept in only when it stands in a room of the house (the picture draws it only there) and she is home
+  const boxHome = st => !st.yard && !!st.furniture.box && st.furniture.box.room !== 'garden';
+  // the learned meal times (local hours, ascending): where at least 3 of the last 8 logged pours lie within ±45 min and
+  // on at least 2 different days; the time is their mean; times closer than 1.5 h merge into the one with more pours
+  function mealTimes(st) {
+    const LG = Array.isArray(st.mealLog) ? st.mealLog : [], L = LG.map(e => e[0]), cand = [];
+    for (const h of L) {
+      const near = LG.filter(e => hourDist(e[0], h) <= BOWL.near + 1e-9), m = near.map(e => e[0]);
+      if (m.length < BOWL.need || new Set(near.map(e => e[1])).size < BOWL.days) continue;
+      let s = 0;
+      for (const x of m) { let d = x - h; if (d > 12) d -= 24; else if (d < -12) d += 24; s += d; }
+      cand.push({ c: hourKey(((h + s / m.length) % 24 + 24) % 24), n: m.length });
+    }
+    cand.sort((a, b) => b.n - a.n || a.c - b.c);
+    const out = [];
+    for (const x of cand) if (out.every(y => hourDist(y, x.c) > 2 * BOWL.near)) out.push(x.c);
+    return out.sort((a, b) => a - b);
+  }
+  // the learned meal time whose window (30 min before to 60 min after) holds the moment t, else null
+  function mealTime(st, t) {
+    if (typeof t !== 'number' || !Number.isFinite(t)) return null;
+    const h = hourOf(t);
+    for (const c of mealTimes(st)) {
+      let d = h - c; if (d > 12) d -= 24; else if (d < -12) d += 24;
+      if (d >= -BOWL.before && d <= BOWL.after) return c;
+    }
+    return null;
+  }
+  // at home and free to go to the bowl: awake, not out, not in the garden, not on the lap, not held, not hiding
+  const free = (st, t) => !st.out && !st.yard && !st.asleep && !st.lap && !st.held && !(st.scared > t);
+  // the bowl and the dish for the UI
+  function bowls(st) {
+    const B = st.bowl, M = st.meal, R = st.drink, t = st.t;
+    return {
+      bowl: B ? { kind: B.kind, amt: Math.round(B.amt), at: B.at } : null, dish: Math.round(st.dish),
+      eating: !!(M && M.since <= t), coming: !!(M && M.since > t), mealKind: M ? M.kind : null, mealSince: M ? M.since : 0,
+      drinking: !!R, mealTime: mealTime(st, t), mealTimes: mealTimes(st),
+    };
   }
   function levelOf(bond) { let l = 0; for (let i = 0; i < LEVELS.length; i++) if (bond >= LEVELS[i].min) l = i; return l; }
   function bondLevel(st) {
@@ -605,6 +776,14 @@ function KockaEngine() {
       guest: st.guest ? st.guest.id : null, jealous: !!st.jealous,
       sulk: teaseKind(st) === 'sulk', cross: teaseKind(st) === 'cross', splashed: !!(st.tease && st.wet > t && st.wet === st.tease.splash),
       teaseUntil: teasing(st) ? st.tease.until : 0,
+      sleepPlace: st.asleep ? st.sleepPlace || 'bed' : null,
+      eating: !!(st.meal && st.meal.since <= t), coming: !!(st.meal && st.meal.since > t), drinking: !!st.drink,
+      bowl: st.bowl ? Math.round(st.bowl.amt) : 0, bowlKind: st.bowl ? st.bowl.kind : null, dish: Math.round(st.dish),
+      // user's wishes 2026-11-17: alone in the garden (out is true, walk false: draw her in the garden, not away); a
+      // daytime nap (else a night's sleep) and when she wakes; awake on a short night stroll; a call she follows at callAt;
+      // she knows about the visitor (the window: only then she goes to look)
+      gardenAlone: gardenAlone(st), nap: napping(st), wakeAt: st.asleep ? st.wakeAt : st.lap && st.lap.doze ? st.lap.dozeAt + dozeLen(st, st.lap) : 0, stroll: !st.asleep && st.stroll > t,
+      callAt: st.callAt, visitNoticed: !!(st.visit && st.visit.noticed),
     };
   }
 
@@ -684,7 +863,8 @@ function KockaEngine() {
   }
   function meet(st, what, t, ev) {
     if (st.traits.fear === what) {
-      st.scared = t + 2 * HOUR; st.held = false; st.asleep = false; st.wokeAt = t;
+      st.scared = t + 2 * HOUR; st.held = false; st.callAt = 0;
+      if (st.asleep) rouse(st, t); else st.wokeAt = t;
       if (st.lap) leaveLap(st, t, 'scared', ev);
       ev.push({ type: 'scared', what });
       find(st, 'fear', t, ev);
@@ -692,20 +872,33 @@ function KockaEngine() {
   }
   function leaveLap(st, t, reason, ev) {
     ev.push({ type: 'lapLeave', reason, minutes: Math.round((t - st.lap.since) / MIN) });
+    lapNapDone(st, t);
     st.lap = null;
   }
+  // a doze on the lap ends (she woke, was stroked awake, the player stood up): a doze of 15 min or more was her nap, so
+  // the next one is planned from now (as after any wake); a shorter one leaves her nap plan as it was
+  function lapNapDone(st, t) {
+    const L = st.lap;
+    if (!L || !L.doze) return;
+    if (t - L.dozeAt >= LAP.napped * MIN) { st.wokeAt = t; st.stroll = 0; st.napAt = napPlan(st, t); }
+    L.doze = false; L.dozeAt = 0;
+  }
+  // how long a doze on the lap lasts, from its start (seeded, never st.n)
+  const dozeLen = (st, L) => (st.needs.energy < 35 ? LAP.dozeMax : LAP.dozeMin + Math.floor(rndSeed(st.seed, Math.floor(L.dozeAt / 1000), 70) * (LAP.dozeMax - LAP.dozeMin + 1))) * MIN;
   // one step on the lap: annoyance fades; she may doze off, wake rested, or jump down and run off
   function lapStep(st, t, dt, night, ev) {
     const L = st.lap, N = st.needs, m = dt / MIN;
     L.annoy = Math.max(0, L.annoy - LAP.calm * m);
     if (L.doze) {
-      if (N.energy >= 95 || t - L.dozeAt >= LAP.dozeMax * MIN) { L.doze = false; L.dozeAt = 0; L.pet = t; ev.push({ type: 'wake', early: false, lap: true }); }
+      if (t - L.dozeAt >= dozeLen(st, L)) { lapNapDone(st, t); L.pet = t; ev.push({ type: 'wake', early: false, lap: true }); }
       return;
     }
-    const mv = moodValue(st);
-    const sincePet = t - L.pet;   // she nods off when the stroking stops (20 s – 2 min after the last stroke), or at night
-    if (N.energy < 60 && mv >= 10 && L.annoy < 1 && ((sincePet >= 20000 && sincePet <= 2 * MIN) || (night && sincePet >= 20000))) {
-      const r = LAP.doze * (N.energy < 35 ? 2 : 1) * (night ? 2 : 1);
+    const mv = moodValue(st), evening = dayPhase(t) === 'evening';
+    // sleepy: her nap is due soon (or overdue: she could not nap while on the lap), or she is tired (user's wish 2026-11-17)
+    const overdue = !!st.napAt && t >= st.napAt, napSoon = !!st.napAt && st.napAt - t <= LAP.napSoon * MIN, sleepy = napSoon || N.energy < 60;
+    const sincePet = t - L.pet;   // she nods off when the stroking stops (20 s – 2 min after the last stroke), or in the evening and at night
+    if (sleepy && mv >= 10 && L.annoy < 1 && ((sincePet >= 20000 && sincePet <= 2 * MIN) || ((night || evening) && sincePet >= 20000))) {
+      const r = LAP.doze * (N.energy < 35 ? 2 : 1) * (napSoon ? 2 : 1) * (overdue ? 2 : 1) * (night ? 2 : evening ? 1.5 : 1);
       if (rnd(st) < 1 - Math.exp(-r * m)) { L.doze = true; L.dozeAt = t; ev.push({ type: 'lapDoze' }); return; }
     }
     if (t + dt - L.since < LAP.settle * MIN && L.annoy < 2) return;
@@ -716,15 +909,116 @@ function KockaEngine() {
     if (st.off && t < st.off.until) f(LAP.offended, 'offended');
     if (st.scared > t) f(LAP.scared, 'scared');
     if (L.annoy > 0) f(1 + LAP.annoy * L.annoy, 'annoyed');
-    if (N.energy < 50 && mv >= 50) rate *= LAP.sleepyHappy;
+    if ((N.energy < 50 || napSoon) && mv >= 50) rate *= LAP.sleepyHappy;
     if (t - L.pet <= MIN) rate *= LAP.petted;
     if (rnd(st) < 1 - Math.exp(-rate * m)) leaveLap(st, t + dt, reason, ev);
   }
-  function getIll(st, kind, t, ev) {
+  /* --- the food bowl and the water dish (user's wish 2026-11-17) --- */
+  // a meal ends (eaten up, full, or she left the bowl): love, bond, purr and the favourite food count now, not at the pour
+  function endMeal(st, t, watching, ev) {
+    const M = st.meal, N = st.needs;
+    st.meal = null;
+    if (M.gain < 0.5) return;                    // she never got to eat
+    const fav = M.kind === st.traits.favFood, tummy = !!(st.ill && st.ill.kind === 'tummy');
+    N.love = Math.min(100, N.love + (fav ? 7 : 2));
+    if (watching) ev.push({ type: 'ate', food: M.kind, gain: Math.round(M.gain), left: bowlHas(st), fav });
+    if (fav) {
+      addBond(st, 1, ev);
+      if (watching) ev.push({ type: 'purr' });
+      if (!tummy && inc(st, 'favFood') >= 3) find(st, 'favFood', t, ev);
+    }
+    // a satisfied want (she was hungry): bond +1, at most once an hour
+    if (M.f0 < 40 && N.food >= 40 && !(t - (st.wantAt.food || 0) < HOUR)) { st.wantAt.food = t; addBond(st, 1, ev); }
+  }
+  function endDrink(st, t, watching, ev) {
+    const R = st.drink, N = st.needs;
+    st.drink = null;
+    if (R.gain < 0.5) return;
+    if (watching) ev.push({ type: 'drank', tap: false });
+    if (R.w0 < 40 && N.water >= 40 && !(t - (st.wantAt.water || 0) < HOUR)) { st.wantAt.water = t; addBond(st, 1, ev); }
+  }
+  // a meal or a drink that cannot go on (she was picked up, fell asleep, went out…) ends at once
+  function bowlCheck(st, t, watching, ev) {
+    if (free(st, t)) return;
+    if (st.meal) endMeal(st, t, watching, ev);
+    if (st.drink) endDrink(st, t, watching, ev);
+  }
+  // one step at the bowls: she starts a meal by herself when hungry (or at her meal time), eats at BOWL.eat a minute,
+  // stops when full or the bowl is empty; she drinks in short sessions when thirsty. Works for any step length.
+  // she goes to eat by herself: hungry (or under the routine level at her meal time) with food in the bowl
+  const wantsMeal = (st, t) => st.needs.food < BOWL.hungry || (st.needs.food < BOWL.routine && mealTime(st, t) !== null);
+  // a meal starts within a few minutes (free at home, a filled bowl, no huff longer than BOWL.wait): no nap before it
+  const mealDue = (st, t) => free(st, t) && !st.meal && !!st.bowl && st.bowl.wait <= t + BOWL.wait && wantsMeal(st, t);
+  function bowlStep(st, t, dt, watching, ev) {
+    const N = st.needs, te = t + dt;
+    if (st.meal && !st.bowl) endMeal(st, t, watching, ev);   // never a meal without a bowl
+    bowlCheck(st, t, watching, ev);
+    if (!free(st, t)) return;
+    const B = st.bowl;
+    if (!st.meal && !st.drink && B && B.wait < te && wantsMeal(st, t))
+      st.meal = { since: Math.max(t, B.wait), kind: B.kind, gain: 0, f0: N.food };   // after a huff: when the 2 minutes are over
+    if (st.meal) {
+      const M = st.meal, from = Math.max(t, M.since);
+      if (from < te) {
+        if (M.since >= t && watching) ev.push({ type: 'mealStart', food: M.kind });
+        const k = st.ill && st.ill.kind === 'tummy' ? 0.5 : 1;   // a sore tummy: she eats little
+        const can = BOWL.eat * (te - from) / MIN, room = Math.max(0, BOWL.stop - N.food) / k;
+        const eat = Math.min(can, st.bowl.amt, room);
+        st.bowl.amt = Math.round((st.bowl.amt - eat) * 1e6) / 1e6;
+        N.food = Math.min(100, N.food + eat * k);
+        M.gain = Math.round(Math.min(100, M.gain + eat * k) * 1e6) / 1e6;
+        if (st.bowl.amt <= 0.5) st.bowl = null;
+        if (eat < can - 1e-9 || !st.bowl) endMeal(st, from + Math.round(eat / BOWL.eat * MIN), watching, ev);
+      }
+      return;
+    }
+    if (!st.drink && st.dish > 0.5 && N.water < DISH.thirsty) {
+      st.drink = { since: t, gain: 0, w0: N.water };
+      if (watching) ev.push({ type: 'drinkStart' });
+    }
+    if (st.drink) {
+      const R = st.drink, from = Math.max(t, R.since);
+      if (from >= te) return;
+      const can = DISH.rate * (te - from) / 1000, sip = Math.min(can, st.dish, DISH.sip - R.gain, 100 - N.water);
+      st.dish = Math.max(0, Math.round((st.dish - sip) * 1e6) / 1e6);
+      N.water = Math.min(100, N.water + sip);
+      R.gain = Math.round(Math.min(DISH.sip, R.gain + sip) * 1e6) / 1e6;
+      if (sip < can - 1e-9) endDrink(st, from + Math.round(sip / DISH.rate * 1000), watching, ev);
+    }
+  }
+  // the pour (act 'feed'): does she hear it? At home (not out, not in the garden): awake and not full (her favourite:
+  // always), or asleep and hungry (the rustle wakes her with BOWL.wakeP). Then she comes and eats after a short walk.
+  function pour(st, kind, t, ev) {
+    const N = st.needs, fav = kind === st.traits.favFood;
+    if (st.meal) endMeal(st, t, true, ev);   // a refill while she was finishing the last bits
+    st.bowl = { kind, amt: FOODS[kind].gain, at: t, wait: 0 };
+    // the routine: one logged pour per meal (a second bowl within 45 min is the same meal)
+    const hk = hourKey(hourOf(t)), dk = dkey(t), last = st.mealLog[st.mealLog.length - 1];
+    const since = last ? (keyNo(dk) - keyNo(last[1])) * 24 + hk - last[0] : Infinity;
+    if (!(since >= 0 && since < BOWL.gap)) st.mealLog.push([hk, dk]);
+    if (st.mealLog.length > BOWL.log) st.mealLog.splice(0, st.mealLog.length - BOWL.log);
+    let comes = null, woke = false;
+    if (!st.out && !st.yard && !(st.scared > t)) {
+      if (st.asleep) {
+        if (N.food < BOWL.hearSleep && rnd(st) < BOWL.wakeP) {
+          rouse(st, t); woke = true;
+          ev.push({ type: 'wake', early: false });
+        }
+      }
+      if (!st.asleep && (N.food < BOWL.hear || fav)) comes = N.food < BOWL.run || fav ? 'run' : 'trot';
+    }
+    if (comes) {
+      st.held = false;
+      if (st.drink) endDrink(st, t, true, ev);
+      st.meal = { since: t + BOWL.walk[comes], kind, gain: 0, f0: N.food };
+    }
+    ev.push({ type: 'poured', food: kind, comes, woke });
+  }
+  function getIll(st, kind, t, ev, watching) {
     if (st.ill) return;
     st.ill = { kind, since: t };
     st.acc = { fleas: 0, tummy: 0, cold: 0 };
-    if (st.out && kind === 'cold') comeBack(st, t, ev);
+    if (st.out && kind === 'cold') comeBack(st, t, ev, false, watching);
     if (st.yard && kind === 'cold' && !st.yard.tree) leaveYard(st, ev, 'house');
     ev.push({ type: 'ill', kind });
   }
@@ -734,10 +1028,15 @@ function KockaEngine() {
     if (kind === 'fleas') st.needs.coat = Math.max(st.needs.coat, 60);   // the flea comb: no flea loop
     ev.push(Object.assign({ type: 'cured', kind, by }, extra || {}));
   }
-  function comeBack(st, t, ev) {
+  // she comes home (letIn or by herself); rain: from the garden, because it began to rain. After a walk she always acts
+  // starving (begs: true, user's wish 2026-11-17: she had snacks at the neighbours', but "dělá, že celé dny nejedla"),
+  // but only when the player sees her come (watching): back during a long absence she begged to nobody
+  function comeBack(st, t, ev, rain, watching) {
     const d = t - st.out.since, walk = st.out.walk, flap = walk && !st.out.byPlayer;   // a walk she began by herself: through the cat flap
     st.out = null; st.acc.cold = 0;
-    const e = { type: 'back', minutes: Math.round(d / MIN), walk, flap, postcard: null, present: null };
+    rouse(st, t);   // out, her sleep plan did not run and her old nap moment passed: the next nap is planned from now
+    const e = { type: 'back', minutes: Math.round(d / MIN), walk, flap, postcard: null, present: null, begs: walk && !!watching };
+    if (rain) e.rain = true;
     if (walk) {
       // a walk (toulka): a postcard 60 %, a dárek 20 %, nothing 20 %
       if (d > st.walkMax) st.walkMax = d;
@@ -805,7 +1104,10 @@ function KockaEngine() {
     const feeder = st.furniture.birdFeeder ? 1.5 : 1;   // birds at the feeder: more feathers, more fun
     if (feeder > 1) N.fun = Math.min(100, N.fun + 2 * h);
     if (rnd(st) < 1 - Math.exp(-GARDEN.present * feeder * h)) ev.push({ type: 'present', item: givePresent(st) });
-    else if (N.energy > 30 && w !== 'snow' && !st.held && rnd(st) < 1 - Math.exp(-GARDEN.tree * h)) { Y.tree = { since: t, calls: 0 }; ev.push({ type: 'climbStuck' }); }
+    else if (N.energy > 30 && w !== 'snow' && !st.held && rnd(st) < 1 - Math.exp(-GARDEN.tree * h)) {
+      Y.tree = { since: t, calls: 0 }; ev.push({ type: 'climbStuck' });
+      if (st.visit && st.visit.act && st.visit.act.with) apart(st, t, true, ev);   // up the tree: the visitor goes on alone
+    }
   }
 
   /* --- time --- */
@@ -850,35 +1152,146 @@ function KockaEngine() {
     if (m === 11 && d === 31) { const at = new Date(y, 11, 31, 23, 50).getTime(); if (at >= t && at < t + dt) return 'fireworks'; }
     return null;
   }
+  /* --- a cat's sleep (user's wish 2026-11-17; SLEEP) --- */
+  // inverse sampling of a hazard that changes with the hour: the first moment after `from` when `need` (an exponential
+  // draw) is used up; rate(x, hour) is constant within 5-minute pieces; null when nothing comes before `max`
+  function hazardAt(from, max, need, rate) {
+    for (let x = from; x < max;) {
+      const d = new Date(x), next = new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours() + 1).getTime();
+      const seg = Math.max(1, Math.min(5 * MIN, next - x, max - x)), r = rate(x, d.getHours());
+      if (r > 0 && need <= r * seg / HOUR) return x + Math.round(need / r * HOUR);
+      need -= r * seg / HOUR; x += seg;
+    }
+    return null;
+  }
+  const expDraw = (st, t, salt) => -Math.log(1 - rndSeed(st.seed, Math.floor(t / 1000), salt));
+  const sleepRate = (h, e) => {
+    if (nightHour(h)) return SLEEP.rate[h];
+    let k = e > SLEEP.rested[0] ? SLEEP.rested[1] : 1;
+    for (const [lo, f] of SLEEP.tired) if (e < lo) { k = f; break; }
+    return SLEEP.rate[h] * k;
+  };
+  // when she dozes off next, planned when she wakes at t: at least 45 min later (a new cat 2 h after adoption), then by the
+  // hourly rate and her energy as it will fall meanwhile
+  function napPlan(st, t) {
+    const from = Math.max(t + SLEEP.gap * MIN, st.born + SLEEP.born * MIN), e0 = st.needs.energy;
+    const at = hazardAt(from, from + 30 * HOUR, expDraw(st, t, 61), (x, h) => sleepRate(h, e0 - RATE.energy[0] * (x - t) / HOUR));
+    return at === null ? from + 30 * HOUR : at;
+  }
+  // the end of a night's sleep that began at s: the morning wake (6:00 + 0–40 min; her wakesEarly quirk 5:00 + 0–20 min,
+  // unless `late`), or before it a night stroll (rare: 0.07 an hour from 23 to 4, twice that when hungry or thirsty)
+  function nightWake(st, s, late) {
+    const d = new Date(s), early = !late && st.traits.quirk === 'wakesEarly', W = early ? SLEEP.early : SLEEP.morning;
+    const w = new Date(d.getFullYear(), d.getMonth(), d.getDate() + (d.getHours() < 12 ? 0 : 1), W[0]).getTime() +
+      Math.floor(rndSeed(st.seed, Math.floor(s / 1000), late ? 66 : 62) * W[1]) * MIN;
+    if (late) return Math.max(w, s + MIN);
+    const k = st.needs.food < 40 || st.needs.water < 40 ? SLEEP.strollHungry : 1;
+    const walk = hazardAt(s + SLEEP.strollAfter * MIN, w, expDraw(st, s, 63), (x, h) => (h >= SLEEP.strollFrom || h < SLEEP.strollTo ? SLEEP.stroll * k : 0));
+    return walk === null ? Math.max(w, s + MIN) : walk;
+  }
+  // the end of a sleep that begins at t: the night (until the morning or a stroll) or a nap of 30–90 min (+30 when tired;
+  // very tired until her energy is about 75)
+  function sleepEnd(st, t) {
+    if (nightHour(new Date(t).getHours())) return nightWake(st, t, false);
+    const e = st.needs.energy, u = rndSeed(st.seed, Math.floor(t / 1000), 64);
+    let len = SLEEP.nap[0] + u * (SLEEP.nap[1] - SLEEP.nap[0]) + (e < 40 ? SLEEP.napTired : 0);
+    if (e < 25) len = Math.max(len, (SLEEP.napUp - e) / RATE.energy[1] * 60);
+    return t + Math.round(len) * MIN;
+  }
+  // a daytime nap (not a night's sleep): she fell asleep outside the night hours
+  const napping = st => st.asleep && !nightHour(new Date(st.sleepAt).getHours());
+  // she wakes up at t (any reason); strollUntil: a night stroll, after which she goes back to sleep
+  function rouse(st, t, strollUntil) {
+    st.asleep = false; st.wokeAt = t; st.wakeAt = 0;
+    st.stroll = strollUntil || 0;
+    st.napAt = strollUntil || napPlan(st, t);
+  }
+  function fallAsleep(st, t) {
+    st.asleep = true; st.sleepAt = t; st.napAt = 0; st.stroll = 0; st.callAt = 0;
+    st.wakeAt = sleepEnd(st, t);
+  }
+  // asleep: a wake moment after she fell asleep and nothing else; awake: a nap moment at least 45 min after she woke (or
+  // the end of her night stroll). A plan that does not fit (states made by hand, older saves) is made again from st.t
+  function ensurePlan(st) {
+    if (st.asleep) {
+      st.napAt = 0; st.stroll = 0; st.callAt = 0;
+      if (!(st.wakeAt > st.sleepAt)) st.wakeAt = sleepEnd(st, st.t);
+    } else {
+      st.wakeAt = 0;
+      if (!st.napAt || (st.stroll ? st.napAt !== st.stroll : st.napAt < st.wokeAt + SLEEP.gap * MIN)) { st.stroll = 0; st.napAt = napPlan(st, st.t); }
+    }
+  }
+  // the next planned moment after t (advance() ends a step there; also the end of a doze on the lap)
+  function nextMoment(st, t) {
+    let m = Infinity;
+    const doze = st.lap && st.lap.doze ? st.lap.dozeAt + dozeLen(st, st.lap) : 0;   // the end of a doze on the lap
+    for (const x of [st.asleep ? st.wakeAt : st.napAt, st.callAt, doze]) if (x > t && x < m) m = x;
+    return m;
+  }
+  // the sleep part of a step at t (not out, not on the lap)
+  function sleepStep(st, t, watching, ev) {
+    const N = st.needs, hr = new Date(t).getHours();
+    ensurePlan(st);
+    if (st.asleep) {
+      if (t >= st.wakeAt) {
+        const nap = napping(st);
+        if (nap && nightHour(hr)) { st.sleepAt = t; st.wakeAt = nightWake(st, t, false); return; }   // a nap ran into the night
+        if (!nap && nightHour(hr)) {   // a night stroll: awake 20–40 min, then back to sleep
+          const len = SLEEP.strollLen[0] + Math.floor(rndSeed(st.seed, Math.floor(t / 1000), 65) * (SLEEP.strollLen[1] - SLEEP.strollLen[0] + 1));
+          rouse(st, t, t + len * MIN);
+          if (watching) ev.push({ type: 'wake', early: false, stroll: true });
+          return;
+        }
+        const early = !nap && hr === 5 && st.traits.quirk === 'wakesEarly';
+        if (early && N.energy < 60) { st.wakeAt = nightWake(st, t, true); return; }   // too tired to wake the house: the usual morning
+        rouse(st, t);
+        if (early) st.day.early = t;           // "she woke you this morning" counts only after a real early wake
+        if (watching) ev.push({ type: 'wake', early });
+      } else if (!nightHour(hr) && N.energy >= 40 && (N.food < 15 || N.water < 15)) {   // hungry or thirsty: up
+        rouse(st, t);
+        if (watching) ev.push({ type: 'wake', early: false });
+      }
+      return;
+    }
+    if (st.held || st.scared > t || st.meal || st.drink) return;
+    if (!(N.energy < 25 || t >= st.napAt)) return;
+    if (mealDue(st, t)) return;   // hungry at a filled bowl: she eats first (bowlStep starts it), then the nap
+    // played with just now and she wants fun or love: she stays up a little longer (by day)
+    if (N.energy >= 25 && !nightHour(hr) && st.playAt && t - st.playAt < SLEEP.play * MIN && (N.fun < SLEEP.wantLow || N.love < SLEEP.wantLow)) {
+      const P = SLEEP.postpone;
+      st.napAt = t + (P[0] + Math.floor(rndSeed(st.seed, Math.floor(t / 1000), 67) * (P[1] - P[0] + 1))) * MIN;
+      return;
+    }
+    fallAsleep(st, t);
+    // where: her box (only when it stands in a room of the house: always with the box quirk, else for a nap), the sill
+    // cushion for a nap, the sun patch for a nap on a clear morning or day, else her bed
+    const ph = dayPhase(t), nap = napping(st);
+    const sunny = (ph === 'morning' || ph === 'day') && weather(t, st) === 'clear';
+    const place = boxHome(st) && (st.traits.quirk === 'box' || nap) ? 'box' : nap && st.owned.sillCushion ? 'sill' : sunny && nap ? 'sun' : 'bed';
+    st.sleepPlace = place;
+    if (watching) {
+      ev.push({ type: 'sleep', place, nap });
+      if (place === 'box') seenQuirk(st, 'box', t, ev);
+    }
+  }
   function step(st, t, dt, helped, watching, ev) {
     st.t = t;
     if (dkey(t) !== st.day.key) newDay(st, t, ev);
-    const ph = dayPhase(t), hr = new Date(t).getHours(), night = ph === 'night', N = st.needs, h = dt / HOUR;
+    const ph = dayPhase(t), night = ph === 'night', N = st.needs, h = dt / HOUR;
     // sleeping and waking (on the lap: dozing, see lapStep)
-    if (!st.out && !st.lap) {
-      if (st.asleep) {
-        let wake = false, early = false;
-        if (night) { if (st.traits.quirk === 'wakesEarly' && hr === 5 && N.energy >= 60) wake = early = true; }
-        else if (N.energy >= 95 || (N.energy >= 60 && (ph === 'morning' || t - st.sleepAt >= 2 * HOUR)) || (N.energy >= 40 && (N.food < 15 || N.water < 15))) wake = true;
-        if (wake) { st.asleep = false; st.wokeAt = t; if (watching) ev.push({ type: 'wake', early }); }
-      } else if (!st.held && st.scared <= t) {
-        // an afternoon nap, but not within 2 h after waking up or after adoption (a new player meets her awake)
-        const nap = ph === 'day' && hr >= 13 && N.energy < 75 && t - st.wokeAt >= 2 * HOUR;
-        if (N.energy < 25 || nap || (night && t - st.wokeAt >= HOUR)) {
-          st.asleep = true; st.sleepAt = t;
-          if (watching) {
-            const place = st.traits.quirk === 'box' || (nap && st.owned.box) ? 'box' : nap ? (st.owned.sillCushion ? 'sill' : 'sun') : 'bed';
-            ev.push({ type: 'sleep', place });
-            seenQuirk(st, 'box', t, ev);
-          }
-        }
-      }
-    }
+    if (!st.out && !st.lap) sleepStep(st, t, watching, ev);
     if (st.held && t - st.heldAt >= 5 * MIN) st.held = false;
+    bowlStep(st, t, dt, watching, ev);
+    // a call she follows later (callSlow): she comes at st.callAt, after her meal; asleep, out, on the lap, held, up the
+    // tree or hiding it is forgotten
+    if (st.callAt) {
+      if (st.asleep || st.out || st.lap || st.held || (st.yard && st.yard.tree) || st.scared > t) st.callAt = 0;
+      else if (!st.meal && t + dt >= st.callAt) { st.callAt = 0; if (watching) ev.push({ type: 'come', late: true }); }
+    }
     // needs (ill: everything falls 1.5× faster)
     const dozing = !!(st.lap && st.lap.doze), k = st.ill ? 1.5 : 1, rest = night || st.asleep || dozing;
     const fall = (n, r) => { N[n] = clamp(N[n] - r * h * k, 0, 100); };
-    fall('food', RATE.food[night ? 1 : 0]);
+    fall('food', RATE.food[night ? 1 : 0] * (st.out && st.out.walk ? 0.5 : 1));   // on a walk she snacks at the neighbours'
     fall('water', RATE.water[night ? 1 : 0] * (st.out ? 0.5 : 1));
     N.energy = clamp(N.energy + (st.asleep || dozing ? RATE.energy[1] * (st.owned.bedDeluxe ? 1.15 : 1) * h : -RATE.energy[0] * h), 0, 100);
     if (st.out) N.fun = clamp(N.fun + 6 * h, 0, 100);
@@ -890,10 +1303,15 @@ function KockaEngine() {
     if (!st.out && !st.ill && N.coat <= groom) N.coat = Math.min(groom, N.coat + h);
     else fall('coat', st.yard ? GARDEN.coat : RATE.coat * (st.out ? 2 : 1));
     if (helped) { N.food = Math.max(N.food, HELP_MIN); N.water = Math.max(N.water, HELP_MIN); N.litter = Math.max(N.litter, HELP_MIN); }
-    // the litter box, about every 8 hours
+    // the litter box, about every 8 hours: only awake and free at home; asleep, on the lap, held or busy at the bowl she
+    // goes 15–30 min later; in the garden she digs by a bed instead (the box stays clean); out on a walk: outside
     if (t + dt > st.litterAt) {
-      if (!st.out) { N.litter = Math.max(0, N.litter - 30); if (watching) ev.push({ type: 'litter' }); }
-      st.litterAt = Math.max(st.litterAt, t) + 7 * HOUR + Math.floor(rnd(st) * 2 * HOUR);
+      if (!st.out && (st.asleep || st.lap || st.held || st.meal || st.drink || (st.yard && st.yard.tree))) st.litterAt = t + dt + (15 + Math.floor(rnd(st) * 16)) * MIN;
+      else {
+        if (st.yard) { if (watching) ev.push({ type: 'litter', garden: true }); }
+        else if (!st.out) { N.litter = Math.max(0, N.litter - 30); if (watching) ev.push({ type: 'litter' }); }
+        st.litterAt = Math.max(st.litterAt, t) + 7 * HOUR + Math.floor(rnd(st) * 2 * HOUR);
+      }
     }
     // illnesses (one at a time) and their end after 4 days
     if (st.ill) { if (t + dt - st.ill.since >= 4 * DAY) cure(st, 'time', ev); }
@@ -904,7 +1322,7 @@ function KockaEngine() {
       if ((st.out || st.yard) && night && season(t) === 'winter') A.cold += dt;
       if (A.fleas >= 24 * HOUR) getIll(st, 'fleas', t + dt, ev);
       else if (A.tummy >= 12 * HOUR) getIll(st, 'tummy', t + dt, ev);
-      else if (A.cold >= 30 * MIN) getIll(st, 'cold', t + dt, ev);
+      else if (A.cold >= 30 * MIN) getIll(st, 'cold', t + dt, ev, watching);
     }
     if (st.lap) lapStep(st, t, dt, night, ev);
     if (st.guest) guestStep(st, t, dt, ev);
@@ -927,7 +1345,8 @@ function KockaEngine() {
     // storms and fireworks; coming home by herself
     const s = scareAt(st, t, dt);
     if (s && !st.out) { meet(st, s, t, ev); if (st.yard && s === 'storm' && !st.yard.tree) leaveYard(st, ev, 'house'); }
-    if (st.out && (t + dt >= st.out.until || N.energy < 25 || (!st.out.byPlayer && night && season(t) === 'winter'))) comeBack(st, t + dt, ev);
+    if (st.out && (t + dt >= st.out.until || N.energy < 25 || (!st.out.byPlayer && night && season(t) === 'winter'))) comeBack(st, t + dt, ev, false, watching);
+    else if (st.out && !st.out.walk && weather(t, st) === 'rain') comeBack(st, t, ev, true, watching);   // alone in the garden: never in the rain
     teaseStep(st, t + dt, watching, ev);
     if (st.off && t >= st.off.until) st.off = null;
     // the day's averages (weight, bond)
@@ -958,6 +1377,10 @@ function KockaEngine() {
     st.t = now;
     st.sleepAt = mv(st.sleepAt); st.wokeAt = mv(st.wokeAt); st.heldAt = mv(st.heldAt); st.pickAt = mv(st.pickAt);
     st.scared = mv(st.scared); st.litterAt = mv(st.litterAt);
+    st.napAt = mv(st.napAt); st.wakeAt = mv(st.wakeAt); st.stroll = mv(st.stroll); st.callAt = mv(st.callAt); st.playAt = mv(st.playAt);
+    if (st.bowl) st.bowl = { kind: st.bowl.kind, amt: st.bowl.amt, at: st.bowl.at + d, wait: mv(st.bowl.wait) };
+    if (st.meal) st.meal = { since: st.meal.since + d, kind: st.meal.kind, gain: st.meal.gain, f0: st.meal.f0 };
+    if (st.drink) st.drink = { since: st.drink.since + d, gain: st.drink.gain, w0: st.drink.w0 };
     if (st.out) st.out = { since: st.out.since + d, until: st.out.until + d, walk: st.out.walk, byPlayer: st.out.byPlayer };
     if (st.yard) st.yard = { since: st.yard.since + d, snow: st.yard.snow, tree: st.yard.tree ? { since: st.yard.tree.since + d, calls: st.yard.tree.calls } : null };
     st.wet = mv(st.wet);
@@ -977,7 +1400,9 @@ function KockaEngine() {
     for (const k of Object.keys(st.diary)) st.diary[k] = Math.min(st.diary[k], now);
     st.born = Math.min(st.born, now);
     if (st.day.key > dkey(now)) st.day = freshDay(now);
-    else if (st.day.ms > 0) {   // the replayed time must not count twice in the day's averages
+    else if (st.day.early && (st.day.early + d > now || dkey(st.day.early + d) !== st.day.key)) st.day.early = 0;
+    else if (st.day.early) st.day.early += d;
+    if (st.day.ms > 0 && st.day.key <= dkey(now)) {   // the replayed time must not count twice in the day's averages
       const D = st.day, k = Math.max(0, D.ms + d) / D.ms;
       D.ms *= k; D.food *= k; D.mood *= k;
     }
@@ -993,24 +1418,28 @@ function KockaEngine() {
   function advance(st, now) {
     const ev = [];
     if (typeof now !== 'number' || !Number.isFinite(now) || now < T_MIN || now > T_MAX) return { st, events: ev };   // a broken clock
-    if (now <= st.t) { shiftTimes(st, now); return { st, events: ev }; }   // the clock moved back: nothing happens
+    if (now <= st.t) { shiftTimes(st, now); ensurePlan(st); return { st, events: ev }; }   // the clock moved back: nothing happens
     const start = st.t, gap = now - start, watching = gap <= HOUR;
     if (st.lap && gap > LAP.away * MIN) leaveLap(st, start, 'away', ev);   // nobody sat in the chair that long
-    if (st.yard && gap > LAP.away * MIN && season(start) === 'winter' && dayPhase(start) !== 'day' && dayPhase(start) !== 'morning') {
-      // a winter evening or night: she comes in with the player
+    if (st.yard && gap > LAP.away * MIN && ((season(start) === 'winter' && dayPhase(start) !== 'day' && dayPhase(start) !== 'morning') || weather(start, st) === 'rain')) {
+      // a winter evening or night, or rain: she comes in with the player
       if (st.yard.tree) ev.push({ type: 'climbDown', by: 'self' });
       leaveYard(st, ev, 'house');
     }
-    if (st.yard && gap > LAP.away * MIN) {   // the player went away: she stays in the garden alone, like letOut
+    if (st.yard && gap > LAP.away * MIN) {   // the player went away: she stays in the garden alone (health().gardenAlone)
       if (st.yard.tree) ev.push({ type: 'climbDown', by: 'self' });
       leaveYard(st, ev, null);
-      st.asleep = false;
+      if (st.asleep) rouse(st, start);
       st.out = { since: start, until: start + (GARDEN.alone[0] + Math.floor(rnd(st) * (GARDEN.alone[1] - GARDEN.alone[0]))) * MIN, walk: false, byPlayer: false };
-      ev.push({ type: 'out', until: st.out.until, walk: false });
+      ev.push({ type: 'out', until: st.out.until, walk: false, garden: true });
     }
     const end = gap > AWAY ? start + AWAY : now;
+    // steps of 10 minutes on a grid from start (so one long advance and many short ones step alike), also ended at her
+    // next planned moment (falling asleep, waking, a late come), so the step length never moves those
     for (let t = start; t < end;) {
-      const dt = Math.min(STEP, end - t);
+      let dt = Math.min(start + (Math.floor((t - start) / STEP) + 1) * STEP, end) - t;
+      const nx = nextMoment(st, t);
+      if (nx < t + dt) dt = nx - t;
       step(st, t, dt, t - start >= HELP, watching, ev);
       t += dt;
     }
@@ -1027,7 +1456,7 @@ function KockaEngine() {
       st.t = now; st.day = freshDay(now);
       st.needs.food = 40; st.needs.water = 40;
       st.weight = r2(clamp(st.weight - Math.min(0.4, 0.1 * Math.max(0, Math.floor(days) - 3)), 3.0, 5.6));
-      st.asleep = false; st.held = false; st.wokeAt = now; st.scared = 0;
+      st.held = false; st.scared = 0; rouse(st, now); st.callAt = 0;
       st.litterAt = now + 4 * HOUR;
       if (st.ill && now - st.ill.since >= 4 * DAY) cure(st, 'time', ev);
       st.off = { until: now + DAY, turned: false };
@@ -1038,9 +1467,9 @@ function KockaEngine() {
       if (st.bday < y && birthdayAge(st.born, now)) { st.bday = y; addBond(st, 10, ev); ev.push({ type: 'birthday', age: birthdayAge(st.born, now) }); }
     }
     teaseTidy(st);
-    const w = wants(st);
-    if (w && w !== st.want && watching) ev.push({ type: 'meow', want: w });
-    st.want = w;
+    ensurePlan(st);
+    const prev = st.want, w = syncWant(st);
+    if (w && w !== prev && watching) ev.push({ type: 'meow', want: w });
     return { st, events: ev };
   }
 
@@ -1050,12 +1479,12 @@ function KockaEngine() {
     const t = st.t, N = st.needs, name = st.name, nm = moodName(moodValue(st));
     const no = reason => { ev.push({ type: 'refused', reason }); return { st, events: ev }; };
     if (typeof action !== 'string' || !ACTIONS.includes(action)) return no('Tohle teď nejde.');
-    const before = wants(st), a = arg && typeof arg === 'object' ? arg : {};
+    const before = wants(st), beforeV = before ? needs(st)[before] : 100, a = arg && typeof arg === 'object' ? arg : {};
     if (action === 'nameKitten') {   // anywhere, whatever Koxa does (she stays on the lap or up the tree)
       const why = nameKitten(st, a, ev);
       return why ? no(why) : { st, events: ev };
     }
-    const home = ['cleanLitter', 'letIn', 'call', 'vacuum', 'sow', 'waterBeds', 'harvest', 'feedVisitor', 'strokeVisitor', 'deletePhoto', 'buy', 'sell', 'place',
+    const home = ['feed', 'water', 'cleanLitter', 'letIn', 'call', 'vacuum', 'sow', 'waterBeds', 'harvest', 'feedVisitor', 'strokeVisitor', 'deletePhoto', 'buy', 'sell', 'place',
       'treatVisitor', 'playVisitor', 'invite', 'photo'];   // invite and photo say themselves why not (Koxa out)
     // up the tree: only calling her, fetching her down, the garden, the shop and the camera
     const TREE_OK = ['call', 'fetchDown', 'vetCure', 'goHouse', 'sow', 'waterBeds', 'harvest', 'buy', 'sell', 'place', 'photo', 'feedVisitor', 'strokeVisitor', 'deletePhoto',
@@ -1064,17 +1493,18 @@ function KockaEngine() {
     // on the lap: stroking, scratching, a treat from the hand, calling, a photo, patting and a nose tap keep her there;
     // anything else = standing up
     if (st.lap && !['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff', 'photo', 'pat', 'boop'].includes(action)) {
-      ev.push({ type: 'lapOff', dozing: st.lap.doze }); st.lap = null;
+      ev.push({ type: 'lapOff', dozing: st.lap.doze }); lapNapDone(st, t); st.lap = null;
     }
     const onLap = !!st.lap, lapK = onLap ? 1.5 : 1;
     // stroking a dozing cat on the lap wakes her (she stays)
-    const lapWake = () => { if (onLap && st.lap.doze) { st.lap.doze = false; ev.push({ type: 'wake', early: false, lap: true }); } };
+    const lapWake = () => { if (onLap && st.lap.doze) { lapNapDone(st, t); ev.push({ type: 'wake', early: false, lap: true }); } };
     const annoy = d => { if (st.lap) st.lap.annoy = Math.min(10, st.lap.annoy + d); };
     // jealous: stroking or scratching her within 2 min makes it all right again
     const soothe = () => { if (!st.jealous) return; N.love = Math.min(100, N.love + JEALOUS.love); ev.push({ type: 'jealousOk', id: st.jealous.id }); st.jealous = null; };
-    if (st.out && !home.includes(action)) return no(`${name} je venku.`);
-    const wakeUp = () => { if (st.asleep) { st.asleep = false; st.wokeAt = t; ev.push({ type: 'wake', early: false }); } };
-    const sleeping = () => { if (st.asleep) { seenQuirk(st, 'box', t, ev); no(`${name} spí, nebuď ji.`); return true; } return false; };
+    // alone in the garden she is not away: the player can go out to her (goGarden), or let her in (letIn)
+    if (st.out && !home.includes(action) && !(action === 'goGarden' && gardenAlone(st))) return no(gardenAlone(st) ? `${name} je na zahradě.` : `${name} je venku.`);
+    const wakeUp = () => { if (st.asleep) { rouse(st, t); ev.push({ type: 'wake', early: false }); } };
+    const sleeping = () => { if (st.asleep) { boxSeen(st, t, ev); no(`${name} spí, nebuď ji.`); return true; } return false; };
     // teasing (SPEC §13.3): while she is cross a touch gets a swat (no claws); a sulk is made up by a stroke along the fur,
     // a scratch or a treat while she is awake
     const cross = () => teaseKind(st, t) === 'cross';
@@ -1091,9 +1521,12 @@ function KockaEngine() {
       find(st, 'reconcile', t, ev);
     };
     const hr = new Date(t).getHours();
-    if (hr >= 5 && hr < 10 && !st.day.acted && !st.out && !st.asleep) {   // the first thing in the morning: she woke them
+    // the player's first thing of the day: "she woke you this morning" only when she really woke early today (her
+    // wakesEarly quirk) and this comes within 2 h of that wake
+    if (!st.day.acted && !st.out && !st.asleep) {
       st.day.acted = true;
-      seenQuirk(st, 'wakesEarly', t, ev);
+      const E0 = st.day.early;
+      if (E0 && t >= E0 && t - E0 <= 2 * HOUR) seenQuirk(st, 'wakesEarly', t, ev);
     }
     const sad = nm === 'sad';
     const useStock = k => { if (--st.stock[k] <= 0) delete st.stock[k]; };
@@ -1117,29 +1550,27 @@ function KockaEngine() {
       } else { N.love = Math.max(0, N.love - 1); ev.push({ type: 'bite' }); annoy(2); }
     };
     switch (action) {
-      case 'feed': {
+      case 'feed': {   // fills the bowl; she eats it over time (bowlStep), the need rises only as she eats
         const kind = typeof arg === 'string' && Object.prototype.hasOwnProperty.call(FOODS, arg) ? arg : 'kibble';
-        if (N.food > 90) return no(`${name} je sytá.`);
+        if (st.bowl && st.bowl.amt > BOWL.full) return no('V misce ještě je jídlo.');
         const price = CHARGE_FOOD ? FOODS[kind].price : 0;
         if (price && !(st.stock[kind] > 0) && st.pamlsky < price) return no(`Na ${FOODS[kind].acc} nemáš dost pamlsků (${price}).`);
         if (price && st.stock[kind] > 0) useStock(kind); else st.pamlsky -= price;
-        wakeUp();
-        const tummy = st.ill && st.ill.kind === 'tummy', amt = FOODS[kind].gain * (tummy ? 0.5 : 1);
-        const gain = Math.min(amt, 100 - N.food), fav = kind === st.traits.favFood;
-        N.food += gain; N.love = Math.min(100, N.love + (fav ? 7 : 2));
-        ev.push({ type: 'ate', food: kind, gain: Math.round(gain), left: amt - gain > 10, fav });
-        if (fav) {
-          addBond(st, 1, ev); ev.push({ type: 'purr' });
-          if (!tummy && inc(st, 'favFood') >= 3) find(st, 'favFood', t, ev);
-        }
+        pour(st, kind, t, ev);
         break;
       }
-      case 'water': {
-        if (N.water >= 95) return no('Miska s vodou je plná.');
-        N.water = 100;                           // the jug fills the bowl to the top
-        const tap = st.traits.quirk === 'tap' && rnd(st) < 0.5;
-        ev.push({ type: 'drank', tap });
-        if (tap) seenQuirk(st, 'tap', t, ev);
+      case 'water': {   // fills the dish; she drinks by herself in short sessions (bowlStep)
+        if (st.dish >= DISH.full) return no('Miska s vodou je plná.');
+        st.dish = 100;
+        // her tap quirk: she jumps up and drinks from the running tap instead (at home, awake, free)
+        const tap = st.traits.quirk === 'tap' && free(st, t) && rnd(st) < 0.5;
+        ev.push({ type: 'dishFilled', tap });
+        if (tap) {
+          if (st.drink) endDrink(st, t, true, ev);
+          N.water = Math.min(100, N.water + DISH.tap);
+          ev.push({ type: 'drank', tap: true });
+          seenQuirk(st, 'tap', t, ev);
+        }
         break;
       }
       case 'stroke': {
@@ -1150,7 +1581,7 @@ function KockaEngine() {
         if (!st.asleep && cross()) { swat('stroke'); break; }
         const half = sad ? 0.5 : 1;
         if (region === 'belly') { belly(); break; }
-        if (st.asleep) { N.love = Math.min(100, N.love + 1); ev.push({ type: 'purr', region, sleeping: true }); seenQuirk(st, 'box', t, ev); break; }
+        if (st.asleep) { N.love = Math.min(100, N.love + 1); ev.push({ type: 'purr', region, sleeping: true }); boxSeen(st, t, ev); break; }
         lapWake();
         if (sp === 'fast' || dir === 'against') { N.love = Math.max(0, N.love - 1); ev.push({ type: 'earsBack', rough: sp === 'fast' }); annoy(1); break; }
         soothe();
@@ -1175,7 +1606,7 @@ function KockaEngine() {
         lapWake(); if (onLap) st.lap.pet = t;
         N.love = Math.min(100, N.love + per * sec * half * lapK);
         ev.push({ type: 'purr', region, sleeping: st.asleep });
-        if (st.asleep) seenQuirk(st, 'box', t, ev);
+        if (st.asleep) boxSeen(st, t, ev);
         if (st.traits.spots.includes(region) && REGIONS[region].scratch) {
           const c = 'spot_' + region; st.cnt[c] = Math.min(CMAX, st.cnt[c] + Math.round(sec));
           if (st.cnt[c] >= 10) find(st, c, t, ev);
@@ -1242,6 +1673,12 @@ function KockaEngine() {
       }
       case 'goGarden': {
         if (st.yard) break;
+        if (gardenAlone(st)) {   // she is out there alone: the player comes to her (the time alone is over)
+          st.out = null; rouse(st, t);   // as after comeBack: her next nap is planned from now
+          st.yard = { since: t, snow: false, tree: null };
+          ev.push({ type: 'garden', weather: weather(t, st), joined: true });
+          break;
+        }
         if (st.ill && st.ill.kind === 'cold') return no(`${name} má rýmu, zůstane doma.`);
         if (sleeping()) return { st, events: ev };
         st.held = false;
@@ -1318,12 +1755,12 @@ function KockaEngine() {
       case 'lapOff': {
         if (!st.lap) return no(`${name} ti nesedí na klíně.`);
         ev.push({ type: 'lapOff', dozing: st.lap.doze });
-        st.lap = null;
+        lapNapDone(st, t); st.lap = null;
         break;
       }
       case 'letIn': {
         if (!st.out) return no(`${name} je doma.`);
-        comeBack(st, t, ev);
+        comeBack(st, t, ev, false, true);
         break;
       }
       case 'treat': {   // a pamlsek from the hand, or arg 'stick': a kočičí tyčinka from the stock (love +5)
@@ -1435,8 +1872,8 @@ function KockaEngine() {
         ev.push({ type: 'pill' });
         break;
       }
-      case 'call': {
-        if (st.out) { ev.push({ type: 'ignore', reason: `${name} je venku.` }); break; }
+      case 'call': {   // user's wish 2026-11-17: whether she comes depends on her mood and the bond (CALL)
+        if (st.out) { ev.push({ type: 'ignore', reason: gardenAlone(st) ? `${name} je na zahradě.` : `${name} je venku.` }); break; }
         if (st.asleep) { ev.push({ type: 'ignore', reason: `${name} spí.` }); break; }
         if (st.yard && st.yard.tree) {
           const T = st.yard.tree;
@@ -1446,11 +1883,29 @@ function KockaEngine() {
         }
         if (cross()) { ev.push({ type: 'ignore', reason: `${name} tě teď schválně neposlouchá.` }); break; }
         if (st.off && t < st.off.until && !st.off.turned) { st.off.turned = true; ev.push({ type: 'turnBack' }); break; }
-        ev.push({ type: 'come' });
+        if (st.lap || st.held) { ev.push({ type: 'come' }); break; }   // she is with you already
+        if (st.meal) {   // eating (or on her way to the bowl): she finishes first, then comes
+          const M = st.meal, k = st.ill && st.ill.kind === 'tummy' ? 0.5 : 1;
+          const left = Math.min(st.bowl ? st.bowl.amt : 0, Math.max(0, BOWL.stop - N.food) / k);
+          st.callAt = Math.round(Math.max(t, M.since) + left / BOWL.eat * MIN) + CALL.after;
+          ev.push({ type: 'callSlow', at: st.callAt, meal: true });
+          break;
+        }
+        const lvl = st.lvl, p = nm === 'happy' && lvl >= CALL.lvl ? CALL.happy : Math.min(CALL.max, CALL.base + CALL.perLvl * lvl + (CALL.mood[nm] || 0));
+        if (rnd(st) < p) { st.callAt = 0; ev.push({ type: 'come' }); break; }
+        if ((nm === 'grumpy' || sad) && rnd(st) < CALL.ignore) {
+          st.callAt = 0;
+          ev.push({ type: 'ignore', reason: sad ? `${name} na tebe jen smutně koukne a zůstane, kde je.` : `${name} dělá, že neslyší.` });
+          break;
+        }
+        // she heard it (an ear, the tail) and comes on her own a little later; a second call never makes it later
+        const at = t + (CALL.slow[0] + Math.floor(rnd(st) * (CALL.slow[1] - CALL.slow[0] + 1))) * 1000;
+        st.callAt = st.callAt > t ? Math.min(st.callAt, at) : at;
+        ev.push({ type: 'callSlow', at: st.callAt, meal: false });
         break;
       }
       case 'vacuum': {
-        if (st.out) { ev.push({ type: 'curious', what: 'vacuum' }); break; }
+        if (st.out) break;                       // she is not here: nothing about her
         wakeUp();
         meet(st, 'vacuum', t, ev);
         break;
@@ -1461,9 +1916,14 @@ function KockaEngine() {
         break;
       }
     }
-    // a satisfied want: bond +1, at most once an hour for each need
-    if (before && needs(st)[before] >= 40 && !(t - (st.wantAt[before] || 0) < HOUR)) { st.wantAt[before] = t; addBond(st, 1, ev); }
-    st.want = wants(st);
+    // a satisfied want (the need was under 40, not just her meal time): bond +1, at most once an hour for each need
+    if (before && beforeV < 40 && needs(st)[before] >= 40 && !(t - (st.wantAt[before] || 0) < HOUR)) { st.wantAt[before] = t; addBond(st, 1, ev); }
+    bowlCheck(st, t, true, ev);                  // picked up, on the lap, out…: she leaves the bowl
+    // the player plays with her or cuddles her (an awake cat): her next nap may wait (SLEEP.play)
+    if (awake0 && !st.asleep && ['stroke', 'scratch', 'play', 'pat', 'pickUp', 'lapOn', 'train', 'showTrick', 'catnip', 'brush', 'playVisitor'].includes(action)) st.playAt = t;
+    if (st.callAt && (st.asleep || st.out || st.lap || st.held)) st.callAt = 0;
+    ensurePlan(st);
+    syncWant(st);
     teaseTidy(st);
     return { st, events: ev };
   }
@@ -1501,7 +1961,7 @@ function KockaEngine() {
     const n = Number.isInteger(a.n) ? clamp(a.n, 1, 999) : 1;
     const ms = typeof a.ms === 'number' && Number.isFinite(a.ms) ? clamp(a.ms, 0, 5000) : 0;
     const cv = typeof a.cv === 'number' && Number.isFinite(a.cv) ? clamp(a.cv, 0, 3) : 0;
-    const eating = a.eating === true;
+    const eating = a.eating === true || !!(st.meal && st.meal.since <= t);   // the UI's flag, or a meal in progress
     const pat = (stage, x) => { ev.push(Object.assign({ type: 'pat', region, stage }, x || {}, eating ? { eating: true } : {})); };
     // asleep (or dozing on the lap): nothing changes, she never blows up (the UI only flicks an ear)
     if (st.asleep || (st.lap && st.lap.doze)) { pat('tolerate', { sleeping: true }); return null; }
@@ -1514,6 +1974,7 @@ function KockaEngine() {
     const blowUp = why => {
       const eat = why === 'eat';
       love(eat ? TEASE.love.eat : TEASE.love.blowUp); addHeat(eat ? TEASE.heat.eat : TEASE.heat.blowUp); T.warnAt = 0;
+      if (eat && st.meal) { endMeal(st, t, true, ev); if (st.bowl) st.bowl.wait = t + BOWL.wait; }   // she leaves the bowl for a while
       offence(st, t, { type: 'blowUp', why, lap }, !eat, ev);   // the meal one plans no payback
     };
     const loveBite = () => {
@@ -1631,7 +2092,9 @@ function KockaEngine() {
     if (typeof game !== 'string' || !Object.prototype.hasOwnProperty.call(GAMES, game)) return no('Takovou hru neznáme.');
     if (st.out) return no(`${st.name} je venku.`);
     if (st.yard && st.yard.tree) return no(`${st.name} je na stromě.`);
-    if (st.lap) { ev.push({ type: 'lapOff', dozing: st.lap.doze }); st.lap = null; }
+    if (st.lap) { ev.push({ type: 'lapOff', dozing: st.lap.doze }); lapNapDone(st, t); st.lap = null; }
+    if (st.meal) endMeal(st, t, true, ev);    // she leaves the bowl to play
+    if (st.drink) endDrink(st, t, true, ev);
     const sc = typeof score === 'number' && Number.isFinite(score) ? Math.floor(clamp(score, 0, 999)) : 0, G = GAMES[game];
     const today = dkey(t);
     if (st.earnDay.key < today) st.earnDay = { key: today, n: 0 };
@@ -1640,10 +2103,11 @@ function KockaEngine() {
     if (n > 0) { st.pamlsky = Math.min(99999, st.pamlsky + n); st.earnDay.n += n; ev.push({ type: 'earned', n, game }); }
     if (want > n) ev.push({ type: 'capReached' });
     const N = st.needs;
-    if (game !== 'pill') { N.fun = Math.min(100, N.fun + 30); N.energy = Math.max(0, N.energy - 10); st.asleep = false; }
+    if (game !== 'pill') { N.fun = Math.min(100, N.fun + 30); N.energy = Math.max(0, N.energy - 10); if (st.asleep) rouse(st, t); st.playAt = t; }
     const prev = st.records[game] ? st.records[game].best : 0;
     if (sc > prev) { st.records[game] = { best: sc, t }; ev.push({ type: 'record', game, best: sc, prev }); }
-    st.want = wants(st);
+    ensurePlan(st);
+    syncWant(st);
     return { st, events: ev };
   }
   // the shop for the UI: items offered at her bond level, with owned / affordable
@@ -1870,6 +2334,16 @@ function KockaEngine() {
       else {
         st.visit = fixVisit(st.visit, t, st);
         if (!st.visit) return;
+        const V = st.visit;
+        // does she know about it? In the garden at once; awake at home she hears it about 10 min after it came (drawn from
+        // its arrival); asleep or out on a walk she does not
+        if (!V.noticed) {
+          if (st.yard || gardenAlone(st)) V.noticed = t;
+          else if (!st.out && !st.asleep) {
+            const hear = V.since + Math.round(expDraw(st, V.since, 68) * NOTICE.hear * MIN);
+            if (t + dt >= hear) { V.noticed = Math.max(t, hear); if (watching) ev.push({ type: 'visitorNoticed', id: V.id }); }
+          }
+        }
         const U = st.visit.until;
         if (U > t) programme(st, t, Math.min(dt, U - t), watching, ev);   // up to the visit's end exactly, whatever the step
         if (t + dt >= U) endVisit(st, 'time', ev);
@@ -1883,11 +2357,13 @@ function KockaEngine() {
     if (!(rnd(st) < 1 - Math.exp(-rate * h))) return;
     const id = night ? 'bivoj' : pickVisitor(st, t, rnd(st));
     const stay = VISIT.stay[0] + Math.floor(rnd(st) * (VISIT.stay[1] - VISIT.stay[0]));
+    // she sees it come: always in the garden; awake at home through the window by day phase (drawn from the arrival)
+    const sees = !!st.yard || gardenAlone(st) || (!st.out && !st.asleep && rndSeed(st.seed, Math.floor(t / 1000), 69) < NOTICE[dayPhase(t)]);
     st.visit = { id, since: t, until: t + stay * MIN, gain: 0, palGain: 0, greeted: false, ready: null, act: { kind: 'arrive', since: t, with: null },
-      pet: 0, treat: false, play: 0, playGain: 0, hurt: false };
+      pet: 0, treat: false, play: 0, playGain: 0, hurt: false, noticed: sees ? t : 0 };
     const kits = smallKits(st, id, t);   // a mother brings her small kittens
     if (kits.length) st.visit.kits = kits;
-    ev.push(Object.assign({ type: 'visitor', id, reaction: st.out ? 'away' : reaction(st, id) }, kits.length ? { kits: kits.slice() } : {}));
+    ev.push(Object.assign({ type: 'visitor', id, reaction: st.out && st.out.walk ? 'away' : reaction(st, id), noticed: sees }, kits.length ? { kits: kits.slice() } : {}));
     kitsArrive(st, id, kits, t, ev);
     const R = vrec(st, id); R.visits = Math.min(CMAX, R.visits + 1);
     if (watching) ev.push({ type: 'visitAct', id, kind: 'arrive', with: null });
@@ -2049,6 +2525,7 @@ function KockaEngine() {
       // Phase B: the last stroke that counted (one a minute), the treat given, the last feather game and what it gave,
       // Rambo's swipe already cost a quarter heart this visit
       pet: when(S.pet), treat: S.treat === true, play: when(S.play), playGain: Math.round(clamp(fin(S.playGain), 0, PLAY_VISIT) * 4) / 4, hurt: S.hurt === true,
+      noticed: when(S.noticed),   // when Koxa noticed the visitor (seen or heard from the house, or in the garden); 0 = not yet
     };
     if (!kits.length) return out;
     out.kits = kits;
@@ -2366,7 +2843,7 @@ function KockaEngine() {
       const V = st.visit, A = V.act && typeof V.act === 'object' ? V.act : {}, kp = {};
       for (const k of Object.keys(V.kp || {})) { const p = V.kp[k]; kp[k] = Object.assign({}, p, { pet: p.pet ? p.pet + d : 0, play: p.play ? p.play + d : 0 }); }
       st.visit = fixVisit(Object.assign({}, V, { since: V.since + d, until: V.until + d, ready: typeof V.ready === 'number' ? V.ready + d : null,
-        act: Object.assign({}, A, { since: A.since + d }), pet: V.pet ? V.pet + d : 0, play: V.play ? V.play + d : 0, kp }), now, st);
+        act: Object.assign({}, A, { since: A.since + d }), pet: V.pet ? V.pet + d : 0, play: V.play ? V.play + d : 0, noticed: V.noticed ? V.noticed + d : 0, kp }), now, st);
     }
     if (st.guest) st.guest = { id: st.guest.id, since: st.guest.since + d, until: st.guest.until + d, slept: st.guest.slept };
     if (st.invDay > today) st.invDay = today;
@@ -2404,7 +2881,7 @@ function KockaEngine() {
   return {
     NEEDS, FOODS, TOYS, REGIONS, FEARS, QUIRKS, ILLS, LEVELS, HOLIDAYS, ACTIONS, CROPS, PRESENTS, WEATHERS, POSTCARDS, BEDS,
     SHOP, GAMES, TRICKS, ROOMS, EARN_CAP, VISITORS, VISIT_ACTS, VISITOR_LIKES, ALBUM_MAX, album, canInvite, visitorLikes,
-    KIT, KIT_NAMES, visitor, visitorIds, kitsNew, TEASE, patTempo,
+    KIT, KIT_NAMES, visitor, visitorIds, kitsNew, TEASE, patTempo, BOWL, DISH, SLEEP_PLACES, bowls, mealTime, mealTimes, SLEEP, CALL, NOTICE,
     create, valid, repair, rename, advance, act, consumeTreats, minigameResult, shop, tricks,
     mood, moodValue, wants, needs, health, bondLevel, diary,
     dayPhase, season, holiday, easter, weather, postcardAt, bedCount,

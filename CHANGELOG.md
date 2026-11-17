@@ -7,6 +7,10 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Kočka: miska je teď opravdová. Nasypané jídlo a voda v misce počkají a Koxa jí a pije sama, když dostane hlad nebo žízeň – sytost roste, až když jí. Když uslyší šustot granulí, přiběhne (sytá ani nehne brvou), pamatuje si, kdy ji obvykle krmíš, a čeká u misky. Je vidět, jak chodí na záchod, spí ve své krabici nebo na polštářku, po probuzení se protáhne a ve spánku nemňouká.
+- Kočka: Koxa spí jako kočka – přes den si několikrát zdřímne, ráno a večer je čilá a v noci se občas projde. Na zavolání nepřijde vždycky hned: podle nálady přiběhne, přijde až za chvíli, nebo dělá, že neslyší. Sousedovy kočky ji rozladí, jen když o nich ví. Když ji necháš na zahradě, najdeš ji tam. Z toulek se vrací vždycky „hladová“ a žebrá u misky.
+- Kočka: když prší, Koxa se na zahradě neprochází jako by nic. Schová se pod novou stříšku u zadních dveří nebo pod strom, přikrčí se se staženýma ušima, otřepává se a mňouká, že chce domů.
+
 ## 1.0.25 – 2026-11-14
 
 - Přistání: hra je teď hlavně o tom trefit plošinu. Stačí včas začít brzdit a pak motor držet: u země raketu zpomalí sám a posadí ji měkce, motor ji už nikdy nevyhodí nahoru a nad zemí není potřeba motor pouštět a zase mačkat.
