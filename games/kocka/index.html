@@ -122,6 +122,12 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 @media (prefers-reduced-motion:reduce){#world.slideR,#world.slideL,.fly,.ffly{animation:none}}
 #roomBox{position:absolute;left:0;top:0}
 #roomBox > svg{position:absolute;inset:0;width:100%;height:100%}
+/* dragging the room sideways: the room carries its own wall and floor, the next place comes in beside it */
+#world.pan::before{content:"";position:absolute;inset:0;background:var(--bands,#a87442);filter:var(--bandf,none);z-index:-1}
+#peek{position:absolute;inset:0;pointer-events:none}
+#peek::before{content:"";position:absolute;inset:0;background:var(--pb,#a87442);filter:var(--bandf,none)}
+#peek .peekRoom{position:absolute}
+#peek .peekRoom > svg{position:absolute;inset:0;width:100%;height:100%}
 .spot{position:absolute;pointer-events:none}
 .tgt{position:absolute;z-index:11;pointer-events:none;border-radius:50%;border:3px dashed rgba(255,247,225,.9);box-shadow:0 0 0 2px rgba(60,30,10,.35);transition:background .15s}
 .tgt.hot{background:rgba(255,226,140,.35);border-style:solid}
@@ -6860,6 +6866,13 @@ function where(x, y) {
   const cx = a.left + x, cy = a.top + y, p = { x: cx - s.left, y: cy - s.top };
   return { cx, cy, p, r: toRoom(p.x, p.y), inScene: p.x >= 0 && p.y >= 0 && p.x <= s.width && p.y <= s.height };
 }
+// the wall and floor that continue beside and above a place's picture (a CSS background in scene px)
+function bands(p) {
+  const y = v => (V.oy + v * V.s).toFixed(1) + 'px';
+  return p === 'garden'
+    ? `linear-gradient(#bfe0f0 0 ${y(330)},#7fae5a ${y(330)})`
+    : `linear-gradient(#ead7b6 0 ${y(296)},#8f6038 ${y(296)} ${y(305)},#b88654 ${y(305)} ${y(396)},#6e4a2c ${y(396)} ${y(406)},#a87442 ${y(406)})`;
+}
 function layout() {
   if (!G) return;
   const r = sceneEl.getBoundingClientRect();
@@ -6869,11 +6882,7 @@ function layout() {
   V = { W, H, s, ox: (W - 400 * s) / 2, oy: H - 600 * s };
   const rb = $('#roomBox').style;
   rb.left = V.ox + 'px'; rb.top = V.oy + 'px'; rb.width = 400 * s + 'px'; rb.height = 600 * s + 'px';
-  // the wall and floor continue beside and above the room picture
-  const y = v => (V.oy + v * s).toFixed(1) + 'px';
-  sceneEl.style.setProperty('--bands', G.view === 'garden'
-    ? `linear-gradient(#bfe0f0 0 ${y(330)},#7fae5a ${y(330)})`
-    : `linear-gradient(#ead7b6 0 ${y(296)},#8f6038 ${y(296)} ${y(305)},#b88654 ${y(305)} ${y(396)},#6e4a2c ${y(396)} ${y(406)},#a87442 ${y(406)})`);
+  sceneEl.style.setProperty('--bands', bands(G.view));
   catEl.style.width = catEl.style.height = CAT * s + 'px';
   placeItems(); placeLife();
   for (const id of TOY_IDS) placeToy(id);
@@ -6912,11 +6921,16 @@ const weatherNow = () => (typeof E.weather === 'function' ? E.weather(now(), G.s
 // what the picture shows: { w: clear | cloudy | fog | rain | storm | snow, temp: °C or null } (SPEC §12f: the real
 // weather where a series covers the moment, else the seeded one)
 const skyNow = () => (typeof E.sky === 'function' ? E.sky(now(), G.st) : { w: weatherNow(), temp: null });
-function drawRoom() {
-  const t = now(), phase = E.dayPhase(t), sk = skyNow();
+// what the art needs to draw place p now
+function roomOpts(p) {
+  const t = now(), sk = skyNow();
   const hol = E.holiday(t, G.st).map(x => x === 'birthday' ? 'narozeniny' : x);
-  const o = { id: G.view, phase, season: E.season(t), sunX: sunX(), holiday: hol, flap: !!((G.st.furniture && G.st.furniture.catFlap) || (G.st.owned && G.st.owned.catFlap)), weather: sk.w, temp: sk.temp };
-  if (G.view === 'garden') o.beds = bedsNow();
+  const o = { id: p, phase: E.dayPhase(t), season: E.season(t), sunX: sunX(), holiday: hol, flap: !!((G.st.furniture && G.st.furniture.catFlap) || (G.st.owned && G.st.owned.catFlap)), weather: sk.w, temp: sk.temp };
+  if (p === 'garden') o.beds = bedsNow();
+  return o;
+}
+function drawRoom() {
+  const o = roomOpts(G.view), phase = o.phase;
   const lap = K.lapView ? (G.seat || 'chair') : '';
   const key = JSON.stringify(o) + lap;
   if (key === roomKey) return;
@@ -7054,7 +7068,7 @@ function drawNav() {
 }
 // her place in the list of places, or null when she is not in the house or garden right now (out, on the lap here)
 function herIndex() { const h = E.health(G.st); if ((h.out && !h.gardenAlone) || G.her === G.view) return null; const i = places().indexOf(G.her); return i < 0 ? null : i; }
-function go(p, dir) {
+function go(p, dir, dragged) {
   if (!places().includes(p) || p === G.view || K.carry) return;
   if (laser.on) setLaser(false);
   const from = G.view, h = E.health(G.st);
@@ -7076,11 +7090,94 @@ function go(p, dir) {
   if (G.seat) G.seat = null;
   G.view = p; save();
   worldEl.classList.remove('slideL', 'slideR'); void worldEl.offsetWidth;
-  worldEl.classList.add(dir > 0 ? 'slideR' : 'slideL');
+  if (!dragged) worldEl.classList.add(dir > 0 ? 'slideR' : 'slideL');   // a dragged room has slid in already
   roomKey = ''; drawRoom(); layout(); refresh();
 }
 $('#navL').addEventListener('click', () => { I.sound.unlock(); const n = neighbours(); if (n.left) go(n.left, -1); });
 $('#navR').addEventListener('click', () => { I.sound.unlock(); const n = neighbours(); if (n.right) go(n.right, 1); });
+
+/* ---------- Dragging the room sideways (the next place comes in under the finger) ---------- */
+// One finger that starts on an empty part of the scene (not on her, a visitor, a toy or a button) and moves sideways
+// drags the whole room; the neighbouring place's picture follows beside it. Let go past PAN_GO of the width, or with a
+// flick that way, and the player goes there; otherwise the room springs back, so turning the finger back undoes it.
+// At the first or last place the room only gives a little. Up or down, a second finger, the laser, the lap, carrying
+// her, arranging furniture, a minigame or training: no drag. Input sees the same finger as a stroke off the cat, and
+// onGesture drops its strokes and swipes while a drag runs (PAN.on or PAN.busy).
+const PAN_GO = 0.3, PAN_FLICK = 0.45, PAN_MS = 220;   // share of the width; px/ms; settle time
+const PAN = { id: null, x0: 0, y0: 0, dx: 0, on: false, busy: false, p: null, shown: null, left: null, right: null, v: [] };
+const peekEl = document.createElement('div');
+peekEl.id = 'peek'; peekEl.hidden = true; peekEl.innerHTML = '<div class="peekRoom"></div>';
+sceneEl.insertBefore(peekEl, worldEl);
+const reducedMotion = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+function panAllowed(e) {
+  if (!G || PAN.busy || MODE.game || MODE.train || MODE.arrange || laser.on || K.lapView || K.carry) return false;
+  if (e.pointerType === 'mouse' && e.button !== 0) return false;
+  if (e.target && e.target.closest && e.target.closest('button, a, input, select, textarea, label, [data-no-gesture], .topbar, .screen, [id^="screen"], #modal')) return false;
+  const s = sceneEl.getBoundingClientRect(), x = e.clientX, y = e.clientY;
+  if (x < s.left || x > s.right || y < s.top || y > s.bottom) return false;
+  return !catHit(x, y) && !toyAt(x, y);
+}
+function drawPeek(p) {
+  const box = peekEl.firstChild;
+  box.innerHTML = A.room(roomOpts(p));
+  Object.assign(box.style, { left: V.ox + 'px', top: V.oy + 'px', width: 400 * V.s + 'px', height: 600 * V.s + 'px' });
+  peekEl.style.setProperty('--pb', bands(p));
+}
+function panTo(dx) {
+  const W = V.W, p = dx < 0 ? PAN.right : PAN.left;      // the finger goes left: the place on the right comes in
+  const x = p ? clamp(dx, -W, W) : clamp(dx * 0.25, -W * 0.12, W * 0.12);
+  if (p && PAN.shown !== p) { drawPeek(p); PAN.shown = p; }
+  peekEl.hidden = !p;
+  worldEl.style.transform = `translateX(${x.toFixed(1)}px)`;
+  if (p) peekEl.style.transform = `translateX(${(x + (dx < 0 ? W : -W)).toFixed(1)}px)`;
+  PAN.dx = dx; PAN.p = p;
+}
+function panBegin() {
+  const nb = neighbours();
+  Object.assign(PAN, { on: true, left: nb.left, right: nb.right, shown: null, p: null });
+  worldEl.classList.remove('slideL', 'slideR');
+  worldEl.classList.add('pan');
+  worldEl.style.transition = peekEl.style.transition = 'none';
+}
+function panEnd(release) {
+  const W = V.W, p = PAN.p, dx = PAN.dx, dir = dx < 0 ? 1 : -1;
+  const a = PAN.v[0], z = PAN.v[PAN.v.length - 1], v = a && z && z.t > a.t ? (z.x - a.x) / (z.t - a.t) : 0;
+  const goes = release && p && (Math.abs(dx) > W * PAN_GO || (Math.abs(dx) > 40 && v * dx > 0 && Math.abs(v) > PAN_FLICK));
+  PAN.on = false; PAN.busy = true;
+  const ms = reducedMotion() ? 0 : PAN_MS;
+  worldEl.style.transition = peekEl.style.transition = ms ? `transform ${ms}ms ease-out` : 'none';
+  worldEl.style.transform = goes ? `translateX(${-dir * W}px)` : 'translateX(0px)';
+  peekEl.style.transform = `translateX(${goes ? 0 : dir * W}px)`;
+  setTimeout(() => {
+    worldEl.style.transition = peekEl.style.transition = 'none';
+    if (goes && !K.carry) { I.sound.unlock(); go(p, dir, true); }
+    worldEl.style.transform = peekEl.style.transform = '';
+    worldEl.classList.remove('pan'); peekEl.hidden = true;
+    void worldEl.offsetWidth;
+    worldEl.style.transition = peekEl.style.transition = '';
+    PAN.busy = false; PAN.shown = null; PAN.p = null;
+  }, ms + 20);
+}
+appEl.addEventListener('pointerdown', e => {
+  if (PAN.id !== null) { const was = PAN.on; PAN.id = null; if (was) panEnd(false); return; }   // a second finger
+  if (!panAllowed(e)) return;
+  Object.assign(PAN, { id: e.pointerId, x0: e.clientX, y0: e.clientY, dx: 0, on: false, v: [{ x: e.clientX, t: e.timeStamp }] });
+});
+appEl.addEventListener('pointermove', e => {
+  if (e.pointerId !== PAN.id) return;
+  const dx = e.clientX - PAN.x0, dy = e.clientY - PAN.y0;
+  PAN.v.push({ x: e.clientX, t: e.timeStamp });
+  while (PAN.v.length > 2 && e.timeStamp - PAN.v[0].t > 100) PAN.v.shift();
+  if (!PAN.on) {
+    if (Math.hypot(dx, dy) < 12) return;
+    if (Math.abs(dx) < 1.3 * Math.abs(dy) || K.carry || laser.on) { PAN.id = null; return; }   // up or down: not a drag
+    panBegin();
+  }
+  panTo(dx);
+});
+const panStop = release => e => { if (e.pointerId !== PAN.id) return; PAN.id = null; if (PAN.on) panEnd(release); };
+appEl.addEventListener('pointerup', panStop(true));
+appEl.addEventListener('pointercancel', panStop(false));
 
 /* ---------- Koxa: where she is and what she does ---------- */
 // K is only the picture: the engine state G.st says how she is; K says where she is drawn and what she is busy with.
@@ -8480,6 +8577,7 @@ function onGesture(ev) {
   if (window.Kocka && Array.isArray(window.Kocka.trace)) window.Kocka.trace.push({ type: ev.type, region: ev.region && ev.region.id, along: ev.along, speed: ev.speed, item: ev.item, target: ev.target });
   if (MODE.game) { gameInput(ev); return; }
   if (MODE.train) { trainInput(ev); return; }
+  if ((PAN.on || PAN.busy) && /^(stroke|swipe|doubleSwipe|scratch)/.test(ev.type)) return;   // the finger drags the room
   if (K.greet && ev.type !== 'laser') { K.greet = false; if (!K.gone && !E.health(G.st).asleep) { say('trill'); bubble(esc(I18N.t('kocka.trill'))); } }
   switch (ev.type) {
     case 'tap': return onTap(ev);
@@ -8519,16 +8617,6 @@ function onGesture(ev) {
       if (ev.what === 'carry' && K.carry) dropCat(null, K.carry);
       if (ev.what === 'drag') endDrag();
       return;
-    // a quick sideways swipe over an empty part of the scene goes to the next place, like the arrows (the finger moves
-    // left = the place on the right); a swipe that started on her, a visitor or an item is never one (Input)
-    case 'swipe': {
-      if (ev.dir !== 'left' && ev.dir !== 'right') return;
-      if (K.lapView || K.carry || MODE.arrange || Math.abs(ev.dx) < 1.5 * Math.abs(ev.dy)) return;
-      if (!where(ev.x - ev.dx, ev.y - ev.dy).inScene) return;    // started on the tray or the hint row
-      const n = neighbours(), p = ev.dir === 'left' ? n.right : n.left;
-      if (p) go(p, ev.dir === 'left' ? 1 : -1);
-      return;
-    }
     case 'dragStart': return startDrag(ev);
     case 'dragMove': return moveDrag(ev);
     case 'dragEnd': return dropItem(ev);

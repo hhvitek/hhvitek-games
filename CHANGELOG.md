@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Kočka: pokoj teď při přejetí prstem jede za prstem a vedle něj se vysouvá vedlejší místnost. Když prst vrátíš, pokoj se vrátí; když ho pustíš dál než za třetinu, přejdeš.
+
 ## 1.0.30 – 2026-11-18
 
 - Kočka: do vedlejší místnosti teď přejdeš i rychlým přejetím prstu do strany po prázdném místě pokoje (přejetí přes kočku ji dál hladí).
