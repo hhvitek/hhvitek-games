@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.30 – 2026-11-18
+
 - Kočka: do vedlejší místnosti teď přejdeš i rychlým přejetím prstu do strany po prázdném místě pokoje (přejetí přes kočku ji dál hladí).
 
 ## 1.0.29 – 2026-11-17
