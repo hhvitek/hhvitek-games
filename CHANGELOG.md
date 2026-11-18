@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Kočka: do vedlejší místnosti teď přejdeš i rychlým přejetím prstu do strany po prázdném místě pokoje (přejetí přes kočku ji dál hladí).
+
 ## 1.0.29 – 2026-11-17
 
 - Hry jsou nově i anglicky. Jazyk se řídí telefonem a přepíná se vlajkou nahoře ve výběru her nebo v Nastavení („Jazyk / Language“); čeština zůstává beze změny. Anglické texty prošly rodilou korekturou, sousedovic kočky v Kočce mají anglická jména.

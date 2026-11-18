@@ -8519,6 +8519,16 @@ function onGesture(ev) {
       if (ev.what === 'carry' && K.carry) dropCat(null, K.carry);
       if (ev.what === 'drag') endDrag();
       return;
+    // a quick sideways swipe over an empty part of the scene goes to the next place, like the arrows (the finger moves
+    // left = the place on the right); a swipe that started on her, a visitor or an item is never one (Input)
+    case 'swipe': {
+      if (ev.dir !== 'left' && ev.dir !== 'right') return;
+      if (K.lapView || K.carry || MODE.arrange || Math.abs(ev.dx) < 1.5 * Math.abs(ev.dy)) return;
+      if (!where(ev.x - ev.dx, ev.y - ev.dy).inScene) return;    // started on the tray or the hint row
+      const n = neighbours(), p = ev.dir === 'left' ? n.right : n.left;
+      if (p) go(p, ev.dir === 'left' ? 1 : -1);
+      return;
+    }
     case 'dragStart': return startDrag(ev);
     case 'dragMove': return moveDrag(ev);
     case 'dragEnd': return dropItem(ev);
