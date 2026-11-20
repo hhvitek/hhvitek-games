@@ -97,9 +97,13 @@ function randomRun(seed, days) {
       ms: pick([0, 150, 500, 650, 6000, NaN, -1]), cv: pick([0, 0.1, 0.5, 5, NaN, 'x']), eating: pick([true, false, 1]) }]),
     boop: () => pick([null, {}, 'x']),
     splash: () => pick([null, {}, 7]),
+    // play (SPEC §14): the right spot often, wrong and garbage ones; praise and leafJump take no argument
+    seek: () => pick([st.hide ? st.hide.spot : 'curtain', st.hide ? { spot: st.hide.spot } : { spot: 'box' }, 'wardrobe', { spot: 'blanket' }, 'moon', null, { spot: 7 }]),
+    praise: () => pick([null, {}]),
+    leafJump: () => pick([null, 'x']),
   };
   const acts = E.ACTIONS.concat(['bogus', '', null]);
-  let lvl = 0;
+  let lvl = 0, forced = null;
   while (t < t0 + days * D) {
     const k = r();
     t += (st.visit || st.guest) && k < 0.5 ? Math.floor(r() * 3 * MIN) : k < 0.6 ? Math.floor(r() * 30 * MIN) : k < 0.97 ? Math.floor(r() * 20 * H) : Math.floor(r() * 5 * D);   // with a visitor: often minutes
@@ -107,7 +111,17 @@ function randomRun(seed, days) {
     let res;
     // now and then a neighbour cat comes over (made by hand, then repaired), so the visitor actions meet a visitor
     if (r() < 0.08 && !st.visit && !st.guest) { st.visit = { id: pick(['sedivka', 'sedivka', 'mourek', 'liza', 'rambo', 'ciperka']), since: st.t, until: st.t + 60 * MIN, gain: 0 }; E.repair(st); }
-    if (st.visit && r() < 0.3) { const a = pick(['strokeVisitor', 'strokeVisitor', 'treatVisitor', 'playVisitor', 'invite', 'photo', 'feedVisitor']); res = E.act(st, a, ARGS[a](), t); }
+    // now and then she hides or brings a catch (made by hand, then repaired: the random player rarely keeps her happy enough)
+    if (r() < 0.04) {
+      const s = pick(E.hideSpots(st));
+      if (r() < 0.6) st.hide = { spot: s.spot, room: s.room, since: st.t, until: st.t + E.HIDE.len };
+      else st.catch = { kind: pick(['mouse', 'cricket']), at: st.t, until: st.t + E.CATCH.ms };
+      E.repair(st);
+      if (st.hide || st.catch) t = st.t + Math.floor(r() * 3 * MIN);
+      if (r() < 0.6) forced = st.hide ? 'seek' : st.catch ? 'praise' : null;   // the player looks for her / praises it
+    }
+    if (forced) { res = E.act(st, forced, ARGS[forced](), t); forced = null; }
+    else if (st.visit && r() < 0.3) { const a = pick(['strokeVisitor', 'strokeVisitor', 'treatVisitor', 'playVisitor', 'invite', 'photo', 'feedVisitor']); res = E.act(st, a, ARGS[a](), t); }
     else if (r() < 0.05) {   // a run of pats (or nose taps, or the can) seconds apart: warnings, blowUps, sulks, crosses, paybacks
       const kind = pick(['pat', 'pat', 'pat', 'boop', 'splash']), region = pick(['back', 'tailBase', 'tail', 'head', 'belly', 'nose']);
       const ms = pick([150, 450, 600]), k = 2 + Math.floor(r() * 25), eating = r() < 0.1, all = [];
@@ -123,6 +137,7 @@ function randomRun(seed, days) {
     }
     else if (r() < 0.15) res = E.advance(st, t);
     else if (r() < 0.02) res = E.consumeTreats(st, pick([1, 5, -3, NaN, 1e9]), t);
+    else if (r() < 0.02) res = E.minigameResult(st, 'hide', pick([{ found: 3, secs: 40 }, { found: 'x' }, 7, null]), t);
     else { const a = pick(acts); res = E.act(st, a, ARGS[a] ? ARGS[a]() : null, t); }
     ok(res.st === st && Array.isArray(res.events), `seed ${seed}: result shape`);
     for (const e of res.events) if (!e || typeof e.type !== 'string') ok(false, `seed ${seed}: bad event ${JSON.stringify(e)}`);
@@ -144,6 +159,9 @@ const results = runs.map(s => randomRun(s, 60));
   const need = ['pat', 'blowUp', 'trap', 'boop', 'swat', 'splash', 'sulk', 'cross', 'sulkEnd', 'crossEnd', 'reconcile', 'payback'];
   console.log(`  teasing in the fuzz: ${need.map(k => `${k} ${seen[k] || 0}`).join(', ')}`);
   ok(need.every(k => seen[k] > 0), `the random runs meet the teasing events (missing: ${need.filter(k => !seen[k]).join(', ')})`);
+  const play = ['hide', 'seekFound', 'seekMiss', 'unhide', 'catch', 'praised', 'catchSnub', 'leafJump'];
+  console.log(`  play in the fuzz: ${play.map(k => `${k} ${seen[k] || 0}`).join(', ')}`);
+  ok(['unhide', 'seekFound', 'seekMiss', 'praised', 'catchSnub'].every(k => seen[k] > 0), 'the random runs meet hide and seek and the catch');
 }
 
 /* ---------- 2. determinism ---------- */
@@ -3327,19 +3345,32 @@ section('Teasing');
     invariants(tl, 'tail');
   }
 
-  // asleep (or dozing on the lap): never a blowUp, nothing changes; the nose tap is refused
+  // asleep (or dozing on the lap): a short run is only tolerated, the 4th tap of a run wakes her hissing (user's wish
+  // 2026-11-19), never a blowUp; the nose tap is refused
   {
-    const st = tc(6); st.asleep = true; st.sleepAt = st.t; st.needs.energy = 50;
+    const sleeper = k => { const st = tc(k); st.asleep = true; st.sleepAt = st.t; st.wakeAt = st.t + 2 * H; st.needs.energy = 50; return st; };
+    const st = sleeper(6);
     const T = JSON.stringify(st.tease);
     const ev = [];
-    for (const reg of ['back', 'tail', 'belly', 'tailBase', 'nose']) ev.push(...pats(st, st.t, reg, 30, 120).ev);
-    ok(st.asleep && ev.every(e => e.type === 'pat' && e.stage === 'tolerate' && e.sleeping === true) && JSON.stringify(st.tease) === T, 'asleep: 150 fast pats are only tolerated in her sleep, the tease state unchanged');
+    for (const reg of ['back', 'tail', 'belly', 'tailBase', 'nose']) ev.push(...pats(st, st.t, reg, 3, 120).ev);
+    ok(st.asleep && ev.every(e => e.type === 'pat' && e.stage === 'tolerate' && e.sleeping === true) && JSON.stringify(st.tease) === T, 'asleep: runs of 3 fast pats are only tolerated in her sleep, the tease state unchanged');
     ok(E.act(st, 'boop', null, st.t).events.pop().reason === 'asleep', 'boop asleep: refused');
     invariants(st, 'pats asleep');
+    for (const reg of ['back', 'belly', 'nose']) {
+      const w = sleeper(6), l0 = w.needs.love, r = pats(w, w.t, reg, 4, 120);
+      ok(!w.asleep && cnt(r.ev, 'wake', e => e.rude === true && e.early === false) === 1 && cnt(r.ev, 'woken', e => e.lap === false) === 1
+        && idx(r.ev, 'wake') < idx(r.ev, 'woken') && r.ev.filter(e => e.type === 'pat').length === 3 && !has(r.ev, 'blowUp')
+        && near(w.needs.love, l0 - 2, 0.3) && !w.tease.kind && w.tease.heat === 0 && !w.tease.pay && w.napAt >= r.t + 45 * MIN,
+      `asleep: the 4th tap of a run on the ${reg} wakes her hissing (love −2, no sulk, the next nap planned anew)`);
+      invariants(w, 'tapped awake');
+    }
     const lp = tc(7); E.act(lp, 'lapOn', null, lp.t); lp.lap.doze = true; lp.lap.dozeAt = lp.t;
-    const e2 = pats(lp, lp.t, 'back', 30, 120).ev;
-    ok(lp.lap && lp.lap.doze && e2.every(e => e.type === 'pat' && e.sleeping), 'dozing on the lap: tolerated, she stays dozing');
+    const e2 = pats(lp, lp.t, 'back', 3, 120).ev;
+    ok(lp.lap && lp.lap.doze && e2.every(e => e.type === 'pat' && e.sleeping), 'dozing on the lap: 3 taps tolerated, she stays dozing');
     ok(E.act(lp, 'boop', null, lp.t).events.pop().reason === 'asleep' && lp.lap, 'boop while she dozes on the lap: refused, the lap stays');
+    const e3 = pats(lp, lp.t, 'back', 4, 120).ev;
+    ok(!lp.lap && cnt(e3, 'lapLeave', e => e.reason === 'annoyed') === 1 && cnt(e3, 'woken', e => e.lap === true) === 1 && idx(e3, 'lapLeave') < idx(e3, 'woken') && !has(e3, 'blowUp'),
+      'dozing on the lap: the 4th tap wakes her, she jumps down hissing');
     invariants(lp, 'pats dozing');
   }
 
@@ -3439,7 +3470,8 @@ section('Teasing');
     const tr = one('treat', null);
     ok(has(tr, 'treat') && !has(tr, 'reconcile') && st.tease.kind === 'cross', 'a treat: eaten, still cross');
     const z = clone(st); z.asleep = true; z.sleepAt = z.t; z.needs.energy = 50;
-    ok(E.act(z, 'stroke', { region: 'back', along: true, speed: 300 }, z.t).events.map(e => e.type).join() === 'purr' && E.act(z, 'pat', { region: 'back', n: 9, ms: 150 }, z.t).events[0].sleeping, 'asleep while cross: purrs in her sleep, never swats');
+    ok(E.act(z, 'stroke', { region: 'back', along: true, speed: 300 }, z.t).events.map(e => e.type).join() === 'purr' && E.act(z, 'pat', { region: 'back', n: 3, ms: 150 }, z.t).events[0].sleeping
+      && E.act(z, 'pat', { region: 'back', n: 4, ms: 150 }, z.t).events.map(e => e.type).join() === 'wake,woken', 'asleep while cross: purrs in her sleep, never swats; tapped awake she hisses');
     const ref = clone(st); ref.tease.kind = null; ref.tease.until = 0;
     ok(E.moodValue(ref) - E.moodValue(st) === 20, `mood while cross: −20 (${E.moodValue(st)})`);
     invariants(st, 'cross');
@@ -4224,6 +4256,311 @@ section('Kitten names');
   E.repair(g);
   ok(g.kits.length === 1 && g.kits[0].name === 'Kitten', 'repair names a nameless kitten in the language set (' + (g.kits[0] && g.kits[0].name) + ')');
   ok(E.setKitNames({ f: E.KIT_NAMES.f, m: E.KIT_NAMES.m, girl: 'Kočička', boy: 'Kocourek', kitten: 'Koťátko' }) === true && E.kitNames().kitten === 'Koťátko', 'back to the Czech names');
+}
+
+/* ---------- Play and memories (SPEC §14, user's wishes 2026-11-19) ---------- */
+section('Play and memories: hide and seek, dreams, a catch, the leaf pile');
+{
+  const has = (ev, type, f) => ev.some(e => e.type === type && (!f || f(e)));
+  const cnt = (ev, type, f) => ev.filter(e => e.type === type && (!f || f(e))).length;
+  const key = ms => { const d = new Date(ms); return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate(); };
+  const T0 = at(2026, 6, 10, 10), HL = E.HIDE.len;
+  // a cat hidden by hand at t (repair keeps a valid hide)
+  const hidden = (seed, spot = 'curtain', t = T0) => {
+    const st = E.create(seed, t, 'Koxa');
+    st.hide = { spot, room: spot === 'wardrobe' ? 'hall' : 'living', since: t, until: t + HL };
+    E.repair(st);
+    return st;
+  };
+
+  // hide: the spots
+  {
+    const st = E.create(1, T0, 'Koxa');
+    ok(E.hideSpots(st).map(s => s.spot + ':' + s.room).join() === 'curtain:living,blanket:living,wardrobe:hall', 'three spots without the box');
+    st.owned.box = true; st.furniture.box = { room: 'kitchen', x: 0.3, y: 0.9 };
+    ok(E.hideSpots(st).some(s => s.spot === 'box' && s.room === 'kitchen'), 'the box: in its room');
+    st.furniture.box.room = 'garden';
+    ok(!E.hideSpots(st).some(s => s.spot === 'box'), 'a box in the garden is no hiding spot');
+  }
+  // hide: found, missed, the boo, ended by another action, kept by the shop, gone while nobody watches
+  {
+    const st = hidden(2);
+    ok(st.hide && st.hide.until === T0 + HL && E.health(st).hiding.spot === 'curtain', 'repair keeps a valid hide; health().hiding');
+    const l0 = st.needs.love, f0 = st.needs.fun;
+    const r = E.act(st, 'seek', { spot: 'curtain' }, T0 + 10000).events;
+    ok(has(r, 'seekFound', e => e.spot === 'curtain' && e.secs === 10 && e.quick === true) && st.hide === null, 'found within 30 s: quick');
+    ok(st.needs.love > l0 + 4.9 && st.needs.fun > f0 + 9.9, `quick: love +5, fun +10 (${l0} → ${st.needs.love}, ${f0} → ${st.needs.fun})`);
+    invariants(st, 'found');
+    const s2 = hidden(2), l2 = s2.needs.love;
+    const r2 = E.act(s2, 'seek', 'curtain', T0 + 60000).events;
+    ok(has(r2, 'seekFound', e => e.secs === 60 && e.quick === false) && s2.needs.love > l2 + 2.9 && s2.needs.love < l2 + 3.1, 'found after a minute: love +3');
+    const s3 = hidden(3, 'wardrobe');
+    E.act(s3, 'water', null, s3.t);   // the first act of the day was made (st.day.acted)
+    E.repair(s3); s3.hide = { spot: 'wardrobe', room: 'hall', since: s3.t, until: s3.t + HL };
+    const before = JSON.stringify(s3), m = E.act(s3, 'seek', { spot: 'blanket' }, s3.t).events;
+    ok(m.length === 1 && m[0].type === 'seekMiss' && m[0].spot === 'blanket' && JSON.stringify(s3) === before, 'a wrong spot: seekMiss, nothing changes');
+    ok(has(E.act(s3, 'seek', { spot: 'moon' }, s3.t).events, 'refused', e => e.reason === 'noSpot') && s3.hide, 'an unknown spot: refused (noSpot), still hidden');
+    ok(has(E.act(E.create(4, T0, 'K'), 'seek', 'curtain', T0).events, 'refused', e => e.reason === 'notHiding'), 'nobody hides: refused (notHiding)');
+    // the boo after 150 s (30-second ticks, as the UI)
+    const b = hidden(5), fb = b.needs.fun, all = [];
+    for (let t = T0 + 30000; t <= T0 + 180000; t += 30000) all.push(...E.advance(b, t).events);
+    ok(cnt(all, 'unhide', e => e.boo === true && e.spot === 'curtain') === 1 && b.hide === null && b.needs.fun > fb + 2.8, 'after 150 s she jumps out (boo, fun +3)');
+    ok(all.findIndex(e => e.type === 'unhide') === all.length - 1 || all.slice(all.findIndex(e => e.type === 'unhide') + 1).every(e => e.type !== 'unhide'), 'one boo');
+    // another action: unhide first, then the action
+    const c = hidden(6), ce = E.act(c, 'call', null, T0 + 5000).events;
+    ok(ce[0].type === 'unhide' && ce[0].by === 'call' && ce.slice(1).some(e => ['come', 'callSlow', 'ignore'].includes(e.type)) && c.hide === null, 'a call: unhide { by: call } first, then the call');
+    const p = hidden(7), pe = E.act(p, 'pickUp', null, T0 + 5000).events;
+    ok(pe[0].type === 'unhide' && pe[0].by === 'pickUp' && !p.hide, 'picking her up ends it');
+    const sh = hidden(8); sh.pamlsky = 50;
+    ok(!has(E.act(sh, 'buy', 'pouch5', T0 + 5000).events, 'unhide') && sh.hide, 'the shop does not end it');
+    ok(has(E.act(sh, 'feed', 'kibble', T0 + 6000).events, 'unhide', e => e.by === 'feed') && !sh.hide, 'a pour ends it');
+    const w = hidden(9), we = E.advance(w, T0 + 2 * H).events;
+    ok(w.hide === null && !has(we, 'unhide'), 'not watching: the hide ends silently');
+    const cb = hidden(10); E.advance(cb, T0 - H);
+    ok(cb.hide && cb.hide.since === T0 - H && cb.hide.until === T0 - H + HL, 'clock back: the hide moves with it');
+    invariants(cb, 'hide after the clock went back');
+  }
+  // hide: she starts by herself only while watching, by day, at most 3 a day and 30 min apart
+  {
+    let days = 0, total = 0, maxDay = 0, badHour = 0, badGap = 0, badState = 0, first = null;
+    for (let seed = 1; seed <= 40; seed++) {
+      const st = E.create(seed, at(2026, 6, 9, 7), 'Koxa'); E.advance(st, at(2026, 6, 10, 7));   // a day at home first (unwatched)
+      let last = 0, n = 0;
+      for (let t = st.t + 10 * MIN; t <= at(2026, 6, 11, 7); t += 10 * MIN) {
+        const hr = new Date(t).getHours(), mi = new Date(t).getMinutes(), before = clone(st);
+        const ev = E.advance(st, t).events;
+        for (const e of ev) {
+          if (e.type !== 'hide') continue;
+          n++; total++;
+          if (!first && !before.hide) first = { before, t };
+          if (hr < 8 || hr >= 21) badHour++;
+          if (last && t - last < 30 * MIN) badGap++;
+          if (!st.hide || st.asleep || st.out || st.yard || st.lap || st.held) badState++;
+          last = t;
+        }
+        if ([8, 13, 18].includes(hr) && mi === 0) basicCare(st, t);
+      }
+      days++; maxDay = Math.max(maxDay, n);
+    }
+    console.log(`  hide and seek: ${(total / days).toFixed(2)} a watched day (most ${maxDay})`);
+    ok(total / days >= 1 && total / days <= 3 && maxDay <= 3, `about 1–3 a watched day, never more than 3 (${(total / days).toFixed(2)}, most ${maxDay})`);
+    ok(badHour === 0 && badGap === 0 && badState === 0, `by day, 30 min apart, at home and free (${badHour}, ${badGap}, ${badState})`);
+    // the same advance with one condition changed: no hide
+    const F = first, again = c => E.advance(c, F.t).events;
+    ok(F && has(again(clone(F.before)), 'hide'), 'the found moment: the same advance hides her again');
+    const k0 = key(F.t);
+    const variants = {
+      asleep: c => { c.asleep = true; c.sleepAt = c.t; c.wakeAt = c.t + 2 * H; c.needs.food = Math.max(c.needs.food, 50); c.needs.water = Math.max(c.needs.water, 50); },   // not woken by hunger
+      garden: c => { c.yard = { since: c.t, snow: false, tree: null }; },
+      lap: c => { c.lap = { since: c.t, annoy: 0, doze: true, pet: c.t, dozeAt: c.t }; },   // dozing: she stays
+      held: c => { c.held = true; c.heldAt = c.t; },
+      scared: c => { c.scared = c.t + H; },
+      cross: c => { c.tease.kind = 'cross'; c.tease.until = c.t + 15 * MIN; },
+      ill: c => { c.ill = { kind: 'fleas', since: c.t }; },
+      visitor: c => { c.visit = { id: 'mourek', since: c.t, until: c.t + H, gain: 0 }; },
+      walk: c => { c.out = { since: c.t, until: c.t + 3 * H, walk: true, byPlayer: true }; },
+      threeToday: c => { c.hides = { key: k0, n: 3, at: c.t - 2 * H }; },
+      newCat: c => { c.born = c.t - 20 * H; },
+      lastAt15MinAgo: c => { c.hides = { key: k0, n: 1, at: c.t - 15 * MIN }; },
+      paybackDue: c => { c.tease.pay = { kind: 'shelf', at: c.t + 30 * MIN }; },
+      tired: c => { c.needs.energy = 20; },
+    };
+    for (const [name, f] of Object.entries(variants)) {
+      const c = clone(F.before); f(c); E.repair(c);
+      const ce = again(c);
+      ok(!has(ce, 'hide'), `no hide when ${name} (${ce.map(e => e.type).join()})`);
+    }
+    const nw = clone(F.before), nev = E.advance(nw, F.t + 2 * H).events;
+    ok(!has(nev, 'hide') && nw.hide === null, 'no hide in an advance nobody watches');
+  }
+  // Schovávaná (the minigame): the score, the treats, the daily cap shared with the others
+  {
+    ok(E.hideScore(5, 30) === 12 && E.hideScore(5, 200) === 5 && E.hideScore(0, 0) === 0 && E.hideScore(10, 0) === 30 && E.hideScore('x', 5) === 0 && E.hideScore(3, NaN) === 3,
+      'hideScore: 3 a round found, −1 per 10 s, at least 1 a round');
+    const st = hidden(11); st.pamlsky = 0;
+    const r = E.minigameResult(st, 'hide', { found: 5, secs: 30 }, T0 + 5000).events;
+    ok(r[0].type === 'unhide' && r[0].by === 'minigame' && has(r, 'earned', e => e.n === 6 && e.game === 'hide') && st.pamlsky === 6 && st.records.hide.best === 12,
+      'the minigame ends a hide; 5 rounds in 30 s: 6 pamlsků, a record of 12');
+    ok(has(E.minigameResult(st, 'hide', { found: 10, secs: 0 }, T0 + 6000).events, 'earned', e => e.n === 8), 'at most 8 a game');
+    ok(!has(E.minigameResult(st, 'hide', { found: 'x', secs: 5 }, T0 + 7000).events, 'earned') && !has(E.minigameResult(st, 'hide', null, T0 + 7000).events, 'earned'), 'garbage earns nothing');
+    st.earnDay.n = 28;
+    const cap = E.minigameResult(st, 'hide', 12, T0 + 8000).events;
+    ok(has(cap, 'earned', e => e.n === 2) && has(cap, 'capReached') && st.earnDay.n === 30, 'the 30 a day are shared with the other minigames');
+    invariants(st, 'hide minigame');
+  }
+
+  // dreams: what she lived through today and yesterday
+  {
+    const st = E.create(12, T0, 'Koxa');
+    ok(JSON.stringify(st.mem) === JSON.stringify({ today: { birds: 0, cats: [], toy: null, fav: false, walk: false, food: null }, prev: { birds: 0, cats: [], toy: null, fav: false, walk: false, food: null } }), 'a new cat has empty memories');
+    ok(E.dream(st, T0) === null, 'awake: no dream');
+    E.act(st, 'play', 'ball', T0);
+    const favOk = st.traits.toy === 'ball' ? st.mem.today.fav : !st.mem.today.fav;
+    ok(st.mem.today.toy === 'ball' && favOk, 'a toy played with is remembered');
+    E.act(st, 'play', st.traits.toy, T0 + 1000);
+    ok(st.mem.today.toy === st.traits.toy && st.mem.today.fav, 'her favourite toy too');
+    st.pamlsky = 5; E.act(st, 'treat', null, T0 + 2000);
+    ok(st.mem.today.food === 'treat', 'a treat');
+    const fv = E.create(13, T0, 'Koxa'); fv.needs.food = 30; fv.pamlsky = 20; feedNow(fv, fv.traits.favFood, T0);
+    ok(fv.mem.today.food === fv.traits.favFood, 'her favourite food, once eaten');
+    const wk = friend(E.create(14, T0, 'Koxa')); E.act(wk, 'letOut', null, T0); E.act(wk, 'letIn', null, T0 + H);
+    ok(wk.mem.today.walk, 'a walk');
+    const g = E.create(15, at(2026, 6, 10, 9), 'Koxa');
+    g.owned.birdFeeder = true; g.furniture.birdFeeder = { room: 'garden', x: 0.5, y: 0.5 };
+    E.act(g, 'goGarden', null, g.t);
+    for (let i = 1; i <= 3; i++) E.advance(g, g.t + 10 * MIN);
+    ok(g.mem.today.birds >= 29.9 && g.mem.today.birds <= 30.1 || g.yard === null || g.yard.tree, `minutes at the bird feeder (${g.mem.today.birds})`);
+    g.visit = { id: 'mourek', since: g.t, until: g.t + H, gain: 0 }; E.repair(g);
+    E.advance(g, g.t + 5 * MIN);
+    ok(g.mem.today.cats.includes('mourek') || !g.yard, 'a neighbour cat she saw');
+    invariants(g, 'memories');
+    // midnight: today becomes yesterday
+    const n = E.create(16, at(2026, 6, 10, 22, 30), 'Koxa'); n.mem.today.walk = true; n.mem.today.cats = ['liza']; E.repair(n);
+    E.advance(n, at(2026, 6, 11, 1));
+    ok(n.mem.prev.walk && n.mem.prev.cats.join() === 'liza' && !n.mem.today.walk && n.mem.today.cats.length === 0, 'at midnight today becomes yesterday');
+    // asleep: a dream from the memories, the same for 15 minutes, changing between the slots, pure
+    const d = E.create(17, T0, 'Koxa');
+    d.mem.today = { birds: 45, cats: ['mourek'], toy: 'ball', fav: false, walk: true, food: 'treat' };
+    d.mem.prev.cats = ['liza'];
+    d.asleep = true; d.sleepAt = T0; d.wakeAt = T0 + 3 * H; E.repair(d);
+    const j = JSON.stringify(d), dr = [];
+    for (let s = 0; s < 12; s++) dr.push(E.dream(d, T0 + s * 15 * MIN + 30000));
+    ok(JSON.stringify(d) === j, 'dream() changes nothing');
+    ok(dr.every(x => x && E.DREAMS.includes(x.kind)), 'asleep: a dream of a known kind: ' + dr.map(x => x.kind + (x.id ? ':' + x.id : '')).join(' '));
+    ok(dr.every((x, s) => JSON.stringify(E.dream(d, T0 + s * 15 * MIN + 14 * MIN)) === JSON.stringify(x)), 'the same dream for 15 minutes');
+    const kinds = new Set(dr.map(x => x.kind)), rep = dr.filter((x, s) => s && JSON.stringify(x) === JSON.stringify(dr[s - 1])).length;
+    ok(kinds.size >= 3 && rep <= 2, `the dreams change between slots (${kinds.size} kinds, ${rep} repeats)`);
+    const ids = dr.filter(x => x.id).map(x => x.kind + ':' + x.id);
+    ok(ids.every(x => ['cat:mourek', 'cat:liza', 'toy:ball', 'food:treat'].includes(x)), 'ids from her memories: ' + [...new Set(ids)].join(' '));
+    const e = E.create(18, T0, 'Koxa'); e.asleep = true; e.sleepAt = T0; e.wakeAt = T0 + 3 * H; E.repair(e);
+    const ek = new Set(); for (let s = 0; s < 20; s++) ek.add(E.dream(e, T0 + s * 15 * MIN).kind);
+    ok([...ek].every(k => k === 'mouse' || k === 'food') && ek.size === 2, 'nothing remembered: a mouse or food');
+    const lp = E.create(19, T0, 'Koxa'); lp.lap = { since: T0, annoy: 0, doze: true, pet: T0, dozeAt: T0 }; E.repair(lp);
+    ok(E.dream(lp, T0 + MIN) && E.dream(lp, T0 + MIN).kind, 'dozing on the lap: she dreams');
+    lp.lap.doze = false; lp.lap.dozeAt = 0;
+    ok(E.dream(lp, T0 + MIN) === null, 'awake on the lap: no dream');
+  }
+
+  // a catch from a walk
+  {
+    let backs = 0, catches = 0, mice = 0, order = 0, longCatch = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      const st = friend(E.create(seed, T0, 'Koxa'));
+      E.act(st, 'letOut', null, T0);
+      for (let t = T0 + 10 * MIN; t < T0 + 10 * H && st.out; t += 10 * MIN) {
+        const ev = E.advance(st, t).events, b = ev.findIndex(e => e.type === 'back'), c = ev.findIndex(e => e.type === 'catch');
+        if (b >= 0) backs++;
+        if (c >= 0) { catches++; if (ev[c].kind === 'mouse') mice++; if (c > b && b >= 0 && (st.catch ? st.catch.kind === ev[c].kind : has(ev, 'catchSnub', e => e.kind === ev[c].kind))) order++; }
+      }
+      const l = friend(E.create(seed, T0, 'Koxa')); E.act(l, 'letOut', null, T0);
+      if (has(E.advance(l, T0 + 10 * H).events, 'catch') || l.catch) longCatch++;
+    }
+    console.log(`  catches: ${catches} of ${backs} walks seen ending, ${mice} toy mice`);
+    ok(catches / backs > 0.22 && catches / backs < 0.38 && mice / catches > 0.45 && mice / catches < 0.75, `about 30 % of the walks seen bring a catch, 60 % toy mice (${catches}/${backs}, ${mice})`);
+    ok(order === catches, 'catch comes after back; st.catch waits (or, 2 min on in the same advance, the snub)');
+    ok(longCatch === 0, 'back while nobody watches: no catch');
+    // review fix 2026-11-19: the phone put away for under an hour (one watching advance in many steps): a catch or a hide
+    // never starts and runs out unseen inside the batch, and a catch left waiting ends without a snub
+    {
+      let batchCatch = 0, batchHide = 0, snub = 0;
+      for (let seed = 1; seed <= 200; seed++) {
+        const st = friend(E.create(seed, T0, 'Koxa')); E.act(st, 'letOut', null, T0);
+        for (let t = T0 + 50 * MIN; t < T0 + 10 * H; t += 50 * MIN) { const ev = E.advance(st, t).events; if (has(ev, 'catch')) batchCatch++; if (has(ev, 'catchSnub')) snub++; }
+        const h = E.create(seed, at(2026, 6, 9, 7), 'Koxa'); E.advance(h, at(2026, 6, 10, 8));
+        for (let t = h.t + 50 * MIN; t <= at(2026, 6, 10, 20); t += 50 * MIN) { E.act(h, 'feed', 'kibble', t); E.act(h, 'water', null, t); if (has(E.advance(h, t + 30 * MIN).events, 'hide')) batchHide++; }
+        const w = friend(E.create(seed, T0, 'Koxa')); w.catch = { kind: 'mouse', at: T0, until: T0 + E.CATCH.ms }; E.repair(w);
+        if (has(E.advance(w, T0 + 30 * MIN).events, 'catchSnub') || w.catch) snub++;
+      }
+      ok(batchCatch === 0 && batchHide === 0 && snub === 0, `a batch of 30–50 min (phone put away): no catch, no hide, no snub (${batchCatch}, ${batchHide}, ${snub})`);
+    }
+    // praise: love +2, bond +1 once a day
+    const mk = (seed, t) => { const s = E.create(seed, t, 'Koxa'); s.catch = { kind: 'cricket', at: t, until: t + E.CATCH.ms }; E.repair(s); return s; };
+    const p = mk(20, T0), l0 = p.needs.love, b0 = p.bond;
+    ok(p.catch && E.health(p).catch.kind === 'cricket', 'repair keeps a valid catch; health().catch');
+    const pr = E.act(p, 'praise', null, T0 + 10000).events;
+    ok(has(pr, 'praised', e => e.kind === 'cricket' && e.bond === true) && p.bond === b0 + 1 && p.needs.love > l0 + 1.9 && p.catch === null, 'praised: love +2, bond +1');
+    p.catch = { kind: 'mouse', at: p.t, until: p.t + E.CATCH.ms };
+    ok(has(E.act(p, 'praise', null, p.t + 1000).events, 'praised', e => e.bond === false) && p.bond === b0 + 1, 'a second catch the same day: no more bond');
+    const nd = at(2026, 6, 11, 10); E.advance(p, nd); p.catch = { kind: 'mouse', at: nd, until: nd + E.CATCH.ms };
+    ok(has(E.act(p, 'praise', null, nd).events, 'praised', e => e.bond === true), 'the next day bond again');
+    ok(has(E.act(p, 'praise', null, nd).events, 'refused', e => e.reason === 'noCatch'), 'no catch: refused (noCatch)');
+    invariants(p, 'praise');
+    // unpraised: a short sulk, only while the player watches
+    const s = mk(21, T0), all = [];
+    for (let t = T0 + 30000; t <= T0 + 150000; t += 30000) all.push(...E.advance(s, t).events);
+    const si = all.findIndex(e => e.type === 'catchSnub');
+    ok(si >= 0 && all[si].kind === 'cricket' && all[si + 1].type === 'sulk' && E.health(s).sulk && s.tease.pay === null && s.catch === null, 'unpraised for 2 min: catchSnub, a sulk, no payback');
+    invariants(s, 'snub');
+    const q = mk(22, T0), qe = E.advance(q, T0 + 2 * H).events;
+    ok(!has(qe, 'catchSnub') && !has(qe, 'sulk') && q.catch === null, 'not watching: it just passes');
+    const cb = mk(23, T0); E.advance(cb, T0 - H);
+    ok(cb.catch && cb.catch.at === T0 - H && cb.catch.until === T0 - H + E.CATCH.ms, 'clock back: the catch moves with it');
+  }
+
+  // the autumn leaf pile
+  {
+    const A = at(2026, 10, 14, 10);
+    const st = E.create(24, A, 'Koxa');
+    ok(E.leafPile(st, A) && !E.leafPile(st, at(2026, 7, 14, 10)) && !E.leafPile(st, at(2026, 12, 14, 10)) && E.leafPile(st, at(2026, 9, 1, 10)), 'a pile only in autumn (Sep–Nov)');
+    ok(has(E.act(st, 'leafJump', null, A).events, 'refused', e => e.reason === 'notInGarden'), 'not in the garden: refused');
+    E.act(st, 'goGarden', null, A);
+    const f0 = st.needs.fun, r = E.act(st, 'leafJump', null, A + 1000).events;
+    ok(has(r, 'leafJump', e => e.self === false) && st.leaves === A + 1000 && st.needs.fun > f0 + 2.9 && !E.leafPile(st, A + H), 'she jumps in: fun +3, the pile is scattered');
+    ok(has(E.act(st, 'leafJump', null, A + 2000).events, 'refused', e => e.reason === 'noLeaves'), 'scattered: refused (noLeaves) the rest of the day');
+    ok(E.leafPile(st, at(2026, 10, 15, 8)), 'raked up again the next day');
+    invariants(st, 'leaf pile');
+    const su = E.create(25, at(2026, 7, 14, 10), 'Koxa'); E.act(su, 'goGarden', null, su.t);
+    ok(has(E.act(su, 'leafJump', null, su.t).events, 'refused', e => e.reason === 'noLeaves'), 'summer: no pile');
+    // by herself: at most once a day, only while the player is with her
+    let self = 0, many = 0, away = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const g = E.create(seed, at(2026, 10, 14, 9), 'Koxa');
+      E.act(g, 'goGarden', null, g.t);
+      let n = 0;
+      for (let t = g.t + 10 * MIN; t <= at(2026, 10, 14, 17); t += 10 * MIN) {
+        n += cnt(E.advance(g, t).events, 'leafJump', e => e.self === true);
+        if (!g.yard && !g.out) E.act(g, 'goGarden', null, t);
+      }
+      self += n; if (n > 1) many++;
+      const w = E.create(seed, at(2026, 10, 14, 9), 'Koxa'); E.act(w, 'goGarden', null, w.t);
+      if (has(E.advance(w, at(2026, 10, 14, 17)).events, 'leafJump')) away++;
+    }
+    console.log(`  leaf pile: she jumped in by herself on ${self} of 40 autumn days in the garden`);
+    ok(self >= 10 && many === 0 && away === 0, `by herself sometimes, at most once a day, never unwatched (${self}, ${many}, ${away})`);
+  }
+
+  // old saves, repair, probes
+  {
+    const st = E.create(26, T0, 'Koxa'), fresh = clone(st);
+    for (const k of ['hide', 'hides', 'mem', 'catch', 'catchDay', 'leaves']) delete st[k];
+    E.repair(st);
+    ok(['hide', 'hides', 'mem', 'catch', 'catchDay', 'leaves'].every(k => JSON.stringify(st[k]) === JSON.stringify(fresh[k])), 'an old save without the new fields loads with the defaults');
+    invariants(st, 'old save');
+    const bad = (f, msg, check) => { const s = E.create(27, T0, 'Koxa'); f(s); E.repair(s); ok(check(s), msg); invariants(s, msg); };
+    bad(s => { s.hide = { spot: 'curtain', room: 'hall', since: T0, until: T0 + HL }; }, 'a hide in the wrong room is dropped', s => s.hide === null);
+    bad(s => { s.hide = { spot: 'curtain', room: 'living', since: T0, until: T0 + 5 * HL }; }, 'a hide of the wrong length is dropped', s => s.hide === null);
+    bad(s => { s.hide = { spot: 'box', room: 'living', since: T0, until: T0 + HL }; }, 'the box without a box is dropped', s => s.hide === null);
+    bad(s => { s.owned.box = true; s.furniture.box = { room: 'kitchen', x: 0.5, y: 0.5 }; s.hide = { spot: 'box', room: 'kitchen', since: T0, until: T0 + HL }; }, 'in the box in the kitchen: kept', s => s.hide && s.hide.room === 'kitchen');
+    bad(s => { s.hide = { spot: 'curtain', room: 'living', since: T0, until: T0 + HL }; s.asleep = true; s.sleepAt = T0; }, 'asleep: no hide', s => s.hide === null);
+    bad(s => { s.catch = { kind: 'bird', at: T0, until: T0 + E.CATCH.ms }; }, 'an unknown catch is dropped', s => s.catch === null);
+    bad(s => { s.mem.today.cats = ['mourek', 'tom', 'mourek', 5, 'liza']; s.mem.prev = 'x'; s.mem.today.toy = 'stone'; s.mem.today.birds = -4; },
+      'memories: unknown cats, toys and numbers are cleaned', s => s.mem.today.cats.join() === 'mourek,liza' && s.mem.prev.cats.length === 0 && s.mem.today.toy === null && s.mem.today.birds === 0);
+    bad(s => { s.hides = { key: 20991231, n: 9, at: T0 + D }; s.leaves = T0 + D; s.catchDay = 'x'; }, 'future days and times are cleaned',
+      s => s.hides.key === 0 && s.hides.n === 0 && s.hides.at === 0 && s.leaves === 0 && s.catchDay === 0);
+    // probes stay exact with memories: the bird feeder, alone in the garden, a visitor
+    let same = 0, all = 0;
+    for (let seed = 1; seed <= 4; seed++) {
+      const s = E.create(seed, at(2026, 10, 2 + seed, 9), 'Koxa');
+      s.owned.birdFeeder = true; s.furniture.birdFeeder = { room: 'garden', x: 0.5, y: 0.5 };
+      s.mem.prev = { birds: 12, cats: ['liza'], toy: 'mouse', fav: true, walk: true, food: 'tuna' };
+      E.act(s, 'goGarden', null, s.t); E.advance(s, s.t + 20 * MIN);
+      const T = [], got = new Map();
+      for (let h = 1.5; h <= 30; h += 1.5) T.push(s.t + h * H);
+      E.advance(clone(s), T[T.length - 1], { at: T, fn: c => got.set(c.t, JSON.stringify(c)) });
+      for (const t of T) { const c = clone(s); E.advance(c, t); all++; if (got.get(t) === JSON.stringify(c)) same++; }
+    }
+    ok(same === all, `probes equal their own advances with the memories (${same}/${all})`);
+  }
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

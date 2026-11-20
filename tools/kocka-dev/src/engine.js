@@ -56,7 +56,7 @@
 //                                   (watching; asleep, out, on the lap, held, up the tree or hiding it is forgotten)
 //   scared { what } / curious { what }  met a vacuum, a storm, fireworks (scared only when it is her fear; nothing at all
 //                                   for the vacuum while she is out)
-//   sleep { place, nap } / wake { early, stroll? }   she fell asleep ('box' only when it is placed indoors | 'sill' | 'sun' on
+//   sleep { place, nap } / wake { early, stroll?, rude? }   she fell asleep ('box' only when it is placed indoors | 'sill' | 'sun' on
 //                                   a clear day | 'bed'; also st.sleepPlace, health().sleepPlace; nap: a daytime nap, else the
 //                                   night) / woke up (watching or caused by an act; stroll: true = a night stroll of 20–40 min,
 //                                   health().stroll, then she goes back to sleep). A cat's sleep (user's wish 2026-11-17, SLEEP):
@@ -134,7 +134,10 @@
 //   Škádlení (teasing out of love, SPEC §13; st.tease):
 //   pat { region, stage: 'like'|'bliss'|'tolerate'|'warn', close?, rear?, sleeping?, eating? }   a pat that did nothing
 //                                   bigger (region after the alias; close and rear with bliss; sleeping: true asleep or
-//                                   dozing on the lap, nothing changes; eating: true while she eats)
+//                                   dozing on the lap and the run is short, nothing changes; eating: true while she eats)
+//   woken { lap }                   tapped awake (the TEASE.wakeN-th tap of a run while asleep or dozing on the lap): she
+//                                   hisses, love −2; no heat, sulk or payback. Comes after wake { early: false, rude: true }
+//                                   (asleep) or lapLeave 'annoyed' (on the lap: she jumps down)
 //   flop { lap }                    after the bliss pat at tap 8: she flops on her side
 //   blowUp { why: 'fast'|'grumpy'|'tail'|'eat', lap }   the warned run went on 1.8 s ('eat' is the mild one: she leaves the bowl)
 //   loveBite { lap }                over-patting went on 1.8 s after its warning (no sulk)
@@ -149,8 +152,30 @@
 //   Order inside one action: lapLeave → the cause (blowUp/loveBite/boop/splash) → sulk/cross → found; a pat while she
 //   eats (st.meal, or the UI's eating flag) and blowUp 'eat': she leaves the bowl (ate first) and comes back after 2 min
 // Teasing actions: pat { region, n, ms, cv, eating }, boop, splash
+//   Play and memories (user's wishes 2026-11-19, SPEC §14):
+//   hide { spot, room }             she hid by herself (seen only: SEEN, the advance's last step; awake, free at home, daytime): st.hide, hideSpots(st)
+//                                   lists where she may be ('curtain' | 'blanket' in 'living', 'wardrobe' in 'hall', 'box'
+//                                   in the box's room when it stands in the house)
+//   seekFound { spot, secs, quick } the player found her (seek at her spot): love and fun up, more when quick (≤ 30 s)
+//   seekMiss { spot }               not there (nothing changes, she stays hidden)
+//   unhide { spot, boo: true }      150 s passed: she jumps out at the player (fun +3)
+//   unhide { spot, by }             the hide ended otherwise: by = the action that ended it (any act but seek, buy, sell,
+//                                   deletePhoto, nameKitten; pushed first, then the action runs), 'minigame', or 'self'
+//                                   (a meal, a fright, … took her out). Not watching: it ends silently
+//   catch { kind }                  back from a walk (after back, seen only: SEEN, the advance's last step) with a catch: 'mouse' (a toy mouse) or
+//                                   'cricket' (a confused live one); st.catch waits 120 s for praise
+//   praised { kind, bond }          praise (the player tapped or stroked her): love +2, bond +1 once a day (bond: given)
+//   catchSnub { kind }              nobody praised it in 120 s (seen only: an advance of at most SEEN): followed by sulk { until } (no payback)
+//   leafJump { self }               she jumped into the autumn leaf pile in the garden (self: by herself, else leafJump
+//                                   act); fun +3; the pile is gone until the next day (leafPile(st, t))
+//   dream(st, t) (no event): what she dreams of while asleep or dozing on the lap, from what she lived today and yesterday
+// Play actions: seek { spot } (or the spot as a string), praise, leafJump; minigameResult(st, 'hide', { found, secs })
 function KockaEngine() {
   const MIN = 60000, HOUR = 60 * MIN, DAY = 24 * HOUR, STEP = 10 * MIN;
+  // the player sees it happen (hide and seek, a catch; SPEC §14): an advance of at most SEEN (the page ticks every 30 s;
+  // a longer one means the phone was put away), and a hide or a catch begins only in its last step, so it never starts
+  // and runs out unseen inside one batch
+  const SEEN = 10 * MIN;
   const AWAY = 72 * HOUR;          // longer absence: paní Nováková took her (§4); the rest is not simulated
   const HELP = 24 * HOUR;          // after a day without anybody paní Nováková looks in (any absence): food, water and litter
   const HELP_MIN = 20;             // kept ≥ 20: never ill from it, but never better off than a day earlier
@@ -292,7 +317,9 @@ function KockaEngine() {
   const GAMES = deep({
     mouse: { per: 3, max: 10 }, laserRun: { per: 1, max: 8 },
     feather: { per: 2, max: 10 }, fishing: { per: 1, max: 8 }, pill: { per: 1, max: 3 },
+    hide: { per: 2, max: 8 },   // Schovávaná: score = hideScore(found, secs)
   });
+  const GAME_TOYS = deep({ mouse: 'mouse', feather: 'feather', laserRun: 'laser' });   // the toy a minigame plays with
   const EARN_CAP = 30;
   // Výcvik: bond needed (the value), the cue gesture the Input sends; 5 rewarded performances = learned
   const TRICKS = deep({
@@ -328,7 +355,27 @@ function KockaEngine() {
   });
   const ACTIONS = deep(['feed', 'water', 'stroke', 'scratch', 'pickUp', 'putDown', 'play', 'brush', 'cleanLitter', 'letOut', 'letIn', 'treat', 'vetCure', 'pill', 'call', 'vacuum', 'lapOn', 'lapOff',
     'goGarden', 'goHouse', 'fetchDown', 'sow', 'waterBeds', 'harvest', 'catnip', 'buy', 'place', 'sell', 'train', 'showTrick',
-    'feedVisitor', 'strokeVisitor', 'photo', 'deletePhoto', 'treatVisitor', 'playVisitor', 'invite', 'nameKitten', 'pat', 'boop', 'splash']);
+    'feedVisitor', 'strokeVisitor', 'photo', 'deletePhoto', 'treatVisitor', 'playVisitor', 'invite', 'nameKitten', 'pat', 'boop', 'splash',
+    'seek', 'praise', 'leafJump']);
+  // hide and seek (SPEC §14.1): she hides by herself while the player watches, by day, now and then: a chance p per
+  // 10-minute slot of the clock (keyed draws, salts 12–14), at most `max` a day, `gap` minutes apart; `len` ms hidden
+  const HIDE = deep({
+    len: 150000, quick: 30000, slot: 10, p: 0.3, max: 3, gap: 30, from: 8, to: 21, energy: 30, home: 24,   // home: hours at home first
+    found: { love: 3, fun: 6 }, quickFx: { love: 5, fun: 10 }, boo: 3,
+  });
+  // the spots and their rooms; the box: in the room where it stands (only in the house)
+  const HIDE_ROOMS = deep({ curtain: 'living', blanket: 'living', wardrobe: 'hall', box: null });
+  // actions that do not end a hide (they do not concern her)
+  const HIDE_KEEP = deep(['buy', 'sell', 'deletePhoto', 'nameKitten']);
+  // a catch brought from a walk (seen only, SEEN): chance p (salt 17), a toy mouse with `mouse` else a cricket (salt 18);
+  // it waits `ms` for praise
+  const CATCH = deep({ p: 0.3, mouse: 0.6, ms: 120000, love: 2 });
+  // the autumn leaf pile in the garden: she jumps in by herself with chance p per 10-minute slot (salts 19, 20)
+  const LEAF = deep({ fun: 3, slot: 10, p: 0.15 });
+  // her memories for dreams (st.mem): birds = minutes at the bird feeder (capped), at most `cats` neighbour cats; a dream
+  // lasts `slot` minutes of sleep; birds from `bird` minutes on are a dream
+  const MEM = deep({ birds: 1500, cats: 4, slot: 15, bird: 10 });
+  const DREAMS = deep(['bird', 'cat', 'toy', 'walk', 'food', 'mouse']);
   // Škádlení (SPEC §13.3): patting, the nose tap, the watering can, the sulk / cross, making up and her payback
   const TEASE = deep({
     fast: 260,           // ms: a mean interval under this is drumming ("fast")
@@ -347,8 +394,9 @@ function KockaEngine() {
     heat: { blowUp: 2, eat: 1, loveBite: 1, trap: 1, boop: 1, splash: 2 },
     crossAt: 5,                           // heat >= 5 after adding = cross, else sulk
     sulkMin: 3, crossMin: 20,
-    love: { blowUp: -2, eat: -1, loveBite: -1, splash: -3, reconcile: 3 },
+    love: { blowUp: -2, eat: -1, loveBite: -1, splash: -3, reconcile: 3, woken: -2 },
     boopN: 3, boopWin: 60000,             // the 3rd nose tap within 60 s = a swat
+    wakeN: 4,                             // asleep: the 4th tap of a run wakes her, hissing (user's wish 2026-11-19)
     wetMin: 30,                           // splash: wet until max(st.wet, t + 30 min)
     pay: { p: 0.5, min: 5, max: 25, lapse: 120, ext: 5 },   // payback: chance for a sulk, delay after the end, lapse, see below
     mood: { sulk: -10, cross: -20 },
@@ -579,6 +627,9 @@ function KockaEngine() {
       quirk: pick(Object.keys(QUIRKS), 6), toy: pick(BASE_TOYS, 7),
     };
   }
+  // what she lived through on one local day (dreams): minutes at the bird feeder, neighbour cats she knew about, the last
+  // toy, her favourite toy played with, a walk, the last treat ('treat') or favourite food eaten (its FOODS id)
+  const freshMem = () => ({ birds: 0, cats: [], toy: null, fav: false, walk: false, food: null });
   const freshDay = ms => ({ key: dkey(ms), ms: 0, food: 0, mood: 0, minE: 100, treats: 0, ttreats: 0, q: false, acted: false, early: 0 });
 
   /* --- creation --- */
@@ -598,6 +649,7 @@ function KockaEngine() {
       kits: [], litter: null, tease: freshTease(),
       bowl: null, dish: DISH.start, meal: null, drink: null, mealLog: [], sleepPlace: null,
       napAt: 0, wakeAt: 0, stroll: 0, callAt: 0, playAt: 0,
+      hide: null, hides: { key: 0, n: 0, at: 0 }, mem: { today: freshMem(), prev: freshMem() }, catch: null, catchDay: 0, leaves: 0,
     };
     for (const k of COUNTS) st.cnt[k] = 0;
     ensurePlan(st);
@@ -755,12 +807,32 @@ function KockaEngine() {
     st.stroll = !st.asleep && okT(st.stroll) && st.stroll <= t + SLEEP.strollLen[1] * MIN ? st.stroll : 0;
     st.callAt = !st.asleep && !st.out && okT(st.callAt) && st.callAt <= t + 3 * MIN ? st.callAt : 0;
     st.playAt = past(st.playAt, 0);
+    // play and memories (SPEC §14): a hide only at home, awake, free of the lap and the arms, at a spot that exists now
+    const HD = obj(st.hide), hr0 = hideRoom(st, HD.spot);
+    st.hide = hr0 && HD.room === hr0 && okT(HD.since) && HD.since <= t && HD.until === HD.since + HIDE.len &&
+      !st.asleep && !st.out && !st.yard && !st.lap && !st.held ? { spot: HD.spot, room: hr0, since: HD.since, until: HD.until } : null;
+    const HS = obj(st.hides), hk = isKey(HS.key) && HS.key <= dkey(t) ? HS.key : 0;
+    st.hides = { key: hk, n: hk && Number.isInteger(HS.n) ? clamp(HS.n, 0, HIDE.max) : 0, at: past(HS.at, 0) };
+    const MM = obj(st.mem), fixMem = v => {
+      const o = obj(v);
+      return {
+        birds: Math.round(num(o.birds, 0, 0, MEM.birds) * 1000) / 1000,
+        cats: (Array.isArray(o.cats) ? o.cats : []).filter((c, i, A) => isVisitor(st, c) && A.indexOf(c) === i).slice(0, MEM.cats),
+        toy: has(TOYS, o.toy) ? o.toy : null, fav: o.fav === true, walk: o.walk === true,
+        food: o.food === 'treat' || has(FOODS, o.food) ? o.food : null,
+      };
+    };
+    st.mem = { today: fixMem(MM.today), prev: fixMem(MM.prev) };
+    const CA = obj(st.catch);
+    st.catch = (CA.kind === 'mouse' || CA.kind === 'cricket') && okT(CA.at) && CA.at <= t && CA.until === CA.at + CATCH.ms ? { kind: CA.kind, at: CA.at, until: CA.until } : null;
+    st.catchDay = isKey(st.catchDay) && st.catchDay <= dkey(t) ? st.catchDay : 0;
+    st.leaves = past(st.leaves, 0);
     ensurePlan(st);
     for (const k of Object.keys(st)) if (!STATE_KEYS.includes(k)) delete st[k];
     return st;
   }
   const STATE_KEYS = ['v', 'seed', 'n', 't', 'born', 'name', 'needs', 'weight', 'bond', 'lvl', 'pamlsky', 'asleep', 'sleepAt', 'wokeAt', 'held', 'heldAt', 'pickAt', 'place', 'out', 'ill', 'acc', 'off', 'scared', 'litterAt', 'walkMax', 'bday', 'pill', 'traits', 'cnt', 'diary', 'day', 'want', 'wantAt', 'lap', 'yard', 'wet', 'beds', 'pantry', 'postcards', 'presents', 'stock', 'owned', 'furniture', 'records', 'tricks', 'earnDay', 'train', 'visitors', 'visit', 'album', 'diaryCat', 'guest', 'invDay', 'jealous', 'jealousAt', 'kits', 'litter', 'tease', 'bowl', 'dish', 'meal', 'drink', 'mealLog', 'sleepPlace',
-    'napAt', 'wakeAt', 'stroll', 'callAt', 'playAt', 'wx'];
+    'napAt', 'wakeAt', 'stroll', 'callAt', 'playAt', 'wx', 'hide', 'hides', 'mem', 'catch', 'catchDay', 'leaves'];
   // the canonical st.tease (SPEC §13.3), after st.wet and st.off were repaired; st.off is never changed here
   function repairTease(Z, st, t) {
     const okT = v => typeof v === 'number' && Number.isFinite(v) && v >= T_MIN && v <= T_MAX;
@@ -906,6 +978,9 @@ function KockaEngine() {
       // she knows about the visitor (the window: only then she goes to look)
       gardenAlone: gardenAlone(st), nap: napping(st), wakeAt: st.asleep ? st.wakeAt : st.lap && st.lap.doze ? st.lap.dozeAt + dozeLen(st, st.lap) : 0, stroll: !st.asleep && st.stroll > t,
       callAt: st.callAt, visitNoticed: !!(st.visit && st.visit.noticed),
+      // play (SPEC §14): hidden { spot, room, since, until } | null; a catch waiting for praise { kind, until } | null
+      hiding: st.hide ? { spot: st.hide.spot, room: st.hide.room, since: st.hide.since, until: st.hide.until } : null,
+      catch: st.catch ? { kind: st.catch.kind, until: st.catch.until } : null,
     };
   }
 
@@ -1025,6 +1100,7 @@ function KockaEngine() {
     N.love = Math.min(100, N.love + (fav ? 7 : 2));
     if (watching) ev.push({ type: 'ate', food: M.kind, gain: Math.round(M.gain), left: bowlHas(st), fav });
     if (fav) {
+      st.mem.today.food = M.kind;
       addBond(st, 1, ev);
       if (watching) ev.push({ type: 'purr' });
       if (!tummy && inc(st, 'favFood') >= 3) find(st, 'favFood', t, ev);
@@ -1134,7 +1210,7 @@ function KockaEngine() {
   // starving (begs: true, user's wish 2026-11-17: she had snacks at the neighbours', but "dělá, že celé dny nejedla"),
   // but only when the player sees her come (watching): back during a long absence she begged to nobody
   // why: 'rain' (back { rain: true }) | 'cold' (a real frost, back { cold: true }) | false
-  function comeBack(st, t, ev, why, watching) {
+  function comeBack(st, t, ev, why, watching, live = watching) {
     const d = t - st.out.since, walk = st.out.walk, flap = walk && !st.out.byPlayer;   // a walk she began by herself: through the cat flap
     st.out = null; st.acc.cold = 0;
     rouse(st, t);   // out, her sleep plan did not run and her old nap moment passed: the next nap is planned from now
@@ -1146,9 +1222,16 @@ function KockaEngine() {
       const r = rnd(st);
       if (r < 0.6) { e.postcard = postcardAt(st.seed, st.postcards.length); st.postcards.push({ id: e.postcard, t }); }
       else if (r < 0.8) e.present = givePresent(st);
+      st.mem.today.walk = true;
     }
     ev.push(e);
     if (walk) find(st, 'walk', t, ev);
+    // a catch (SPEC §14.3), only when the player sees her come: a keyed draw from the moment (never st.n), never a dead animal
+    if (walk && live && rndSeed(st.seed, Math.floor(t / 1000), 17) < CATCH.p) {
+      const kind = rndSeed(st.seed, Math.floor(t / 1000), 18) < CATCH.mouse ? 'mouse' : 'cricket';
+      st.catch = { kind, at: t, until: t + CATCH.ms };
+      ev.push({ type: 'catch', kind });
+    }
   }
   // the n-th postcard: each round of 42 is a new seeded shuffle, so no card repeats before all were collected
   function postcardAt(seed, n) {
@@ -1250,6 +1333,7 @@ function KockaEngine() {
   function newDay(st, t, ev) {
     endDay(st, ev);
     st.day = freshDay(t);
+    st.mem = { today: freshMem(), prev: st.mem.today };   // a night across midnight still dreams of the day before
     litterDay(st, t, ev);
     const age = birthdayAge(st.born, t), y = new Date(t).getFullYear();
     if (age && st.bday < y) { st.bday = y; addBond(st, 10, ev); ev.push({ type: 'birthday', age }); }
@@ -1333,6 +1417,8 @@ function KockaEngine() {
     }
   }
   // the next planned moment after t (advance() ends a step there; also the end of a doze on the lap)
+  // (a hide and a catch do not split steps, SPEC §14: the split would move every later draw of a watched advance; the
+  // UI advances at their `until`, and the step that reaches it ends them)
   function nextMoment(st, t) {
     let m = Infinity;
     const doze = st.lap && st.lap.doze ? st.lap.dozeAt + dozeLen(st, st.lap) : 0;   // the end of a doze on the lap
@@ -1387,7 +1473,7 @@ function KockaEngine() {
       if (place === 'box') seenQuirk(st, 'box', t, ev);
     }
   }
-  function step(st, t, dt, helped, watching, ev) {
+  function step(st, t, dt, helped, watching, ev, seen, live) {
     st.t = t;
     if (dkey(t) !== st.day.key) newDay(st, t, ev);
     const ph = dayPhase(t), night = ph === 'night', N = st.needs, h = dt / HOUR;
@@ -1448,7 +1534,7 @@ function KockaEngine() {
       ev.push({ type: 'jealousEnd', id: st.jealous.id });
       st.jealous = null;
     }
-    if (st.yard) gardenStep(st, t, dt, night, ev);
+    if (st.yard) { gardenStep(st, t, dt, night, ev); leafStep(st, t, dt, night, watching, ev); }
     // the cat flap: while the player is away she goes on a walk by herself (0.2 per daytime hour; bond Kamarádka, placed in the předsíň)
     else if (!watching && st.furniture.catFlap && st.lvl >= WALK_BOND && !st.out && !st.asleep && !st.lap && !st.ill && !night &&
       rnd(st) < 1 - Math.exp(-0.2 * h)) {
@@ -1460,10 +1546,13 @@ function KockaEngine() {
     if (s && !st.out) { meet(st, s, t, ev); if (st.yard && s === 'storm' && !st.yard.tree) leaveYard(st, ev, 'house'); }
     // alone in the garden in a real frost (§12f): in after WX.frostAlone minutes at most (back { cold: true })
     const cold = gardenAlone(st) && frostAt(st, t) && t + dt >= Math.min(st.out.until, st.out.since + WX.frostAlone * MIN);
-    if (cold) comeBack(st, t + dt, ev, 'cold', watching);
-    else if (st.out && (t + dt >= st.out.until || N.energy < 25 || (!st.out.byPlayer && night && season(t) === 'winter'))) comeBack(st, t + dt, ev, false, watching);
-    else if (st.out && !st.out.walk && weather(t, st) === 'rain') comeBack(st, t, ev, 'rain', watching);   // alone in the garden: never in the rain
+    if (cold) comeBack(st, t + dt, ev, 'cold', watching, live);
+    else if (st.out && (t + dt >= st.out.until || N.energy < 25 || (!st.out.byPlayer && night && season(t) === 'winter'))) comeBack(st, t + dt, ev, false, watching, live);
+    else if (st.out && !st.out.walk && weather(t, st) === 'rain') comeBack(st, t, ev, 'rain', watching, live);   // alone in the garden: never in the rain
+    memStep(st, t, dt, night);
+    catchStep(st, t, dt, seen, ev);
     teaseStep(st, t + dt, watching, ev);
+    hideStep(st, t, dt, seen, live, ev);
     if (st.off && t >= st.off.until) st.off = null;
     // the day's averages (weight, bond)
     const D = st.day;
@@ -1478,12 +1567,150 @@ function KockaEngine() {
     const P = T.pay;
     if (!P) return;
     if (te >= P.at + TEASE.pay.lapse * MIN || T.payDay === dkey(te)) { T.pay = null; return; }
-    const free = !st.asleep && !st.out && !st.lap && !st.held && !(st.yard && st.yard.tree) && !(st.scared > te) &&
+    const free = !st.asleep && !st.out && !st.lap && !st.held && !st.hide && !(st.yard && st.yard.tree) && !(st.scared > te) &&
       !(st.visit && st.visit.act && st.visit.act.with) && !st.jealous && !teasing(st, te) && !longOff(st, te);
     if (te < P.at || !watching || !free) return;
     T.payDay = dkey(te); T.pay = null;
     ev.push({ type: 'payback', kind: st.yard ? 'ambush' : P.kind });   // no kitchen counter in the garden
     find(st, 'payback', te, ev);
+  }
+
+  /* --- play and memories (SPEC §14, user's wishes 2026-11-19): hide and seek, dreams, a catch, the leaf pile --- */
+  // the room of a hiding spot now, or null (the box: only when it stands in a room of the house)
+  function hideRoom(st, spot) {
+    if (typeof spot !== 'string' || !Object.prototype.hasOwnProperty.call(HIDE_ROOMS, spot)) return null;
+    if (spot !== 'box') return HIDE_ROOMS[spot];
+    const B = st.furniture && st.furniture.box;
+    return B && B.room !== 'garden' ? B.room : null;
+  }
+  // where she may hide now: [{ spot, room }]
+  function hideSpots(st) {
+    return Object.keys(HIDE_ROOMS).map(spot => ({ spot, room: hideRoom(st, spot) })).filter(s => s.room);
+  }
+  // a hide goes on: at home, awake, not on the lap or in the arms, not frightened, not at the bowls
+  const hideStays = (st, x) => free(st, x) && !st.meal && !st.drink;
+  // she may start to hide at x (watching): at home for a day already (a new cat settles in first), free at home, by day, in a good mood, nothing else going on, nothing due
+  // during the hide (a nap, the litter box, a meal, a drink), at most HIDE.max a day and HIDE.gap minutes apart
+  function hideCan(st, x) {
+    const N = st.needs, H = st.hides, h = new Date(x).getHours();
+    return !st.hide && x - st.born >= HIDE.home * HOUR && hideStays(st, x) && h >= HIDE.from && h < HIDE.to && !st.ill && !teasing(st, x) && !longOff(st, x) &&
+      !st.jealous && !st.visit && !st.guest && !st.catch && !st.callAt && !st.tease.pay && N.energy >= HIDE.energy && moodValue(st) >= 10 &&
+      !(st.bowl && wantsMeal(st, x)) && !(st.dish > 0.5 && N.water < DISH.thirsty) &&
+      st.napAt > x + HIDE.len && st.litterAt > x + HIDE.len &&
+      !(H.key === dkey(x) && H.n >= HIDE.max) && !(H.at && x >= H.at && x - H.at < HIDE.gap * MIN);
+  }
+  // the next moment in (t, t + 10 min] at which a hide may start: one keyed chance per 10-minute slot of the clock
+  function hideNext(st, t) {
+    const S = HIDE.slot * MIN, s0 = Math.floor(t / S);
+    for (let s = s0; s <= s0 + 1; s++) {
+      if (rndSeed(st.seed, s, 12) >= HIDE.p) continue;
+      const m = s * S + Math.floor(rndSeed(st.seed, s, 13) * S);
+      if (m > t) return m;
+    }
+    return 0;
+  }
+  // the end of a step (te): a hide ends (from 150 s on: she jumps out; or something took her out), or one starts when a
+  // slot's moment lies in (t, te] (watching only; it begins at te, when the UI hears of it, and lasts HIDE.len from there)
+  function hideStep(st, t, dt, seen, live, ev) {
+    const te = t + dt, H = st.hide;
+    if (H) {
+      if (!seen) { st.hide = null; return; }
+      if (!hideStays(st, te)) { st.hide = null; ev.push({ type: 'unhide', spot: H.spot, by: 'self' }); return; }
+      if (te >= H.until) { st.hide = null; st.needs.fun = Math.min(100, st.needs.fun + HIDE.boo); ev.push({ type: 'unhide', spot: H.spot, boo: true }); }
+      return;
+    }
+    if (!live) return;
+    const m = hideNext(st, t);
+    if (!m || m > te || !hideCan(st, te)) return;
+    const spots = hideSpots(st), s = spots[Math.floor(rndSeed(st.seed, Math.floor(m / (HIDE.slot * MIN)), 14) * spots.length)], key = dkey(te);
+    st.hides = { key, n: (st.hides.key === key ? st.hides.n : 0) + 1, at: te };
+    st.hide = { spot: s.spot, room: s.room, since: te, until: te + HIDE.len };
+    ev.push({ type: 'hide', spot: s.spot, room: s.room });
+  }
+  // the hide ends because of the player (an action, a minigame)
+  function unhide(st, by, ev) {
+    ev.push({ type: 'unhide', spot: st.hide.spot, by });
+    st.hide = null;
+  }
+  // Schovávaná (the minigame): the score from the rounds she was found in and the seconds it took altogether
+  function hideScore(found, secs) {
+    const f = typeof found === 'number' && Number.isFinite(found) ? Math.floor(clamp(found, 0, 20)) : 0;
+    const s = typeof secs === 'number' && Number.isFinite(secs) ? clamp(secs, 0, 3600) : 3600;
+    return Math.max(f, f * 3 - Math.floor(s / 10));
+  }
+  // her memories of the step (also while nobody watches): minutes at the bird feeder in the garden (with the player or
+  // alone; awake, by day, not in the rain, not up the tree), the neighbour cats she knows about
+  function memStep(st, t, dt, night) {
+    const M = st.mem.today;
+    if (st.furniture.birdFeeder && (st.yard ? !st.yard.tree : gardenAlone(st)) && !st.asleep && !night && weather(t, st) !== 'rain')
+      M.birds = Math.min(MEM.birds, Math.round((M.birds + dt / MIN) * 1000) / 1000);
+    if (perceives(st) && M.cats.length < MEM.cats && !M.cats.includes(st.visit.id)) M.cats.push(st.visit.id);
+  }
+  // a toy she played with (the act, a toy minigame, the feather for two)
+  function memToy(st, toy) {
+    const M = st.mem.today;
+    M.toy = toy;
+    if ((TOYS[toy].base || toy) === st.traits.toy) M.fav = true;
+  }
+  // what she dreams of at t (pure): null when she is awake; asleep or dozing on the lap { kind, id? }: a weighted keyed
+  // pick from today's and yesterday's memories (yesterday half), always a little 'mouse' and 'food'; the same for a
+  // 15-minute slot of the sleep (from when it began), and a slot repeats the one before only when nothing else fits
+  function dream(st, t) {
+    if (!st || typeof st !== 'object' || !st.mem || !st.traits) return null;
+    const x = typeof t === 'number' && Number.isFinite(t) ? t : st.t;
+    const from = st.asleep ? st.sleepAt || st.t : st.lap && st.lap.doze ? st.lap.dozeAt || st.t : 0;
+    if (!from) return null;
+    const C = [], add = (kind, w, id) => C.push(id ? { kind, w, id } : { kind, w });
+    const base = toy => (Object.prototype.hasOwnProperty.call(TOYS, toy) ? TOYS[toy].base || toy : toy);
+    for (const [M, k] of [[st.mem.today, 1], [st.mem.prev, 0.5]]) {
+      if (!M) continue;
+      if (M.birds >= MEM.bird) add('bird', k * (1 + Math.min(2, M.birds / 60)));
+      for (const c of M.cats || []) add('cat', k * 1.2, c);
+      const favToy = M.toy && base(M.toy) === st.traits.toy;
+      if (M.toy) add('toy', k * (M.fav && favToy ? 2 : 1), M.toy);
+      if (M.fav && !favToy) add('toy', k * 2, st.traits.toy);
+      if (M.walk) add('walk', k * 2);
+      if (M.food) add('food', k * 1.5, M.food);
+    }
+    add('mouse', 0.5); add('food', 0.3);
+    const pick = (s, salt) => {
+      let r = rndSeed(st.seed, Math.floor(from / 1000) + s * 7919, salt) * C.reduce((a, c) => a + c.w, 0);
+      for (const c of C) { if (r < c.w) return c; r -= c.w; }
+      return C[C.length - 1];
+    };
+    const s = Math.max(0, Math.floor((x - from) / (MEM.slot * MIN)));
+    let d = pick(s, 15);
+    if (s > 0) { const p = pick(s - 1, 15); if (p.kind === d.kind && p.id === d.id) d = pick(s, 16); }
+    return d.id ? { kind: d.kind, id: d.id } : { kind: d.kind };
+  }
+  // the leaf pile stands in the garden at t: in autumn, unless it was scattered that day (raked up again by the next one)
+  function leafPile(st, t) {
+    const x = typeof t === 'number' && Number.isFinite(t) ? t : st.t;
+    return season(x) === 'autumn' && !(st.leaves && dkey(st.leaves) === dkey(x));
+  }
+  function leafJump(st, t, self, ev) {
+    st.leaves = t;
+    st.needs.fun = Math.min(100, st.needs.fun + LEAF.fun);
+    ev.push({ type: 'leafJump', self });
+  }
+  // in the garden with the player (watching): she jumps into a whole pile by herself, a keyed chance per 10-minute slot
+  function leafStep(st, t, dt, night, watching, ev) {
+    const Y = st.yard;
+    if (!Y || !watching || Y.tree || st.asleep || st.lap || st.held || night || !leafPile(st, t) || weather(t, st) === 'rain') return;
+    const S = LEAF.slot * MIN, s0 = Math.floor(t / S);
+    for (let s = s0; s <= s0 + 1; s++) {
+      if (rndSeed(st.seed, s, 19) >= LEAF.p) continue;
+      const m = s * S + Math.floor(rndSeed(st.seed, s, 20) * S);
+      if (m > t && m <= t + dt && leafPile(st, m)) { leafJump(st, m, true, ev); return; }
+    }
+  }
+  // the catch waits 120 s (nextMoment ends a step there): unpraised while the player watches, she sulks a little
+  function catchStep(st, t, dt, seen, ev) {
+    const C = st.catch;
+    if (!C || t + dt < C.until) return;
+    st.catch = null;
+    if (!seen || st.out || st.asleep) return;
+    offence(st, C.until, { type: 'catchSnub', kind: C.kind }, false, ev);
   }
   // the clock moved back by now - st.t: every stored moment moves with it, so waiting times stay as long as they were
   function shiftTimes(st, now) {
@@ -1530,6 +1757,12 @@ function KockaEngine() {
     T.boops = T.boops.map(b => b + d);
     if (T.pay) T.pay = { kind: T.pay.kind, at: T.pay.at + d };
     T.payDay = Math.min(T.payDay, today); T.bondDay = Math.min(T.bondDay, today);
+    // play (SPEC §14): a hide and a catch keep their length, the day keys are clamped, the leaf pile stays scattered
+    if (st.hide) st.hide = { spot: st.hide.spot, room: st.hide.room, since: st.hide.since + d, until: st.hide.until + d };
+    st.hides = { key: Math.min(st.hides.key, today), n: st.hides.n, at: mv(st.hides.at) };
+    if (st.catch) st.catch = { kind: st.catch.kind, at: st.catch.at + d, until: st.catch.until + d };
+    st.catchDay = Math.min(st.catchDay, today);
+    st.leaves = Math.min(st.leaves, now);
   }
   // probe (optional) = { at: [times, ascending], fn(copy) }: fn gets, at each of those times, a copy of her exactly as an
   // advance from the same start to that time alone would leave her (the same steps, then the same tidying at the end).
@@ -1539,7 +1772,8 @@ function KockaEngine() {
     const ev = [];
     if (typeof now !== 'number' || !Number.isFinite(now) || now < T_MIN || now > T_MAX) return { st, events: ev };   // a broken clock
     if (now <= st.t) { shiftTimes(st, now); ensurePlan(st); return { st, events: ev }; }   // the clock moved back: nothing happens
-    const start = st.t, gap = now - start, watching = gap <= HOUR;
+    const start = st.t, gap = now - start, watching = gap <= HOUR, seen = gap <= SEEN;
+    if (!seen) { st.hide = null; st.catch = null; }   // nobody looked for her or praised the catch: it just passed
     if (st.lap && gap > LAP.away * MIN) leaveLap(st, start, 'away', ev);   // nobody sat in the chair that long
     if (st.yard && gap > LAP.away * MIN && ((season(start) === 'winter' && dayPhase(start) !== 'day' && dayPhase(start) !== 'morning') || weather(start, st) === 'rain')) {
       // a winter evening or night, or rain: she comes in with the player
@@ -1563,7 +1797,7 @@ function KockaEngine() {
       let dt = Math.min(start + (Math.floor((t - start) / STEP) + 1) * STEP, end) - t;
       const nx = nextMoment(st, t);
       if (nx < t + dt) dt = nx - t;
-      step(st, t, dt, t - start >= HELP, watching, ev);
+      step(st, t, dt, t - start >= HELP, watching, ev, seen, seen && t + dt >= end);
       t += dt;
       // a probe time on the step grid is reached exactly (others are skipped): the end of an advance to it, on a copy
       for (; probe && pi < probe.at.length && probe.at[pi] <= t; pi++) {
@@ -1584,6 +1818,7 @@ function KockaEngine() {
       st.jealous = null;
       endDay(st, ev);
       st.t = now; st.day = freshDay(now);
+      st.mem = { today: freshMem(), prev: freshMem() };   // days ago: nothing fresh to dream of
       st.needs.food = 40; st.needs.water = 40;
       st.weight = r2(clamp(st.weight - Math.min(0.4, 0.1 * Math.max(0, Math.floor(days) - 3)), 3.0, 5.6));
       st.held = false; st.scared = 0; rouse(st, now); st.callAt = 0;
@@ -1609,6 +1844,9 @@ function KockaEngine() {
     const t = st.t, N = st.needs, name = st.name, nm = moodName(moodValue(st));
     const no = (reason, p) => { ev.push(Object.assign({ type: 'refused' }, typeof reason === 'string' ? refusal(reason, p) : reason)); return { st, events: ev }; };
     if (typeof action !== 'string' || !ACTIONS.includes(action)) return no('cantNow');
+    // hide and seek (SPEC §14.1): seek looks for her; any other action about her ends the hide first (she comes out)
+    if (action === 'seek' && !st.hide) return no('notHiding');
+    if (st.hide && action !== 'seek' && !HIDE_KEEP.includes(action)) unhide(st, action, ev);
     const before = wants(st), beforeV = before ? needs(st)[before] : 100, a = arg && typeof arg === 'object' ? arg : {};
     if (action === 'nameKitten') {   // anywhere, whatever Koxa does (she stays on the lap or up the tree)
       const why = nameKitten(st, a, ev);
@@ -1622,7 +1860,7 @@ function KockaEngine() {
     if (st.yard && st.yard.tree && !TREE_OK.includes(action)) return no('onTree');
     // on the lap: stroking, scratching, a treat from the hand, calling, a photo, patting and a nose tap keep her there;
     // anything else = standing up
-    if (st.lap && !['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff', 'photo', 'pat', 'boop'].includes(action)) {
+    if (st.lap && !['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff', 'photo', 'pat', 'boop', 'praise'].includes(action)) {
       ev.push({ type: 'lapOff', dozing: st.lap.doze }); lapNapDone(st, t); st.lap = null;
     }
     const onLap = !!st.lap, lapK = onLap ? 1.5 : 1;
@@ -1665,6 +1903,7 @@ function KockaEngine() {
       wakeUp();
       if (stick) useStock('stick'); else st.pamlsky -= 1;
       if (training) st.day.ttreats++; else st.day.treats++;
+      st.mem.today.food = 'treat';
       N.food = Math.min(100, N.food + (stick ? 3 : 5)); N.love = Math.min(100, N.love + (stick ? 5 : 3));
       ev.push({ type: 'treat', stick });
       if (st.day.treats + st.day.ttreats / 2 > 12) getIll(st, 'tummy', t, ev);
@@ -1774,6 +2013,7 @@ function KockaEngine() {
         if (dayPhase(t) === 'evening') gain = Math.round(gain * 1.25);
         N.fun = Math.min(100, N.fun + gain); N.energy = Math.max(0, N.energy - 5);
         ev.push({ type: 'played', toy, gain, fav });
+        memToy(st, toy);
         if (fav && inc(st, 'toy') >= 5) find(st, 'toy', t, ev);
         if (st.traits.quirk === 'socks' && rnd(st) < 0.3) seenQuirk(st, 'socks', t, ev);
         break;
@@ -2045,12 +2285,41 @@ function KockaEngine() {
         if (why) return no(why);
         break;
       }
+      case 'seek': {   // st.hide is set (checked above): the right spot finds her, a wrong one changes nothing
+        const H = st.hide, spot = typeof arg === 'string' ? arg : a.spot;
+        if (typeof spot !== 'string' || !Object.prototype.hasOwnProperty.call(HIDE_ROOMS, spot)) return no('noSpot');
+        if (spot !== H.spot) { ev.push({ type: 'seekMiss', spot }); break; }
+        const ms = t - H.since, quick = ms <= HIDE.quick, F = quick ? HIDE.quickFx : HIDE.found;
+        st.hide = null;
+        N.love = Math.min(100, N.love + F.love); N.fun = Math.min(100, N.fun + F.fun);
+        ev.push({ type: 'seekFound', spot, secs: Math.round(ms / 1000), quick });
+        break;
+      }
+      case 'praise': {   // her catch from a walk: praised (a tap or a stroke while it waits)
+        const C = st.catch;
+        if (!C) return no('noCatch');
+        st.catch = null;
+        N.love = Math.min(100, N.love + CATCH.love);
+        const bond = st.catchDay !== dkey(t);
+        ev.push({ type: 'praised', kind: C.kind, bond });
+        if (bond) { st.catchDay = dkey(t); addBond(st, 1, ev); }
+        break;
+      }
+      case 'leafJump': {   // the player taps the leaf pile while she is in the garden with them
+        if (!st.yard) return no('notInGarden');
+        if (!leafPile(st, t)) return no('noLeaves');
+        if (sleeping()) return { st, events: ev };
+        if (cross()) { ev.push({ type: 'ignore', reason: 'playCross' }); break; }
+        st.held = false;
+        leafJump(st, t, false, ev);
+        break;
+      }
     }
     // a satisfied want (the need was under 40, not just her meal time): bond +1, at most once an hour for each need
     if (before && beforeV < 40 && needs(st)[before] >= 40 && !(t - (st.wantAt[before] || 0) < HOUR)) { st.wantAt[before] = t; addBond(st, 1, ev); }
     bowlCheck(st, t, true, ev);                  // picked up, on the lap, out…: she leaves the bowl
     // the player plays with her or cuddles her (an awake cat): her next nap may wait (SLEEP.play)
-    if (awake0 && !st.asleep && ['stroke', 'scratch', 'play', 'pat', 'pickUp', 'lapOn', 'train', 'showTrick', 'catnip', 'brush', 'playVisitor'].includes(action)) st.playAt = t;
+    if (awake0 && !st.asleep && ['stroke', 'scratch', 'play', 'pat', 'pickUp', 'lapOn', 'train', 'showTrick', 'catnip', 'brush', 'playVisitor', 'praise', 'leafJump'].includes(action)) st.playAt = t;
     if (st.callAt && (st.asleep || st.out || st.lap || st.held)) st.callAt = 0;
     ensurePlan(st);
     syncWant(st);
@@ -2093,8 +2362,16 @@ function KockaEngine() {
     const cv = typeof a.cv === 'number' && Number.isFinite(a.cv) ? clamp(a.cv, 0, 3) : 0;
     const eating = a.eating === true || !!(st.meal && st.meal.since <= t);   // the UI's flag, or a meal in progress
     const pat = (stage, x) => { ev.push(Object.assign({ type: 'pat', region, stage }, x || {}, eating ? { eating: true } : {})); };
-    // asleep (or dozing on the lap): nothing changes, she never blows up (the UI only flicks an ear)
-    if (st.asleep || (st.lap && st.lap.doze)) { pat('tolerate', { sleeping: true }); return null; }
+    // asleep (or dozing on the lap): a short run changes nothing (the UI flicks an ear); the TEASE.wakeN-th tap of a run
+    // wakes her (user's wish 2026-11-19: "she will hiss, but she will be awake"); she never blows up asleep
+    if (st.asleep || (st.lap && st.lap.doze)) {
+      if (n < TEASE.wakeN) { pat('tolerate', { sleeping: true }); return null; }
+      if (lap) leaveLap(st, t, 'annoyed', ev);
+      else { rouse(st, t); ev.push({ type: 'wake', early: false, rude: true }); }
+      love(TEASE.love.woken); T.warnAt = 0; touch();
+      ev.push({ type: 'woken', lap });
+      return null;
+    }
     if (n <= 2 || t - T.at > TEASE.runGap) T.warnAt = 0;   // a fresh run
     touch();
     // a path at its warning tap: warn; the outcome only when the run goes on 1.8 s after the warning
@@ -2224,7 +2501,11 @@ function KockaEngine() {
     if (st.lap) { ev.push({ type: 'lapOff', dozing: st.lap.doze }); lapNapDone(st, t); st.lap = null; }
     if (st.meal) endMeal(st, t, true, ev);    // she leaves the bowl to play
     if (st.drink) endDrink(st, t, true, ev);
+    if (st.hide) unhide(st, 'minigame', ev);
+    // Schovávaná reports { found, secs } (or a score already made by hideScore)
+    if (game === 'hide' && score && typeof score === 'object') score = hideScore(score.found, score.secs);
     const sc = typeof score === 'number' && Number.isFinite(score) ? Math.floor(clamp(score, 0, 999)) : 0, G = GAMES[game];
+    if (Object.prototype.hasOwnProperty.call(GAME_TOYS, game)) memToy(st, GAME_TOYS[game]);   // a dream of the toy
     const today = dkey(t);
     if (st.earnDay.key < today) st.earnDay = { key: today, n: 0 };
     // a day already paid in the future (the clock went back): nothing more today
@@ -2777,6 +3058,7 @@ function KockaEngine() {
       if (koxa) {
         const N = st.needs;
         N.fun = Math.min(100, N.fun + (caught === 'koxa' ? 12 : 8)); N.energy = Math.max(0, N.energy - 3);
+        memToy(st, 'feather');
         addPal(st, id, t, ev);
       }
       if (caught === 'visitor') jealousy(st, id, t, ev);   // the other cat got the feather
@@ -3032,5 +3314,6 @@ function KockaEngine() {
     mood, moodValue, wants, needs, health, bondLevel, diary,
     dayPhase, season, holiday, easter, weather, postcardAt, bedCount,
     WX, wmoChar, wxParse, wxValid, setWx, sky,
+    HIDE, CATCH, LEAF, MEM, DREAMS, hideSpots, hideScore, dream, leafPile,
   };
 }

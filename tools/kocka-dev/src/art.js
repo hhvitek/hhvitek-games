@@ -75,9 +75,10 @@
 //                            snow. temp: °C or null: ≤ −2 frost ferns on the window glass, a frosty lawn and a frozen
 //                            pond; ≥ 28 a stronger sun, a warm haze and a heat shimmer in the garden (not at night).
 //   rooms                    { id: { spots: { name: {x, y} } } } for the four places (room coordinates,
-//                            where an item or Koxa stands): living (Obývák: rug, bed, window, chair = armchair seat, sun),
-//                            kitchen (Kuchyně: bowl, water, counter, window), hall (Předsíň: litter, door, shoe, mat),
-//                            garden (Zahrada: door, gate, tree, branch, branch2, bench, feeder, yard, bed1..bed4).
+//                            where an item or Koxa stands): living (Obývák: rug, bed, window, chair = armchair seat, sun,
+//                            curtain, blanket), kitchen (Kuchyně: bowl, water, counter, window), hall (Předsíň: litter,
+//                            door, shoe, mat, wardrobe), garden (Zahrada: door, gate, tree, branch, branch2, bench, feeder,
+//                            yard, bed1..bed4, porch, pond, fence, leaves).
 //   bedSpots(n)              the garden beds in one row along the bottom: n = 4 (wide, = bed1..bed4) or 6 (narrower,
 //                            from bond level Parťačka): [{ x, y, w }] (x = middle, y = the spot's foot, w = width).
 //   spots                    the old single-room spots { bowl, water, litter, bed, window, door }, kept for old code.
@@ -110,6 +111,27 @@
 //                            the anchor of a kitten (anchors mapped). Kitten play poses (any cat can): tumble (on her back,
 //                            paws up; hops and somersaults by CSS) and tailCatch (up on the hind legs, both paws up and
 //                            forward batting at something above, e.g. Koxa's raised tail; the near paw bats by CSS).
+//   Hiding (schovávaná): hideCurtain, hideBlanket, hideWardrobe draw only what shows of her; the room draws the cover
+//                            with room({ hide: 'curtain' | 'blanket' (living) | 'wardrobe' (hall) }): the right curtain
+//                            tented over her on the sill (ear points in the fabric), a lump under the armchair blanket, the
+//                            wardrobe door ajar with a dark gap. hides[pose] = { room, spot, hide, sc }: put the pose's
+//                            point (100, 186) on rooms[room].spots[spot] at depth scale sc (box 212 · sc room units), never
+//                            flipped, over room({ hide }). hideBox (hides.hideBox = { box: true }) draws its own box front
+//                            like inBox and goes where inBox goes. opts.peek: a little more (curtain: one eye and ear round
+//                            the window side; blanket: the head half out; box: the head up to the nose; wardrobe: wide eyes
+//                            and a paw on the threshold); hideBox opts.tailOnly: only the tail tip curling out of the box.
+//                            Their regions: 'tail', 'ears', 'head', 'paws' (only what shows) and 'lump' (the cover itself,
+//                            last in hit-test order).
+//   opts.dreaming (asleep: sleep, lapCurl, loaf / lapLoaf with asleep): the svg gets kx-dream, the paws (kx-dpaw,
+//                            kx-dpawB) twitch and the whiskers (kx-whisk, kx-whiskR) flick now and then.
+//   dream(kind, opts)        <svg class="kx-bubble"> viewBox 0 0 120 100: a thought bubble whose two small circles lead
+//                            down-left to (8, 98) (put that just above her head); dreams = the kinds: bird, cat (opts.id
+//                            = a neighbour id or 'koxa': the head), toy (opts.id = an item name, yarn by default), walk,
+//                            food (a full bowl; opts.id 'fish' = a goldfish), mouse. The picture bobs (kx-dpic).
+//   pawPrint()               <svg class="kx-print"> viewBox 0 0 20 20: one paw print in the snow, toes up.
+//   Room options: leafPile (garden: the autumn leaf heap at spots.leaves), pawTrail: false (garden winter without the
+//                            static trail of paw prints). Items: cricket, bird, leafPile (the heap as an item) and leafBurst
+//                            (the heap bursting, leaves flying up and falling once, kx-burst 1.3 s; same size and spot).
 function KockaArt() {
   'use strict';
   const C = {
@@ -311,7 +333,9 @@ function KockaArt() {
     else s += `<path d="M0 13.6V16.5${MOUTH[h.mouth] || MOUTH.cat}" fill="none" stroke="${C.lid}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>`;
     if (h.tongue === 2) s += `<path d="M-4.2 16.4C-4.8 24 -2.6 29 0 29C2.6 29 4.8 24 4.2 16.4Z" fill="${C.tongue}" stroke="#a8504a" stroke-width="1"/><path d="M0 18.5V25" stroke="#c8605a" stroke-width="1.1" stroke-linecap="round"/>`;   // licking: the tongue out
     else if (h.tongue) s += `<path d="M-2.8 18Q0 25 2.8 18Z" fill="${C.tongue}"/>`;
-    s += `<path d="M-17 12L-50 6M-17 15L-51 15.5M-16 18L-47 25M17 12L50 6M17 15L51 15.5M16 18L47 25"${COAT.whisk ? ` transform="scale(${COAT.whisk} 1)"` : ''} stroke="${C.lid}" stroke-width="1.2" stroke-linecap="round" opacity=".75"/>`;
+    const wk = `${COAT.whisk ? ` transform="scale(${COAT.whisk} 1)"` : ''} stroke="${C.lid}" stroke-width="1.2" stroke-linecap="round" opacity=".75"`;
+    if (h.dream) s += `<g class="kx-whisk" style="transform-origin:-16px 15px"><path d="M-17 12L-50 6M-17 15L-51 15.5M-16 18L-47 25"${wk}/></g><g class="kx-whisk kx-whiskR" style="transform-origin:16px 15px"><path d="M17 12L50 6M17 15L51 15.5M16 18L47 25"${wk}/></g>`;
+    else s += `<path d="M-17 12L-50 6M-17 15L-51 15.5M-16 18L-47 25M17 12L50 6M17 15L51 15.5M16 18L47 25"${wk}/>`;
     if (h.ill === 'cold') s += '<path d="M2.6 14.6q2.8 4.6 0 6.6q-2.8-2 0-6.6z" fill="#a9d8f2"/>';
     if (h.ill === 'tummy') s += `<path d="M35 -27q4.5 6.5 0 9.4q-4.5-2.9 0-9.4z" fill="#a9d8f2" stroke="${C.ol}" stroke-width=".8"/>`;
     return s;
@@ -329,6 +353,7 @@ function KockaArt() {
   // head at (x, y), scale s, rotation rot; h from expr() plus { back, tongue, edge }; also adds the head regions
   function head(R, x, y, s, rot, h) {
     h = faceOpts(R.o || {}, h);
+    if (R.o && R.o.dreaming && R.o.asleep && !h.back) h = H(h, { dream: true });   // the whiskers flick in a dream
     // a kitten: the whole drawing is squashed by (KIT.sx, KIT.sy) around the feet (cat()); the head undoes that, so it
     // stays round, and is KIT.hk times bigger
     const K = KIT, hs = K ? r2(s * K.hk) : s, ek = K ? K.ear : 1, o = R.o || {};
@@ -394,6 +419,12 @@ function KockaArt() {
     if (both) { R.limb(line(112, 112, 113, 177), 15, LEG); R.raw(`<path d="M100 132V174" stroke="${C.edge}" stroke-width="1.4" stroke-linecap="round"/>`); }
     else R.raw(`<path d="M95.5 132V174" stroke="${C.edge}" stroke-width="1.4" stroke-linecap="round"/>`);
   }
+  // a paw that twitches in a dream (opts.dreaming while asleep: kx-dpaw on the paw, kx-dpawB = the other rhythm)
+  function dpaw(R, k, x, y, fn) {
+    const o = R.o || {};
+    if (!(o.dreaming && o.asleep)) return fn();
+    R.open('', k ? 'kx-dpaw kx-dpawB' : 'kx-dpaw', x, y); fn(); R.close();
+  }
   const POSES = {
     sit(R, o, e) {
       sitBody(R, o, false);
@@ -430,7 +461,7 @@ function KockaArt() {
       R.part(ell(150, 165, 24, 19), { edge: true, patches: spots([[156, 158, 9, 0]]) });
       R.close();
       tail(R, [174, 180, 162, 190, 128, 190, 110, 185]);
-      paw(R, 64, 183, 10, 5.5, { toes: true }); paw(R, 87, 184, 10, 5.5, { toes: true });
+      dpaw(R, 0, 64, 183, () => paw(R, 64, 183, 10, 5.5, { toes: true })); dpaw(R, 1, 87, 184, () => paw(R, 87, 184, 10, 5.5, { toes: true }));
       head(R, 72, 130, 0.95, -4, e);
       R.region('back', BODY, [1, 0]);
       R.mid = [125, 150];
@@ -443,7 +474,7 @@ function KockaArt() {
       R.part(BODY, { patches: spots([[118, 140, 16, 0], [150, 150, 9, 1], [92, 160, 10, 0], [170, 170, 7, 0]]) });
       R.part(ell(146, 162, 28, 21), { edge: true, patches: spots([[140, 170, 10, 1]]) });
       R.close();
-      paw(R, 62, 182, 11, 5.5, { toes: true }); paw(R, 84, 184, 11, 5.5, { toes: true });
+      dpaw(R, 0, 62, 182, () => paw(R, 62, 182, 11, 5.5, { toes: true })); dpaw(R, 1, 84, 184, () => paw(R, 84, 184, 11, 5.5, { toes: true }));
       head(R, 64, 152, 0.86, -12, H(e, { eyes: 'closed', mouth: 'cat', ears: o.ears || 'turned', blush: false }));
       tail(R, [178, 176, 170, 190, 124, 191, 102, 186]);
       R.region('back', BODY, [1, 0]);
@@ -585,6 +616,11 @@ function KockaArt() {
       paw(R, 82, 122, 10, 6, { toes: true }); paw(R, 118, 122, 10, 6, { toes: true });
       R.mid = [100, 110];
     },
+    // hiding (see "hiding"): only a little of her shows
+    hideCurtain(R, o, e) { hideCurtain(R, o, e); },
+    hideBlanket(R, o, e) { hideBlanket(R, o, e); },
+    hideBox(R, o, e) { hideBox(R, o, e); },
+    hideWardrobe(R, o, e) { hideWardrobe(R, o, e); },
     // a visitor sitting on the fence top, tail hanging down
     onFence(R, o, e) {
       R.shadow = null;
@@ -1012,6 +1048,100 @@ function KockaArt() {
     R.zz = [128, 30];
   }
 
+  /* ---------- hiding (schovávaná): the room draws the cover (room option hide), the pose only what shows of her ---------- */
+  // The cover shapes are in room units and shared by room() and the poses, so the two always line up when the pose's
+  // point (100, 186) is put on the spot `at` at the depth scale sc (the UI draws her 200-unit box 212 · sc room units
+  // big, CAT / 200 = UI_KC), never flipped. hideBox draws its own box front like inBox and goes where inBox goes.
+  const UI_KC = 1.06;
+  const HIDE_ROOM = {
+    // the right living-room curtain tented over her on the sill: two ear points, the hem lifted forward
+    curtain: { room: 'living', spot: 'curtain', at: { x: 198, y: 268 }, sc: 0.9,
+      edge: 'M189 118Q186 150 180 166Q174 178 172 192Q162 204 160 226Q156 252 158 284Q200 318 242 290Q246 256 240 226Q236 204 228 192Q226 178 220 165Q216 150 223 118' },
+    // a dome under the armchair blanket; the cover for clipping also takes the blanket hanging over the seat front
+    blanket: { room: 'living', spot: 'blanket', at: { x: 326, y: 404 }, sc: 0.9, edge: 'M292 420C287 396 294 368 315 366C330 365 334 377 346 379C362 381 372 400 370 420' },
+    // the hall wardrobe's door ajar: the dark gap [x0, y0, x1, y1]
+    wardrobe: { room: 'hall', spot: 'wardrobe', at: { x: 96, y: 406 }, sc: 0.82, gap: [85, 148, 108, 384] },
+  };
+  const hideTf = k => { const h = HIDE_ROOM[k], u = UI_KC * h.sc; return (x, y) => [r1(100 + (x - h.at.x) / u), r1(186 + (y - h.at.y) / u)]; };
+  const hidePath = (k, d) => kitPath(hideTf(k), d);
+  const hidePts = (k, p) => { const f = hideTf(k), q = []; for (let i = 0; i + 1 < p.length; i += 2) q.push(...f(p[i], p[i + 1])); return q; };
+  // draw fn's parts only outside the cover (a closed path in the cat's units)
+  function clipOut(R, cover, fn) {
+    const id = nid(), g = `<g clip-path="url(#${id})">`;
+    R.defs.push(`<clipPath id="${id}"><path clip-rule="evenodd" d="M-300 -300H500V500H-300Z${cover}"/></clipPath>`);
+    R.ol.push(g); R.fi.push(g);
+    fn();
+    R.ol.push('</g>'); R.fi.push('</g>');
+  }
+  const noFace = R => { R.reg = R.reg.filter(g => g.id !== 'nose' && g.id !== 'chin'); };
+  const peekEyes = (o, e) => (o.asleep ? 'closed' : e.eyes === 'happy' || e.eyes === 'closed' ? 'open' : e.eyes);
+  // behind the curtain on the sill: the tail tip hangs out under the hem; peek: one eye and ear round its window side
+  function hideCurtain(R, o, e) {
+    R.shadow = null;
+    const cover = hidePath('curtain', HIDE_ROOM.curtain.edge + 'Z');
+    clipOut(R, cover, () => {
+      tail(R, hidePts('curtain', [229, 288, 231, 312, 240, 324, 237, 338, 235, 350, 224, 353, 222, 344]), 13);
+      if (o.peek) { const [x, y] = hidePts('curtain', [163, 232]); head(R, x, y, 0.8, -18, H(e, { eyes: peekEyes(o, e), ears: o.ears || 'up', blush: false })); }
+    });
+    noFace(R);
+    R.region('lump', cover, [0, 1]);
+    R.order = ['tail', 'ears', 'head', 'lump'];
+    R.mid = hidePts('curtain', [200, 236]); R.zz = hidePts('curtain', [212, 150]);
+  }
+  // a lump under the armchair blanket: the ear tips out of its window side, the tail tip under the fringe; peek: the head
+  // half out, lying on its side
+  function hideBlanket(R, o, e) {
+    R.shadow = null;
+    const cover = hidePath('blanket', HIDE_ROOM.blanket.edge + 'L370 459L292 459Z');
+    clipOut(R, cover, () => {
+      tail(R, hidePts('blanket', [345, 452, 346, 464, 347, 474, 343, 482, 339, 490, 329, 491, 328, 483]), 12);
+      const [x, y] = hidePts('blanket', o.peek ? [300, 400] : [318, 396]);
+      head(R, x, y, 0.78, o.peek ? -50 : -40, H(e, { eyes: peekEyes(o, e), ears: o.ears || 'up', blush: false }));
+    });
+    noFace(R);
+    if (!o.peek) R.reg = R.reg.filter(g => g.id !== 'head');   // only the ear tips show
+    R.region('lump', hidePath('blanket', HIDE_ROOM.blanket.edge + 'Z'), [1, 0]);
+    R.order = ['tail', 'ears', 'head', 'lump'];
+    R.mid = hidePts('blanket', [330, 392]); R.zz = hidePts('blanket', [338, 340]);
+  }
+  // in the cardboard box: the ear tips and the eyes over the front edge; peek: the head up to the nose;
+  // tailOnly: only the tail tip curling up out of it
+  function hideBox(R, o, e) {
+    R.shadow = [100, 186, 66, 5];
+    R.raw(`<path d="M46 122L40 92H160L154 122Z" fill="#a8783e" stroke="${IO}" stroke-width="2.5" stroke-linejoin="round"/>`);
+    if (o.tailOnly) tail(R, [122, 134, 124, 112, 130, 94, 144, 86, 156, 80, 162, 90, 154, 96], 12);
+    else head(R, 100, o.peek ? 106 : 119, 1, o.peek ? 0 : -4, H(e, { eyes: o.peek ? peekEyes(o, e) : o.asleep ? 'closed' : e.eyes === 'happy' ? 'open' : e.eyes, ears: o.ears || 'up', blush: false }));
+    noFace(R);
+    for (const g of R.reg) if (g.id === 'head') g.path = kitPath((x, y) => [x, Math.min(y, 121)], g.path);   // only above the rim
+    R.raw(BOX_FRONT);
+    R.region('lump', 'M38 120L162 120L156 186L44 186Z', [0, 1]);
+    R.order = ['tail', 'ears', 'head', 'lump'];
+    R.mid = [100, 110]; R.zz = [130, 60];
+  }
+  // in the hall wardrobe: eyes glinting in the dark gap of the door ajar, the tail hanging out over the plinth onto the
+  // floor; peek: the eyes wide and a front paw out on the threshold
+  function hideWardrobe(R, o, e) {
+    R.shadow = null;
+    const g = HIDE_ROOM.wardrobe.gap, [x0, y0] = hideTf('wardrobe')(g[0], g[1]), [x1, y1] = hideTf('wardrobe')(g[2], g[3]);
+    clipOut(R, `M-300 -300L500 -300L500 ${y1}L-300 ${y1}Z`, () => tail(R, hidePts('wardrobe', [104, 376, 105, 392, 104, 402, 111, 408, 118, 413, 129, 411, 128, 402]), 12));
+    const [ex, ey] = hidePts('wardrobe', [96.5, 316]), k = 0.62;
+    if (!o.asleep) {
+      const kind = o.peek ? 'wide' : e.eyes === 'grumpy' ? 'grumpy' : 'open';
+      R.raw(`<g transform="translate(${ex} ${ey}) scale(${k})"><g fill="${C.eye}" opacity=".16"><circle cx="-15" cy="-1" r="15"/><circle cx="15" cy="-1" r="15"/></g>` +
+        `<g class="kx-eyes" style="transform-origin:0px -1px">${eye(-1, kind)}${eye(1, kind)}</g></g>`);
+    } else R.raw(`<g transform="translate(${ex} ${ey}) scale(${k})">${eye(-1, 'closed')}${eye(1, 'closed')}</g>`);
+    R.region('head', ellPoly(ex, ey, 30 * k + 6, 12 * k + 6), [0, -1]);
+    if (o.peek) { const [px, py] = hidePts('wardrobe', [89, 397]); R.limb([px + 3, py - 20, px + 2, py - 13, px + 1, py - 6, px, py], 12, { edge: true, paw: [10, 6], toes: true }); }
+    R.region('lump', poly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]), [0, 1]);
+    R.order = ['tail', 'paws', 'head', 'lump'];
+    R.mid = [r1((x0 + x1) / 2), r1(ey + 30)]; R.zz = [r1(x1 + 8), r1(ey - 40)];
+  }
+  const HIDES = { hideBox: { box: true } };
+  for (const [p, k] of [['hideCurtain', 'curtain'], ['hideBlanket', 'blanket'], ['hideWardrobe', 'wardrobe']]) {
+    const h = HIDE_ROOM[k];
+    HIDES[p] = { room: h.room, spot: h.spot, hide: k, sc: h.sc };
+  }
+
   /* ---------- the cat ---------- */
   function opts(x) {
     const o = typeof x === 'string' ? { mood: x } : Object.assign({}, x);
@@ -1103,7 +1233,7 @@ function KockaArt() {
       const s = R.shadow, [sx, sy] = K ? kitOut(K, ...kitIn(K, s[0], s[1])) : s, f = K ? K.ks * K.sx : 1;
       sh = `<ellipse cx="${sx}" cy="${sy}" rx="${K ? r1(s[2] * f) : s[2]}" ry="${K ? r1(s[3] * K.ks) : s[3]}" fill="#000" opacity=".18"/>`;
     }
-    const cls = ['koxa', 'kx-m-' + o.mood, 'kx-p-' + p, K ? 'kx-kit' : '', o.asleep ? 'kx-asleep' : '', o.wet ? 'kx-wet' : '', R.cls || ''].filter(Boolean).join(' ');
+    const cls = ['koxa', 'kx-m-' + o.mood, 'kx-p-' + p, K ? 'kx-kit' : '', o.asleep ? 'kx-asleep' : '', o.asleep && o.dreaming ? 'kx-dream' : '', o.wet ? 'kx-wet' : '', R.cls || ''].filter(Boolean).join(' ');
     return `<svg class="${cls}" viewBox="0 0 200 200" aria-hidden="true"><defs>${R.defs.join('')}</defs>${sh}${inner}</svg>`;
   }
   // poses that do not stand on (100, 186): the point of her box to put on the spot
@@ -1256,6 +1386,31 @@ function KockaArt() {
       `<path d="M24 36V74" stroke="#fff" stroke-width="5" stroke-linecap="round" opacity=".85"/><path d="M58 34V78" stroke="#ddd3bd" stroke-width="5" stroke-linecap="round" opacity=".7"/>` +
       `<ellipse cx="41" cy="26" rx="27" ry="7" fill="#2f5fa8"${st()}/><ellipse cx="41" cy="27" rx="21.5" ry="4.2" fill="#e9e1cf"/>` +
       `<path d="M50 33.5l3 1.5 2.5 -1 1 3.5 -2.5 3 -3.5 -.5 -1.5 -3z" fill="#2b2b33" stroke="#7a8a9a" stroke-width="1"/>`,
+    // a small friendly cricket (cvrček) she caught: big eye, a smile, the long jumping leg
+    cricket: () => groundShadow(30) + `<path d="M58 64L74 40L90 84" fill="none"${st(8)}/><path d="M58 64L74 40L90 84" fill="none" stroke="#6f9a34" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>` +
+      `<path d="M28 74L22 88M40 76L38 89M52 76L56 89" fill="none"${st(5)}/><path d="M28 74L22 88M40 76L38 89M52 76L56 89" stroke="#8a6a3a" stroke-width="2.4" stroke-linecap="round"/>` +
+      `<ellipse cx="50" cy="66" rx="27" ry="13" fill="#86b84a"${st(2.5)}/><path d="M34 70Q50 78 72 70" stroke="#c9dc8a" stroke-width="2.6" fill="none" stroke-linecap="round"/>` +
+      `<path d="M30 58Q52 46 80 62Q56 68 30 58Z" fill="#8a7a3a"${st(2)}/><path d="M40 57Q56 54 70 60" stroke="#b8a45a" stroke-width="1.6" fill="none"/>` +
+      `<path d="M18 52Q8 30 28 16M22 51Q22 30 44 22" fill="none" stroke="${IO}" stroke-width="1.8" stroke-linecap="round"/>` +
+      `<circle cx="24" cy="63" r="13" fill="#97c95a"${st(2.5)}/><circle cx="20" cy="59" r="5.4" fill="#fff"${st(1.4)}/><circle cx="19" cy="59.5" r="3" fill="${IO}"/><circle cx="17.8" cy="58" r="1.1" fill="#fff"/>` +
+      `<ellipse cx="25" cy="69" rx="3" ry="1.8" fill="#e8908a" opacity=".7"/><path d="M13 68Q16 72 20 70" fill="none" stroke="${IO}" stroke-width="1.6" stroke-linecap="round"/>`,
+    // a small round songbird (sýkorka koňadra) for the dreams: yellow belly with the black stripe, white cheek, black cap
+    bird: () => groundShadow(24) + `<path d="M46 80L44 90M56 80L58 90" stroke="#8a6a5a" stroke-width="2.4" stroke-linecap="round"/><path d="M70 56L94 46L93 62Z" fill="#6f8fb0"${st(2)}/>` +
+      `<ellipse cx="52" cy="60" rx="27" ry="23" fill="#f2cf45"${st(2.5)}/><path d="M44 40Q72 34 80 56Q68 72 48 62Z" fill="#8aa04e"${st(2)}/><path d="M52 52Q68 50 76 60Q62 68 52 60Z" fill="#6f8fb0"${st(1.8)}/><path d="M56 56Q64 55 70 59" stroke="#fff" stroke-width="2" fill="none"/>` +
+      `<path d="M31 52Q37 50 41 55L46 79Q42 83 39 78Z" fill="#22201e"/><circle cx="33" cy="40" r="16" fill="#fff"${st(2.5)}/><path d="M17 41Q18 23 35 23Q50 25 49 40Q41 34 33 38Q25 42 17 41Z" fill="#22201e"/>` +
+      `<path d="M47 44Q42 54 30 54" fill="none" stroke="#22201e" stroke-width="3"/><circle cx="27" cy="37" r="2.6" fill="${IO}"/><circle cx="26" cy="36" r=".9" fill="#fff"/><path d="M18 40L9 43L18 46Z" fill="#3a3330"${st(1.2)}/>`,
+    // the autumn leaf pile on the lawn and the same pile bursting (leaves flying up and falling, once: kx-burst ~1.3 s)
+    leafPile: () => leafHeap(50, 90, 1, 11),
+    leafBurst: () => {
+      let sd = 4711;
+      const rnd = () => (sd = (sd * 9301 + 49297) % 233280) / 233280;
+      let s = Array.from({ length: 9 }, (_, i) => leafShape(22 + i * 7 + rnd() * 4, 88 - rnd() * 4, 0.85, rnd() * 180, LEAF_COL[i % LEAF_COL.length])).join('');
+      s += '<g class="kx-burst">' + Array.from({ length: 22 }, (_, i) => {
+        const a = (-160 + i / 21 * 140) * Math.PI / 180, r = 22 + rnd() * 30, x = 50 + Math.cos(a) * r * 0.85, y = 80 + Math.sin(a) * r * 1.3;
+        return leafShape(x, y, 0.9 + rnd() * 0.4, rnd() * 180, LEAF_COL[(i * 5) % LEAF_COL.length]).replace(/^/, `<g style="--bx:${r1(50 - x)}px;--by:${r1(84 - y)}px;--br:${Math.round(rnd() * 240 - 120)}deg;animation-delay:${r2(rnd() * 0.12)}s">`) + '</g>';
+      }).join('') + '</g>';
+      return s;
+    },
     pill: () => `<g transform="rotate(-30 50 55)"><path d="M50 45H30A10 10 0 0 0 30 65H50Z" fill="#fff"/><path d="M50 45H70A10 10 0 0 1 70 65H50Z" fill="#e0727a"/><rect x="20" y="45" width="60" height="20" rx="10" fill="none"${st()}/><path d="M50 45V65" stroke="${IO}" stroke-width="2"/><path d="M28 50H44" stroke="#fff" stroke-opacity=".8" stroke-width="2.4" stroke-linecap="round"/></g>`,
   };
   function item(name) {
@@ -1320,6 +1475,41 @@ function KockaArt() {
     const f = FX[name];
     return f ? `<svg class="kx-fx" viewBox="0 0 40 40" aria-hidden="true">${f()}</svg>` : '';
   }
+
+  /* ---------- dreams: a thought bubble above her head (viewBox 0 0 120 100; the two small circles at the bottom left lead
+     down to her head, so put about (8, 98) of it just above and right of headPoint) ---------- */
+  const BUB = [[64, 42, 30], [38, 46, 19], [90, 46, 20], [50, 26, 18], [78, 24, 20], [60, 62, 20], [84, 64, 15], [38, 62, 13]];
+  const DREAMS = ['bird', 'cat', 'toy', 'walk', 'food', 'mouse'];
+  // the walk: a path up a green hill to a round tree, a butterfly (100 × 100 like an item)
+  const walkPic = () => `<path d="M2 92Q50 50 98 92Z" fill="#86bd5c"${st(2.5)}/><path d="M24 92Q40 80 50 82Q62 84 64 72Q66 66 70 64" fill="none" stroke="#e3c98f" stroke-width="7" stroke-linecap="round"/>` +
+    `<path d="M74 70V48" stroke="#6b4a2e" stroke-width="5" stroke-linecap="round"/><g fill="#4c8c38"${st(2)}><circle cx="74" cy="40" r="14"/></g><circle cx="69" cy="35" r="4" fill="#6fb04a"/>` +
+    `<g transform="translate(30 38) rotate(-12)"><path d="M0 0Q-12 -14 -14 -2Q-12 6 0 0Q-8 10 -2 12Q2 10 0 0ZM0 0Q12 -14 14 -2Q12 6 0 0Q8 10 2 12Q-2 10 0 0Z" fill="#f08a2a"${st(1.6)}/><circle cx="-8" cy="-4" r="1.6" fill="#fff"/><circle cx="8" cy="-4" r="1.6" fill="#fff"/><path d="M0 -4V8M0 -4l-3 -6M0 -4l3 -6" stroke="${IO}" stroke-width="1.6" stroke-linecap="round" fill="none"/></g>`;
+  // a neighbour's head (or Koxa's), centred on (0, 0)
+  function dreamHead(id) {
+    const draw = () => { const R = Rig({ mood: 'calm' }); head(R, 0, 0, 1, 0, expr({ mood: 'calm' })); return `<defs>${R.defs.join('')}</defs><g>${R.ol.join('')}</g><g>${R.fi.join('')}</g>`; };
+    return id === 'koxa' ? draw() : withCoat(NEIGHBOURS[id] || NEIGHBOURS.mourek, draw);
+  }
+  // dream(kind, opts): kind 'bird' | 'cat' (opts.id = a neighbour id, or 'koxa') | 'toy' (opts.id = an item name, yarn
+  // by default) | 'walk' | 'food' (a full bowl; opts.id 'fish' = a goldfish) | 'mouse'; anything else = 'bird'
+  function dream(kind, o) {
+    o = o || {};
+    if (!DREAMS.includes(kind)) kind = 'bird';
+    // an item-like drawing (100 × 100) scaled by k, its point (50, cy) in the middle of the cloud
+    const pic = (fn, k, cy) => `<g transform="translate(64 44) scale(${k}) translate(-50 ${-cy})">${quiet(fn)}</g>`;
+    const TOYK = { ballBell: [1.15, 66], mouse: [0.95, 68], catnipMouse: [0.95, 66], yarn: [1, 62], featherBunch: [0.85, 48], treat: [1, 56], laserDot: [1.1, 50] };
+    let inner;
+    if (kind === 'cat') inner = `<g transform="translate(64 47) scale(.58)">${dreamHead(o.id)}</g>`;
+    else if (kind === 'toy') { const id = ITEMS[o.id] && o.id !== 'leafBurst' ? o.id : 'yarn', [k, cy] = TOYK[id] || [0.8, 60]; inner = pic(ITEMS[id], k, cy); }
+    else if (kind === 'walk') inner = pic(walkPic, 0.8, 58);
+    else if (kind === 'food') inner = o.id === 'fish' ? pic(() => fishInner('goldfish'), 0.82, 50) : pic(ITEMS.bowlFull, 0.86, 67);
+    else if (kind === 'mouse') inner = pic(ITEMS.mouse, 0.95, 68);
+    else inner = pic(ITEMS.bird, 0.74, 56);
+    return `<svg class="kx-bubble" viewBox="0 0 120 100" aria-hidden="true"><g fill="${IO}">${BUB.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r + 2.5}"/>`).join('')}</g>` +
+      `<g fill="#fffdf6">${BUB.map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}"/>`).join('')}</g><path d="M42 28Q48 18 60 17" stroke="#fff" stroke-width="3" fill="none" opacity=".9" stroke-linecap="round"/>` +
+      `<circle cx="20" cy="84" r="6" fill="#fffdf6"${st(2.4)}/><circle cx="9" cy="95" r="3.6" fill="#fffdf6"${st(2)}/><g class="kx-dpic">${inner}</g></svg>`;
+  }
+  // one cat paw print in the snow (viewBox 0 0 20 20, toes up; the UI turns and fades it)
+  const pawPrint = () => `<svg class="kx-print" viewBox="0 0 20 20" aria-hidden="true">${PAWMARK(10, 11.5, 0.78, '#a9bccb')}</svg>`;
 
   /* ---------- the vet's room (viewBox 0 0 400 600, like room()) ---------- */
   const vetSpots = { table: { x: 200, y: 428 } };   // where she sits: the middle of the table top
@@ -1517,6 +1707,64 @@ function KockaArt() {
     `<path d="M286 406Q286 392 300 392H364Q378 392 378 406V418H286Z" fill="${AC.light}"/>` +
     `<path d="M262 470V368Q262 350 279 350Q296 350 296 368V470Z" fill="${AC.fab}"/><path d="M368 470V368Q368 350 384 350Q400 350 400 368V470Z" fill="${AC.fab}"/></g>` +
     `<g fill="${AC.line}"><circle cx="314" cy="324" r="2.4"/><circle cx="350" cy="324" r="2.4"/><circle cx="332" cy="352" r="2.4"/><circle cx="314" cy="376" r="2.4"/><circle cx="350" cy="376" r="2.4"/></g>`;
+  // the right curtain tented over her (room option hide: 'curtain'): the same gingham (pattern id g, room units, so the
+  // checks run on), folds pulled from the ear points, a shadow on the far side and under the lifted hem
+  function curtainTent(g) {
+    const e = HIDE_ROOM.curtain.edge;
+    return `<path d="M162 292Q200 324 240 296" fill="none" stroke="#000" stroke-width="5" opacity=".1" stroke-linecap="round"/><path d="${e}Z" fill="url(#${g})"/>` +
+      '<path d="M226 194Q244 236 240 290Q232 296 224 299Q234 244 218 196Z" fill="#6a2a1a" opacity=".16"/><path d="M168 214Q160 250 164 286" stroke="#fff" stroke-width="4" fill="none" opacity=".25" stroke-linecap="round"/>' +
+      '<g fill="none" stroke="#9a4a3a" stroke-linecap="round"><path d="M181 165Q186 142 190 122M219 164Q216 142 214 122M187 174Q200 186 213 174M178 196Q186 230 182 280M222 196Q216 236 222 286" stroke-width="1.4" opacity=".55"/>' +
+      `<path d="${e}" stroke-width="1.5"/></g>`;
+  }
+  // the knitted throw over the armchair (always there): over the back, the seat and the seat front, a fringe; hide:
+  // a dome on the seat where she lies under it (HIDE_ROOM.blanket)
+  const BL = { fab: '#8fa9c6', top: '#a5bdd6', low: '#7891b0', line: '#4f6688', stripe: '#f3e6d2', thin: '#c8574a' };
+  function blanket(hide) {
+    const band = (x0, x1, y, w) => `<path d="M${x0} ${y}H${x1}" stroke="${BL.stripe}" stroke-width="${w}"/><path d="M${x0} ${y + w / 2 + 1.5}H${x1}" stroke="${BL.thin}" stroke-width="1.4"/>`;
+    let s = `<g stroke="${BL.line}" stroke-width="2" stroke-linejoin="round"><path d="M298 396L301 304Q302 285 332 284Q362 285 363 304L366 396Z" fill="${BL.fab}"/>` +
+      `<path d="M296 394L368 394L371 420L293 420Z" fill="${BL.top}"/><path d="M293 420L371 420L370 448Q352 451 334 454Q314 459 296 462Z" fill="${BL.low}"/>` +
+      `<path d="M301 304Q302 285 332 284Q362 285 363 304Q348 300 332 312Q316 300 301 304Z" fill="${BL.low}"/></g>`;
+    s += `<g>${band(301, 363, 326, 5)}${band(300, 365, 360, 5)}${band(295, 369, 406, 3)}</g><path d="M294 434L370 430" stroke="${BL.stripe}" stroke-width="4"/><path d="M294 437.5L370 433.5" stroke="${BL.thin}" stroke-width="1.4"/>` +
+      `<path d="M306 292Q332 286 358 292" stroke="#fff" stroke-width="2.5" fill="none" opacity=".35" stroke-linecap="round"/><path d="M318 318Q314 350 318 390M346 318Q350 352 346 390M312 424Q310 440 314 456" stroke="${BL.line}" stroke-width="1.3" fill="none" opacity=".45" stroke-linecap="round"/>` +
+      `<path d="${Array.from({ length: 15 }, (_, i) => { const x = 298 + i * 5, y = 462 - (x - 296) * 0.2; return `M${x} ${r1(y - 0.5)}l${i % 2 ? 1 : -1} 7`; }).join('')}" stroke="${BL.line}" stroke-width="2.2" stroke-linecap="round"/>`;
+    if (!hide) return s;
+    const e = HIDE_ROOM.blanket.edge;
+    const id = nid();
+    return s + `<defs><clipPath id="${id}"><path d="${e}Z"/></clipPath></defs><path d="${e}Z" fill="${BL.fab}"/><g clip-path="url(#${id})">` +
+      `<path d="M350 380C364 384 372 402 370 420H352C356 402 356 390 350 380Z" fill="${BL.line}" opacity=".22"/><path d="M286 404Q330 386 376 404" fill="none" stroke="${BL.stripe}" stroke-width="5"/><path d="M286 408Q330 390 376 408" fill="none" stroke="${BL.thin}" stroke-width="1.4"/>` +
+      `<path d="M298 392Q302 372 316 370M334 380Q342 384 350 384" stroke="#fff" stroke-width="3" fill="none" opacity=".35" stroke-linecap="round"/></g><path d="${e}" fill="none" stroke="${BL.line}" stroke-width="2"/>` +
+      `<path d="M330 376Q326 396 330 418" stroke="${BL.line}" stroke-width="1.3" fill="none" opacity=".4" stroke-linecap="round"/>`;
+  }
+  // the tall wardrobe in the hall, left of the door (one door hinged on the left, a hat box on top); ajar: the door
+  // swung a little towards you and the dark gap HIDE_ROOM.wardrobe.gap open by its free edge
+  function wardrobe(ajar) {
+    const [gx0, gy0, gx1, gy1] = HIDE_ROOM.wardrobe.gap;
+    let s = '<g stroke="#4a2e18" stroke-width="2.5" stroke-linejoin="round"><path d="M40 126V112Q40 106 60 106Q80 106 80 112V126Z" fill="#c0503a"/><path d="M38 112Q60 104 82 112" fill="none"/>' +
+      '<rect x="22" y="136" width="94" height="258" fill="#9a6a3a"/><rect x="16" y="124" width="106" height="14" rx="3" fill="#b07c46"/><rect x="20" y="392" width="98" height="14" fill="#7a4f2a"/></g>' +
+      '<path d="M60 108V126" stroke="#e6b040" stroke-width="3"/>';
+    if (!ajar) return s + '<g stroke="#4a2e18" stroke-linejoin="round"><rect x="30" y="148" width="78" height="236" rx="2" fill="#b07c46" stroke-width="2.5"/>' +
+      '<rect x="38" y="158" width="62" height="96" rx="3" fill="#a87442" stroke="#7a4f2a" stroke-width="2"/><rect x="38" y="266" width="62" height="108" rx="3" fill="#a87442" stroke="#7a4f2a" stroke-width="2"/></g>' +
+      '<circle cx="101" cy="262" r="3.6" fill="#d9b24a" stroke="#7a5a1a" stroke-width="1.2"/><path d="M44 164V246" stroke="#c99252" stroke-width="3" opacity=".6"/>';
+    return s + `<rect x="30" y="${gy0}" width="${gx1 - 30}" height="${gy1 - gy0}" fill="#120c08"/><path d="M${gx0} ${gy0 + 8}H${gx1}" stroke="#3a2a1e" stroke-width="2"/>` +
+      `<path d="M96 156l6 6M100 162Q104 200 102 250L${gx1} 252V162Z" fill="#2a2630" stroke="#1a1612" stroke-width="1.5"/><path d="M${gx0} ${gy1 - 6}H${gx1}" stroke="#2a1c12" stroke-width="3"/>` +
+      '<g stroke="#4a2e18" stroke-linejoin="round"><path d="M30 148L80 141L80 391L30 384Z" fill="#b07c46" stroke-width="2.5"/><path d="M80 141L85 142L85 390L80 391Z" fill="#c99252" stroke-width="2"/>' +
+      '<path d="M37 158L73 153L73 253L37 254Z" fill="#a87442" stroke="#7a4f2a" stroke-width="2"/><path d="M37 266L73 265L73 378L37 374Z" fill="#a87442" stroke="#7a4f2a" stroke-width="2"/></g>' +
+      '<circle cx="75" cy="262" r="3.6" fill="#d9b24a" stroke="#7a5a1a" stroke-width="1.2"/><path d="M42 164V246" stroke="#c99252" stroke-width="3" opacity=".6"/>';
+  }
+  // a heap of autumn leaves, its foot (x, y), size k (88 · k wide, 34 · k tall), the same leaves for the same seed
+  const LEAF_COL = ['#d98a2b', '#c0552c', '#e6b040', '#b5631c', '#a8432a', '#d9a03a'];
+  const leafShape = (x, y, k, a, col) => `<path d="M-7 0Q0 -5 7 0Q0 5 -7 0Z" transform="translate(${r1(x)} ${r1(y)}) rotate(${Math.round(a)}) scale(${r2(k)})" fill="${col}" stroke="${IO}" stroke-width="${r2(1.1 / k)}"/>`;
+  function leafHeap(x, y, k, seed) {
+    let sd = seed * 7919 + 13;
+    const rnd = () => (sd = (sd * 9301 + 49297) % 233280) / 233280, L = [];
+    for (let i = 0; i < 58; i++) {
+      const u = rnd() * 2 - 1, top = 32 * (1 - u * u), v = Math.sqrt(rnd());
+      L.push([x + u * 42 * k, y - 4 * k - (1 - v) * top * k, (1.4 + rnd() * 0.7) * k, rnd() * 180, LEAF_COL[i % LEAF_COL.length]]);
+    }
+    L.sort((a, b) => a[1] - b[1]);
+    return `<ellipse cx="${x}" cy="${y}" rx="${r1(46 * k)}" ry="${r1(5 * k)}" fill="#000" opacity=".14"/><path d="M${r1(x - 44 * k)} ${y}Q${r1(x - 30 * k)} ${r1(y - 38 * k)} ${x} ${r1(y - 36 * k)}Q${r1(x + 30 * k)} ${r1(y - 38 * k)} ${r1(x + 44 * k)} ${y}Z" fill="#8f4f1f" stroke="${IO}" stroke-width="1.6"/>` +
+      L.map(q => leafShape(...q)).join('');
+  }
   const rug = () => '<ellipse cx="200" cy="534" rx="172" ry="46" fill="#5f8580"/><g fill="none"><ellipse cx="200" cy="534" rx="154" ry="39" stroke="#7fa39d" stroke-width="7"/><ellipse cx="200" cy="534" rx="122" ry="29" stroke="#c9b38a" stroke-width="5"/><ellipse cx="200" cy="534" rx="88" ry="19" stroke="#7fa39d" stroke-width="6"/><ellipse cx="200" cy="534" rx="172" ry="46" stroke="#4d6e6a" stroke-width="2"/></g>';
   // the garden beds in one row along the bottom (y 508–580): 4 wide ones, or 6 narrower ones that end at x 330, so the
   // camera button in the scene's bottom right corner covers none of them
@@ -1526,17 +1774,20 @@ function KockaArt() {
   }
   const PLACES = {
     living: {
-      spots: { rug: { x: 200, y: 534 }, bed: { x: 316, y: 562 }, window: { x: 130, y: 268 }, chair: { x: 332, y: 396 }, sun: sunPatch(0.5) },
+      spots: { rug: { x: 200, y: 534 }, bed: { x: 316, y: 562 }, window: { x: 130, y: 268 }, chair: { x: 332, y: 396 }, sun: sunPatch(0.5),
+        curtain: { x: 198, y: 268 },   // on the sill behind the right curtain (hideCurtain)
+        blanket: { x: 326, y: 404 } }, // under the armchair blanket (hideBlanket)
       draw(c) {
         const g = nid();
         let s = `<defs>${gingham(g)}</defs>` + wallFill('#ead7b6') + panelling() + frameWin(c, GX, GY, GW, GH);
         s += `<path d="M34 66H226" stroke="#5a3a20" stroke-width="5" stroke-linecap="round"/><g fill="url(#${g})" stroke="#9a4a3a" stroke-width="1.5"><path d="M38 66H76C72 120 66 170 70 218C74 250 68 288 60 300H40C36 230 34 150 38 66Z"/><path d="M222 66H184C188 120 194 170 190 218C186 250 192 288 200 300H220C224 230 226 150 222 66Z"/></g>`;
+        if (c.hide === 'curtain') s += curtainTent(g);
         s += '<rect x="234" y="96" width="54" height="46" fill="#6b4426"/><rect x="239" y="101" width="44" height="36" fill="#bfe0f0"/><path d="M239 128q20-10 44-4v13h-44z" fill="#79ad5e"/><g fill="#efe4cc"><rect x="252" y="114" width="20" height="10"/><rect x="263" y="105" width="5" height="11"/></g><path d="M250 115h24l-3-4h-18zM262 106h7l-3.5-5z" fill="#a8513a"/>';
         s += hangLamp(232, c.ph === 'evening') + planks() + rug();
         // the sun patch only under a clear sky (stronger on a hot day), the moonlight only on a clear night
         if ((c.ph === 'day' || c.ph === 'morning') && c.wx === 'clear') s += panes(sunX0(c.sunX), c.ph === 'morning' ? '#ffd79a' : '#fff1b8', (c.ph === 'morning' ? 0.42 : 0.5) + (c.heat ? 0.14 : 0));
         const hp = holidayProps(c.hol);
-        s += armchair() + hp.s + light(c, 232, 66);
+        s += armchair() + blanket(c.hide === 'blanket') + hp.s + light(c, 232, 66);
         if (c.ph === 'night' && c.wx === 'clear') s += panes(150, '#bcd0ff', 0.12);
         return s + hp.glow;
       },
@@ -1566,7 +1817,8 @@ function KockaArt() {
       },
     },
     hall: {
-      spots: { litter: { x: 330, y: 500 }, door: { x: 180, y: 404 }, shoe: { x: 84, y: 548 }, mat: { x: 180, y: 432 } },
+      spots: { litter: { x: 330, y: 500 }, door: { x: 180, y: 404 }, shoe: { x: 84, y: 548 }, mat: { x: 180, y: 432 },
+        wardrobe: { x: 96, y: 406 } },   // the floor in front of the wardrobe's door gap (hideWardrobe)
       draw(c) {
         let s = wallFill('#e6d4b4') + panelling();
         // the garden door with a glass pane, a cat flap when there is one
@@ -1580,11 +1832,13 @@ function KockaArt() {
           '<path d="M282 166L266 190L262 300H304L300 190Z" fill="#8a3a2a" stroke="#4a1a10" stroke-width="2" stroke-linejoin="round"/><path d="M282 170V298M274 200l8 12 8-12" stroke="#4a1a10" stroke-width="2" fill="none"/>' +
           '<path d="M346 166Q336 220 340 262H352Q350 220 346 166Z" fill="#3f78a8" stroke="#1f3a58" stroke-width="2"/><path d="M341 236h10M340 248h12" stroke="#f3e6d2" stroke-width="3"/>' +
           '<path d="M360 182Q362 162 374 162Q386 162 388 182Z" fill="#6b5a3a" stroke="#3a2a1a" stroke-width="2"/><path d="M354 184H394" stroke="#3a2a1a" stroke-width="3" stroke-linecap="round"/>';
-        s += `<rect x="78" y="176" width="12" height="20" rx="3" fill="#8a5a32"/><path d="M70 172H98L92 154H76Z" fill="${c.ph === 'evening' || c.ph === 'night' ? '#f6c766' : '#d99a3e'}" stroke="#8a5a22" stroke-width="1.5"/>`;
-        s += '<rect x="36" y="336" width="34" height="66" rx="5" fill="#9a958a" stroke="#5a564e" stroke-width="2"/><path d="M53 336V270" stroke="#3a2a1a" stroke-width="3"/><path d="M53 270q-6-4-6-10" stroke="#3a2a1a" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M42 336Q46 296 53 286Q60 296 64 336Z" fill="#c0503a" stroke="#6a1a10" stroke-width="2"/>';
+        // the wall lamp above the door, the umbrella stand under the coat rack, the wardrobe left of the door
+        s += `<rect x="180" y="116" width="12" height="20" rx="3" fill="#8a5a32"/><path d="M172 112H200L194 94H178Z" fill="${c.ph === 'evening' || c.ph === 'night' ? '#f6c766' : '#d99a3e'}" stroke="#8a5a22" stroke-width="1.5"/>`;
+        s += '<rect x="352" y="336" width="34" height="66" rx="5" fill="#9a958a" stroke="#5a564e" stroke-width="2"/><path d="M369 336V270" stroke="#3a2a1a" stroke-width="3"/><path d="M369 270q-6-4-6-10" stroke="#3a2a1a" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M358 336Q362 296 369 286Q376 296 380 336Z" fill="#c0503a" stroke="#6a1a10" stroke-width="2"/>';
+        s += wardrobe(c.hide === 'wardrobe');
         s += planks() + '<ellipse cx="180" cy="432" rx="66" ry="14" fill="#9a7040" stroke="#6a4a24" stroke-width="2"/><ellipse cx="180" cy="432" rx="52" ry="9" fill="none" stroke="#b88a54" stroke-width="2" stroke-dasharray="4 3"/>';
         s += '<path d="M62 548V524Q62 516 70 516H84Q90 516 90 524V534Q104 536 108 544V548Z" fill="#7a4a28" stroke="#3a2210" stroke-width="2.5" stroke-linejoin="round"/><path d="M62 548H110" stroke="#3a2210" stroke-width="4" stroke-linecap="round"/><path d="M70 526h12M72 532h10" stroke="#c9a070" stroke-width="1.6"/>';
-        return s + light(c, 84, 166);
+        return s + light(c, 186, 104);
       },
     },
     garden: {
@@ -1592,6 +1846,7 @@ function KockaArt() {
         door: { x: 44, y: 404 }, gate: { x: 278, y: 390 }, tree: { x: 344, y: 444 }, branch: { x: 278, y: 226 }, branch2: { x: 360, y: 186 },
         bench: { x: 184, y: 420 }, feeder: { x: 108, y: 266 }, yard: { x: 200, y: 470 },
         porch: { x: 52, y: 414 },   // her shelter from the rain: the step under the little roof of the back door
+        leaves: { x: 124, y: 476 },   // the foot of the autumn leaf pile (room option leafPile, items leafPile / leafBurst)
         bed1: { x: 59, y: 566 }, bed2: { x: 155, y: 566 }, bed3: { x: 251, y: 566 }, bed4: { x: 347, y: 566 }, pond: { x: 280, y: 478 }, fence: { x: 120, y: 308 },
       },
       draw(c) {
@@ -1629,7 +1884,8 @@ function KockaArt() {
         s += `<g fill="${snow ? '#dfe7ee' : '#b8b2a4'}" stroke="${snow ? '#b8c6d2' : '#8a8478'}" stroke-width="2">${[[50, 424, 18], [100, 418, 16], [150, 412, 15], [206, 406, 14], [254, 400, 13]].map(([x, y, r]) => `<ellipse cx="${x}" cy="${y}" rx="${r}" ry="${r1(r * 0.42)}"/>`).join('')}</g>`;
         if (se === 'spring' || se === 'summer') s += `<g>${[[24, 470, '#f4d03f'], [140, 476, '#f7b6c8'], [214, 466, '#fff'], [300, 478, '#f4d03f'], [380, 462, '#f7b6c8'], [90, 456, '#fff']].map(([x, y, col]) => `<circle cx="${x}" cy="${y}" r="3.4" fill="${col}" stroke="#2e2118" stroke-width=".8"/>`).join('')}</g>`;
         if (se === 'autumn') s += `<g>${[[40, 450, '#d98a2b'], [150, 470, '#c0552c'], [230, 460, '#e6b040'], [300, 486, '#d98a2b'], [372, 470, '#c0552c'], [100, 480, '#e6b040']].map(([x, y, col], i) => `<ellipse cx="${x}" cy="${y}" rx="5" ry="2.6" fill="${col}" transform="rotate(${i * 37} ${x} ${y})"/>`).join('')}</g>`;
-        if (snow) s += `<g fill="#b8c6d2">${Array.from({ length: 9 }, (_, i) => { const x = 74 + i * 22, y = 430 + Math.sin(i * 1.3) * 8 + i * 2; return `<circle cx="${r1(x)}" cy="${r1(y)}" r="2.2"/><circle cx="${r1(x - 3)}" cy="${r1(y - 4)}" r="1.1"/><circle cx="${r1(x + 1)}" cy="${r1(y - 5)}" r="1.1"/><circle cx="${r1(x + 4)}" cy="${r1(y - 3)}" r="1.1"/>`; }).join('')}</g>`;
+        if (c.leafPile) s += leafHeap(124, 476, 1, 11);
+        if (snow && c.pawTrail) s += `<g fill="#b8c6d2">${Array.from({ length: 9 }, (_, i) => { const x = 74 + i * 22, y = 430 + Math.sin(i * 1.3) * 8 + i * 2; return `<circle cx="${r1(x)}" cy="${r1(y)}" r="2.2"/><circle cx="${r1(x - 3)}" cy="${r1(y - 4)}" r="1.1"/><circle cx="${r1(x + 1)}" cy="${r1(y - 5)}" r="1.1"/><circle cx="${r1(x + 4)}" cy="${r1(y - 3)}" r="1.1"/>`; }).join('')}</g>`;
         // the pond (Rybaření): stones round the water, a lily pad and reeds; frozen in winter
         const ice = snow || c.frost;   // the pond freezes in winter and on a frosty day
         s += `<ellipse cx="280" cy="478" rx="50" ry="17" fill="#9a958a" stroke="#6a665e" stroke-width="2"/><ellipse cx="280" cy="478" rx="42" ry="12" fill="${ice ? '#d8eaf4' : '#4f8fb8'}"/>` +
@@ -1674,7 +1930,8 @@ function KockaArt() {
     const o = typeof a === 'string' ? { phase: a, season: b } : Object.assign({}, a);
     const P = PLACES[o.id] || PLACES.living;
     const c = Object.assign({ ph: SKY[o.phase] ? o.phase : 'day', se: HILL[o.season] ? o.season : 'summer', sunX: Number.isFinite(o.sunX) ? Math.min(1, Math.max(0, o.sunX)) : 0.5,
-      hol: [].concat(o.holiday || []), flap: !!o.flap, beds: o.beds === 6 ? 6 : 4, holes: [] }, wxOf(o));
+      hol: [].concat(o.holiday || []), flap: !!o.flap, beds: o.beds === 6 ? 6 : 4, holes: [],
+      hide: HIDE_ROOM[o.hide] && HIDE_ROOM[o.hide].room === (PLACES[o.id] ? o.id : 'living') ? o.hide : null, leafPile: !!o.leafPile, pawTrail: o.pawTrail !== false }, wxOf(o));
     return `<svg class="kx-room" viewBox="0 0 400 600" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${P.draw(c)}</svg>`;
   }
   const rooms = {};
@@ -1752,7 +2009,8 @@ function KockaArt() {
   for (const [k, v] of Object.entries({ bowl: 58, bowlEmpty: 58, bowlFull: 58, waterBowl: 52, waterBowlEmpty: 52, litter: 104, litterDirty: 104, bed: 150, mouse: 34, catnipMouse: 34,
     feather: 70, yarn: 40, laserDot: 30, treat: 30, foodBag: 60, jug: 56, brush: 50, scoop: 50, pouch: 40, chicken: 56, tuna: 44, vacuum: 140, seedPacket: 40, wateringCan: 70, trowel: 44,
     pill: 24, pouchPack: 70, chickenPack: 70, tunaPack: 64, treatBag: 50, ballBell: 34, box: 120, tunnel: 190, scratcher: 130, catTree: 240, sillCushion: 140, bedDeluxe: 160,
-    rugRound: 280, lamp: 170, birdFeeder: 150, catFlap: 60, fishingRod: 120, featherWand: 120, featherBunch: 40, mug: 26 })) itemSize[k] = { w: v, h: v };
+    rugRound: 280, lamp: 170, birdFeeder: 150, catFlap: 60, fishingRod: 120, featherWand: 120, featherBunch: 40, mug: 26,
+    cricket: 26, bird: 30, leafPile: 100, leafBurst: 100 })) itemSize[k] = { w: v, h: v };
   // in the item's own 100 × 100 box: the rod / wand tip (where the UI hangs its own string), the cat tree's platforms
   const itemPoints = { fishingRod: { tip: { x: 70, y: 10 } }, featherWand: { tip: { x: 60, y: 14 } }, catTree: { platforms: [{ x: 32, y: 58 }, { x: 71, y: 36 }, { x: 47, y: 8 }] } };
 
@@ -1770,9 +2028,10 @@ function KockaArt() {
   }
   // fish for the pond (Rybaření): goldfish, carp, perch
   const FISH = { goldfish: ['#ef8a2b', '#f6b45a', null], carp: ['#9a8a5a', '#c4b27a', null], perch: ['#7a9a4a', '#c8d48a', '#3e5a2a'] };
-  function fish(kind) {
+  function fish(kind) { return wrap(fishInner(kind)); }
+  function fishInner(kind) {
     const [body, belly, stripe] = FISH[kind] || FISH.goldfish;
-    return wrap(`<path d="M74 50L94 36V64Z" fill="${body}"${st(2.5)}/><path d="M8 50Q30 26 62 34Q80 42 78 50Q80 58 62 66Q30 74 8 50Z" fill="${body}"${st(2.5)}/>` +
+    return (`<path d="M74 50L94 36V64Z" fill="${body}"${st(2.5)}/><path d="M8 50Q30 26 62 34Q80 42 78 50Q80 58 62 66Q30 74 8 50Z" fill="${body}"${st(2.5)}/>` +
       `<path d="M16 54Q40 66 70 56" fill="none" stroke="${belly}" stroke-width="5" stroke-linecap="round"/><path d="M40 34Q46 24 56 30" fill="${body}"${st(2)}/>` +
       (stripe ? `<path d="M34 34V64M46 32V66M58 34V62" stroke="${stripe}" stroke-width="3.4"/>` : '') + `<circle cx="22" cy="46" r="3.4" fill="#fff"${st(1.4)}/><circle cx="22.6" cy="46" r="1.6" fill="${IO}"/><path d="M28 40Q32 50 28 60" stroke="${IO}" stroke-width="1.6" fill="none"/>`);
   }
@@ -1923,6 +2182,13 @@ function KockaArt() {
 .kx-shake{animation:kx-shake .4s ease-in-out 3}
 .kx-drops path{transform-box:fill-box;transform-origin:50% 50%;animation:kx-drops .9s ease-out 1 both}
 .koxa .kx-achoo{animation:kx-achoo .5s ease-out 1}
+.kx-dream .kx-dpaw{animation:kx-dpaw 4.6s ease-in-out infinite}
+.kx-dream .kx-dpawB{animation-duration:5.9s;animation-delay:-2.3s}
+.kx-dream .kx-whisk{animation:kx-whisk 3.7s ease-in-out infinite}
+.kx-dream .kx-whiskR{animation-delay:-1.6s}
+.kx-bubble,.kx-print{display:block;width:100%;height:100%;overflow:visible}
+.kx-bubble .kx-dpic{animation:kx-dbob 3.4s ease-in-out infinite}
+.kx-burst>g{transform-box:fill-box;transform-origin:50% 50%;animation:kx-burst 1.3s ease-out 1 both}
 .koxa .kx-shakeHead{animation:kx-shakeHead .6s ease-in-out 1}
 .kx-flick .koxa .kx-earR,.koxa.kx-flick .kx-earR{animation:kx-earflick .4s ease-out 1}
 @keyframes kx-blink{0%,93%,100%{transform:scaleY(1)}96%{transform:scaleY(.08)}}
@@ -1969,11 +2235,16 @@ function KockaArt() {
 @keyframes kx-achoo{0%{transform:none}25%{transform:translate(1px,-3px) rotate(6deg) scale(1.04)}45%{transform:translate(-4px,7px) rotate(-8deg) scale(.96,1.04)}70%{transform:translate(-1px,2px) rotate(-2deg)}100%{transform:none}}
 @keyframes kx-shakeHead{0%,100%{transform:none}15%{transform:rotate(-14deg)}35%{transform:rotate(13deg)}55%{transform:rotate(-11deg)}75%{transform:rotate(8deg)}90%{transform:rotate(-3deg)}}
 @keyframes kx-earflick{0%,100%{transform:none}25%{transform:rotate(24deg)}50%{transform:rotate(-6deg)}75%{transform:rotate(10deg)}}
+@keyframes kx-dpaw{0%,68%,100%{transform:none}71%{transform:translate(-1.5px,-1px) rotate(-9deg)}74%{transform:none}77%{transform:translate(-1px,-.6px) rotate(-6deg)}81%{transform:none}}
+@keyframes kx-whisk{0%,78%,100%{transform:none}82%{transform:rotate(-8deg)}86%{transform:rotate(4deg)}90%{transform:none}}
+@keyframes kx-dbob{0%,100%{transform:translate(0,0)}50%{transform:translate(0,-2px)}}
+@keyframes kx-burst{0%{opacity:1;transform:translate(var(--bx,0px),var(--by,0px)) rotate(0deg) scale(.6)}40%{opacity:1;transform:none}100%{opacity:0;transform:translate(0,14px) rotate(var(--br,90deg))}}
 @keyframes kx-glow{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
-@media (prefers-reduced-motion:reduce){.koxa,.koxa *,.kx-item *,.kx-room *,.kx-fx-float{animation:none!important}.koxa .kx-z{opacity:.9}}
+@media (prefers-reduced-motion:reduce){.koxa,.koxa *,.kx-item *,.kx-room *,.kx-bubble *,.kx-fx-float{animation:none!important}.koxa .kx-z{opacity:.9}}
 `;
 
   return { css, cat, poses: Object.keys(POSES), regions, kitScale, kitAnchor, room, bedSpots, spots: spotsAt, item, items: Object.keys(ITEMS), face,
     mouth, headPoint, itemHeld, sunPatch, rooms, lap, lapSpot, crop, crops: CROPS, cropSlot, anchors: ANCHORS, itemSize, itemPoints, mouseHole, mousePeek, fish, fishes: Object.keys(FISH), marker,
-    shop, shopSpots, postcardFrame, postcardHole, photoFrame, photoHole, neighbour, neighbours, icon, icons: Object.keys(ICONS), fx, fxs: Object.keys(FX), vet, vetSpots };
+    shop, shopSpots, postcardFrame, postcardHole, photoFrame, photoHole, neighbour, neighbours, icon, icons: Object.keys(ICONS), fx, fxs: Object.keys(FX), vet, vetSpots,
+    hides: HIDES, dream, dreams: DREAMS, pawPrint };
 }

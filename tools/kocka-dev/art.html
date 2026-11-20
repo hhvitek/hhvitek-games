@@ -19,6 +19,10 @@ h2{margin:24px 0 8px;font-size:18px}
 .frame .kx-drops path{animation-delay:-.6s!important;animation-play-state:paused!important}
 .boltf .kx-bolt{animation-delay:-8.01s!important;animation-play-state:paused!important}
 .nomo .kx-room *{animation:none!important}
+.dfr .kx-dpaw{animation-delay:-3.3s!important;animation-play-state:paused!important}
+.dfr .kx-whisk{animation-delay:-3.04s!important;animation-play-state:paused!important}
+.room .ph{position:absolute;inset:0;pointer-events:none}
+.snow{background:#f2f6f9}
 .frame2 .kx-achoo{animation-delay:-.22s!important;animation-play-state:paused!important}
 </style>
 </head>
@@ -277,7 +281,73 @@ for (const p of A.poses) { const m = A.mouth(p, { openMouth: true }); h += cell(
 h += '</div><h2>Big (phone size, 250 px)</h2><div style="display:flex;gap:8px;flex-wrap:wrap">';
 for (const [p, m, bg] of [['sit', 'happy', 'cottage'], ['sit', 'calm', 'paper'], ['loaf', 'calm', 'cottage'], ['sleep', 'calm', 'paper']]) h += `<div class="cell ${bg}" style="width:250px">${A.cat(p, m)}</div>`;
 h += '</div>';
-out.innerHTML = '<div id="tease"></div>' + h;
+out.innerHTML = '<div id="news"></div><div id="tease"></div>' + h;
+// 2026-11-19: hiding, the armchair blanket, the wardrobe, the leaf pile, paw prints, the cricket, dreams
+function news() {
+  const KCx = 212 / 200;
+  // a room with cats placed like the game does: [pose, opts, fx, fy, sc] (box 212·sc room units, point (100, 186) on (fx, fy))
+  const onRoom = (o, cats, label, reg) => {
+    const fig = cats.map(([p, co, fx, fy, sc]) => {
+      const w = 200 * KCx * sc, [ax, ay] = A.anchors[p] || [100, 186];
+      const ov = reg ? `<svg viewBox="0 0 200 200" class="reg" style="position:absolute;inset:0;overflow:visible">${A.regions(p, co).slice().reverse().map(r => `<path d="${r.path}" fill="${COL[r.id] || '#888'}"/>`).join('')}</svg>` : '';
+      return `<div style="position:absolute;left:${(fx - ax * KCx * sc) / 4}%;top:${(fy - ay * KCx * sc) / 6}%;width:${w / 4}%;aspect-ratio:1">${A.cat(p, co)}${ov}</div>`;
+    }).join('');
+    // the dashed lines: what a 393 × 760 phone shows of the 400 × 600 slice (x 45…355)
+    return `<div><div class="room">${A.room(o)}${fig}<svg class="ph" viewBox="0 0 400 600"><path d="M45 0V600M355 0V600" stroke="#f0f" stroke-dasharray="6 6" stroke-width="1.5"/></svg></div>${label}</div>`;
+  };
+  const H = A.hides, at = p => { const h = H[p], sp = A.rooms[h.room].spots[h.spot]; return [sp.x, sp.y, h.sc]; };
+  const hc = (p, co) => [p, co, ...at(p)];
+  COL.lump = '#888';
+  let s = '<h2 id="hide">Hiding: hideCurtain, hideBlanket (living), hideWardrobe (hall), at A.hides spots with room({ hide })</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';
+  s += onRoom({ id: 'living', phase: 'day', season: 'autumn', sunX: 0.6 }, [], 'living: blanket, no hide');
+  s += onRoom({ id: 'living', phase: 'day', season: 'autumn', sunX: 0.6, hide: 'curtain' }, [hc('hideCurtain', 'calm')], 'hideCurtain');
+  s += onRoom({ id: 'living', phase: 'day', season: 'autumn', sunX: 0.6, hide: 'curtain' }, [hc('hideCurtain', { mood: 'calm', peek: true })], 'hideCurtain peek');
+  s += onRoom({ id: 'living', phase: 'night', season: 'winter', hide: 'curtain' }, [hc('hideCurtain', 'happy')], 'hideCurtain night');
+  s += onRoom({ id: 'living', phase: 'day', season: 'autumn', sunX: 0.6, hide: 'blanket' }, [hc('hideBlanket', 'calm')], 'hideBlanket');
+  s += onRoom({ id: 'living', phase: 'day', season: 'autumn', sunX: 0.6, hide: 'blanket' }, [hc('hideBlanket', { mood: 'calm', peek: true })], 'hideBlanket peek');
+  s += onRoom({ id: 'living', phase: 'evening', season: 'autumn', hide: 'blanket' }, [hc('hideBlanket', { asleep: true })], 'hideBlanket evening asleep');
+  s += onRoom({ id: 'living', phase: 'day', season: 'autumn', hide: 'blanket' }, [['sit', 'calm', A.rooms.living.spots.chair.x, A.rooms.living.spots.chair.y, 0.9]], 'sit on the chair (blanket)');
+  s += onRoom({ id: 'hall', phase: 'day', season: 'spring' }, [], 'hall: wardrobe closed');
+  s += onRoom({ id: 'hall', phase: 'day', season: 'spring', hide: 'wardrobe' }, [hc('hideWardrobe', 'calm')], 'hideWardrobe');
+  s += onRoom({ id: 'hall', phase: 'day', season: 'spring', hide: 'wardrobe' }, [hc('hideWardrobe', { mood: 'calm', peek: true })], 'hideWardrobe peek');
+  s += onRoom({ id: 'hall', phase: 'evening', season: 'winter', hide: 'wardrobe', flap: true }, [hc('hideWardrobe', 'grumpy')], 'hideWardrobe evening grumpy');
+  s += '</div><h2>Hide regions (grey = lump)</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';
+  s += onRoom({ id: 'living', phase: 'day', season: 'autumn', hide: 'curtain' }, [hc('hideCurtain', { mood: 'calm', peek: true })], 'hideCurtain peek regions', true);
+  s += onRoom({ id: 'living', phase: 'day', season: 'autumn', hide: 'blanket' }, [hc('hideBlanket', { mood: 'calm' })], 'hideBlanket regions', true);
+  s += onRoom({ id: 'living', phase: 'day', season: 'autumn', hide: 'blanket' }, [hc('hideBlanket', { mood: 'calm', peek: true })], 'hideBlanket peek regions', true);
+  s += onRoom({ id: 'hall', phase: 'day', season: 'spring', hide: 'wardrobe' }, [hc('hideWardrobe', { mood: 'calm', peek: true })], 'hideWardrobe peek regions', true);
+  s += '</div><h2>hideBox (default, peek, tailOnly, asleep; with the box item) and regions</h2><div class="grid" style="grid-template-columns:repeat(8,1fr)">';
+  const boxed = (co, reg) => `<div style="position:absolute;left:20%;top:32%;width:60%">${A.item('box')}</div>${A.cat('hideBox', co)}` + (reg ? `<svg viewBox="0 0 200 200" class="reg" style="position:absolute;inset:0;overflow:visible">${A.regions('hideBox', co).slice().reverse().map(r => `<path d="${r.path}" fill="${COL[r.id] || '#888'}"/>`).join('')}</svg>` : '');
+  for (const [co, l] of [['calm', 'default'], [{ mood: 'happy', peek: true }, 'peek'], [{ mood: 'calm', tailOnly: true }, 'tailOnly'], [{ asleep: true }, 'asleep']]) s += cell(boxed(co), 'hideBox ' + l) + cell(boxed(co, true), l + ' regions');
+  s += '</div><h2>Garden autumn: leafPile off / on (spot leaves); winter: pawTrail on (default) / off; items</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';
+  s += onRoom({ id: 'garden', phase: 'day', season: 'autumn', sunX: 0.5 }, [], 'autumn');
+  s += onRoom({ id: 'garden', phase: 'day', season: 'autumn', sunX: 0.5, leafPile: true }, [], 'autumn leafPile');
+  s += onRoom({ id: 'garden', phase: 'evening', season: 'autumn', leafPile: true }, [], 'autumn evening leafPile');
+  s += onRoom({ id: 'garden', phase: 'day', season: 'winter' }, [], 'winter (trail)') + onRoom({ id: 'garden', phase: 'day', season: 'winter', pawTrail: false }, [], 'winter pawTrail:false');
+  // the leaf items at their natural size on the leaves spot
+  const lv = A.rooms.garden.spots.leaves, it = k => { const w = A.itemSize[k].w; return `<div class="burstcell" style="position:absolute;left:${(lv.x - w / 2) / 4}%;top:${(lv.y - w * 0.9) / 6}%;width:${w / 4}%;aspect-ratio:1">${A.item(k)}</div>`; };
+  s += `<div><div class="room">${A.room({ id: 'garden', phase: 'day', season: 'autumn' })}${it('leafPile')}</div>item leafPile at spot</div>`;
+  s += `<div><div class="room" id="burstRoom">${A.room({ id: 'garden', phase: 'day', season: 'autumn' })}${it('leafBurst')}</div>item leafBurst <button id="burstAgain">Přehrát</button></div>`;
+  s += '</div><div class="grid" style="grid-template-columns:repeat(8,1fr);margin-top:8px">';
+  for (const k of ['leafPile', 'leafBurst', 'cricket', 'bird', 'mouse']) s += cell(A.item(k), `${k} (${A.itemSize[k] ? A.itemSize[k].w : '?'})`);
+  s += cell(A.itemHeld('cricket'), 'cricket held') + cell(`<div style="width:30%;margin:35% auto">${A.pawPrint()}</div>`, 'pawPrint', 'snow') + cell(`<div style="display:flex;gap:4px;justify-content:center;margin-top:30%">${[12, 18, 24].map(w => `<div style="width:${w}px;transform:rotate(${w * 3}deg)">${A.pawPrint()}</div>`).join('')}</div>`, 'pawPrint 12/18/24 px', 'snow');
+  s += '</div><h2>Dreams (A.dream) at 80 px and 140 px; dreaming sleepers (frozen at a twitch)</h2><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">';
+  const D = [['bird'], ['cat', { id: 'mourek' }], ['cat', { id: 'liza' }], ['cat', { id: 'bivoj' }], ['cat', { id: 'koxa' }], ['toy', { id: 'yarn' }], ['toy', { id: 'featherBunch' }], ['toy', { id: 'ballBell' }], ['walk'], ['food'], ['food', { id: 'fish' }], ['mouse']];
+  for (const [k, o] of D) s += `<div class="cell paper" style="width:84px"><div style="width:80px">${A.dream(k, o)}</div>${k}${o ? ' ' + o.id : ''}</div>`;
+  s += `<div class="cell cottage" style="width:144px"><div style="width:140px">${A.dream('bird')}</div>bird 140</div><div class="cell cottage" style="width:144px"><div style="width:140px">${A.dream('cat', { id: 'ciperka' })}</div>cat ciperka 140</div>`;
+  s += '</div><div class="grid dfr" style="grid-template-columns:repeat(6,1fr);margin-top:8px">';
+  for (const [p, o] of [['sleep', { dreaming: true }], ['lapCurl', { dreaming: true }], ['lapLoaf', { asleep: true, dreaming: true }], ['loaf', { asleep: true, dreaming: true }], ['sleep', {}], ['lapCurl', {}]])
+    s += cell(A.cat(p, o), p + (o.dreaming ? ' dreaming' : ''));
+  s += '</div><div class="grid" style="grid-template-columns:repeat(4,1fr);margin-top:8px">';
+  // a dream bubble over the sleeper in the living room
+  const bed = A.rooms.living.spots.bed, hp = A.headPoint('sleep', {}), sc = 1, bx = bed.x - 100 * KCx * sc, by = bed.y - 186 * KCx * sc;
+  const hx = bx + hp.x * KCx * sc, hy = by + hp.y * KCx * sc;
+  s += `<div><div class="room">${A.room({ id: 'living', phase: 'night', season: 'winter' })}<div style="position:absolute;left:${bx / 4}%;top:${by / 6}%;width:${212 / 4}%;aspect-ratio:1">${A.cat('sleep', { dreaming: true })}</div>` +
+    `<div style="position:absolute;left:${(hx + 4) / 4}%;top:${(hy - 100) / 6}%;width:${100 / 4}%">${A.dream('bird')}</div></div>dream over the sleeper (bubble 100 room units, its (8, 98) at the head)</div>`;
+  return s + '</div>';
+}
+document.getElementById('news').innerHTML = news();
+document.getElementById('burstAgain').onclick = () => { const c = document.querySelector('#burstRoom .burstcell'); c.innerHTML = A.item('leafBurst'); };
 const tease = document.getElementById('tease');
 const drawTease = () => {
   tease.innerHTML = teasing();

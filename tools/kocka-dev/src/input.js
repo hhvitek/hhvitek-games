@@ -75,19 +75,28 @@
 //   every MIC_POLL_MS; onCall() when the level stays ≥ threshold for MIC_CALL_MS (then MIC_COOLDOWN_MS pause).
 //   States 'off'|'ask'|'ok'|'denied'|'none'. The tracks are released on stop(), on maxMs and when the page hides.
 // Sound:  I.sound.meow(mood) → variant, say(kind) → kind|null, purr(on, intensity 0…1), nom(), hiss(), chirp(),
-//   fx(name) → name|null, FX, setEnabled(bool), unlock(), KINDS, last(). meow() picks a variant fitting the mood ('happy'|'calm'|'grumpy'|'sad'|
-//   'want'|'offended'), never the same twice in a row; kinds: mew, meow, demand, plaintive, chirp, trill, question,
-//   yowl, hiss, purr, nom, lap; every call is randomized (pitch ±15 %, length, contour, loudness). purr(true, x) while
-//   purring only changes the intensity. WebAudio, no files: formant synthesis (SPEC §12a). fx(name): one Škádlení
-//   effect (SPEC §13.1), FX = ['sneeze', 'splash', 'shake', 'clink'], randomized a little every time; they are not meow
-//   kinds (never in KINDS); null when the name is unknown or the sound is silent (the same gates as say). The AudioContext is created on the first user gesture (attach() calls unlock() on taps;
-//   call it from your own buttons too). Silent when disabled, before any gesture and while the page is hidden.
+//   fx(name) → name|null, FX, setEnabled(bool), unlock(), KINDS, last(), purring(), enabled(), hush() (stops every
+//   purr), render(kind, rate?, { voice, intensity, raw }) → Promise({ data, rate, params }) (offline, for tests).
+//   meow() picks a variant fitting the mood ('happy'|'calm'|'grumpy'|'sad'|'want'|'offended'), never the same twice in
+//   a row; kinds: mew, meow, demand, plaintive, chirp, trill, question, yowl, hiss, purr, nom, lap; every call is
+//   randomized (pitch, length, contour, articulation, loudness). purr(true, x) while purring only changes the
+//   intensity. WebAudio, no files: Koxa's voice is computed sample by sample (a glottal source through a nasal
+//   pole-zero pair and four moving formants, SPEC §12a). I.sound.other is the neighbour cats' voice (the older node
+//   synthesis, so a visitor never sounds like Koxa): other.meow(mood or kind, { pitch }) → kind, other.say(kind,
+//   { pitch }) → kind|null, other.purr(on, intensity), other.purring(), other.render(kind, rate?, o); its purr runs
+//   beside Koxa's. fx(name): one Škádlení effect (SPEC §13.1), FX = ['sneeze', 'splash', 'shake', 'clink'],
+//   randomized a little every time; they are not meow kinds (never in KINDS); null when the name is unknown or the
+//   sound is silent (the same gates as say). The AudioContext is created on the first user gesture (attach() calls
+//   unlock() on taps; call it from your own buttons too). Silent when disabled, before any gesture and while the page
+//   is hidden.
 // Vibration:  I.vibrate(pattern) (ms, an array or a name from I.BUZZ), I.setVibrate(bool)
 // Pure helpers (tests): classifyStroke(fur, dx, dy, dt, path?), reversals(samples), isScratch(samples),
 //   flickVelocity(samples) → { vx, vy, speed }, follow(p, target, dtMs, lagMs?), stepToy(b, dtS, w, h),
 //   strokeStepFor(catWidth), holdMoved(samples), majorityRegion([region|null]), isRub(samples), isCircle(samples),
 //   isDoubleSwipe([{ dir, t }]), classifyCue(samples, t0?) → { type: 'circle'|'swipe'|'miss', dir?, reason?, dx, dy },
-//   voiceParams(kind, rnd?) (one randomized call), pickKind(mood, last, rnd?),
+//   voiceParams(kind, rnd?) (one randomized call of the older voice), pickKind(mood, last, rnd?), callParams(kind, rnd?)
+//   and synthCall(p, rate?, rnd?) → Float32Array (one call of Koxa's voice), synthPurr(rate?, rnd?, cycles?) →
+//   { smooth, rough, seconds }, synthHiss(rate?, rnd?) → Float32Array,
 //   rhythm(times) → { n, ms, cv } (ascending tap times in ms: n = count, ms = the mean interval rounded, cv = its
 //   population standard deviation / mean rounded to 0.01; fewer than 2 times → ms 0, cv 0)
 //   samples = [{ x, y, t }] with t in ms. I.T = all thresholds.
@@ -730,22 +739,27 @@ function KockaInput() {
   /* ---------- Audio context (shared by the sounds and the microphone) ---------- */
   let ctx = null, master = null, noiseBuf = null, ctxBound = false;
   const activated = () => !navigator.userActivation || navigator.userActivation.hasBeenActive;
+  // the master gain and a limiter on c (a loud yowl over a purr never clips); render() builds the same offline
+  function chain(c) {
+    const m = c.createGain(); m.gain.value = 0.8;
+    const lim = c.createDynamicsCompressor();
+    lim.threshold.value = -10; lim.knee.value = 6; lim.ratio.value = 8; lim.attack.value = 0.003; lim.release.value = 0.15;
+    m.connect(lim); lim.connect(c.destination);
+    return m;
+  }
   function getCtx() {
     if (!ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC || !activated()) return null;                  // Chrome warns about a context made before a tap
       try {
         ctx = new AC();
-        master = ctx.createGain(); master.gain.value = 0.8;
-        const lim = ctx.createDynamicsCompressor();          // a loud yowl over a purr never clips
-        lim.threshold.value = -10; lim.knee.value = 6; lim.ratio.value = 8; lim.attack.value = 0.003; lim.release.value = 0.15;
-        master.connect(lim); lim.connect(ctx.destination);
+        master = chain(ctx);
       } catch (e) { ctx = null; return null; }
       if (!ctxBound) {
         ctxBound = true;
         document.addEventListener('visibilitychange', () => {
           if (!ctx) return;
-          if (document.hidden) { sound.purr(false); ctx.suspend().catch(() => {}); }
+          if (document.hidden) { sound.hush(); ctx.suspend().catch(() => {}); }
         });
       }
     }
@@ -763,6 +777,12 @@ function KockaInput() {
   }
 
   /* ---------- Sounds (synthesized, SPEC §12a) ---------- */
+  // Two voices, both made in code (no recordings). Koxa's voice (the default) computes every call sample by sample
+  // into a buffer: a source-filter model of a real meow (callParams → synthCall, synthPurr, synthHiss). The older
+  // formant voice made of WebAudio nodes (VOWEL, VARIANT, voiceParams) stays for the neighbour cats (sound.other), so a
+  // visitor never sounds like Koxa.
+
+  /* The older voice (neighbour cats) */
   // Vowels of a cat's "m-i-a-u" (an adult female, voice F0 about 400–700 Hz): F1, F2, F3 in Hz and the cutoff of the
   // "mouth" low-pass (a closed mouth = m / rr is dark, an open a is bright)
   const VOWEL = {
@@ -810,7 +830,7 @@ function KockaInput() {
     want: { demand: 4, meow: 2, plaintive: 1 },
     offended: { yowl: 2, demand: 1, plaintive: 1 },
   };
-  // the voice parameters for one call: the variant randomized (pitch ±15 %, length, contour, loudness); pure (rnd)
+  // the older voice's parameters for one call: the variant randomized (pitch ±15 %, length, contour, loudness); pure (rnd)
   function voiceParams(kind, rnd = Math.random) {
     const v = VARIANT[kind] || VARIANT.meow, r = (a, b) => a + (b - a) * rnd();
     const pitch = r(0.85, 1.15), len = r(0.8, 1.25), size = r(0.95, 1.05);
@@ -836,10 +856,352 @@ function KockaInput() {
     return Object.keys(w)[0];
   }
 
+  /* Koxa's voice: computed sample by sample (pure functions, the same in the game, offline and in Node) */
+  const TAU = Math.PI * 2;
+  // A cat's vocal tract is short (about 8–10 cm), so its formants sit higher than a person's. Per articulation:
+  // F1–F4 (Hz), open (0 = lips closed: dark and quiet, 1 = wide open: bright and loud), nasal (1 = the "m": a nasal
+  // anti-resonance swallows the F2 region)
+  const CAT_VOWEL = {
+    m: { f: [480, 1650, 3500, 4700], open: 0.05, nasal: 1 },
+    n: { f: [520, 1900, 3600, 4800], open: 0.2, nasal: 0.7 },
+    r: { f: [580, 1700, 3400, 4600], open: 0.3, nasal: 0.25 },
+    i: { f: [700, 2650, 4000, 5200], open: 0.55, nasal: 0 },
+    e: { f: [920, 2300, 3800, 5100], open: 0.75, nasal: 0 },
+    a: { f: [1250, 2050, 3700, 5000], open: 1, nasal: 0 },
+    o: { f: [960, 1550, 3500, 4800], open: 0.7, nasal: 0 },
+    u: { f: [660, 1200, 3300, 4600], open: 0.32, nasal: 0.1 },
+  };
+  const CAT_BW = [160, 230, 280, 350];       // formant bandwidths (Hz); wider while the mouth is closed
+  // The calls: f0 (Hz), d (s, the voiced part), amp (relative loudness), contour [[time 0…1, pitch factor]],
+  // vowels [[time, articulation or [choices]]], vib [rate Hz, depth, from (0…1)], breath (breathy noise),
+  // tilt (Hz: the voice's brightness, higher = tenser), rough (cycle-to-cycle jitter, shimmer and subharmonics),
+  // roll [rate Hz, depth, from, to, chance?] (the rolled "rrr": a pulsed voice), waver [rate Hz, depth] (a slow
+  // wobble), att / rel (s: the onset and the end; a short rel ends abruptly like "mrrp"), tail (s: breath after the
+  // voice), size (formant scale: a kitten's short tract is > 1)
+  const CALL = {
+    mew: { f0: 900, d: 0.3, amp: 0.55, size: 1.12, contour: [[0, 0.86], [0.3, 1.1], [0.65, 1.04], [1, 0.82]],
+      vowels: [[0, 'm'], [0.16, ['i', 'e']], [0.55, 'e'], [0.82, ['e', 'a']], [1, 'u']], vib: [6.5, 0.012, 0.3],
+      breath: 0.12, tilt: 3200, att: 0.03, rel: 0.08, tail: 0.06 },
+    meow: { f0: 640, d: 0.7, amp: 0.6, contour: [[0, 0.84], [0.32, 1.12], [0.6, 1.05], [1, 0.76]],
+      vowels: [[0, 'm'], [0.12, ['i', 'e', 'e']], [0.36, 'a'], [0.62, 'a'], [0.84, 'o'], [1, 'u']], vib: [5.5, 0.012, 0.35],
+      breath: 0.08, tilt: 3800, roll: [26, 0.45, 0.03, 0.14, 0.25], att: 0.05, rel: 0.12, tail: 0.1 },
+    demand: { f0: 700, d: 1.1, amp: 0.75, contour: [[0, 0.8], [0.22, 1.14], [0.65, 1.1], [1, 0.82]],
+      vowels: [[0, 'm'], [0.07, 'r'], [0.18, 'a'], [0.72, 'a'], [0.88, 'o'], [1, 'u']], vib: [6, 0.015, 0.3],
+      breath: 0.1, tilt: 5000, rough: 0.18, roll: [27, 0.5, 0.03, 0.15], att: 0.04, rel: 0.14, tail: 0.12 },
+    plaintive: { f0: 660, d: 1.0, amp: 0.5, contour: [[0, 1], [0.15, 1.08], [0.55, 0.86], [1, 0.62]],
+      vowels: [[0, 'm'], [0.1, 'i'], [0.32, 'a'], [0.65, 'o'], [1, 'u']], vib: [5, 0.022, 0.25],
+      breath: 0.22, tilt: 2600, att: 0.07, rel: 0.2, tail: 0.16 },
+    chirp: { f0: 640, d: 0.2, amp: 0.66, contour: [[0, 0.8], [0.55, 1], [1, 1.3]],
+      vowels: [[0, 'm'], [0.25, 'r'], [0.75, 'e'], [1, 'e']], vib: [6, 0.008, 1], breath: 0.05, tilt: 3500,
+      roll: [26, 0.75, 0.08, 0.7], att: 0.015, rel: 0.015, tail: 0.03 },
+    trill: { f0: 580, d: 0.45, amp: 0.68, contour: [[0, 0.86], [0.75, 1.14], [1, 1.24]],
+      vowels: [[0, 'm'], [0.15, 'r'], [0.82, 'r'], [1, 'e']], vib: [6, 0.008, 1], breath: 0.05, tilt: 3200,
+      roll: [27, 0.92, 0.08, 0.9], att: 0.02, rel: 0.03, tail: 0.04 },
+    question: { f0: 600, d: 0.42, amp: 0.6, contour: [[0, 0.9], [0.5, 0.94], [1, 1.42]],
+      vowels: [[0, 'm'], [0.15, 'r'], [0.5, 'r'], [0.8, 'a'], [1, 'e']], vib: [6, 0.01, 0.6], breath: 0.06, tilt: 3500,
+      roll: [26, 0.6, 0.08, 0.5], att: 0.025, rel: 0.06, tail: 0.06 },
+    yowl: { f0: 500, d: 1.9, amp: 0.8, contour: [[0, 0.8], [0.14, 1.1], [0.38, 0.95], [0.58, 1.14], [0.82, 0.9], [1, 0.7]],
+      vowels: [[0, 'm'], [0.08, 'a'], [0.28, 'o'], [0.44, 'a'], [0.66, 'u'], [0.82, 'a'], [1, 'u']], vib: [4.2, 0.03, 0.15],
+      waver: [2.6, 0.05], breath: 0.14, tilt: 4500, rough: 0.35, att: 0.08, rel: 0.25, tail: 0.15 },
+    lap: { f0: 400, d: 0.5, amp: 0.66, contour: [[0, 0.95], [0.45, 1.06], [1, 0.88]],
+      vowels: [[0, 'm'], [0.3, 'r'], [0.62, 'o'], [1, 'm']], vib: [5, 0.01, 0.5], breath: 0.06, tilt: 2200,
+      roll: [23, 0.55, 0.15, 0.85], att: 0.04, rel: 0.1, tail: 0.08 },
+  };
+  // one call of a kind, randomized (pitch, length, loudness, the contour and vowel timing, the articulation, the cat's
+  // size); pure (rnd). Unknown kinds give a meow.
+  function callParams(kind, rnd = Math.random) {
+    const v = CALL[kind] || CALL.meow, r = (a, b) => a + (b - a) * rnd();
+    const pick = k => (Array.isArray(k) ? k[Math.floor(rnd() * k.length) % k.length] : k);
+    const jit = list => list.map(([t, x], i) => [i === 0 || i === list.length - 1 ? t : clamp(t + r(-0.04, 0.04), 0.02, 0.98), x])
+      .sort((a, b) => a[0] - b[0]);
+    const size = (v.size || 1) * r(0.94, 1.06);
+    const roll = v.roll && (v.roll[4] == null || rnd() < v.roll[4]) ? v.roll : null;
+    return {
+      kind: CALL[kind] ? kind : 'meow', f0: v.f0 * r(0.88, 1.13), d: v.d * r(0.85, 1.2), amp: v.amp * r(0.85, 1.05),
+      contour: jit(v.contour).map(([t, f]) => [t, f * r(0.96, 1.04)]),
+      vowels: jit(v.vowels).map(([t, k]) => { const w = CAT_VOWEL[pick(k)]; return [t, { f: w.f.map(f => f * size * r(0.97, 1.03)), open: w.open, nasal: w.nasal }]; }),
+      vib: [v.vib[0] * r(0.85, 1.15), v.vib[1] * r(0.6, 1.4), v.vib[2]], breath: v.breath * r(0.7, 1.3), tilt: v.tilt * r(0.85, 1.15),
+      rough: (v.rough || 0) * r(0.7, 1.3), roll: roll ? [roll[0] * r(0.9, 1.1), roll[1] * r(0.85, 1.1), roll[2], roll[3]] : null,
+      waver: v.waver ? [v.waver[0] * r(0.8, 1.2), v.waver[1] * r(0.7, 1.3)] : null,
+      att: v.att, rel: v.rel, tail: v.tail,
+    };
+  }
+  const ease = x => x * x * (3 - 2 * x);
+  // a value along [[t, v]] (sorted by t), eased between the points like a moving tongue
+  function track(list, x) {
+    if (x <= list[0][0]) return list[0][1];
+    for (let i = 1; i < list.length; i++) {
+      if (x <= list[i][0]) { const [t0, a] = list[i - 1], [t1, b] = list[i]; return a + (b - a) * ease(t1 > t0 ? (x - t0) / (t1 - t0) : 1); }
+    }
+    return list[list.length - 1][1];
+  }
+  // a two-pole resonator with unity gain at 0 Hz (Klatt): the cascade of them gives a vowel's natural formant levels
+  function resCoef(s, f, bw, R) {
+    if (f >= 0.45 * R) { s.a = 1; s.b = 0; s.c = 0; return s; }   // above what the rate can hold: let it through
+    s.c = -Math.exp(-TAU * bw / R); s.b = 2 * Math.exp(-Math.PI * bw / R) * Math.cos(TAU * f / R); s.a = 1 - s.b - s.c;
+    return s;
+  }
+  // Biquads (RBJ) for the fixed filters: lowpass | highpass | bandpass (0 dB at the peak)
+  function biquad(type, f, q, R) {
+    const w = TAU * Math.min(f, 0.45 * R) / R, cw = Math.cos(w), al = Math.sin(w) / (2 * q), a0 = 1 + al;
+    const b = type === 'lowpass' ? [(1 - cw) / 2, 1 - cw, (1 - cw) / 2] : type === 'highpass' ? [(1 + cw) / 2, -(1 + cw), (1 + cw) / 2] : [al, 0, -al];
+    return [b[0] / a0, b[1] / a0, b[2] / a0, -2 * cw / a0, (1 - al) / a0];
+  }
+  // filters x and adds gain × the result into `into` (a new array when not given)
+  function filt(x, k, gain = 1, into = null) {
+    const [b0, b1, b2, a1, a2] = k, y = into || new Float32Array(x.length);
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < x.length; i++) {
+      const v = b0 * x[i] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+      x2 = x1; x1 = x[i]; y2 = y1; y1 = v; y[i] += gain * v;
+    }
+    return y;
+  }
+  // soft saturation (tanh) of a signal normalized to 1: tames the peaks of pulses, so it is louder at the same peak
+  function soft(x, drive) {
+    normalize(x, 1);
+    const k = 1 / Math.tanh(drive);
+    for (let i = 0; i < x.length; i++) x[i] = Math.tanh(drive * x[i]) * k;
+    return x;
+  }
+  function normalize(x, peak) {
+    let m = 0;
+    for (let i = 0; i < x.length; i++) { const a = Math.abs(x[i]); if (a > m) m = a; }
+    if (m > 0) { const g = peak / m; for (let i = 0; i < x.length; i++) x[i] *= g; }
+    return x;
+  }
+  // synthCall(p, rate, rnd) → Float32Array: one call (p from callParams), peak = p.amp × 1.15 (the limiter follows).
+  // Source: the harmonics of F0 up to ~10 kHz (a glottal pulse: −6 dB per octave, steeper above p.tilt), F0 from the
+  // contour with vibrato, a slow random drift, the waver and cycle-by-cycle jitter; shimmer per cycle, every other
+  // cycle weaker in a rough voice (subharmonics, the growl of a yowl); breath noise louder while the glottis is open,
+  // and a breathy tail after the voice. Filter: a nasal pole-zero pair (the "m"), four formant resonators following
+  // the vowels, the lips (a one-pole low-pass from 1.3 kHz closed to 10 kHz open), a lift of the highs, a DC block.
+  // Last, the loudness is levelled to the planned envelope (the filters' gain differs a lot between a closed "m" or
+  // "rrr" and an open "a"; the plan keeps a closed mouth quieter, but not lost).
+  function synthCall(p, R = 22050, rnd = Math.random) {
+    const d = p.d, tail = p.tail || 0, n = Math.ceil((d + tail + 0.02) * R), out = new Float32Array(n);
+    const plan = new Float32Array(Math.ceil(n / 16) + 1);
+    const B = 16, T = 1 / R, KMAX = 64, amps = new Float64Array(KMAX + 1);
+    const fmax = Math.min(0.45 * R, 10500), fade0 = fmax * 0.8;
+    const F = [0, 1, 2, 3].map(k => p.vowels.map(([t, w]) => [t, w.f[k]]));
+    const OPEN = p.vowels.map(([t, w]) => [t, w.open]), NAS = p.vowels.map(([t, w]) => [t, w.nasal]);
+    const res = [0, 1, 2, 3].map(() => ({ a: 1, b: 0, c: 0, y1: 0, y2: 0 }));
+    const np = resCoef({ a: 1, b: 0, c: 0, y1: 0, y2: 0 }, 450, 150, R), nz = { a: 1, b: 0, c: 0, x1: 0, x2: 0 }, zc = { a: 1, b: 0, c: 0 };
+    const rough = p.rough || 0, J = 0.005 + rough * 0.03, S = 0.06 + rough * 0.3;
+    const rho = Math.exp(-B / (0.12 * R)), sig = 0.009 * Math.sqrt(1 - rho * rho);   // drift: ±0.9 %, ~0.12 s
+    const hpk = Math.exp(-TAU * 70 / R), pre = Math.exp(-TAU * 1500 / R);   // DC block; two zeros lift the highs (a small head radiates them)
+    let theta = 0, cyc = 1, shim = 1, flip = false, K = 1, f0 = p.f0, drift = 0;
+    let av = 0, ahV = 0, ahT = 0, alpha = 1, lp1 = 0, px = 0, px2 = 0, hx = 0, hy = 0;
+    let vibPh = rnd() * TAU, wavPh = rnd() * TAU, rollPh = 0;
+    const att = Math.max(0.005, p.att || 0.03), rel = Math.max(0.008, Math.min(p.rel || 0.1, d * 0.5));
+    for (let i = 0; i < n; i++) {
+      if (i % B === 0) {
+        const t = i * T, x = clamp(t / d, 0, 1);
+        // the pitch
+        drift = drift * rho + sig * (rnd() * 2 - 1) * 1.7;
+        vibPh += TAU * p.vib[0] * B * T;
+        const vibOn = clamp((x - p.vib[2]) * d / 0.15, 0, 1);
+        let fac = track(p.contour, x) * (1 + p.vib[1] * vibOn * Math.sin(vibPh)) * (1 + drift);
+        if (p.waver) { wavPh += TAU * p.waver[0] * B * T; fac *= 1 + p.waver[1] * Math.sin(wavPh); }
+        f0 = p.f0 * fac;
+        // the harmonics: −6 dB per octave, another −6 above the tilt, faded out towards fmax
+        K = Math.min(KMAX, Math.floor(fmax / f0));
+        for (let k = 1; k <= K; k++) {
+          const f = k * f0, q = f / p.tilt;
+          amps[k] = Math.pow(k, -0.8) / Math.sqrt(1 + q * q) * (f > fade0 ? (fmax - f) / (fmax - fade0) : 1);
+        }
+        // loudness: the onset, the end, a little declination; the mouth's opening adds loudness
+        let open = track(OPEN, x);
+        const env = t < att ? ease(t / att) : t < d - rel ? 1 : t < d ? 1 - ease((t - (d - rel)) / rel) : 0;
+        let am = 1;
+        if (p.roll) {
+          const [rate, depth, from, to] = p.roll;
+          rollPh += TAU * rate * B * T;
+          const w = clamp(Math.min((x - from) / 0.06, (to - x) / 0.06), 0, 1), pulse = Math.pow(0.5 + 0.5 * Math.cos(rollPh), 2);
+          am = 1 - depth * w * (1 - pulse);
+          open *= 1 - 0.5 * w * (1 - pulse);
+        }
+        const loud = (0.25 + 0.75 * Math.pow(open, 0.8)) * (1 - 0.15 * x);
+        av = env * loud * am;
+        plan[i / B] = av;
+        ahV = p.breath * env * (0.5 + 0.5 * loud) * am;
+        ahT = t < d - rel ? 0 : t < d ? p.breath * 1.4 * ease((t - (d - rel)) / rel) : tail > 0 ? p.breath * 1.4 * Math.pow(Math.max(0, 1 - (t - d) / tail), 2) : 0;
+        // the vocal tract
+        const nas = track(NAS, x), bwk = 1 + 1.2 * nas + 0.6 * (1 - open);
+        for (let k = 0; k < 4; k++) resCoef(res[k], track(F[k], x) * (p.roll && k === 0 ? 1 - 0.08 * (1 - am) : 1), CAT_BW[k] * bwk, R);
+        resCoef(zc, 450 + nas * 850, 150, R);
+        nz.a = 1 / zc.a; nz.b = -zc.b / zc.a; nz.c = -zc.c / zc.a;
+        alpha = 1 - Math.exp(-TAU * Math.min(0.45 * R, 1300 * Math.pow(8, open)) / R);
+      }
+      // the glottis
+      theta += TAU * f0 * cyc * T;
+      if (theta >= TAU) {
+        theta -= TAU;
+        cyc = 1 + (rnd() * 2 - 1) * J; shim = 1 + (rnd() * 2 - 1) * S; flip = !flip;
+      }
+      const s1 = Math.sin(theta), c2 = 2 * Math.cos(theta);
+      let sk = s1, skm = 0, src = 0;
+      for (let k = 1; k <= K; k++) { src += amps[k] * sk; const nx = c2 * sk - skm; skm = sk; sk = nx; }
+      if (flip) src *= 1 - rough * 0.6;
+      const wn = rnd() * 2 - 1;
+      let v = src * shim * av + wn * (ahV * (0.35 + 0.65 * Math.max(0, s1)) + ahT);
+      // nasal pole, then its zero (they cancel when nas = 0)
+      const y = np.a * v + np.b * np.y1 + np.c * np.y2; np.y2 = np.y1; np.y1 = y;
+      v = nz.a * y + nz.b * nz.x1 + nz.c * nz.x2; nz.x2 = nz.x1; nz.x1 = y;
+      for (let k = 0; k < 4; k++) { const s = res[k], o = s.a * v + s.b * s.y1 + s.c * s.y2; s.y2 = s.y1; s.y1 = o; v = o; }
+      lp1 += alpha * (v - lp1);
+      const e0 = lp1 - pre * px; px = lp1; const e = e0 - pre * px2; px2 = e0;
+      const o = e - hx + hpk * hy; hx = e; hy = o;
+      out[i] = o;
+    }
+    // levelling: per 10 ms block, the gain that brings the block's RMS to the plan (only where the voice is clearly on;
+    // elsewhere the nearest such gain), limited to ×4 around the median and smoothed
+    const L = Math.max(B, Math.round(0.01 * R / B) * B), nb = Math.ceil(n / L), g = new Float64Array(nb);
+    let valid = 0;
+    for (let b = 0; b < nb; b++) {
+      let ss = 0, w = 0, cnt = 0;
+      for (let i = b * L; i < Math.min(n, (b + 1) * L); i++) ss += out[i] * out[i];
+      for (let j = b * L / B; j < Math.min(plan.length, (b + 1) * L / B); j++) { w += plan[j]; cnt++; }
+      w /= cnt || 1;
+      const rms = Math.sqrt(ss / L);
+      g[b] = w > 0.12 && rms > 1e-9 ? w / rms : NaN;
+      if (g[b] === g[b]) valid++;
+    }
+    if (valid) {
+      for (let b = 1; b < nb; b++) if (g[b] !== g[b]) g[b] = g[b - 1];
+      for (let b = nb - 2; b >= 0; b--) if (g[b] !== g[b]) g[b] = g[b + 1];
+      const med = Array.from(g).sort((a, b) => a - b)[nb >> 1];
+      for (let b = 0; b < nb; b++) g[b] = clamp(g[b], med / 4, med * 4);
+      for (let pass = 0; pass < 2; pass++) for (let b = 1; b < nb - 1; b++) g[b] = (g[b - 1] + 2 * g[b] + g[b + 1]) / 4;
+      for (let i = 0; i < n; i++) {
+        const x = i / L - 0.5, b0 = clamp(Math.floor(x), 0, nb - 1), b1 = Math.min(nb - 1, b0 + 1), u = clamp(x - b0, 0, 1);
+        out[i] *= g[b0] + (g[b1] - g[b0]) * u;
+      }
+    }
+    // a short fade at the very end (filter tails)
+    const f = Math.min(n, Math.round(0.01 * R));
+    for (let i = 0; i < f; i++) out[n - 1 - i] *= i / f;
+    return normalize(out, p.amp * 1.15);
+  }
+  // synthPurr(rate, rnd, cycles) → { smooth, rough, seconds }: `cycles` breaths of purring, two layers of the same
+  // pulses (play them looped together; the mix follows the intensity). A purr is a train of short pulses, ~26 Hz while
+  // breathing in (quieter) and ~23 Hz while breathing out (louder, a little lower), each pulse a click and a short
+  // burst of noise from the larynx; the smooth layer through the chest (~260 Hz) and the throat (~700 Hz) under a
+  // 1.1 kHz low-pass, the rough one noisier and a little brighter (under 2.6 kHz). Both start and end in a pause, so the loop has no seam.
+  function synthPurr(R = 22050, rnd = Math.random, cycles = 3) {
+    const r = (a, b) => a + (b - a) * rnd(), ph = [];
+    let t = 0.02;
+    for (let c = 0; c < cycles; c++) {
+      const tin = r(0.85, 1.15), tout = r(1.0, 1.4);
+      ph.push({ t0: t, d: tin, rate: r(25, 27.5), lvl: r(0.55, 0.7), tau: 0.0045 }); t += tin + r(0.06, 0.14);
+      ph.push({ t0: t, d: tout, rate: r(21.5, 24), lvl: 1, tau: 0.0065 }); t += tout + r(0.16, 0.26);
+    }
+    const n = Math.ceil(t * R), eS = new Float32Array(n), eR = new Float32Array(n);
+    for (const P of ph) {
+      for (let tt = P.t0 + r(0, 0.01); tt < P.t0 + P.d; tt += (1 / P.rate) * (1 + (rnd() * 2 - 1) * 0.04)) {
+        const u = tt - P.t0, env = P.lvl * ease(clamp(u / 0.2, 0, 1)) * ease(clamp((P.d - u) / 0.25, 0, 1));
+        const a = env * (1 + (rnd() * 2 - 1) * 0.15), i0 = Math.round(tt * R), tau = P.tau * r(0.8, 1.2) * R, len = Math.ceil(tau * 5);
+        if (i0 >= n) break;
+        eS[i0] += a; eR[i0] += a * 0.5;
+        for (let j = 0; j < len && i0 + j < n; j++) { const w = (rnd() * 2 - 1) * a * Math.exp(-j / tau); eS[i0 + j] += w * 0.35; eR[i0 + j] += w; }
+      }
+    }
+    const smooth = filt(eS, biquad('bandpass', 260, 1.2, R), 1);
+    filt(eS, biquad('bandpass', 700, 2, R), 0.6, smooth);
+    filt(eS, biquad('bandpass', 1400, 2, R), 0.12, smooth);
+    const sm = filt(smooth, biquad('lowpass', 1100, 0.7, R));
+    const rough = filt(eR, biquad('bandpass', 550, 1, R), 0.8);
+    filt(eR, biquad('bandpass', 1200, 1.5, R), 0.4, rough);
+    filt(eR, biquad('bandpass', 2400, 1.2, R), 0.08, rough);
+    return { smooth: soft(sm, 3), rough: soft(filt(rough, biquad('lowpass', 2600, 0.7, R)), 3), seconds: n / R };
+  }
+  // synthHiss(rate, rnd) → Float32Array: a hiss of 0.6–1 s: breath through bared teeth, noise above ~2.5 kHz with a
+  // peak at 4.5–6.5 kHz, a fast attack, a short hold and a decay, turbulent; mostly with a short spit (a burst and a
+  // pop) at the start
+  function synthHiss(R = 22050, rnd = Math.random) {
+    const r = (a, b) => a + (b - a) * rnd(), d = r(0.6, 1.0), spit = rnd() < 0.75, t0 = spit ? r(0.02, 0.035) : 0;
+    const n = Math.ceil((t0 + d + 0.03) * R), wn = new Float32Array(n);
+    for (let i = 0; i < n; i++) wn[i] = rnd() * 2 - 1;
+    const hp = filt(wn, biquad('highpass', r(2200, 2800), 0.7, R));
+    const h = filt(hp, biquad('bandpass', r(4500, 6500), 1.2, R), 1.4);
+    filt(hp, biquad('highpass', 6000, 0.7, R), 0.5, h);
+    const out = new Float32Array(n), hold = d * r(0.15, 0.25), tau = d * 0.35;
+    let turb = 0;
+    const rho = Math.exp(-1 / (0.03 * R));
+    for (let i = 0; i < n; i++) {
+      const t = i / R - t0;
+      if (t < 0) continue;
+      turb = turb * rho + (rnd() * 2 - 1) * Math.sqrt(1 - rho * rho) * 1.7;
+      const env = (t < 0.015 ? ease(t / 0.015) : t < hold ? 1 : Math.exp(-(t - hold) / tau)) * clamp((d - t) / (0.1 * d), 0, 1);
+      out[i] = h[i] * env * (1 + 0.22 * turb);
+    }
+    normalize(out, 1);
+    if (spit) {
+      const bp = filt(wn, biquad('highpass', 700, 0.7, R)), len = Math.round(0.03 * R), f = r(180, 260);
+      let m = 0;
+      for (let i = 0; i < len; i++) m = Math.max(m, Math.abs(bp[i]));
+      for (let i = 0; i < len && i < n; i++) {
+        const t = i / R, e = Math.exp(-t / 0.006);
+        out[i] += (bp[i] / (m || 1)) * 1.3 * e + 0.5 * Math.sin(TAU * f * t) * Math.exp(-t / 0.008);
+      }
+    }
+    return normalize(soft(out, 2), 0.8);
+  }
+
   const sound = (() => {
-    let enabled = true, purrNodes = null, lastKind = null, lastSaid = null;
-    const ready = () => (enabled && !document.hidden ? getCtx() : null);
+    let enabled = true, lastKind = null, lastSaid = null, otherLast = null, purrCache = null;
+    const ready = () => { const c = enabled && !document.hidden ? getCtx() : null; if (c) warm(c); return c; };
     const r = (a, b) => a + (b - a) * Math.random();
+    // Koxa's sounds are computed at half the device rate (all of them lie below 10.5 kHz; the browser resamples)
+    const rateOf = c => { const s = Math.round(c.sampleRate) || 44100; return s >= 44100 ? Math.round(s / 2) : clamp(s, 8000, 48000); };
+    const purrRate = c => Math.min(16000, rateOf(c));
+    const idle = f => (typeof window.requestIdleCallback === 'function' ? window.requestIdleCallback(f, { timeout: 2000 }) : setTimeout(f, 80));
+    // plays a computed buffer at t
+    function playBuf(c, data, rate, t, dest = master, gain = 1) {
+      const b = c.createBuffer(1, data.length, rate);
+      b.getChannelData(0).set(data);
+      const s = c.createBufferSource(), g = c.createGain();
+      s.buffer = b; g.gain.value = gain; s.connect(g); g.connect(dest); s.start(t);
+      return s;
+    }
+    // One computed call of every kind waits ready, so a call plays at once; the next one is computed when the page is
+    // idle (a call takes a few ms; the first ones also warm up the JIT)
+    const pre = {};
+    const make = (kind, R) => {
+      if (kind === 'hiss') return { p: null, data: synthHiss(R), rate: R };
+      const p = callParams(kind);
+      return { p, data: synthCall(p, R), rate: R };
+    };
+    function refill(kind, R) { idle(() => { if (enabled && !(pre[kind] && pre[kind].rate === R)) pre[kind] = make(kind, R); }); }
+    function take(kind, R) {
+      let x = pre[kind];
+      pre[kind] = null;
+      if (!x || x.rate !== R) x = make(kind, R);
+      refill(kind, R);
+      return x;
+    }
+    let warmed = false;
+    function warm(c) {
+      if (warmed) return;
+      warmed = true;
+      const R = rateOf(c), list = ['meow', 'chirp', 'trill', 'mew', 'purr', 'question', 'demand', 'plaintive', 'lap', 'hiss', 'yowl'];
+      (function next(i) {
+        if (i >= list.length) return;
+        idle(() => {
+          if (list[i] === 'purr') { if (!purrCache) purrCache = Object.assign(synthPurr(purrRate(c)), { rate: purrRate(c) }); }
+          else if (!pre[list[i]]) pre[list[i]] = make(list[i], R);
+          next(i + 1);
+        });
+      })(0);
+    }
+    // Koxa: one call (or her hiss)
+    function callAt(c, kind, t, dest = master) {
+      const x = take(kind, rateOf(c));
+      playBuf(c, x.data, x.rate, t, dest);
+      return x.p;
+    }
+
+    /* the older voice (neighbour cats) */
     // one meow-like call: a sawtooth (+ a little pulse) voice through three formant band-passes and a "mouth" low-pass
     function voice(c, p, t, dest = master) {
       const d = p.d, end = t + d, stopT = end + 0.08, amp = p.amp * VOICE_GAIN;
@@ -1021,54 +1383,59 @@ function KockaInput() {
       FX_AT[name](c, c.currentTime + 0.02);
       return name;
     }
-    // say(kind): one sound of that variant, randomized every time; returns the kind (or null when silent)
-    function say(kind, o = {}) {
-      if (!KINDS.includes(kind)) kind = 'meow';
-      lastSaid = kind;
-      if (kind === 'purr') {                                  // a short purr
-        if (!purrNodes && ready()) { purr(true, o.intensity); setTimeout(() => purr(false), (o.seconds || 2.5) * 1000); }
-        return purrNodes ? kind : null;
-      }
-      const c = ready(); if (!c) return null;
-      const t = c.currentTime + 0.02;
-      if (kind === 'hiss') hissAt(c, t);
-      else if (kind === 'nom') nomAt(c, t);
-      else voice(c, voiceParams(kind), t);
-      return kind;
+
+    // ramps a param from wherever its automation is at t (also in the middle of a ramp: no click) to val in dur s
+    function rampTo(g, t, val, dur) {
+      if (typeof g.cancelAndHoldAtTime === 'function') g.cancelAndHoldAtTime(t);
+      else { g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); }
+      g.linearRampToValueAtTime(val, t + dur);
     }
-    // meow(mood): a variant that fits the mood ('happy'|'calm'|'grumpy'|'sad'|'want'|'offended'), never the same
-    // variant twice in a row; returns the variant chosen
-    function meow(mood) {
-      const kind = pickKind(mood, lastKind);
-      lastKind = kind;
-      say(kind);
-      return kind;
+    /* Purring: one controller per voice; build(c, x, dest) → { level(x), stop(t?) } */
+    function purrer(build) {
+      let nodes = null;
+      function purr(onOff, intensity = 0.6) {
+        const x = clamp(Number(intensity) || 0, 0, 1);
+        if (!onOff) { if (!nodes) return; const n = nodes; nodes = null; try { n.stop(); } catch (e) {} return; }
+        if (nodes) { nodes.level(x); return; }                 // already purring: only the intensity changes
+        const c = ready(); if (!c) return;
+        nodes = build(c, x, master);
+      }
+      return { purr, on: () => !!nodes };
     }
-    // purr(on, intensity 0…1): a low buzz at ~25 Hz with its harmonics (audible on a phone speaker) plus a chopped
-    // noise layer, breathing in (quieter, slower) and out (louder) about every 2.5 s
-    function purr(onOff, intensity = 0.6) {
-      const lvl = 0.25 + 0.75 * clamp(Number(intensity) || 0, 0, 1);
-      if (!onOff) {
-        if (!purrNodes) return;
-        const nodes = purrNodes; purrNodes = null;
-        clearTimeout(nodes.timer);
-        try {
-          const t = nodes.c.currentTime;
-          nodes.out.gain.cancelScheduledValues(t);
-          nodes.out.gain.setValueAtTime(nodes.out.gain.value, t);
-          nodes.out.gain.linearRampToValueAtTime(0, t + 0.3);
-          for (const s of nodes.src) s.stop(t + 0.35);
-        } catch (e) {}
-        return;
-      }
-      if (purrNodes) {                                        // already purring: only the intensity changes
-        const t = purrNodes.c.currentTime;
-        purrNodes.out.gain.cancelScheduledValues(t);
-        purrNodes.out.gain.setValueAtTime(purrNodes.out.gain.value, t);
-        purrNodes.out.gain.linearRampToValueAtTime(lvl, t + 0.4);
-        return;
-      }
-      const c = ready(); if (!c) return;
+    // Koxa's purr: the two layers of synthPurr looped together; the intensity sets the loudness and how rough it is
+    function koxaPurr(c, x, dest, offset) {
+      const R = purrRate(c);
+      if (!purrCache || purrCache.rate !== R) purrCache = Object.assign(synthPurr(R), { rate: R });
+      const buf = purrCache;
+      const t0 = c.currentTime, out = c.createGain(), at = offset != null ? offset : Math.random() * buf.seconds;
+      out.gain.setValueAtTime(0, t0); out.gain.linearRampToValueAtTime(1, t0 + 0.35); out.connect(dest);
+      const layer = data => {
+        const b = c.createBuffer(1, data.length, R); b.getChannelData(0).set(data);
+        const s = c.createBufferSource(), g = c.createGain();
+        s.buffer = b; s.loop = true; s.connect(g); g.connect(out); s.start(t0, at);
+        return { s, g };
+      };
+      const S = layer(buf.smooth), Rg = layer(buf.rough);
+      const gains = v => { const lvl = 0.45 + 0.55 * v; return [lvl * 0.75, lvl * 0.55 * (0.15 + 0.85 * v)]; };
+      const [a0, b0] = gains(x);
+      S.g.gain.value = a0; Rg.g.gain.value = b0;
+      return {
+        level(v) {
+          const t = c.currentTime, [a, b] = gains(v);
+          rampTo(S.g.gain, t, a, 0.4); rampTo(Rg.g.gain, t, b, 0.4);
+        },
+        stop(t = c.currentTime) {
+          rampTo(out.gain, t, 0, 0.3);
+          S.s.stop(t + 0.35); Rg.s.stop(t + 0.35);
+          // now and then the next purr gets new breaths
+          if (c === ctx && Math.random() < 0.5) idle(() => { if (purrCache === buf) purrCache = Object.assign(synthPurr(R), { rate: R }); });
+        },
+      };
+    }
+    // the older purr (neighbour cats): a low buzz at ~25 Hz with its harmonics plus a chopped noise layer, breathing
+    // in (quieter, slower) and out (louder) about every 2.5 s
+    function oldPurr(c, x, dest) {
+      const lvlOf = v => 0.25 + 0.75 * v;
       const t0 = c.currentTime;
       const buzz = c.createOscillator(); buzz.type = 'sawtooth'; buzz.frequency.value = 25;
       const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.Q.value = 0.7;
@@ -1084,14 +1451,14 @@ function KockaInput() {
       const breath = c.createGain(); breath.gain.value = 0;
       gA.connect(breath); gB.connect(breath);
       const out = c.createGain();
-      out.gain.setValueAtTime(0, t0); out.gain.linearRampToValueAtTime(lvl, t0 + 0.4);
-      breath.connect(out); out.connect(master);
-      buzz.start(t0); nz.start(t0); chop.start(t0);
-      const nodes = { c, out, src: [buzz, nz, chop], timer: 0 };
-      purrNodes = nodes;
+      out.gain.setValueAtTime(0, t0); out.gain.linearRampToValueAtTime(lvlOf(x), t0 + 0.4);
+      breath.connect(out); out.connect(dest);
+      const src = [buzz, nz, chop];
+      for (const s of src) s.start(t0);
+      let dead = false, timer = 0;
       // one breath at a time, scheduled a little ahead
       (function cycle(t) {
-        if (purrNodes !== nodes) return;
+        if (dead) return;
         const tin = r(0.9, 1.2), tout = r(1.1, 1.5), gap1 = 0.1, gap2 = r(0.12, 0.25);
         const b = breath.gain, f = [buzz.frequency, chop.frequency];
         b.setValueAtTime(0.05, t);
@@ -1100,25 +1467,99 @@ function KockaInput() {
         b.linearRampToValueAtTime(1, to + 0.2); b.setValueAtTime(1, to + tout - 0.25); b.linearRampToValueAtTime(0.05, to + tout);
         for (const p of f) { p.setValueAtTime(r(21, 23), t); p.setValueAtTime(r(25, 28), to); }
         const next = to + tout + gap2;
-        nodes.timer = setTimeout(() => cycle(next), Math.max(0, (next - c.currentTime - 0.3) * 1000));
+        timer = setTimeout(() => cycle(next), Math.max(0, (next - c.currentTime - 0.3) * 1000));
       })(t0 + 0.05);
+      return {
+        level(v) { rampTo(out.gain, c.currentTime, lvlOf(v), 0.4); },
+        stop(t = c.currentTime) {
+          dead = true; clearTimeout(timer);
+          rampTo(out.gain, t, 0, 0.3);
+          for (const s of src) s.stop(t + 0.35);
+        },
+      };
     }
-    // tests and tuning: renders one call of a kind (or an fx name) offline → Promise({ data: Float32Array, rate, params })
-    function render(kind, rate = 22050) {
+    const koxaP = purrer(koxaPurr), otherP = purrer(oldPurr);
+    // purr(on, intensity 0…1): Koxa's purr; purr(true, x) while purring only changes the intensity
+    const purr = koxaP.purr;
+
+    // say(kind): one sound of that variant in Koxa's voice, randomized every time; returns the kind (or null when silent)
+    function say(kind, o = {}) {
+      if (!KINDS.includes(kind)) kind = 'meow';
+      lastSaid = kind;
+      if (kind === 'purr') {                                  // a short purr
+        if (!koxaP.on() && ready()) { purr(true, o.intensity); setTimeout(() => purr(false), (o.seconds || 2.5) * 1000); }
+        return koxaP.on() ? kind : null;
+      }
+      const c = ready(); if (!c) return null;
+      const t = c.currentTime + 0.02;
+      if (kind === 'nom') nomAt(c, t);
+      else callAt(c, kind, t);
+      return kind;
+    }
+    // meow(mood): a variant that fits the mood ('happy'|'calm'|'grumpy'|'sad'|'want'|'offended'), never the same
+    // variant twice in a row; returns the variant chosen
+    function meow(mood) {
+      const kind = pickKind(mood, lastKind);
+      lastKind = kind;
+      say(kind);
+      return kind;
+    }
+    // the neighbour cats' voice (the older synthesis): other.meow(mood or kind, { pitch }), other.say(kind, { pitch,
+    // intensity, seconds }), other.purr(on, intensity), other.purring(), other.render(kind, rate, o)
+    const other = {
+      say(kind, o = {}) {
+        if (!KINDS.includes(kind)) kind = 'meow';
+        if (kind === 'purr') {
+          if (!otherP.on() && ready()) { otherP.purr(true, o.intensity); setTimeout(() => otherP.purr(false), (o.seconds || 2.5) * 1000); }
+          return otherP.on() ? kind : null;
+        }
+        const c = ready(); if (!c) return null;
+        const t = c.currentTime + 0.02;
+        if (kind === 'hiss') hissAt(c, t);
+        else if (kind === 'nom') nomAt(c, t);
+        else { const p = voiceParams(kind); if (o.pitch > 0) p.f0 *= clamp(o.pitch, 0.5, 2); voice(c, p, t); }
+        return kind;
+      },
+      meow(moodOrKind, o = {}) {
+        const kind = KINDS.includes(moodOrKind) ? moodOrKind : pickKind(moodOrKind, otherLast);
+        otherLast = kind;
+        other.say(kind, o);
+        return kind;
+      },
+      purr: otherP.purr,
+      purring: () => otherP.on(),
+      render: (kind, rate, o = {}) => render(kind, rate, Object.assign({}, o, { voice: 'other' })),
+    };
+
+    // tests and tuning: renders one sound offline through the same master and limiter →
+    // Promise({ data: Float32Array, rate, params }). kind: a KINDS name or an fx name; o.voice 'other' = the older
+    // voice; o.intensity for 'purr' (4 s); o.raw = without the master and limiter
+    function render(kind, rate = 22050, o = {}) {
       const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
       if (!OAC) return Promise.reject(new Error('no OfflineAudioContext'));
-      const p = voiceParams(kind), oc = new OAC(1, Math.ceil(rate * ((p.d || 1) + 1.3)), rate);
-      if (FX.includes(kind)) FX_AT[kind](oc, 0.01, oc.destination);
-      else if (kind === 'hiss') hissAt(oc, 0.01, oc.destination);
-      else if (kind === 'nom') nomAt(oc, 0.01, oc.destination);
-      else voice(oc, p, 0.01, oc.destination);
+      const old = o.voice === 'other';
+      let p = null, secs = 1.5;
+      if (kind === 'purr') secs = 4.5;
+      else if (!FX.includes(kind) && kind !== 'hiss' && kind !== 'nom') { p = old ? voiceParams(kind) : callParams(kind); secs = p.d + 1.3; }
+      const oc = new OAC(1, Math.ceil(rate * secs), rate), dest = o.raw ? oc.destination : chain(oc);
+      if (FX.includes(kind)) FX_AT[kind](oc, 0.01, dest);
+      else if (kind === 'nom') nomAt(oc, 0.01, dest);
+      else if (kind === 'hiss') { if (old) hissAt(oc, 0.01, dest); else playBuf(oc, synthHiss(rate), rate, 0.01, dest); }
+      else if (kind === 'purr') {
+        const x = o.intensity != null ? clamp(+o.intensity || 0, 0, 1) : 0.6;
+        const nd = old ? oldPurr(oc, x, dest) : koxaPurr(oc, x, dest, 0);
+        nd.stop(4.0);
+      } else if (old) voice(oc, p, 0.01, dest);
+      else playBuf(oc, synthCall(p, rate), rate, 0.01, dest);
       return oc.startRendering().then(b => ({ data: b.getChannelData(0), rate, params: p }));
     }
     const nom = () => say('nom'), hiss = () => say('hiss'), chirp = () => say('chirp');
-    function setEnabled(b) { enabled = !!b; if (!enabled) purr(false); }
-    function unlock() { if (enabled) getCtx(); }
-    return { meow, say, purr, nom, hiss, chirp, fx, FX, setEnabled, unlock, render, KINDS,
-      enabled: () => enabled, purring: () => !!purrNodes, last: () => lastSaid };
+    // stops both purrs (sound off, the page hidden)
+    function hush() { koxaP.purr(false); otherP.purr(false); }
+    function setEnabled(b) { enabled = !!b; if (!enabled) hush(); }
+    function unlock() { if (enabled) ready(); }
+    return { meow, say, purr, nom, hiss, chirp, fx, FX, setEnabled, unlock, render, KINDS, other, hush,
+      enabled: () => enabled, purring: () => koxaP.on(), last: () => lastSaid };
   })();
 
   /* ---------- Microphone (loudness only) ---------- */
@@ -1207,5 +1648,5 @@ function KockaInput() {
 
   return { attach, tilt, mic, sound, vibrate, setVibrate, BUZZ, T,
     classifyStroke, reversals, isScratch, flickVelocity, follow, stepToy, strokeStepFor, holdMoved, majorityRegion, isRub, isCircle, isDoubleSwipe, classifyCue,
-    rhythm, voiceParams, pickKind, VOWEL, VARIANT };
+    rhythm, voiceParams, pickKind, VOWEL, VARIANT, callParams, synthCall, synthPurr, synthHiss, CALL, CAT_VOWEL };
 }

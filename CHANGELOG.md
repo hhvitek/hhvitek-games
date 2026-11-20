@@ -7,6 +7,14 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Kočka: spící Koxu teď probudíš, když do ní ťukáš pořád dokola. Prskne na tebe, ale bude vzhůru.
+- Kočka: Koxa se občas schová za závěs, pod deku na křesle, do skříně v předsíni nebo do krabice. Najdi ji ťuknutím! Schovávaná je i nová minihra za pamlsky.
+- Kočka: když Koxa spí, zdá se jí o tom, co ten den zažila: o ptáčcích u krmítka, o sousedových kočkách, o hračkách. Cukají jí přitom tlapky a vousky.
+- Kočka: z procházky ti občas přinese myšku nebo cvrčka a čeká na pochvalu.
+- Kočka: na podzim je na zahradě hromada listí, do které Koxa skáče, a v zimě za ní zůstávají stopy ve sněhu.
+- Kočka: fotku z alba teď můžeš poslat rodině nebo kamarádům jako obrázek.
+- Kočka: Koxa má nový, věrnější hlas: mňoukání, předení i prskání.
+
 ## 1.0.31 – 2026-11-18
 
 - Kočka: pokoj teď při přejetí prstem jede za prstem a vedle něj se vysouvá vedlejší místnost. Když prst vrátíš, pokoj se vrátí; když ho pustíš dál než za třetinu, přejdeš.

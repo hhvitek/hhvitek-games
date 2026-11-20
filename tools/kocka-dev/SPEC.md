@@ -476,6 +476,18 @@ rolled r), `question` ("mrr?" rising), `yowl` (offended/scared, rare), `hiss`, `
 breathing rhythm in and out, intensity by mood), `nom` (eating crunch), `lap` (soft content murmur). API stays
 `I.sound.meow(mood)` and adds `I.sound.say(kind)`.
 
+Second voice (user's wish 2026-11-19: no recordings of the real cat will come, "try to generate a better meow"): Koxa's
+calls are computed sample by sample into a buffer (`callParams` → `synthCall`): a glottal-like source with spectral tilt,
+jitter, shimmer, vibrato and drift, breath noise, a nasal "m" onset, four formants following the m-i-a-u path, lip
+opening and closing, a loudness plan; every call is randomized (pitch ±12 %, length, timing, vowel, size), rough kinds
+(demand, yowl) growl a little. Purr (`synthPurr`): a ~26 Hz inhale / ~23 Hz exhale pulse train in two looped layers
+(smooth and rough, mixed by intensity). Hiss (`synthHiss`): high noise with a fast attack, often a spit first. Rendered
+at half the device rate, one ready call per kind prepared in idle time after the first tap. The neighbour cats keep the
+first voice as `I.sound.other` (`meow`, `say(kind, { pitch })`, `purr`), so visitors never sound like Koxa;
+`I.sound.hush()` stops both purrs. `tools/kocka-dev/feel.html` §7b plays both voices side by side;
+`tools/kocka-dev/sound-check.js` (run with Playwright's `browser_run_code_unsafe`) measures every sound (peak, RMS, F0,
+roll rate, centroid). Still no files.
+
 ### 12b. Movement (Art + UI)
 Walking is a real gait: legs cycle (at least 4 frames or a continuous CSS leg swing), the step rate follows the
 speed, a small body bob; she faces the way she goes; moving toward or away from the viewer on the floor is still a
@@ -774,7 +786,7 @@ adds):
 
 | # | Case | Result |
 |---|---|---|
-| 0 | asleep, or dozing on the lap | `pat { region, stage: 'tolerate', sleeping: true }`; nothing changes (no wake, no heat, no `at`) |
+| 0 | asleep, or dozing on the lap | taps 1–3 of a run (`n < TEASE.wakeN`): `pat { region, stage: 'tolerate', sleeping: true }`, nothing changes (no heat, no `at`); from tap 4 she wakes up hissing (user's wish 2026-11-19: "she will hiss, but she will be awake"): asleep `wake { early: false, rude: true }`, on the lap `lapLeave 'annoyed'`, then `woken { lap }`, love −2 (`TEASE.love.woken`); no heat, sulk or payback |
 | — | (then: fresh-run check, `heat = heatNow(t)`, `at = t`) | |
 | 1 | cross running | `swat { why: 'pat' }`; no heat, no love; `warnAt = 0` |
 | 2 | `eating` | warn from n ≥ 2 → outcome `blowUp { why: 'eat' }` (mild) |
@@ -851,6 +863,7 @@ dkey(te)`, `pay = null`, Deníček `payback`. Not free → it waits until it lap
 
 | Event | Fields | When |
 |---|---|---|
+| `woken` | `lap` | tapped awake (row 0): the UI arches her back with a hiss (no stretch, no wash) |
 | `pat` | `region` (after the alias), `stage: 'like'\|'bliss'\|'tolerate'\|'warn'`, `close?` and `rear?` (bliss), `sleeping?` (true), `eating?` (true while `eating`) | a pat that did nothing bigger |
 | `flop` | `lap` | after `pat` bliss at tap 8 |
 | `blowUp` | `why: 'fast'\|'grumpy'\|'tail'\|'eat'`, `lap` | the warned run went on 1.8 s |
@@ -984,3 +997,41 @@ engine gave them), `get tease()` (a copy of `G.st.tease` plus `health()`'s `sulk
 `forcePayback(kind)` (puts `{ type: 'payback', kind }` through `handle()` and skips only the 5 s welcome wait; the other
 holding rules apply; returns true when queued). `tools/shots.js` gets a step with a tap on her nose and one with the can
 on her in the garden.
+
+## 14. Play and memories (user's wishes 2026-11-19)
+
+New state (create → `STATE_KEYS` → canonical repair → `shiftTimes`; older saves get the defaults): `hide` (null |
+`{ spot, room, since, until }`), `hides` (`{ key, n, at }`: hides that day, the last start), `mem` (`{ today, prev }`, each
+`{ birds, cats, toy, fav, walk, food }`), `catch` (null | `{ kind, at, until }`), `catchDay`, `leaves` (when the pile was
+last scattered; top level, because `st.yard` exists only while she is in the garden). No `rnd(st)`: every draw is keyed.
+
+**14.1 Hide and seek** (`HIDE`). She hides by herself only in a watched advance: at home for a day already, awake and
+free (not on the lap, held, out, in the garden, frightened, at the bowls), 8–21 h, not ill, sulking, cross or offended,
+no visitor, guest, jealousy, catch, call or payback pending, energy ≥ 30, mood calm or happy, no nap, litter box, meal or
+drink due within the hide. One keyed chance 0.3 per 10-minute slot of the clock (salts 12, 13; the spot salt 14), at most
+3 a day and 30 min apart: about one hide in two watched hours (measured: 0.45 in 30 min, 1.2 in 2 h, 2 in 4 h). Spots:
+`curtain`, `blanket` (living), `wardrobe` (hall), `box` (its room, only in the house). A hide does not split the steps
+(the split moved every later draw of a watched advance and changed measured tests): it begins at the end of the step
+in which its slot's moment falls and ends at the first step end ≥ `until` (150 s later) with the boo; the UI ticks every
+30 s, so it should advance at `health().hiding.until`. `seek { spot }`: right spot → `seekFound` (love +3, fun +6; within
+30 s love +5, fun +10), wrong → `seekMiss` (nothing changes). Any other action except buy, sell, deletePhoto, nameKitten
+ends it first (`unhide { by }`), a minigame too; an unwatched advance ends it silently. Schovávaná: the minigame `hide`,
+`minigameResult(st, 'hide', { found, secs })`, score `hideScore = max(found, 3·found − ⌊secs/10⌋)`, 1 pamlsek per 2
+points, at most 8 a game, inside the shared 30 a day.
+
+**14.2 Dreams.** `mem.today` records minutes at the bird feeder (in the garden, with the player or alone, awake, by day,
+not in the rain or up the tree), up to 4 neighbour cats she knew about, the last toy (act, toy minigames, the feather for
+two) and whether it was her favourite, a walk, the last treat or favourite food; at a new local day `prev = today`. Also
+while nobody watches, so probes stay exact. `dream(st, t)` (pure): null awake; asleep or dozing on the lap a weighted
+keyed pick (salts 15, 16) of `bird | cat | toy | walk | food | mouse` (yesterday half weight, always a little mouse and
+food), the same for each 15-minute slot from when the sleep began, a repeat of the slot before redrawn once. No diary
+entry (a "first dream seen" belongs to the UI).
+
+**14.3 A catch.** Back from a walk (also through the cat flap) in a watched advance or by `letIn`: 30 % (salt 17) a catch,
+a toy mouse 60 % or a live cricket (salt 18), never a dead animal; `catch` after `back`. `praise`: love +2, bond +1 once a
+local day (`catchDay`). Unpraised for 120 s while watched: `catchSnub` + a 3-min sulk (`offence`, no payback); else it
+passes silently.
+
+**14.4 The leaf pile.** `leafPile(st, t)`: autumn (Sep–Nov) and not scattered that local day. `leafJump` (in the garden,
+awake, not cross): fun +3, scattered until the next day; by herself in the garden with the player, a keyed chance 0.15 per
+10-minute slot (salts 19, 20), so at most once a day. Paw prints in the snow are the UI's.

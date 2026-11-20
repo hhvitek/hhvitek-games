@@ -59,6 +59,8 @@
   #patBig { position: absolute; right: 10px; top: 8px; font-size: 26px; font-weight: 800; pointer-events: none; }
   #patBig.go { color: #2d7a2d; } #patBig.new { color: #b26200; }
   #patList { margin: 6px 0 0; min-height: 4em; white-space: pre-wrap; }
+  .ab { margin-top: 4px; }
+  .abName { display: inline-block; min-width: 9.5em; font-size: 14px; }
   #log { position: fixed; left: 0; right: 0; bottom: 0; height: 170px; overflow: auto; margin: 0; padding: 6px 12px;
     background: #2b1a0e; color: #f4ebdf; font: 12px/1.35 ui-monospace, monospace; white-space: pre-wrap; }
 </style>
@@ -135,6 +137,18 @@
   <h2 style="margin-top:12px">Vibrace a vypínače</h2>
   <div class="row"><button id="sndOn" aria-pressed="true">Zvuky</button><button id="vibOn" aria-pressed="true">Vibrace</button>
     <button data-buzz="tap">Ťuk</button><button data-buzz="purr">Vrnění</button><button data-buzz="bite">Kousnutí</button></div>
+</section>
+
+<section>
+  <h2>7b. Hlas Koxy × starý hlas (sousedé)</h2>
+  <p class="note">Koxa má nový hlas počítaný vzorek po vzorku (hlasivky, nosní „m“, pohyb úst m-i-a-u). Starý hlas
+    zůstává sousedovic kočkám (<code>I.sound.other</code>), aby nezněly jako Koxa. Poslechni si každý druh oběma hlasy.</p>
+  <div id="ab"></div>
+  <div class="row"><span class="abName">Předení</span>
+    <button data-abpurr="koxa" data-int="0.2">Koxa slabě</button><button data-abpurr="koxa" data-int="0.9">Koxa silně</button>
+    <button data-abpurr="other" data-int="0.2">soused slabě</button><button data-abpurr="other" data-int="0.9">soused silně</button></div>
+  <div class="row"><button id="abAll">Všechno: Koxa, pak soused</button><button id="abStop">Ztišit předení</button>
+    <span class="stat" id="abStat"></span></div>
 </section>
 
 <section>
@@ -407,6 +421,40 @@ $('#rand5').onclick = () => {
 $('#purr').onclick = e => { I.sound.unlock(); const on = !I.sound.purring(); I.sound.purr(on, +$('#purrInt').value); e.currentTarget.setAttribute('aria-pressed', on); };
 $('#purrInt').oninput = e => { if (I.sound.purring()) I.sound.purr(true, +e.target.value); };
 $('#sndOn').onclick = e => { const on = !I.sound.enabled(); I.sound.setEnabled(on); e.currentTarget.setAttribute('aria-pressed', on); };
+/* ---------- 7b. A/B: Koxa's voice and the older one (the neighbour cats) ---------- */
+const AB_KINDS = I.sound.KINDS.filter(k => k !== 'purr');
+const abStat = s => { $('#abStat').textContent = s; log({ type: 'ab', what: s }, 'sound'); };
+const abSay = (k, v) => (v === 'other' ? I.sound.other.say(k) : I.sound.say(k));
+$('#ab').innerHTML = AB_KINDS.map(k => `<div class="row ab"><span class="abName">${KIND_NAME[k] || k}</span>` +
+  `<button data-ab="${k}" data-v="koxa">Koxa</button><button data-ab="${k}" data-v="other">soused</button></div>`).join('');
+document.querySelectorAll('[data-ab]').forEach(b => b.onclick = () => {
+  I.sound.unlock();
+  abStat(`${b.dataset.ab} (${b.dataset.v === 'other' ? 'soused' : 'Koxa'}): ${abSay(b.dataset.ab, b.dataset.v) ? 'hraje' : 'ticho'}`);
+});
+let abPurrT = 0;
+const abHush = () => { clearTimeout(abPurrT); I.sound.purr(false); I.sound.other.purr(false); };
+document.querySelectorAll('[data-abpurr]').forEach(b => b.onclick = () => {
+  I.sound.unlock(); abHush();
+  const p = b.dataset.abpurr === 'other' ? I.sound.other : I.sound;
+  p.purr(true, +b.dataset.int);
+  abStat(`předení ${b.dataset.abpurr === 'other' ? 'soused' : 'Koxa'} ${b.dataset.int}: ${p.purring() ? 'hraje 5 s' : 'ticho'}`);
+  abPurrT = setTimeout(abHush, 5000);
+});
+$('#abStop').onclick = abHush;
+// every kind with Koxa's voice, then the same kind with the older one
+let abRun = 0;
+$('#abAll').onclick = () => {
+  I.sound.unlock(); abHush();
+  const my = ++abRun, list = [];
+  for (const k of AB_KINDS) list.push([k, 'koxa'], [k, 'other']);
+  (function next(i) {
+    if (my !== abRun || i >= list.length) return;
+    const [k, v] = list[i];
+    abStat(`${KIND_NAME[k] || k}: ${v === 'other' ? 'soused' : 'Koxa'}`);
+    abSay(k, v);
+    setTimeout(() => next(i + 1), k === 'yowl' ? 2600 : k === 'demand' || k === 'plaintive' ? 1800 : 1300);
+  })(0);
+};
 let vibOn = true;
 $('#vibOn').onclick = e => { vibOn = !vibOn; I.setVibrate(vibOn); e.currentTarget.setAttribute('aria-pressed', vibOn); };
 document.querySelectorAll('[data-buzz]').forEach(b => b.onclick = () => log({ type: 'vibrate', ok: I.vibrate(b.dataset.buzz) }, 'buzz'));
