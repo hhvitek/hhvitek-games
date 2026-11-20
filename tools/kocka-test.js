@@ -413,6 +413,8 @@ function discover(seed) {
   else if (T.fear === 'storm') for (let d = 0; d < 90 && !st.diary.fear; d++) { for (let h = 0; h < 24; h++) tick(H); t = careAt(st, t); }
   else { t = at(2026, 12, 31, 12); E.advance(st, t); t = careAt(st, t); for (let h = 0; h < 16; h++) tick(H); }
   nextDay(8);   // the weight
+  // her dream: the player looks at her while she sleeps (5-minute ticks, seen)
+  for (let i = 0; i < 24 * 12 && !st.diary.dream; i++) { tick(5 * MIN); if (i % 36 === 35) t = careAt(st, t); }
   return st;
 }
 {
@@ -435,7 +437,14 @@ function discover(seed) {
   ok(full(), `every trait value reached (${tested} cats)`);
   const st = E.create(1, at(2026, 11, 12, 15), 'Koxa');
   const d = E.diary(st);
-  ok(d.length === 21 && d.find(e => e.id === 'birthday').found && JSON.stringify(d.find(e => e.id === 'birthday').info) === '{"y":2026,"m":11,"d":12}', 'the list: 21 entries, the birthday found at once (12. 11. 2026)');
+  ok(d.length === 22 && d[21].id === 'dream' && !d[21].found && d.find(e => e.id === 'birthday').found && JSON.stringify(d.find(e => e.id === 'birthday').info) === '{"y":2026,"m":11,"d":12}', 'the list: 22 entries (the dream last), the birthday found at once (12. 11. 2026)');
+  // the dream entry: only when the player looks at her asleep for 10 minutes (an advance over 10 min is not looking)
+  {
+    const a = E.create(3, at(2026, 6, 9, 22), 'Koxa'); E.advance(a, at(2026, 6, 10, 2));
+    ok(a.asleep && !a.diary.dream, 'asleep while nobody looked: no dream entry');
+    let ev = []; for (let k = 1; k <= 3; k++) ev = ev.concat(E.advance(a, a.t + 5 * MIN).events);
+    ok(a.diary.dream && ev.some(e => e.type === 'found' && e.id === 'dream' && JSON.stringify(e.info) === '{}'), 'watched asleep: found dream {}');
+  }
   ok(d.map(e => e.id).slice(9, 15).join() === 'birthday,bliss,boop,reconcile,splash,payback' &&
     d.filter(e => ['bliss', 'boop', 'reconcile', 'splash', 'payback'].includes(e.id)).every(e => !e.found && e.info === null),
     'the five teasing entries follow the birthday; not found yet: no facts (the UI shows a question or a neutral hint)');

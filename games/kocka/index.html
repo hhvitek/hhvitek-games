@@ -74,8 +74,9 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 
 /* ---------- Top bar (rule: home, Nová hra, <h1> name, ?, settings) ---------- */
 .topbar{flex:none;height:60px;display:flex;align-items:center;gap:10px;padding:0 var(--gut);background:var(--bar);border-bottom:1px solid var(--line)}
-.topbar h1{flex:1;min-width:0;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule) */
+.topbar h1{flex:1;min-width:min-content;text-align:center;font-size:26px;font-weight:800;line-height:1.05;color:var(--ink);white-space:normal;overflow-wrap:normal;word-break:normal} /* a long name wraps to two lines between words, never inside a word and never cut (rule); its longest word keeps its width and the Deníček pill gives way (a long translation) */
 .pill{flex:none;height:46px;padding:0 16px;border-radius:23px;background:var(--chip);font-size:18px;font-weight:700;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line)}
+.topbar .pill{flex:0 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}   /* gives way to the title */
 .round{flex:none;width:46px;height:46px;border-radius:50%;background:var(--chip);display:grid;place-items:center;font-size:26px;font-weight:800;color:var(--ink);box-shadow:inset 0 0 0 2px var(--chip-line);text-decoration:none}
 .round svg{width:28px;height:28px;fill:currentColor}
 .top-right{flex:none;display:flex;gap:8px}
@@ -4745,13 +4746,14 @@ function KockaEngine() {
     mood: { sulk: -10, cross: -20 },
   });
   const TEASE_DIARY = ['bliss', 'boop', 'reconcile', 'splash', 'payback'];
+  const DREAM_SEEN = 10;   // Deníček 'dream': minutes she has slept when the player sees her (the UI's first bubble comes about then)
   const CMAX = 1e6;  // counters saturate here (inc)
   const COUNTS = ['favFood', 'belly', 'toy', 'quirk'].concat(SPOTS.map(s => 'spot_' + s));
   // pal*: Koxa and a neighbour cat (the cat is st.diaryCat[id])
   const PAL_DIARY = ['palFirst', 'palGroom', 'palSnuggle'];
   // the entries that name a neighbour cat (st.diaryCat), in this order; kittens: the mother, kitGrown: the kitten
   const CAT_DIARY = PAL_DIARY.concat(['sleepover', 'kittens', 'kitGrown']);
-  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY);
+  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY, ['dream']);
 
   /* --- small helpers --- */
   const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
@@ -5342,7 +5344,7 @@ function KockaEngine() {
   //   favFood { food } | spot_<region> { region } | belly {} | toy { toy } | fear { fear } | quirk { quirk } |
   //   weight { kg } | walk { h, min } | birthday { y, m, d } (m 1–12) | bliss { brisk } | boop, reconcile, splash, payback {} |
   //   the cat entries { cat (visitor id or null), fem } and for kittens also { mother (when a young cat came alone first),
-  //   kits: [kitten ids of the mother's first litter seen] }
+  //   kits: [kitten ids of the mother's first litter seen] } | dream {}
   function entryInfo(st, id) {
     const T = st.traits;
     if (id === 'favFood') return { food: T.favFood };
@@ -5368,7 +5370,7 @@ function KockaEngine() {
   }
   // Deníček: her two spots only; found = when it was found (the UI shows the fact from info), else the UI shows a question
   function diary(st) {
-    const ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY);
+    const ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY, ['dream']);
     return ids.map(id => {
       const found = st.diary[id] || null;
       return { id, found, info: found ? entryInfo(st, id) : null };
@@ -6173,6 +6175,11 @@ function KockaEngine() {
       ev.push({ type: 'offended', days: Math.floor(days) });
       const y = new Date(now).getFullYear();
       if (st.bday < y && birthdayAge(st.born, now)) { st.bday = y; addBond(st, 10, ev); ev.push({ type: 'birthday', age: birthdayAge(st.born, now) }); }
+    }
+    // Deníček: the player saw her dream (SPEC §14.2): asleep or dozing on the lap for DREAM_SEEN minutes in a seen advance
+    if (seen && !st.diary.dream) {
+      const from = st.asleep ? st.sleepAt : st.lap && st.lap.doze ? st.lap.dozeAt : 0;
+      if (from && end - from >= DREAM_SEEN * MIN) find(st, 'dream', end, ev);
     }
     teaseTidy(st);
     ensurePlan(st);
@@ -12188,6 +12195,7 @@ const HINT_KEY = {
   boop: 'kocka.diary.hint.boop', reconcile: 'kocka.diary.hint.reconcile', splash: 'kocka.diary.hint.splash', payback: 'kocka.diary.hint.payback',
   palFirst: 'kocka.diary.hint.palFirst', palGroom: 'kocka.diary.hint.palGroom', palSnuggle: 'kocka.diary.hint.palSnuggle',
   sleepover: 'kocka.diary.hint.sleepover', kittens: 'kocka.diary.hint.kittens', kitGrown: 'kocka.diary.hint.kitGrown',
+  dream: 'kocka.diary.hint.dream',
 };
 // the question shown while an entry is not found yet (plain text; the birthday has none: it is found at once)
 function diaryHint(id) {
@@ -12196,7 +12204,7 @@ function diaryHint(id) {
   return HINT_KEY[id] ? I18N.t(HINT_KEY[id]) : '';
 }
 // the plain keys of found entries: { name } only
-const FOUND_KEY = { belly: 'kocka.diary.found.belly', boop: 'kocka.diary.found.boop', reconcile: 'kocka.diary.found.reconcile', splash: 'kocka.diary.found.splash', payback: 'kocka.diary.found.payback' };
+const FOUND_KEY = { belly: 'kocka.diary.found.belly', boop: 'kocka.diary.found.boop', reconcile: 'kocka.diary.found.reconcile', splash: 'kocka.diary.found.splash', payback: 'kocka.diary.found.payback', dream: 'kocka.diary.found.dream' };
 // the cat entries: [with the cat, without (no cat recorded)]
 const CAT_FOUND_KEY = {
   palFirst: ['kocka.diary.found.palFirst', 'kocka.diary.found.palFirstNone'], palGroom: ['kocka.diary.found.palGroom', 'kocka.diary.found.palGroomNone'],

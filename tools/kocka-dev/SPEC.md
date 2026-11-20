@@ -1024,8 +1024,8 @@ not in the rain or up the tree), up to 4 neighbour cats she knew about, the last
 two) and whether it was her favourite, a walk, the last treat or favourite food; at a new local day `prev = today`. Also
 while nobody watches, so probes stay exact. `dream(st, t)` (pure): null awake; asleep or dozing on the lap a weighted
 keyed pick (salts 15, 16) of `bird | cat | toy | walk | food | mouse` (yesterday half weight, always a little mouse and
-food), the same for each 15-minute slot from when the sleep began, a repeat of the slot before redrawn once. No diary
-entry (a "first dream seen" belongs to the UI).
+food), the same for each 15-minute slot from when the sleep began, a repeat of the slot before redrawn once. Deníček `dream` (the last entry, info `{}`): found when a seen advance (at most 10 min) ends with her
+asleep or dozing on the lap for 10 minutes (`DREAM_SEEN`), about when the UI shows the first bubble.
 
 **14.3 A catch.** Back from a walk (also through the cat flap) in a watched advance or by `letIn`: 30 % (salt 17) a catch,
 a toy mouse 60 % or a live cricket (salt 18), never a dead animal; `catch` after `back`. `praise`: love +2, bond +1 once a

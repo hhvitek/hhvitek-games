@@ -402,13 +402,14 @@ function KockaEngine() {
     mood: { sulk: -10, cross: -20 },
   });
   const TEASE_DIARY = ['bliss', 'boop', 'reconcile', 'splash', 'payback'];
+  const DREAM_SEEN = 10;   // Deníček 'dream': minutes she has slept when the player sees her (the UI's first bubble comes about then)
   const CMAX = 1e6;  // counters saturate here (inc)
   const COUNTS = ['favFood', 'belly', 'toy', 'quirk'].concat(SPOTS.map(s => 'spot_' + s));
   // pal*: Koxa and a neighbour cat (the cat is st.diaryCat[id])
   const PAL_DIARY = ['palFirst', 'palGroom', 'palSnuggle'];
   // the entries that name a neighbour cat (st.diaryCat), in this order; kittens: the mother, kitGrown: the kitten
   const CAT_DIARY = PAL_DIARY.concat(['sleepover', 'kittens', 'kitGrown']);
-  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY);
+  const DIARY_IDS = ['favFood'].concat(SPOTS.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY, ['dream']);
 
   /* --- small helpers --- */
   const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
@@ -999,7 +1000,7 @@ function KockaEngine() {
   //   favFood { food } | spot_<region> { region } | belly {} | toy { toy } | fear { fear } | quirk { quirk } |
   //   weight { kg } | walk { h, min } | birthday { y, m, d } (m 1–12) | bliss { brisk } | boop, reconcile, splash, payback {} |
   //   the cat entries { cat (visitor id or null), fem } and for kittens also { mother (when a young cat came alone first),
-  //   kits: [kitten ids of the mother's first litter seen] }
+  //   kits: [kitten ids of the mother's first litter seen] } | dream {}
   function entryInfo(st, id) {
     const T = st.traits;
     if (id === 'favFood') return { food: T.favFood };
@@ -1025,7 +1026,7 @@ function KockaEngine() {
   }
   // Deníček: her two spots only; found = when it was found (the UI shows the fact from info), else the UI shows a question
   function diary(st) {
-    const ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY);
+    const ids = ['favFood'].concat(st.traits.spots.map(s => 'spot_' + s), ['belly', 'toy', 'fear', 'quirk', 'weight', 'walk', 'birthday'], TEASE_DIARY, CAT_DIARY, ['dream']);
     return ids.map(id => {
       const found = st.diary[id] || null;
       return { id, found, info: found ? entryInfo(st, id) : null };
@@ -1830,6 +1831,11 @@ function KockaEngine() {
       ev.push({ type: 'offended', days: Math.floor(days) });
       const y = new Date(now).getFullYear();
       if (st.bday < y && birthdayAge(st.born, now)) { st.bday = y; addBond(st, 10, ev); ev.push({ type: 'birthday', age: birthdayAge(st.born, now) }); }
+    }
+    // Deníček: the player saw her dream (SPEC §14.2): asleep or dozing on the lap for DREAM_SEEN minutes in a seen advance
+    if (seen && !st.diary.dream) {
+      const from = st.asleep ? st.sleepAt : st.lap && st.lap.doze ? st.lap.dozeAt : 0;
+      if (from && end - from >= DREAM_SEEN * MIN) find(st, 'dream', end, ev);
     }
     teaseTidy(st);
     ensurePlan(st);
