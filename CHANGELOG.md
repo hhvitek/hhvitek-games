@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.32 – 2026-11-20
+
 - Kočka: spící Koxu teď probudíš, když do ní ťukáš pořád dokola. Prskne na tebe, ale bude vzhůru.
 - Kočka: Koxa se občas schová za závěs, pod deku na křesle, do skříně v předsíni nebo do krabice. Najdi ji ťuknutím! Schovávaná je i nová minihra za pamlsky.
 - Kočka: když Koxa spí, zdá se jí o tom, co ten den zažila: o ptáčcích u krmítka, o sousedových kočkách, o hračkách. Cukají jí přitom tlapky a vousky. Když ji poprvé uvidíš snít, přibude zápis v Deníčku.

@@ -1,7 +1,20 @@
 // The app version, shown in the launcher's Nastavení and used by sw.js to name its cache.
 // Written by tools/release.js from CHANGELOG.md: never edit by hand.
-globalThis.APP_VERSION = { version: '1.0.31', date: '2026-11-18' };
+globalThis.APP_VERSION = { version: '1.0.32', date: '2026-11-20' };
 globalThis.APP_CHANGES = [
+  {
+    "version": "1.0.32",
+    "date": "2026-11-20",
+    "items": [
+      "Kočka: spící Koxu teď probudíš, když do ní ťukáš pořád dokola. Prskne na tebe, ale bude vzhůru.",
+      "Kočka: Koxa se občas schová za závěs, pod deku na křesle, do skříně v předsíni nebo do krabice. Najdi ji ťuknutím! Schovávaná je i nová minihra za pamlsky.",
+      "Kočka: když Koxa spí, zdá se jí o tom, co ten den zažila: o ptáčcích u krmítka, o sousedových kočkách, o hračkách. Cukají jí přitom tlapky a vousky. Když ji poprvé uvidíš snít, přibude zápis v Deníčku.",
+      "Kočka: z procházky ti občas přinese myšku nebo cvrčka a čeká na pochvalu.",
+      "Kočka: na podzim je na zahradě hromada listí, do které Koxa skáče, a v zimě za ní zůstávají stopy ve sněhu.",
+      "Kočka: fotku z alba teď můžeš poslat rodině nebo kamarádům jako obrázek.",
+      "Kočka: Koxa má nový, věrnější hlas: mňoukání, předení i prskání."
+    ]
+  },
   {
     "version": "1.0.31",
     "date": "2026-11-18",
