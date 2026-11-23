@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.33 – 2026-11-23
+
 - Kočka: přenesená Koxa teď opravdu projde dveřmi na zahradu i zpátky domů. Když ji podržíš u okraje obrazovky, přeneseš ji do vedlejší místnosti.
 - Kočka: každá Koxa dostala do obýváku krabici. Když v ní spí, kouká z ní kus uší, ocasu nebo tlapky, a když ji tam přeneseš unavenou, usne v ní.
 - Kočka: rychlé ťukání Koxu zlobí: podle povahy zaprská a vrátí se, urazí se, nebo uteče do jiné místnosti, a klesne jí Mazlení.
