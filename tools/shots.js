@@ -167,6 +167,9 @@ async (page) => {
       const can = await page.evaluate(() => window.Kocka.itemPoint('can'));
       const her = await page.evaluate(() => { const K = window.Kocka; for (const r of ['head', 'back', 'chin', 'ears', 'tailBase', 'paws']) { const p = K.catPoint(r); if (p && K.regionAtFull(p.x, p.y) === r) return p; } return null; });
       if (can && her) { await drag(can, her); await wait(1500); } else errors.push('kocka: no can or no Koxa in the garden');
+      // Anička (paní Nováková's granddaughter) comes through the gate and plays with her ribbon
+      await page.evaluate(() => { const K = window.Kocka; if (!K.forceKid) return; K.state.G.st.visit = null; K.settle(); K.forceKid('garden', 'ribbon'); });
+      await wait(3000);
     },
     // the hint (dotted way, the next arrow framed), a tap on the framed arrow, the hint again
     'kulicka': async () => { await tap('#btnHint'); await wait(400); await tap('.arrow.hint'); await wait(1200); await tap('#btnHint'); await wait(500); },

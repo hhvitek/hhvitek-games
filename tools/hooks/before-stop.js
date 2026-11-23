@@ -6,7 +6,8 @@
 //     (.playwright-mcp/<id>-1start.png: the pictures stay there until the change is committed).
 // Otherwise the turn goes on once with the reason (exit code 2, text on stderr). The second time
 // (stop_hook_active) it lets the agent stop, so it is a reminder, never a loop.
-// When texts changed (games/ or i18n/), one line with the translation debt (tools/i18n.js) is added; it never blocks.
+//  3. when texts changed (games/ or i18n/), every ready language must be translated (tools/i18n.js: no missing or
+//     stale messages; user's decision 2026-11-23), and one line with the whole translation debt is added.
 'use strict';
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -53,15 +54,24 @@ process.stdin.on('end', () => {
     const r = spawnSync(process.execPath, [CHECK], { cwd: ROOT, encoding: 'utf8' });
     if (r.status !== 0) reasons.push('tools/check.js fails after the change of the texts (i18n/):', (r.stdout || '').split('\n').filter(l => /^(FAIL|\s+- )/.test(l)).join('\n'));
   }
-  // information only: what is left to translate (never a reason to go on)
+  // the translation debt of a ready language is unfinished work (user's decision 2026-11-23): a task ends translated
   let debt = '';
-  if (changed.some(f => /^(games|i18n)\//.test(f))) { try { debt = require('../i18n.js').debtLine(); } catch (e) {} }
+  if (changed.some(f => /^(games|i18n)\//.test(f))) {
+    try {
+      const I = require('../i18n.js');
+      debt = I.debtLine();
+      const open = Object.entries(I.debt().langs).filter(([, r]) => r.ready && (r.missing.length || r.stale.length));
+      if (open.length) reasons.push(
+        `Translations are not finished (${open.map(([c, r]) => `${c}: ${r.missing.length} missing, ${r.stale.length} stale`).join('; ')}): ` +
+        'a task ends only when every ready language is translated. Run the translation pass (skill translate) before you stop.');
+    } catch (e) {}
+  }
   const finish = () => {
     if (!reasons.length) {
       if (debt) process.stdout.write(JSON.stringify({ systemMessage: debt }) + '\n');
       process.exit(0);
     }
-    process.stderr.write(reasons.join('\n') + '\n' + (debt ? debt + ' (information only)\n' : ''));
+    process.stderr.write(reasons.join('\n') + '\n' + (debt ? debt + '\n' : ''));
     process.exit(2);
   };
   if (!ids.size) finish();

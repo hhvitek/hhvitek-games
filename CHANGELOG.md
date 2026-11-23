@@ -7,6 +7,11 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Kočka: přenesená Koxa teď opravdu projde dveřmi na zahradu i zpátky domů. Když ji podržíš u okraje obrazovky, přeneseš ji do vedlejší místnosti.
+- Kočka: každá Koxa dostala do obýváku krabici. Když v ní spí, kouká z ní kus uší, ocasu nebo tlapky, a když ji tam přeneseš unavenou, usne v ní.
+- Kočka: rychlé ťukání Koxu zlobí: podle povahy zaprská a vrátí se, urazí se, nebo uteče do jiné místnosti, a klesne jí Mazlení.
+- Kočka: občas odpoledne přijde na návštěvu Anička, vnučka paní Novákové. Hraje si s Koxou na zahradě, za špatného počasí v obýváku. Dá se s ní promluvit, pohrát si peříčkem i se vyfotit. Návštěvy teď občas přijdou chvíli po otevření hry, takže je jde zažít naživo.
+
 ## 1.0.32 – 2026-11-20
 
 - Kočka: spící Koxu teď probudíš, když do ní ťukáš pořád dokola. Prskne na tebe, ale bude vzhůru.

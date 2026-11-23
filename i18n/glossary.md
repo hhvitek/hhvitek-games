@@ -105,4 +105,6 @@ Plus Minus; Sudoku, Mahjong, Reversi, FreeCell and Prší stay as they are. A ne
 ### Names in Cat (user's decision 2026-11-17: English names like the opponents and the kittens)
 
 Koxa stays Koxa. Neighbour cats: Mourek = Stripey, Líza = Lisa, Bivoj = Hercules, Čiperka = Zippy, Pacička = Mittens,
-Rambo = Rambo, Šedivka = Silver, Fousek = Whiskers. Paní Nováková = Mrs Novak.
+Rambo = Rambo, Šedivka = Silver, Fousek = Whiskers. Paní Nováková = Mrs Novak. Anička, Mrs Novak's granddaughter
+(added 2026-11-21) = Annie (used since the pass of 2026-11-23, like the other English names; the user may still
+change it). "Kočičko!" = "Here, kitty!"; the doorbell "Crrr!" = "Ding-dong!"; povaha (her hidden trait) = temperament.

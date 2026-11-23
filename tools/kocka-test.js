@@ -101,12 +101,15 @@ function randomRun(seed, days) {
     seek: () => pick([st.hide ? st.hide.spot : 'curtain', st.hide ? { spot: st.hide.spot } : { spot: 'box' }, 'wardrobe', { spot: 'blanket' }, 'moon', null, { spot: 7 }]),
     praise: () => pick([null, {}]),
     leafJump: () => pick([null, 'x']),
+    // Anička (Phase 4): good and garbage arguments
+    kidFeather: () => pick([null, {}, { toy: pick(['feather', 'featherWand', 'laser', 5]) }]),
+    kidPhoto: () => pick([null, {}, { pose: pick(['sit', '', 'x'.repeat(30), 5]), kpose: pick(['carry', '', 'x'.repeat(30), null]), nokoxa: pick([true, false, 1]) }]),
   };
   const acts = E.ACTIONS.concat(['bogus', '', null]);
   let lvl = 0, forced = null;
   while (t < t0 + days * D) {
     const k = r();
-    t += (st.visit || st.guest) && k < 0.5 ? Math.floor(r() * 3 * MIN) : k < 0.6 ? Math.floor(r() * 30 * MIN) : k < 0.97 ? Math.floor(r() * 20 * H) : Math.floor(r() * 5 * D);   // with a visitor: often minutes
+    t += (st.visit || st.guest || st.kid.visit) && k < 0.5 ? Math.floor(r() * 3 * MIN) : k < 0.6 ? Math.floor(r() * 30 * MIN) : k < 0.97 ? Math.floor(r() * 20 * H) : Math.floor(r() * 5 * D);   // with a visitor: often minutes
     if (r() < 0.02) t -= Math.floor(r() * 3 * H);            // the clock moved back
     let res;
     // now and then a neighbour cat comes over (made by hand, then repaired), so the visitor actions meet a visitor
@@ -120,7 +123,17 @@ function randomRun(seed, days) {
       if (st.hide || st.catch) t = st.t + Math.floor(r() * 3 * MIN);
       if (r() < 0.6) forced = st.hide ? 'seek' : st.catch ? 'praise' : null;   // the player looks for her / praises it
     }
-    if (forced) { res = E.act(st, forced, ARGS[forced](), t); forced = null; }
+    // and now and then Anička (made by hand, then repaired: a broken act or place is mended, next to a cat she is dropped)
+    if (r() < 0.04 && !st.kid.visit && !st.visit && !st.guest) {   // next to a cat repair would drop her
+      st.kid.visit = { since: st.t, until: st.t + pick([40, 60, 600]) * MIN, where: pick(['garden', 'house', 'house', 'roof']),
+        act: { kind: pick(['arrive', 'stroke', 'carry', 'lap', 'wait', 'hide', 'x']), since: st.t, with: pick([null, 'koxa']), out: pick([undefined, 'held', 'wriggle']) } };
+      E.repair(st);
+      // the player talks, plays or takes a photo at once (the hide and the catch above share the random sequence, so
+      // without this Anička's actions met her only by luck; merged 2026-11-23)
+      if (st.kid.visit && !forced && r() < 0.6) { t = st.t + Math.floor(r() * 3 * MIN); forced = pick(['kidTalk', 'kidFeather', 'kidPhoto']); }
+    }
+    if (forced) { res = E.act(st, forced, ARGS[forced] ? ARGS[forced]() : null, t); forced = null; }
+    else if (st.kid.visit && r() < 0.3) { const a = pick(['kidTalk', 'kidFeather', 'kidFeather', 'kidPhoto', 'goGarden', 'goHouse', 'pickUp', 'opened']); res = E.act(st, a, ARGS[a] ? ARGS[a]() : null, t); }
     else if (st.visit && r() < 0.3) { const a = pick(['strokeVisitor', 'strokeVisitor', 'treatVisitor', 'playVisitor', 'invite', 'photo', 'feedVisitor']); res = E.act(st, a, ARGS[a](), t); }
     else if (r() < 0.05) {   // a run of pats (or nose taps, or the can) seconds apart: warnings, blowUps, sulks, crosses, paybacks
       const kind = pick(['pat', 'pat', 'pat', 'boop', 'splash']), region = pick(['back', 'tailBase', 'tail', 'head', 'belly', 'nose']);
@@ -162,6 +175,12 @@ const results = runs.map(s => randomRun(s, 60));
   const play = ['hide', 'seekFound', 'seekMiss', 'unhide', 'catch', 'praised', 'catchSnub', 'leafJump'];
   console.log(`  play in the fuzz: ${play.map(k => `${k} ${seen[k] || 0}`).join(', ')}`);
   ok(['unhide', 'seekFound', 'seekMiss', 'praised', 'catchSnub'].every(k => seen[k] > 0), 'the random runs meet hide and seek and the catch');
+  // Anička (Phase 4) and the guest at an opening (4b)
+  const kidNeed = ['kidArrive', 'kidAct', 'kidLeave', 'kidTalk', 'kidPlay', 'kidNoticed'];
+  let kidPhotos = 0;
+  for (const j of results) for (const evs of JSON.parse(j).events) for (const e of evs) if (e.type === 'photo' && e.kid) kidPhotos++;
+  console.log(`  Anička in the fuzz: ${kidNeed.map(k => `${k} ${seen[k] || 0}`).join(', ')}, photos ${kidPhotos}`);
+  ok(kidNeed.every(k => seen[k] > 0) && kidPhotos > 0, `the random runs meet Anička's events (missing: ${kidNeed.filter(k => !seen[k]).join(', ')})`);
 }
 
 /* ---------- 2. determinism ---------- */
@@ -412,6 +431,8 @@ function discover(seed) {
   if (T.fear === 'vacuum') E.act(st, 'vacuum', null, t);
   else if (T.fear === 'storm') for (let d = 0; d < 90 && !st.diary.fear; d++) { for (let h = 0; h < 24; h++) tick(H); t = careAt(st, t); }
   else { t = at(2026, 12, 31, 12); E.advance(st, t); t = careAt(st, t); for (let h = 0; h < 16; h++) tick(H); }
+  // pestering her twice shows her temper (the reactions, whatever they are)
+  up(); E.act(st, 'pester', null, t); t += 30 * MIN; E.advance(st, t); up(); E.act(st, 'pester', null, t);
   nextDay(8);   // the weight
   // her dream: the player looks at her while she sleeps (5-minute ticks, seen)
   for (let i = 0; i < 24 * 12 && !st.diary.dream; i++) { tick(5 * MIN); if (i % 36 === 35) t = careAt(st, t); }
@@ -428,7 +449,7 @@ function discover(seed) {
     if (fresh) continue;
     const st = discover(seed); tested++;
     const list = E.diary(st);
-    const missing = list.filter(e => !e.found && !e.id.startsWith('pal') && !['sleepover', 'kittens', 'kitGrown'].includes(e.id)).map(e => e.id);   // pal*, sleepover, kittens: neighbour cats, see 'Visitors 2', 3 and 4
+    const missing = list.filter(e => !e.found && !e.id.startsWith('pal') && !e.id.startsWith('kid') && !['sleepover', 'kittens', 'kitGrown'].includes(e.id)).map(e => e.id);   // pal*, sleepover, kittens: neighbour cats, see 'Visitors 2', 3 and 4; kid*: Anička, see 'Anička'
     ok(missing.length === 0, `seed ${seed} (${T.favFood}, ${T.spots}, ${T.fear}, ${T.quirk}, ${T.toy}): all found, missing ${missing.join(', ')}`);
     ok(list.every(e => (e.found ? e.info && typeof e.info === 'object' : e.info === null) && !/undefined|NaN|null/.test(JSON.stringify(Object.assign({}, e.info, { cat: 0, fem: 0 })))), `seed ${seed}: entry facts`);
     if (!missing.length) { seen.favFood.add(T.favFood); seen.fear.add(T.fear); seen.quirk.add(T.quirk); seen.toy.add(T.toy); T.spots.forEach(s => seen.spot.add(s)); }
@@ -437,7 +458,7 @@ function discover(seed) {
   ok(full(), `every trait value reached (${tested} cats)`);
   const st = E.create(1, at(2026, 11, 12, 15), 'Koxa');
   const d = E.diary(st);
-  ok(d.length === 22 && d[21].id === 'dream' && !d[21].found && d.find(e => e.id === 'birthday').found && JSON.stringify(d.find(e => e.id === 'birthday').info) === '{"y":2026,"m":11,"d":12}', 'the list: 22 entries (the dream last), the birthday found at once (12. 11. 2026)');
+  ok(d.length === 26 && d[22].id === 'dream' && !d[22].found && d.slice(-3).map(e => e.id).join() === 'kidFirst,kidLikes,kidLap' && d.slice(-3).every(e => !e.found && e.info === null) && d.find(e => e.id === 'birthday').found && JSON.stringify(d.find(e => e.id === 'birthday').info) === '{"y":2026,"m":11,"d":12}', 'the list: 26 entries (the dream, then the three of Anička last), the birthday found at once (12. 11. 2026)');
   // the dream entry: only when the player looks at her asleep for 10 minutes (an advance over 10 min is not looking)
   {
     const a = E.create(3, at(2026, 6, 9, 22), 'Koxa'); E.advance(a, at(2026, 6, 10, 2));
@@ -445,9 +466,9 @@ function discover(seed) {
     let ev = []; for (let k = 1; k <= 3; k++) ev = ev.concat(E.advance(a, a.t + 5 * MIN).events);
     ok(a.diary.dream && ev.some(e => e.type === 'found' && e.id === 'dream' && JSON.stringify(e.info) === '{}'), 'watched asleep: found dream {}');
   }
-  ok(d.map(e => e.id).slice(9, 15).join() === 'birthday,bliss,boop,reconcile,splash,payback' &&
-    d.filter(e => ['bliss', 'boop', 'reconcile', 'splash', 'payback'].includes(e.id)).every(e => !e.found && e.info === null),
-    'the five teasing entries follow the birthday; not found yet: no facts (the UI shows a question or a neutral hint)');
+  ok(d.map(e => e.id).slice(9, 16).join() === 'birthday,bliss,boop,reconcile,splash,payback,temper' &&
+    d.filter(e => ['bliss', 'boop', 'reconcile', 'splash', 'payback', 'temper'].includes(e.id)).every(e => !e.found && e.info === null),
+    'the six teasing entries follow the birthday; not found yet: no facts (the UI shows a question or a neutral hint)');
 }
 
 /* ---------- 11. repair survives garbage ---------- */
@@ -914,7 +935,7 @@ function gardenCat(seed, t) {
   ok(rs.filter(e => e.type === 'snowPaws').length === 1, 'snow: she shakes her paws once');
   // presents and the tree over many garden hours; the tree never keeps her more than 30 min
   let presents = 0, stuck = 0, longest = 0, callsMax = 0;
-  for (let s = 1; s <= 30; s++) {
+  for (let s = 1; s <= 60; s++) {
     const day = dayWith(E.create(s, clear, 'K'), 'clear', at(2026, 6, 1));
     const c = gardenCat(s, day); E.act(c, 'goGarden', null, day);
     let since = null;
@@ -928,7 +949,7 @@ function gardenCat(seed, t) {
     }
     if (since) longest = Math.max(longest, c.t - since);
   }
-  ok(presents > 10 && stuck > 5 && longest <= 31 * MIN, `4 h in the garden × 30 cats: ${presents} presents, stuck ${stuck}×, never longer than 30 min (${Math.round(longest / MIN)} min)`);
+  ok(presents > 20 && stuck > 8 && longest <= 31 * MIN, `4 h in the garden × 60 cats: ${presents} presents, stuck ${stuck}×, never longer than 30 min (${Math.round(longest / MIN)} min)`);
   // call: down within three calls; fetchDown: at once; goHouse refused while she is up there
   for (let s = 1; s <= 20; s++) {
     const c = gardenCat(s, clear); E.act(c, 'goGarden', null, clear); c.yard.tree = { since: clear, calls: 0 };
@@ -1220,7 +1241,7 @@ section('Economy balance (60 days)');
     n++; if (E.mood(st) === 'sad') sad++;
   }
   console.log(`  2 minigames a day: kapsička refused ${pouchRefused}×, toys bought ${toys}, 120 pamlsků saved on day ${firstRich}, ${st.pamlsky} at the end`);
-  ok(pouchRefused === 0 && toys >= 5 && ill === 0 && sad / n < 0.1, 'kapsička every day and a toy every week are affordable; healthy');
+  ok(pouchRefused === 0 && toys >= toyList.filter(x => !E.create(50, t0, 'K').owned[x]).length && ill === 0 && sad / n < 0.1, 'kapsička every day and a toy every week are affordable; healthy');
   ok(firstRich !== null && firstRich >= 14, `the cat tree (120) takes weeks of saving (day ${firstRich})`);
   const care = visitRun(50, [8, 20], 30);
   ok(care.ill === 0 && care.sad < 0.1 && care.st.pamlsky === 5, 'free care only (granule, water): still healthy, no pamlsky spent');
@@ -1368,14 +1389,17 @@ section('Visitors');
   ok(E.moodValue(with_('bivoj')) === base - 10 && E.moodValue(with_('bivoj', 3)) === base + 5, 'Bivoj: she hisses (mood −10) until 3 hearts, then they are friends (+5)');
   ok(E.moodValue(with_('rambo', 1)) === base - 10 && E.moodValue(with_('rambo', 2)) === base, 'Rambo: hissing until 2 hearts');
   // Phase A: they play only together in the garden (chase, wrestle), no longer through the window
-  let more = 0, less = 0;
-  for (let s = 1; s <= 20; s++) {
+  let more = 0, less = 0, fair = 0;
+  for (let s = 1; s <= 30; s++) {
     const mk = vis => { const x = E.create(s, t0, 'Koxa'); x.needs.fun = 20; x.yard = { since: t0, snow: false, tree: null }; if (vis) x.visit = { id: 'ciperka', since: t0, until: t0 + 2 * H, gain: 0 }; return x; };
     const a = mk(true), b = mk(false);
-    for (let k = 1; k <= 9; k++) { E.advance(a, t0 + k * 10 * MIN); E.advance(b, t0 + k * 10 * MIN); }
+    let other = false;   // a cat of its own came to b (watched: the chance ×3, Phase 4b): no fair comparison
+    for (let k = 1; k <= 9; k++) { E.advance(a, t0 + k * 10 * MIN); if (E.advance(b, t0 + k * 10 * MIN).events.some(e => e.type === 'visitor')) other = true; }
+    if (other) continue;
+    fair++;
     if (a.needs.fun > b.needs.fun + 1e-9) more++; else if (a.needs.fun < b.needs.fun - 1e-9) less++;
   }
-  ok(more >= 14 && less === 0 && E.moodValue(with_('ciperka')) === base + 5, `Čiperka: they play in the garden (more fun in ${more}/20, less in ${less}), mood +5 while she only watches`);
+  ok(fair >= 15 && more >= fair * 0.7 && less === 0 && E.moodValue(with_('ciperka')) === base + 5, `Čiperka: they play in the garden (more fun in ${more}/${fair}, less in ${less}), mood +5 while she only watches`);
   ok(E.moodValue(with_('mourek')) === base, 'Mourek: she just watches');
   // feeding and stroking
   const p = with_('pacicka');
@@ -2807,8 +2831,9 @@ section('Bowls, meals and routine');
   // G. where she sleeps: her box only when she has one, the sun only on a clear day, the sill cushion
   {
     const boxSeed = seedWith('quirk', 'box');
-    const placed = (s, own) => { Object.assign(s.owned, own || {}); for (const k of Object.keys(own || {})) s.furniture[k] = { room: 'living', x: 0.3, y: 0.9 }; };
-    const night = (seed, own, put = true) => { const s = E.create(seed, at(2026, 6, 10, 20), 'Koxa'); if (put) placed(s, own); else Object.assign(s.owned, own || {}); let place = null; for (let t = s.t + 10 * MIN; !place && t <= at(2026, 6, 11, 3); t += 10 * MIN) { const e = E.advance(s, t).events.find(x => x.type === 'sleep'); if (e) place = e.place; } return { s, place }; };
+    // every Koxa gets the box (2026-11-21): these take it away unless `own` has it
+    const placed = (s, own) => { delete s.owned.box; delete s.furniture.box; Object.assign(s.owned, own || {}); for (const k of Object.keys(own || {})) s.furniture[k] = { room: 'living', x: 0.3, y: 0.9 }; };
+    const night = (seed, own, put = true) => { const s = E.create(seed, at(2026, 6, 10, 20), 'Koxa'); if (put) placed(s, own); else { placed(s); Object.assign(s.owned, own || {}); } let place = null; for (let t = s.t + 10 * MIN; !place && t <= at(2026, 6, 11, 3); t += 10 * MIN) { const e = E.advance(s, t).events.find(x => x.type === 'sleep'); if (e) place = e.place; } return { s, place }; };
     const nb = night(boxSeed), wb = night(boxSeed, { box: true });
     ok(nb.place === 'bed' && nb.s.sleepPlace === 'bed' && E.health(nb.s).sleepPlace === 'bed', 'the box quirk without a box: her bed');
     ok(wb.place === 'box' && E.health(wb.s).sleepPlace === 'box', 'with a box: the box');
@@ -2834,7 +2859,7 @@ section('Bowls, meals and routine');
       }
       return null;
     };
-    ok(nap({}, true) === 'sun' && nap({}, false) === 'bed' && nap({ sillCushion: true }, false) === 'sill' && nap({ box: true }, true) === 'box', 'a nap: sun on a clear day, bed otherwise, the sill cushion, a box');
+    ok(nap({}, true) === 'sun' && nap({}, false) === 'bed' && nap({ sillCushion: true }, false) === 'sill', 'a nap: sun on a clear day, bed otherwise, the sill cushion');
     const rp = cat(32); rp.sleepPlace = 'moon'; E.repair(rp); ok(rp.sleepPlace === null, 'repair: an unknown sleep place');
   }
   // H. "Dnes ráno tě vzbudila": only after a real early wake, the first act within 2 h
@@ -3958,7 +3983,7 @@ section('Real weather');
   const dw30 = thirst(30), dw20 = thirst(20), dw28 = thirst(28), dw27 = thirst(27);
   ok(Math.abs(dw30 / dw20 - 1.3) < 0.01 && Math.abs(dw28 / dw20 - 1.3) < 0.01 && Math.abs(dw27 - dw20) < 1e-6, `heat: water falls ×1.3 from 28 °C (${dw20.toFixed(2)} → ${dw30.toFixed(2)} in 2 h)`);
   const napPlace = (temps, sill) => {
-    const c = E.create(23, hot - H, 'Koxa'); if (sill) c.owned.sillCushion = true;
+    const c = E.create(23, hot - H, 'Koxa'); delete c.owned.box; delete c.furniture.box; if (sill) c.owned.sillCushion = true;
     c.wx = mkWx(at(2026, 7, 15), rep('c', 24), temps);
     for (let t = hot; t <= hot + 10 * H; t += 30 * MIN) { const e = E.advance(c, t).events.find(x => x.type === 'sleep' && x.nap); if (e) return e.place; }
     return null;
@@ -4085,8 +4110,8 @@ section('Input: pat runs, rhythm, sounds (the Input block)');
     };
     let S = setup(), e = S.tap(50, 50, 1000);
     ok(e.type === 'tap' && e.t === 1060, 'a tap has t (the release)');
-    eq(e.pat, { n: 1, ms: 0, cv: 0, region: 'back' }, 'the first pat');
-    e = S.tap(52, 52, 1500); eq(e.pat, { n: 2, ms: 500, cv: 0, region: 'back' }, 'the second pat');
+    eq(e.pat, { n: 1, ms: 0, cv: 0, region: 'back', fast: 1 }, 'the first pat');
+    e = S.tap(52, 52, 1500); eq(e.pat, { n: 2, ms: 500, cv: 0, region: 'back', fast: 1 }, 'the second pat');
     e = S.tap(150, 20, 2000); eq(e.pat && e.pat.n, 3, 'the same region far away continues');
     e = S.tap(150, 20, 2960); eq(e.pat && e.pat.n, 1, '960 ms later: a new run');
     e = S.tap(150, 20, 3860); eq(e.pat && e.pat.n, 2, 'exactly 900 ms: the run goes on');
@@ -4096,6 +4121,14 @@ section('Input: pat runs, rhythm, sounds (the Input block)');
     S = setup(); S.tap(60, 90, 0); e = S.tap(60, 115, 400); eq([e.pat.n, e.pat.region], [1, 'head'], 'another region 25 px away: a new run');
     S = setup(); S.tap(60, 90, 0); e = S.tap(60, 130, 400); eq([e.pat.n, e.pat.region], [1, 'head'], 'another region 40 px away: a new run');
     S = setup(); S.tap(40, 101, 0); e = S.tap(40, 99, 300); eq([e.pat.n, e.pat.region], [2, 'back'], 'nose → back next to it continues');
+    // pestering (fast): quick taps anywhere on the same cat, each ≤ PESTER_GAP (250 ms) after the one before
+    ok(I.T.PESTER_GAP === 250, 'PESTER_GAP 250');
+    S = setup(); eq([0, 200, 400, 600].map((t, i) => S.tap(i % 2 ? 150 : 50, i % 2 ? 150 : 50, t).pat.fast), [1, 2, 3, 4], 'quick taps on back and head far apart: fast 1–4');
+    S = setup(); S.tap(50, 50, 0); S.tap(150, 150, 250); e = S.tap(50, 50, 500); eq(e.pat.fast, 3, 'exactly 250 ms: still quick');
+    e = S.tap(150, 150, 751); eq([e.pat.fast, e.pat.n > 0], [1, true], '251 ms: fast starts again');
+    S = setup(); S.tap(50, 50, 0); S.tap(50, 50, 400); e = S.tap(50, 50, 800); eq([e.pat.n, e.pat.fast], [3, 1], 'steady patting (400 ms): a run, never quick');
+    S = setup(); S.tap(320, 50, 0); S.tap(320, 50, 150); e = S.tap(150, 50, 300); eq(e.pat.fast, 1, 'a visitor, then Koxa: not one quick run');
+    S = setup(); S.tap(50, 50, 0); S.tap(50, 50, 150); S.g.cancel(); e = S.tap(50, 50, 300); eq(e.pat.fast, 1, 'cancel() ends the quick run too');
     // visitors: a run only on the same visitor
     S = setup(); S.tap(320, 90, 0); e = S.tap(320, 105, 300); eq([e.pat.n, e.pat.region], [2, 'v:liza:head'], 'the same visitor nearby continues');
     e = S.tap(198, 105, 600); eq(e.pat.n, 1, 'Koxa after a visitor: a new run');
@@ -4248,6 +4281,151 @@ section('Art: rearUp lifts her rear right under the finger (the Cat art block)')
   }
 }
 
+/* ---------- The box (2026-11-21): a gift for every Koxa, naps in it, carried into it, what peeks over the rim ---------- */
+section('The box');
+{
+  const MIN = 60000, H = 60 * MIN, D = 24 * H, T = at(2026, 6, 10, 10);
+  const seedWith = (k, v, from = 1) => { let s = from; while (E.create(s, T, 'K').traits[k] !== v) s++; return s; };
+  const plain = seedWith('quirk', 'socks'), boxy = seedWith('quirk', 'box');
+  // the gift
+  const g0 = E.create(plain, T, 'Koxa');
+  ok(g0.owned.box === true && g0.furniture.box && g0.furniture.box.room === 'living' && g0.gift.box === 1, 'a new Koxa has her box in the obývák');
+  ok(E.shop(g0).some(i => i.id === 'box' && i.owned), 'the shop shows the box as owned');
+  const old = clone(g0); delete old.gift; delete old.owned.box; delete old.furniture.box; const n0 = old.n; E.repair(old);
+  ok(old.owned.box && JSON.stringify(old.furniture.box) === JSON.stringify(g0.furniture.box) && old.gift.box === 1 && old.n === n0, 'an older save gets the box once (no rnd draw)');
+  const again = clone(old); E.repair(again); ok(JSON.stringify(again) === JSON.stringify(old), 'repair again: nothing changes');
+  const moved = clone(g0); delete moved.gift; moved.furniture.box = { room: 'kitchen', x: 0.3, y: 0.8 }; E.repair(moved);
+  ok(moved.furniture.box.room === 'kitchen' && moved.furniture.box.x === 0.3, 'an older save with its own box placed: kept where it is');
+  const loose = clone(g0); delete loose.gift; delete loose.furniture.box; E.repair(loose);
+  ok(loose.owned.box && !loose.furniture.box && loose.gift.box === 1, 'an older save with the box bought, not placed: stays unplaced');
+  const gone = clone(g0); delete gone.owned.box; delete gone.furniture.box; E.repair(gone);
+  ok(!gone.owned.box && !gone.furniture.box, 'given once: a box gone later never comes back');
+  const mv = clone(g0); E.act(mv, 'place', { id: 'box', room: 'hall', x: 0.7, y: 0.9 }, T); E.repair(mv);
+  ok(mv.furniture.box.room === 'hall', 'the player moves it: repair leaves it there');
+  const bad = clone(g0); bad.gift = [1]; delete bad.owned.box; delete bad.furniture.box; E.repair(bad);
+  ok(bad.gift.box === 1 && bad.owned.box, 'a broken gift flag: repaired');
+
+  // naps: the box quirk always, others about 40 %, the sill and the sun still happen
+  const napPlaces = (quirk, own, salt, days = 160) => {
+    const out = {};
+    for (let d = 0; d < days; d++) {
+      const t0 = at(2026, 5, 1, 11) + d * D, s = E.create(salt + d * 7919, t0 - 3 * H, 'Koxa');
+      s.traits.quirk = quirk; Object.assign(s.owned, own || {});
+      E.advance(s, t0); s.needs.energy = 50;
+      for (let t = t0 + 10 * MIN; t <= t0 + 5 * H; t += 10 * MIN) { const e = E.advance(s, t).events.find(x => x.type === 'sleep' && x.nap); if (e) { out[e.place] = (out[e.place] || 0) + 1; break; } }
+    }
+    return out;
+  };
+  const qb = napPlaces('box', null, 3), pl = napPlaces('socks', { sillCushion: true }, 5), pl2 = napPlaces('tap', null, 11);
+  const sum = o => Object.values(o).reduce((a, b) => a + b, 0);
+  console.log(`  naps: box quirk ${JSON.stringify(qb)}, others with the sill cushion ${JSON.stringify(pl)}, without ${JSON.stringify(pl2)}`);
+  ok(sum(qb) > 80 && qb.box === sum(qb), 'the box quirk: every nap in the box');
+  const share = ((pl.box || 0) + (pl2.box || 0)) / (sum(pl) + sum(pl2));
+  ok(share > 0.3 && share < 0.5, `other cats: about 40 % of naps in the box (${(share * 100).toFixed(0)} %)`);
+  ok(pl.sill > 0 && pl2.sun > 0, 'the sill cushion and the sun patch still get naps');
+  const same = () => { const s = E.create(plain, T - 3 * H, 'Koxa'); s.needs.energy = 50; let p = null; for (let t = T; !p && t <= T + 8 * H; t += 10 * MIN) { const e = E.advance(s, t).events.find(x => x.type === 'sleep'); if (e) p = e.place + s.sleepAt; } return p; };
+  ok(same() !== null && same() === same(), 'the nap place is the same every time (seeded on the nap start)');
+
+  // carried into the box
+  const awake = (seed, needs, t = T) => { const s = E.create(seed, t - H, 'Koxa'); E.advance(s, t); s.asleep = false; s.wakeAt = 0; s.wokeAt = t - H; Object.assign(s.needs, { food: 90, water: 90, energy: 90, fun: 90, love: 90 }, needs || {}); s.napAt = t + 3 * H; return s; };
+  const putIn = s => { const p = E.act(s, 'pickUp', null, s.t).events; return { held: p.some(e => e.type === 'held'), ev: E.act(s, 'putDown', 'box', s.t).events }; };
+  const tired = awake(plain, { energy: 40 }), r1 = putIn(tired);
+  ok(r1.held && tired.asleep && tired.sleepPlace === 'box' && E.health(tired).sleepPlace === 'box' && r1.ev.some(e => e.type === 'sleep' && e.place === 'box' && e.put), 'tired, put into the box: she falls asleep there');
+  ok(E.act(tired, 'pickUp', null, tired.t).events.every(e => e.type !== 'held'), 'asleep in the box: she cannot be picked up');
+  const rested = awake(plain), r2 = putIn(rested), put = r2.ev.find(e => e.type === 'put');
+  ok(r2.held && !rested.asleep && put && put.place === 'box' && put.sit >= 60000 && put.sit <= 180000, `rested: she sits in it ${put && put.sit / 1000} s, awake`);
+  const r2b = putIn(awake(plain)); ok(JSON.stringify(r2b.ev) === JSON.stringify(r2.ev), 'the same state: the same answer');
+  const soon = awake(plain); soon.napAt = soon.t + 20 * MIN; putIn(soon); ok(soon.asleep && soon.sleepPlace === 'box', 'her nap due within 30 min: asleep in the box');
+  const nt = awake(plain, {}, at(2026, 6, 10, 23)); putIn(nt); ok(nt.asleep && nt.sleepPlace === 'box', 'at night: asleep in the box');
+  const q = awake(boxy); putIn(q); ok(q.asleep && q.sleepPlace === 'box', 'the box quirk, rested: asleep in the box');
+  const hungry = awake(plain, { energy: 40, food: 10 }); putIn(hungry); ok(!hungry.asleep, 'hungry: she does not sleep in it');
+  const nob = awake(plain, { energy: 40 }); delete nob.owned.box; delete nob.furniture.box; const r3 = putIn(nob);
+  ok(!nob.asleep && r3.ev.some(e => e.type === 'put' && e.place === 'box' && e.sit === undefined), 'no box: a plain put');
+  const gbx = awake(plain, { energy: 40 }); gbx.furniture.box = { room: 'garden', x: 0.5, y: 0.9 }; putIn(gbx); ok(!gbx.asleep, 'the box in the garden: no sleep in it');
+
+  // carried out into the garden: still held; going out together: put down
+  const cg = awake(plain); E.act(cg, 'pickUp', null, cg.t); E.act(cg, 'goGarden', 'carried', cg.t);
+  ok(cg.yard && cg.held, 'carried out into the garden: still held');
+  E.act(cg, 'goHouse', null, cg.t); ok(!cg.yard && cg.held, 'carried back in: still held');
+  const wg = awake(plain); E.act(wg, 'pickUp', null, wg.t); E.act(wg, 'goGarden', null, wg.t); ok(wg.yard && !wg.held, 'going out together: she walks');
+
+  // what peeks over the rim
+  const bs = awake(plain, { energy: 40 }); putIn(bs);
+  ok(E.boxPeek(rested, rested.t) === null && E.boxPeek(awake(plain), T) === null, 'awake: nothing peeks');
+  const seen = {}, runs = []; let last = null, since = 0;
+  for (let ms = bs.t; ms < bs.t + 12 * H; ms += 5000) {
+    const v = E.boxPeek(bs, ms); seen[v] = 1;
+    if (v !== last) { if (last !== null) runs.push(ms - since); last = v; since = ms; }
+  }
+  ok(Object.keys(seen).sort().join() === 'back,ears,paw,tail', 'all four: ears, tail, paw, back');
+  const inner = runs.slice(1);
+  ok(inner.length > 100 && inner.every(r => r >= 3 * MIN - 5000 && r <= 5 * MIN + 5000), `runs of 3–5 min (${Math.min(...inner) / 1000}–${Math.max(...inner) / 1000} s)`);
+  ok(E.boxPeek(bs, bs.t + 77777) === E.boxPeek(clone(bs), bs.t + 77777), 'seeded: the same after a reload');
+}
+
+/* ---------- Pestering (2026-11-21): a run of quick taps; her temper decides how she takes it ---------- */
+section('Pestering');
+{
+  const MIN = 60000, H = 60 * MIN, T = at(2026, 6, 10, 10);
+  const kitty = (temper, seed = 40, t = T) => {
+    const s = E.create(seed, t - H, 'Koxa'); E.advance(s, t);
+    s.asleep = false; s.wakeAt = 0; s.wokeAt = t - H; s.napAt = t + 3 * H;
+    Object.assign(s.needs, { food: 90, water: 90, energy: 80, fun: 90, love: 80, litter: 100, coat: 90 });
+    s.traits.temper = temper; return s;
+  };
+  const pester = (s, t = s.t) => E.act(s, 'pester', null, t).events;
+  const ofType = (ev, k) => ev.find(e => e.type === k);
+  // the trait: from the seed (k = 9), all three, about a third each; an older save gets the same one, no rnd draw
+  const cnt = { playful: 0, huffy: 0, touchy: 0 };
+  for (let i = 1; i <= 600; i++) cnt[E.create(i, T, 'K').traits.temper]++;
+  ok(Object.values(cnt).every(v => v > 150), `tempers from the seed: ${JSON.stringify(cnt)}`);
+  const o = E.create(7, T, 'K'), tp = o.traits.temper, other = JSON.stringify(Object.assign({}, o.traits, { temper: 0 }));
+  delete o.traits.temper; const n0 = o.n; E.repair(o);
+  ok(o.traits.temper === tp && o.n === n0 && JSON.stringify(Object.assign({}, o.traits, { temper: 0 })) === other, 'an older save: the temper from its seed, the other traits kept, no rnd draw');
+  const bad = E.create(7, T, 'K'); bad.traits.temper = 'angry'; E.repair(bad); ok(bad.traits.temper === tp, 'a broken temper: from the seed');
+
+  // each temper
+  const pl = kitty('playful'), b0 = pl.bond, n1 = pl.n, e1 = pester(pl), p1 = ofType(e1, 'pester');
+  ok(p1 && p1.level === 'playful' && !p1.woke && !p1.flee && pl.needs.love === 79 && !E.health(pl).sulk && !E.health(pl).cross, 'playful: a half-play hiss, love −1, no sulk');
+  ok(pl.bond === b0 && pl.n === n1, 'bond never drops; no rnd draw');
+  const hu = kitty('huffy'), e2 = pester(hu), p2 = ofType(e2, 'pester');
+  ok(p2 && p2.level === 'huffy' && hu.needs.love === 78 && E.health(hu).sulk && e2.findIndex(e => e.type === 'pester') < e2.findIndex(e => e.type === 'sulk'), 'huffy: she sulks, love −2 (the pester first, then the sulk)');
+  const to = kitty('touchy'), e3 = pester(to), p3 = ofType(e3, 'pester'), c3 = ofType(e3, 'cross');
+  ok(p3 && p3.level === 'touchy' && p3.flee && to.needs.love === 76 && E.health(to).cross && c3 && c3.until - to.t >= 10 * MIN && c3.until - to.t <= 20 * MIN, `touchy: she runs off, cross ${c3 && (c3.until - to.t) / MIN} min, love −4`);
+  ok(E.moodValue(hu) < E.moodValue(kitty('huffy')), 'huffy: a worse mood');
+  ok([pl, hu, to].every(s => s.bond === b0), 'bond unchanged for every temper');
+  // escalation: again within 10 min (heat left) one step up; after the heat cooled the temper again
+  const again = kitty('playful'); pester(again);
+  ok(ofType(pester(again, again.t + 5 * MIN), 'pester').level === 'huffy', 'playful pestered again after 5 min: huffy');
+  const later = kitty('playful'); pester(later);
+  ok(ofType(pester(later, later.t + 11 * MIN), 'pester').level === 'playful', 'after 11 min (the heat cooled): playful again');
+  const hh = kitty('huffy'); pester(hh); ok(ofType(pester(hh, hh.t + 4 * MIN), 'pester').level === 'touchy', 'huffy pestered again: touchy');
+  const tt = kitty('touchy'); pester(tt); ok(ofType(pester(tt, tt.t + MIN), 'pester').level === 'touchy', 'touchy stays touchy (the top)');
+  const gr = kitty('playful'); Object.assign(gr.needs, { fun: 0, love: 0 }); gr.wet = gr.t + H;
+  ok(E.mood(gr) === 'grumpy' || E.mood(gr) === 'sad', `a grumpy cat (${E.mood(gr)})`);
+  ok(ofType(pester(gr), 'pester').level === 'huffy', 'grumpy or sad: one step up');
+  // asleep: a single tap never wakes her, a pestering does (energy −3, no nap again for a while)
+  const sl = E.create(40, at(2026, 6, 10, 21), 'Koxa'); sl.traits.temper = 'playful';
+  let ts = sl.t; for (; ts < at(2026, 6, 11, 2) && !sl.asleep; ts += 10 * MIN) E.advance(sl, ts);
+  ok(sl.asleep, 'asleep at night');
+  E.act(sl, 'pat', { region: 'back', n: 1 }, sl.t); ok(sl.asleep, 'a single pat: still asleep');
+  const ref = clone(sl); E.advance(ref, sl.t + 1000);
+  const es = pester(sl, sl.t + 1000), ps = ofType(es, 'pester');
+  ok(!sl.asleep && ps && ps.woke && Math.abs(ref.needs.energy - sl.needs.energy - 3) < 0.01, `pestered asleep: she wakes with a start, energy −3 (${(ref.needs.energy - sl.needs.energy).toFixed(2)})`);
+  ok(sl.napAt >= sl.t + 45 * MIN, 'and does not fall asleep again for a while');
+  // determinism, out, the Deníček
+  const d1 = kitty('huffy'), d2 = clone(d1);
+  ok(JSON.stringify(pester(d1)) === JSON.stringify(pester(d2)) && JSON.stringify(d1) === JSON.stringify(d2), 'the same state: the same reaction');
+  const out = kitty('huffy'); out.out = { since: out.t, until: out.t + 2 * H, walk: true, byPlayer: true };
+  ok(pester(out).some(e => e.type === 'refused'), 'out on a walk: nothing to pester');
+  const dy = kitty('touchy'); pester(dy); ok(!dy.diary.temper, 'one reaction: not in the Deníček yet');
+  pester(dy, dy.t + 30 * MIN); const de = E.diary(dy).find(e => e.id === 'temper');
+  ok(de.found && JSON.stringify(de.info) === '{"temper":"touchy"}', 'two reactions: the Deníček knows her temper');
+  // on the lap: she leaves it
+  const lp = kitty('playful'); friend(lp); E.act(lp, 'lapOn', null, lp.t);
+  if (E.health(lp).lap) { const el = pester(lp); ok(!E.health(lp).lap && el.some(e => e.type === 'lapLeave') && ofType(el, 'pester'), 'on the lap: she jumps off'); }
+}
+
 /* ---------- Kitten names in the player's language (setKitNames) ---------- */
 section('Kitten names');
 {
@@ -4285,6 +4463,9 @@ section('Play and memories: hide and seek, dreams, a catch, the leaf pile');
   // hide: the spots
   {
     const st = E.create(1, T0, 'Koxa');
+    // every Koxa gets a free box in the obývák (§6b, merged 2026-11-23): it is a hiding spot at once
+    ok(E.hideSpots(st).map(s => s.spot + ':' + s.room).join() === 'curtain:living,blanket:living,wardrobe:hall,box:living', 'a new Koxa: her free box in the obývák is the fourth spot');
+    delete st.furniture.box;   // a box that is not placed (or sold)
     ok(E.hideSpots(st).map(s => s.spot + ':' + s.room).join() === 'curtain:living,blanket:living,wardrobe:hall', 'three spots without the box');
     st.owned.box = true; st.furniture.box = { room: 'kitchen', x: 0.3, y: 0.9 };
     ok(E.hideSpots(st).some(s => s.spot === 'box' && s.room === 'kitchen'), 'the box: in its room');
@@ -4548,7 +4729,7 @@ section('Play and memories: hide and seek, dreams, a catch, the leaf pile');
     const bad = (f, msg, check) => { const s = E.create(27, T0, 'Koxa'); f(s); E.repair(s); ok(check(s), msg); invariants(s, msg); };
     bad(s => { s.hide = { spot: 'curtain', room: 'hall', since: T0, until: T0 + HL }; }, 'a hide in the wrong room is dropped', s => s.hide === null);
     bad(s => { s.hide = { spot: 'curtain', room: 'living', since: T0, until: T0 + 5 * HL }; }, 'a hide of the wrong length is dropped', s => s.hide === null);
-    bad(s => { s.hide = { spot: 'box', room: 'living', since: T0, until: T0 + HL }; }, 'the box without a box is dropped', s => s.hide === null);
+    bad(s => { delete s.furniture.box; s.hide = { spot: 'box', room: 'living', since: T0, until: T0 + HL }; }, 'the box without a box is dropped', s => s.hide === null);
     bad(s => { s.owned.box = true; s.furniture.box = { room: 'kitchen', x: 0.5, y: 0.5 }; s.hide = { spot: 'box', room: 'kitchen', since: T0, until: T0 + HL }; }, 'in the box in the kitchen: kept', s => s.hide && s.hide.room === 'kitchen');
     bad(s => { s.hide = { spot: 'curtain', room: 'living', since: T0, until: T0 + HL }; s.asleep = true; s.sleepAt = T0; }, 'asleep: no hide', s => s.hide === null);
     bad(s => { s.catch = { kind: 'bird', at: T0, until: T0 + E.CATCH.ms }; }, 'an unknown catch is dropped', s => s.catch === null);
@@ -4569,6 +4750,402 @@ section('Play and memories: hide and seek, dreams, a catch, the leaf pile');
       for (const t of T) { const c = clone(s); E.advance(c, t); all++; if (got.get(t) === JSON.stringify(c)) same++; }
     }
     ok(same === all, `probes equal their own advances with the memories (${same}/${all})`);
+  }
+}
+
+/* ---------- Phase 4: Anička, paní Nováková's granddaughter, comes to see Koxa (st.kid) ---------- */
+section('Anička');
+{
+  const hourOf = ms => { const d = new Date(ms); return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600; };
+  const home19 = ms => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 19).getTime(); };
+  const dayAt = (ms, h) => { const d = new Date(ms); return new Date(d.getFullYear(), d.getMonth(), d.getDate(), h).getTime(); };
+  // a Koxa that lived a while, at home, fed, awake and content at t
+  const koxa = (seed, t, o = {}) => {
+    const s = E.create(seed, t - 2 * D, 'Koxa'); E.advance(s, t - 3 * H); careAt(s, s.t); E.advance(s, t);
+    s.asleep = false; s.wakeAt = 0; s.wokeAt = t - H; s.napAt = t + 4 * H; s.sleepPlace = null; s.meal = null; s.drink = null; s.bowl = null;
+    Object.assign(s.needs, { food: 90, water: 90, energy: 80, fun: 70, love: 80, litter: 100, coat: 90 }, o.needs || {});
+    if (o.temper) s.traits.temper = o.temper;
+    s.visit = null; s.guest = null; s.due = null;
+    s.kid = { visits: 0, friend: o.friend || 0, met: 0, day: 0, owe: 0, diary: {}, visit: null };   // she has not been here yet
+    E.repair(s);
+    return s;
+  };
+  // she is due one minute later (as after an opening) and comes
+  const come = s => { s.due = { who: 'kid', at: s.t + MIN }; return E.advance(s, s.t + MIN + 1000).events; };
+  // watched minute ticks until she has gone (or `until`); f(s, events) after each
+  const watch = (s, f, until = s.t + 2 * H, step = MIN) => { const all = []; for (let x = s.t + step; x <= until; x += step) { const e = E.advance(s, x).events; all.push(...e); if (f) f(s, e); if (!s.kid.visit && e.some(v => v.type === 'kidLeave')) break; } return all; };
+  const day = (seed, w, from, h) => dayWith(E.create(seed, from, 'K'), w, from, h);
+
+  // 1. her days: 10 Koxas × 8 weeks, advanced a day at a time while nobody watches (probes see every visit)
+  const life = (seed, weeks) => {
+    const st = E.create(seed, at(2026, 4, 6, 7), 'Koxa'), visits = new Map(), out = { arrivals: 0, maxDay: 0, bad: 0, cats: 0, visits };
+    for (let d = 0; d < weeks * 7; d++) {
+      const to = new Date(2026, 3, 7 + d, 7).getTime(), T = [];
+      for (let x = st.t + 6 * H; x < st.t + 13 * H; x += 10 * MIN) T.push(x);
+      const r = E.advance(st, to, { at: T, fn: c => { const V = c.kid.visit; if (V) { visits.set(V.since, { since: V.since, until: V.until, where: V.where }); if (c.visit || c.guest) out.bad++; } } });
+      const n = r.events.filter(e => e.type === 'kidArrive').length;
+      out.arrivals += n; out.maxDay = Math.max(out.maxDay, n); out.cats += r.events.filter(e => e.type === 'visitor').length;
+      careAt(st, st.t);
+      invariants(st, `Anička life ${seed}`);
+    }
+    out.st = st;
+    return out;
+  };
+  let arrivals = 0, weeks = 0, cats = 0, bad = 0, maxDay = 0, window = 0, length = 0, wet = 0, fairHouse = 0, fair = 0, all = 0;
+  for (let s = 1; s <= 10; s++) {
+    const L = life(s, 8); arrivals += L.arrivals; weeks += 8; cats += L.cats; bad += L.bad; maxDay = Math.max(maxDay, L.maxDay);
+    for (const v of L.visits.values()) {
+      all++;
+      const h = hourOf(v.since), len = (v.until - v.since) / MIN;
+      if (h >= 13 && h < 18.5 && v.until <= home19(v.since)) window++;
+      if (len >= 30 - 1e-9 && len <= 60 + 1e-9) length++;
+      const sky = E.sky(v.since, L.st).w;
+      if (['rain', 'storm', 'snow'].includes(sky)) { if (v.where !== 'house') wet++; } else { fair++; if (v.where === 'house') fairHouse++; }
+    }
+  }
+  console.log(`  ${weeks} weeks: ${arrivals} visits (${(arrivals / weeks).toFixed(2)} a week), ${cats} cat visits, inside on ${fairHouse}/${fair} fair days`);
+  ok(arrivals / weeks >= 1 && arrivals / weeks <= 2, `about 1–2 visits a week (${(arrivals / weeks).toFixed(2)})`);
+  ok(all === arrivals && window === all && length === all, `every visit 13:00–18:30, home by 19:00, 30–60 min (${window}/${length}/${all})`);
+  ok(maxDay <= 1, 'at most one visit a day');
+  ok(bad === 0, 'never together with a neighbour cat or a guest');
+  ok(wet === 0 && fairHouse > 0 && fairHouse < fair * 0.45, `rain, a storm or snow: always inside; a fair day inside now and then (${fairHouse}/${fair})`);
+
+  // 2. garden or inside by the weather (forced at 14:00)
+  let rainHouse = 0, rainN = 0, clearGarden = 0, clearN = 0;
+  for (let s = 1; s <= 30; s++) {
+    for (const [w, n] of [['rain', 'r'], ['clear', 'c']]) {
+      const t = day(s, w, at(2026, 6, 1), 14); if (!t) continue;
+      const k = koxa(s, t); come(k);
+      if (!k.kid.visit) { ok(false, `seed ${s} ${w}: she came`); continue; }
+      if (n === 'r') { rainN++; if (k.kid.visit.where === 'house') rainHouse++; } else { clearN++; if (k.kid.visit.where === 'garden') clearGarden++; }
+    }
+  }
+  ok(rainN >= 10 && rainHouse === rainN && clearGarden >= clearN * 0.6 && clearGarden < clearN, `rain: inside ${rainHouse}/${rainN}; a clear day: the garden ${clearGarden}/${clearN}`);
+  const real = (s, ch, temp) => { const h0 = Math.floor(s.t / H) * H - 2 * H; E.setWx(s, { city: 'praha', at: s.t, h0, w: ch.repeat(12), t: Array(12).fill(temp) }); };
+  { const t = day(5, 'clear', at(2026, 1, 5), 14), k = koxa(5, t); real(k, 'c', -5); come(k); ok(k.kid.visit && k.kid.visit.where === 'house', 'a real frost (−5 °C): she rings and plays inside'); }
+  { const t = day(6, 'clear', at(2026, 7, 5), 14), k = koxa(6, t); real(k, 'x', 24); come(k); ok(k.kid.visit && k.kid.visit.where === 'house', 'a real storm: inside'); }
+  { const t = day(6, 'clear', at(2026, 7, 5), 14), k = koxa(6, t); come(k); E.setWx(k, null); const g = k.kid.visit.where === 'garden';
+    if (g) { real(k, 'r', 15); const ev = watch(k); ok(ev.some(e => e.type === 'kidLeave' && e.reason === 'rain' && e.where === 'garden'), 'rain on a garden visit: she goes home'); } }
+
+  // 3. the window, the day, the cats: forced arrivals that must not happen
+  { const t = day(7, 'clear', at(2026, 6, 1), 10), k = koxa(7, t); come(k); ok(!k.kid.visit && !k.due, 'at 10:00: not her time, the due visit drops'); }
+  { const t = day(7, 'clear', at(2026, 6, 1), 18) + 40 * MIN, k = koxa(7, t); come(k); ok(!k.kid.visit, 'after 18:30: too late'); }
+  { const t = day(7, 'clear', at(2026, 6, 1), 14), k = koxa(7, t); come(k); const v1 = k.kid.visits; watch(k); E.advance(k, k.t + 30 * MIN); come(k);
+    ok(v1 === 1 && k.kid.visits === 1 && !k.kid.visit, 'one visit a day'); }
+  { const t = day(7, 'clear', at(2026, 6, 1), 14), k = koxa(7, t); k.visit = { id: 'mourek', since: t, until: t + H, gain: 0 }; E.repair(k); come(k);
+    ok(k.visit && !k.kid.visit, 'a neighbour cat is here: she does not come'); }
+  { const t = day(7, 'clear', at(2026, 6, 1), 14), k = koxa(7, t); come(k); let catCame = false;
+    watch(k, (s, e) => { if (e.some(v => v.type === 'visitor') && s.kid.visit) catCame = true; });
+    for (let i = 0; i < 40 && !catCame; i++) { const c = koxa(100 + i, t); come(c); watch(c, (s, e) => { if (e.some(v => v.type === 'visitor') && s.kid.visit) catCame = true; }); }
+    ok(!catCame, 'no cat comes while she is here (40 watched visits)'); }
+
+  // 4. determinism: one long advance = 2-hour chunks; watched 1-, 5- and 10-minute ticks; a reload; probes
+  let longSame = 0, longN = 0;
+  for (let s = 1; s <= 12; s++) {
+    for (let d = 0; d < 40; d++) {
+      const t0 = new Date(2026, 4, 1 + d, 7).getTime(), base = koxa(s, t0);
+      const a = clone(base), ea = E.advance(a, t0 + 22 * H).events;
+      if (!ea.some(e => e.type === 'kidArrive')) continue;
+      const b = clone(base), eb = []; for (let x = t0 + 2 * H; x <= t0 + 22 * H; x += 2 * H) eb.push(...E.advance(b, x).events);
+      const kid = ev => JSON.stringify(ev.filter(e => e.type.startsWith('kid')));
+      const noWant = x => JSON.stringify(Object.assign({}, x, { want: 0 }));   // st.want follows only at the end of an advance (as before)
+      longN++; if (noWant(a) === noWant(b) && kid(ea) === kid(eb)) longSame++;
+      break;
+    }
+  }
+  ok(longN >= 10 && longSame === longN, `one 22-hour advance = eleven 2-hour ones, with her visit in it (${longSame}/${longN})`);
+  let tickSame = 0, tickN = 0;
+  for (let s = 1; s <= 12; s++) {
+    const t = day(s, 'rain', at(2026, 6, 1), 12); if (!t) continue;   // rain: no cat comes
+    const base = koxa(s, t), runs = [MIN, 5 * MIN, 10 * MIN].map(step => {
+      const k = clone(base), list = [];
+      for (let x = t + step; x <= t + 7 * H; x += step) for (const e of E.advance(k, x).events) if (e.type === 'kidArrive') list.push(JSON.stringify([k.kid.visit && k.kid.visit.since, k.kid.visit && k.kid.visit.until, e.where]));
+      return list.join() + '|' + k.kid.visits;
+    });
+    if (runs[0].startsWith('|')) continue;
+    tickN++; if (runs[0] === runs[1] && runs[1] === runs[2]) tickSame++;
+  }
+  ok(tickN >= 3 && tickSame === tickN, `watched in 1-, 5- or 10-minute ticks: the same arrival, place and length (${tickSame}/${tickN})`);
+  {
+    const t = day(3, 'clear', at(2026, 6, 1), 14), k = koxa(3, t, { friend: 2 }); E.act(k, 'goGarden', null, t); come(k);
+    E.advance(k, k.t + 10 * MIN);
+    const r = clone(k); E.repair(r); const c = clone(k);
+    for (let x = k.t + MIN; x <= k.t + 70 * MIN; x += MIN) { E.advance(c, x); E.advance(r, x); }
+    ok(JSON.stringify(c) === JSON.stringify(r), 'a reload in the middle of her visit changes nothing');
+    const p = koxa(4, day(4, 'rain', at(2026, 6, 1), 12)), T = []; E.act(p, 'opened', null, p.t);
+    for (let h = 1.5; h <= 9; h += 0.5) T.push(p.t + h * H);
+    const got = new Map(); E.advance(clone(p), T[T.length - 1], { at: T, fn: c2 => got.set(c2.t, JSON.stringify(c2)) });
+    let same = 0; for (const x of T) { const c2 = clone(p); E.advance(c2, x); if (got.get(x) === JSON.stringify(c2)) same++; }
+    ok(same === T.length, `probes over her afternoon equal their own advances (${same}/${T.length})`);
+  }
+
+  // 5. what they do: every act reachable, Koxa asleep = wait, refusals and hiding, the caps
+  const kinds = {}, outs = {}, hides = {};
+  const record = e => { for (const v of e) if (v.type === 'kidAct') { kinds[v.kind] = (kinds[v.kind] || 0) + 1; if (v.out) outs[v.out] = 1; if (v.hide) hides[v.hide] = 1; } };
+  let capOk = 0, capN = 0, gainOk = 0, woke = 0, asleepJoint = 0, waits = 0;
+  const caps = E.KID.cap;
+  for (let s = 1; s <= 40; s++) {
+    const t = day(s, s % 3 ? 'clear' : 'rain', at(2026, 5, 1), 14); if (!t) continue;
+    const garden = s % 2 === 0, k = koxa(s, t, { friend: s % 6, temper: E.TEMPERS[s % 3], needs: { energy: s % 4 ? 80 : 45 } });
+    if (garden) E.act(k, 'goGarden', null, t);
+    if (s % 10 === 9) { friend(k); E.act(k, 'letOut', null, t); }   // out on a walk: she plays alone
+    if (s % 5 === 3) Object.assign(k.needs, { fun: 15, love: 15 });   // grumpy
+    const f0 = k.kid.friend;
+    record(come(k));
+    record(watch(k, (x, e) => {
+      const V = x.kid.visit;
+      if (V) { capN++; if (V.fx.love <= caps.love + 1e-9 && V.fx.fun <= caps.fun + 1e-9 && V.fx.energy <= caps.energy + 1e-9) capOk++; }
+      record(e);
+      if (!x.yard && garden && !x.out && x.kid.visit && x.kid.visit.where === 'garden' && !(x.yard && x.yard.tree)) E.act(x, 'goGarden', null, x.t);
+    }));
+    if (k.kid.friend - f0 <= 0.5 + 1e-9) gainOk++;
+  }
+  // Koxa asleep in the house on a rainy afternoon: she waits, never wakes her
+  for (let s = 1; s <= 15; s++) {
+    const t = day(s, 'rain', at(2026, 6, 1), 14); if (!t) continue;
+    const k = koxa(s, t); k.asleep = true; k.sleepAt = t - 10 * MIN; k.wakeAt = t + 3 * H; k.sleepPlace = 'bed'; E.repair(k);
+    record(come(k));
+    record(watch(k, (x, e) => {
+      if (e.some(v => v.type === 'wake')) woke++;
+      const V = x.kid.visit; if (V && V.act.with === 'koxa' && V.act.kind !== 'wait') asleepJoint++;
+      if (V && V.act.kind === 'wait') waits++;
+    }));
+    if (!k.asleep) woke++;
+  }
+  ok(capN > 500 && capOk === capN, `a visit changes each need at most by its cap (${capOk}/${capN})`);
+  ok(gainOk >= 30, `Koxa's liking grows at most ½ a visit (${gainOk})`);
+  ok(woke === 0 && asleepJoint === 0 && waits > 50, `Koxa asleep: she waits by her (${waits} min) and never wakes her (woke ${woke}, other acts ${asleepJoint})`);
+  // touchy and grumpy: she refuses and hides; playful, happy and fond of her: almost never
+  const refusals = (temper, needs, friend0) => {
+    let hide = 0, joint = 0;
+    for (let s = 1; s <= 25; s++) {
+      const t = day(s, 'rain', at(2026, 6, 1), 14); if (!t) continue;
+      const k = koxa(s, t, { temper, friend: friend0, needs }); if (needs.fun < 30) k.wet = t + 2 * H;
+      record(come(k)); watch(k, (x, e) => { record(e); for (const v of e) if (v.type === 'kidAct' && v.with === 'koxa') { joint++; if (v.kind === 'hide') hide++; } });
+    }
+    return { hide, joint };
+  };
+  const tg = refusals('touchy', { fun: 20, love: 20 }, 0), ph = refusals('playful', { fun: 90, love: 95 }, 5);
+  console.log(`  hiding: touchy and grumpy ${tg.hide}/${tg.joint}, playful, happy and fond ${ph.hide}/${ph.joint}`);
+  ok(tg.hide >= tg.joint * 0.2 && ph.hide <= ph.joint * 0.03, 'a touchy, grumpy Koxa hides from her; a happy, playful one hardly ever');
+  { // up the tree in the garden with the player
+    let stuck = 0;
+    for (let s = 1; s <= 60 && !stuck; s++) {
+      const t = day(s, 'clear', at(2026, 6, 1), 14); if (!t) continue;
+      const k = koxa(s, t, { temper: 'touchy', needs: { fun: 20, love: 20 } }); k.wet = t + 2 * H; E.act(k, 'goGarden', null, t); come(k);
+      if (!k.kid.visit || k.kid.visit.where !== 'garden') continue;
+      watch(k, (x, e) => { record(e); if (e.some(v => v.type === 'climbStuck' && v.kid) && x.yard && x.yard.tree) stuck++; });
+    }
+    ok(stuck > 0, 'hiding in the garden with the player: she is up the tree (climbStuck { kid: true })');
+  }
+  console.log(`  acts: ${JSON.stringify(kinds)}, carry ${Object.keys(outs)}, hide ${Object.keys(hides)}`);
+  ok(Object.keys(E.KID_ACTS).every(a => kinds[a] > 0) && outs.held && outs.wriggle && hides.tree && hides.chair,
+    `every act reachable, carry held and wriggled free, hiding up the tree and under the armchair (missing: ${Object.keys(E.KID_ACTS).filter(a => !kinds[a]).join(', ')})`);
+
+  // 6. the player and Anička: talk, the feather, a photo; the album
+  {
+    const t = day(9, 'rain', at(2026, 6, 1), 14), k = koxa(9, t, { temper: 'playful', friend: 4 });
+    ok(E.act(k, 'kidTalk', null, t).events.some(e => e.type === 'refused' && e.reason === 'kidNotHere'), 'not here: kidTalk refused');
+    come(k);
+    const info = E.kid(k);
+    ok(info.here && info.where === 'house' && info.visits === 1 && info.met === k.kid.visit.since, 'kid(st): here, where, visits, met');
+    let prev = -1, twice = 0, lines = new Set();
+    for (let i = 0; i < 40; i++) { const e = E.act(k, 'kidTalk', null, k.t + 1000).events.find(v => v.type === 'kidTalk'); if (e.line === prev) twice++; prev = e.line; lines.add(e.line); }
+    ok(twice === 0 && lines.size >= 4 && [...lines].every(l => l >= 0 && l < E.KID.talk), `kidTalk: lines 0–${E.KID.talk - 1}, never the same twice (${lines.size} different)`);
+    const c1 = clone(k), c2 = clone(k);
+    ok(JSON.stringify(E.act(c1, 'kidTalk', null, k.t + 5000).events) === JSON.stringify(E.act(c2, 'kidTalk', null, k.t + 5000).events), 'kidTalk: the same moment, the same line');
+    ok(E.act(k, 'kidFeather', { toy: 'featherWand' }, k.t + 1000).events.some(e => e.reason === 'toyNotOwned'), 'the feather wand only when owned');
+    const fun0 = k.needs.fun, p1 = E.act(k, 'kidFeather', {}, k.t + 1000).events.find(e => e.type === 'kidPlay');
+    ok(p1 && p1.toy === 'feather' && p1.koxa && k.needs.fun > fun0, 'the feather: they play together, fun +');
+    ok(E.act(k, 'kidFeather', {}, k.t + 2000).events.some(e => e.reason === 'kidResting'), 'one game a minute');
+    for (let i = 0; i < 20; i++) E.act(k, 'kidFeather', {}, k.t + MIN + 1000);
+    ok(k.kid.visit.fx.fun <= E.KID.cap.fun + 1e-9 && k.kid.visit.fg <= 0.5, `the feather is capped (fun ${k.kid.visit.fx.fun}, liking +${k.kid.visit.fg})`);
+    const n0 = k.album.length, ph = E.act(k, 'kidPhoto', { kpose: 'ribbon' }, k.t + 1000).events.find(e => e.type === 'photo');
+    const p = k.album[k.album.length - 1], al = E.album(k);
+    ok(ph && ph.kid && k.album.length === n0 + 1 && p.kid === true && p.kpose === 'ribbon' && p.room === 'living' && !p.nokoxa, 'kidPhoto: a record with kid and kpose in the album');
+    ok(al.kid && al.kid.photos.length === 1 && al.photos.every(x => !x.kid) && al.kid.visits === 1 && al.kid.met === k.kid.met, 'album(st).kid: her own part; the other photos without hers');
+    const r = clone(k); E.repair(r); ok(JSON.stringify(r) === JSON.stringify(k), 'canonical with her photo');
+    E.act(k, 'kidPhoto', null, k.t + 2000);
+    ok(E.act(k, 'deletePhoto', { t: p.t }, k.t + 3000).events.some(e => e.type === 'photoDeleted') && E.album(k).kid.photos.length === 1, 'deletePhoto removes her photo too');
+    const bad = clone(k); bad.album.push({ t: k.t, kid: true, kpose: 7, visitor: 'mourek', nokoxa: true }, { t: k.t, kid: 'yes', nokoxa: true }); E.repair(bad);
+    const b1 = bad.album[bad.album.length - 2], b2 = bad.album[bad.album.length - 1];
+    ok(!b1.kid && b1.visitor === 'mourek' && !b2.kid && !b2.nokoxa, 'repair: a photo is hers only with kid: true and no cat');
+    const away = koxa(9, t, { friend: 4 }); friend(away); E.act(away, 'letOut', null, t); come(away);
+    ok(away.kid.visit && E.act(away, 'kidPhoto', {}, away.t).events.find(e => e.type === 'photo') && away.album[away.album.length - 1].nokoxa === true, 'Koxa out: the photo is without her');
+  }
+
+  // 7. the Deníček: her first visit, Koxa likes her, she fell asleep on her lap
+  {
+    const k = koxa(21, at(2026, 6, 1, 12), { temper: 'playful' });
+    let lap = 0, likes = 0;
+    for (let d = 0; d < 30 && !(k.diary.kidLikes && k.diary.kidLap); d++) {
+      const t = new Date(2026, 5, 2 + d, 14).getTime(); E.advance(k, t - 2 * H); careAt(k, k.t); E.advance(k, t);
+      if (k.asleep) { k.asleep = false; k.wokeAt = t - H; k.napAt = t + 4 * H; k.wakeAt = 0; E.repair(k); }
+      k.needs.energy = d % 2 ? 45 : 80;   // sleepy every other day
+      k.wet = 0; E.repair(k);
+      if (E.weather(t, k) !== 'rain') E.act(k, 'goGarden', null, t);
+      come(k);
+      watch(k, (x, e) => { if (x.kid.visit && x.kid.visit.where === 'garden' && !x.yard && !x.out) E.act(x, 'goGarden', null, x.t); });
+      if (k.kid.friend >= 3 && !likes) likes = d + 1;
+      if (k.diary.kidLap && !lap) lap = d + 1;
+      E.advance(k, k.t + 2 * H);
+    }
+    const dy = E.diary(k), f = id => dy.find(e => e.id === id);
+    console.log(`  Deníček: kidLikes after ${likes} visits, kidLap after ${lap}`);
+    ok(f('kidFirst').found && ['garden', 'house'].includes(f('kidFirst').info.where), 'kidFirst: found, with where');
+    ok(f('kidLikes').found && likes > 0 && f('kidLap').found && ['garden', 'house'].includes(f('kidLap').info.where), 'kidLikes (3 hearts) and kidLap reached');
+    invariants(k, 'Anička diary');
+  }
+
+  // 7b. review fixes: the bowl ends being together; why Koxa did not join the feather; kidLap only asleep on her lap
+  {
+    const t0 = at(2026, 6, 1, 15);
+    const visitAt = (k, where, kind) => {
+      k.kid.visit = { since: k.t - MIN, until: k.t + 40 * MIN, where, act: { kind, since: k.t, with: 'koxa' }, fx: { love: 0, fun: 0, energy: 0 }, fg: 0, play: 0, talk: -1, noticed: k.t };
+      k.kid.met = k.t - MIN; k.kid.visits = 1; k.kid.day = 0; E.repair(k); return k;
+    };
+    // the reviewer's repro: an indoor visit on the lap act, granules poured, food 20
+    const m = visitAt(koxa(31, t0, { needs: { energy: 45, food: 20 } }), 'house', 'lap');
+    ok(E.kid(m).koxa, 'on Anička\'s lap before the pour');
+    E.act(m, 'feed', 'kibble', m.t + 1000);
+    let both = 0, ate = 0;
+    for (let m0 = m.t, x = m0 + 10000; x <= m0 + 6 * MIN; x += 10000) { E.advance(m, x); const h = E.health(m); if (h.eating || h.drinking) ate++; if (E.kid(m).koxa && (h.eating || h.coming || h.drinking)) both++; }
+    ok(ate > 0 && both === 0, `food poured on Anička's lap: she goes to the bowl and is never with Anička meanwhile (${both} steps both, ${ate} eating)`);
+    // kidPlay: why she did not play along
+    const why = (k, f) => { f(k); return (E.act(k, 'kidFeather', {}, k.t + 1000).events.find(e => e.type === 'kidPlay') || {}).why; };
+    const base = () => visitAt(koxa(32, t0), 'house', 'ribbon');
+    ok(why(base(), () => {}) === undefined, 'she plays along: no reason');
+    ok(why(base(), k => { k.out = { since: k.t, until: k.t + 2 * H, walk: true, byPlayer: true }; }) === 'away', 'out on a walk: away');
+    ok(why(visitAt(koxa(32, t0), 'garden', 'ribbon'), () => {}) === 'elsewhere', 'Anička in the garden, Koxa inside: elsewhere');
+    ok(why(base(), k => { k.asleep = true; k.sleepAt = k.t; k.wakeAt = k.t + H; k.napAt = 0; }) === 'asleep', 'asleep: asleep');
+    ok(why(base(), k => { E.act(k, 'pickUp', null, k.t); }) === 'busy', 'held by the player: busy');
+    ok(why(base(), k => { k.tease.kind = 'sulk'; k.tease.until = k.t + 3 * MIN; }) === 'noMood', 'sulking: noMood');
+    // kidLap: not while she only lies there awake; found once she sleeps on Anička's lap
+    const l = visitAt(koxa(33, t0, { needs: { energy: 80 } }), 'house', 'lap');
+    for (let l0 = l.t, x = l0 + MIN; x <= l0 + 4 * MIN; x += MIN) E.advance(l, x);
+    ok(!l.diary.kidLap, 'awake on her lap: not in the Deníček yet');
+    if (l.kid.visit && l.kid.visit.act.kind === 'lap') {
+      l.asleep = true; l.sleepAt = l.t; l.wakeAt = l.t + H; l.napAt = 0;
+      E.advance(l, l.t + MIN);
+      ok(l.diary.kidLap && E.diary(l).find(e => e.id === 'kidLap').info.where === 'house', 'asleep on her lap: kidLap (house)');
+    } else ok(false, 'the lap act lasted 4 minutes');
+  }
+
+  // 8. repair, the clock moved back, a long absence
+  {
+    const t = day(11, 'clear', at(2026, 6, 1), 14), base = koxa(11, t); E.act(base, 'goGarden', null, t); come(base); E.advance(base, base.t + 10 * MIN);
+    base.due = { who: 'mourek', at: base.t + 2 * MIN }; base.owe = 2; base.openAt = base.t - H;
+    invariants(base, 'Anička repair base');
+    ok(!!base.kid.visit, 'the base has her visit');
+    const G = [null, 'x', NaN, Infinity, -1, 1e308, [], {}, true, 2 ** 53, { kind: 'x' }];
+    const paths = [['kid'], ['due'], ['owe'], ['openAt'], ['kid', 'diary'], ['due', 'who'], ['due', 'at']];
+    (function walk(o, p) { for (const k2 of Object.keys(o)) { paths.push(p.concat(k2)); if (o[k2] && typeof o[k2] === 'object') walk(o[k2], p.concat(k2)); } })(base.kid, ['kid']);
+    let n = 0;
+    for (const p of paths) for (const g of G) {
+      const s = clone(base); let o = s; for (let i = 0; i < p.length - 1; i++) o = o[p[i]];
+      if (!o || typeof o !== 'object') continue;
+      o[p[p.length - 1]] = g;
+      try { E.repair(s); invariants(s, `kid repair ${p.join('.')} = ${String(g)}`); E.advance(s, s.t + 20 * MIN); E.act(s, 'kidTalk', null, s.t); E.act(s, 'opened', null, s.t + H); invariants(s, `after kid repair ${p.join('.')}`); n++; }
+      catch (e) { ok(false, `kid repair ${p.join('.')} = ${String(g)} threw ${e.stack}`); }
+    }
+    console.log(`  ${n} broken Anička states repaired`);
+    const w = clone(base); w.visit = { id: 'liza', since: w.t, until: w.t + H, gain: 0 }; E.repair(w);
+    ok(w.visit && !w.kid.visit, 'repair: her visit next to a cat visit is dropped (never together)');
+    const g2 = clone(base); g2.kid.visit.until = g2.kid.visit.since + 3 * H; g2.kid.visit.where = 'roof'; E.repair(g2);
+    ok(!g2.kid.visit && g2.kid.visits === base.kid.visits, 'repair: an endless or nowhere visit is dropped, the rest kept');
+    const g3 = clone(base); g3.kid.visit.act = { kind: 'carry', since: g3.t, with: 'koxa' }; E.repair(g3);
+    ok(g3.kid.visit.act.kind === 'call' && g3.kid.visit.act.with === null, 'repair: carry without its outcome = call alone');
+    const g4 = clone(base); g4.due = { who: 'kid', at: g4.t - MIN }; E.repair(g4); ok(g4.due === null, 'repair: a due guest in the past is dropped');
+    const g5 = clone(base); g5.due = { who: 'tom', at: g5.t + MIN }; E.repair(g5); ok(g5.due === null, 'repair: an unknown due guest is dropped');
+    const g6 = clone(base); g6.kid = 'x'; delete g6.due; delete g6.owe; delete g6.openAt; E.repair(g6);
+    ok(JSON.stringify(g6.kid) === JSON.stringify({ visits: 0, friend: 0, met: 0, day: 0, owe: 0, diary: {}, visit: null }) && g6.due === null && g6.owe === 0 && g6.openAt === 0, 'an older save: a fresh st.kid, no due, nothing owed');
+    // the clock moves back an hour in the middle of her visit: every moment moves with it
+    const cb = clone(base), V0 = clone(cb.kid.visit), d0 = cb.due.at - cb.t;
+    E.advance(cb, cb.t - H);
+    ok(cb.kid.visit && cb.kid.visit.since === V0.since - H && cb.kid.visit.until === V0.until - H && cb.kid.visit.act.since === V0.act.since - H && cb.due.at - cb.t === d0,
+      'the clock back: her visit and the due guest move with it');
+    invariants(cb, 'kid clock back');
+    E.advance(cb, cb.t + 5 * MIN); ok(!!cb.kid.visit, 'and her visit goes on');
+    const aw = clone(base), ea = E.advance(aw, aw.t + 5 * D).events;
+    ok(!aw.kid.visit && ea.some(e => e.type === 'kidLeave') && aw.due === null, 'a long absence: she has gone home, nothing due');
+  }
+}
+
+/* ---------- Phase 4b: a guest when the game is opened; more visits while it is watched ---------- */
+section('Visits at an opening');
+{
+  // the same opening = the same guest at the same moment (also after a reload); at most once in 3 hours
+  let rolled = 0, due = 0, kidDue = 0, sameOk = 0, n = 0;
+  for (let s = 1; s <= 200; s++) {
+    const t = at(2026, 6, 1 + (s % 28), 9 + (s % 9), s % 60), st = E.create(s, t - D, 'Koxa'); E.advance(st, t);
+    st.visit = null; st.kid.visit = null; st.guest = null; E.repair(st);
+    const a = clone(st), b = JSON.parse(JSON.stringify(st)); E.repair(b);
+    E.act(a, 'opened', null, t); E.act(b, 'opened', null, t);
+    n++; if (JSON.stringify(a.due) === JSON.stringify(b.due) && a.openAt === b.openAt) sameOk++;
+    if (a.openAt === t) rolled++;
+    if (a.due) {
+      due++; if (a.due.who === 'kid') kidDue++;
+      ok(a.due.at >= t + MIN && a.due.at <= t + 5 * MIN, 'due 1–5 min later');
+      const c = clone(a); E.act(c, 'opened', null, t + 20000); ok(JSON.stringify(c.due) === JSON.stringify(a.due), 'a second opening keeps the guest due');
+    }
+    if (a.openAt === t && !a.due) { const c = clone(a); E.act(c, 'opened', null, t + 2 * H); ok(!c.due && c.openAt === t, 'again within 3 h: no new draw'); }
+  }
+  console.log(`  200 openings by day: ${rolled} drew, ${due} guests due (${kidDue} Anička)`);
+  ok(sameOk === n, 'the same opening gives the same guest at the same moment, also after a reload');
+  ok(due > rolled * 0.2 && due < rolled * 0.4 && kidDue > 0, `about 30 % of the draws bring a guest (${due}/${rolled})`);
+  { // a night opening: nothing; an opening with a visitor here: nothing
+    const st = E.create(3, at(2026, 6, 3, 23), 'Koxa'); E.act(st, 'opened', null, st.t); ok(!st.due && !st.openAt, 'at night: no guest is drawn');
+    const v = E.create(3, at(2026, 6, 3, 10), 'Koxa'); v.visit = { id: 'mourek', since: v.t, until: v.t + H, gain: 0 }; E.repair(v); E.act(v, 'opened', null, v.t);
+    ok(!v.due && !v.openAt, 'a visitor here already: nothing drawn');
+  }
+  { // the due cat comes exactly then
+    let ok1 = 0, tried = 0;
+    for (let s = 1; s <= 300 && tried < 15; s++) {
+      const t = at(2026, 6, 2 + (s % 20), 9, s % 60), st = E.create(s, t - D, 'Koxa'); E.advance(st, t); st.visit = null; st.kid.visit = null; E.repair(st);
+      E.act(st, 'opened', null, t); if (!st.due || st.due.who === 'kid') continue;
+      tried++;
+      const D0 = st.due; let got = null;
+      for (let x = t + MIN; x <= t + 6 * MIN && !got; x += MIN) for (const e of E.advance(st, x).events) if (e.type === 'visitor') got = e;
+      if (got && got.id === D0.who && st.visit && st.visit.since === D0.at && st.owe >= 1) ok1++;
+    }
+    ok(tried >= 10 && ok1 === tried, `the due cat comes at its moment (${ok1}/${tried})`);
+  }
+
+  // a player who opens the game 3× a day for 10 minutes (watched minute ticks), 10 Koxas × 4 weeks, against the same
+  // Koxas nobody watches and nobody opens (the visits as before Phase 4b)
+  const jit = (s, d, h) => (s * 7919 + d * 131 + h * 17) % 41;
+  function player(seed, opens, bowl) {
+    const st = E.create(seed, at(2026, 4, 1, 7), 'Koxa');
+    if (bowl) { st.owned.visitorBowl = true; st.furniture.visitorBowl = { room: 'garden', x: 0.5, y: 0.8 }; }
+    const r = { cats: 0, kid: 0, eligible: 0, quick: 0 };
+    const count = ev => { for (const e of ev) { if (e.type === 'visitor') r.cats++; if (e.type === 'kidArrive') r.kid++; } };
+    for (let d = 0; d < 28; d++) for (const h of [8, 13, 19]) {
+      const to = new Date(2026, 3, 2 + d, h, jit(seed, d, h)).getTime();
+      count(E.advance(st, to).events);
+      if (opens) {
+        const fair = E.weather(to + 5 * MIN, st) !== 'rain' && E.weather(to, st) !== 'rain', free = !st.visit && !st.guest && !st.kid.visit && !st.due;
+        count(E.act(st, 'opened', null, to).events);
+        let got = false;
+        for (let m = 1; m <= 10; m++) { const ev = E.advance(st, to + m * MIN).events; count(ev); if (m <= 5 && ev.some(e => e.type === 'visitor' || e.type === 'kidArrive')) got = true; }
+        if (fair && free) { r.eligible++; if (got) r.quick++; }
+      }
+      count(E.act(st, 'feed', 'kibble', st.t).events); count(E.act(st, 'water', null, st.t).events); count(E.act(st, 'cleanLitter', null, st.t).events);
+    }
+    invariants(st, `player ${seed}`);
+    return r;
+  }
+  for (const bowl of [false, true]) {
+    const P = { cats: 0, kid: 0, eligible: 0, quick: 0 }, B = { cats: 0, kid: 0 };
+    for (let s = 1; s <= 10; s++) {
+      const p = player(s, true, bowl), b = player(s, false, bowl);
+      for (const k of Object.keys(P)) P[k] += p[k];
+      B.cats += b.cats; B.kid += b.kid;
+    }
+    const wk = 40, ratio = P.cats / B.cats;
+    console.log(`  ${bowl ? 'with' : 'without'} the visitors' bowl: a visit within 5 min of ${P.quick}/${P.eligible} fair openings; cats ${(P.cats / wk).toFixed(2)} a week (nobody watching ${(B.cats / wk).toFixed(2)}, ×${ratio.toFixed(2)}); Anička ${(P.kid / wk).toFixed(2)} (${(B.kid / wk).toFixed(2)})`);
+    ok(P.eligible > 100 && P.quick >= P.eligible / 4, `${bowl ? 'bowl' : 'no bowl'}: at least 1 in 4 fair openings by day brings a guest within 5 min (${P.quick}/${P.eligible})`);
+    ok(ratio >= 0.75 && ratio <= 1.25, `${bowl ? 'bowl' : 'no bowl'}: cat visits a week within ±25 % of before (×${ratio.toFixed(2)})`);
+    ok(P.kid / wk >= 1 && P.kid / wk <= 2 && B.kid / wk >= 1 && B.kid / wk <= 2, `${bowl ? 'bowl' : 'no bowl'}: Anička 1–2 times a week (${(P.kid / wk).toFixed(2)}, unwatched ${(B.kid / wk).toFixed(2)})`);
   }
 }
 

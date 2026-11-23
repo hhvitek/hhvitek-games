@@ -22,12 +22,13 @@
 //   opts.on(ev)           receives { type, ... }:
 //     tap        { x, y, item, region, cat, t, pat }   released before LONG_MS, moved < SLOP px and did not rub;
 //                t = ms of the release (opts.time); pat only in 'care' (the key is absent in other modes): the run of
-//                taps on a cat this tap belongs to (Škádlení, SPEC §13.1), { n, ms, cv, region } when the tap is on a cat
+//                taps on a cat this tap belongs to (Škádlení, SPEC §13.1), { n, ms, cv, region, fast } when the tap is on a cat
 //                (cat, a region hit, no item), else null. n = taps in the run including this one; ms, cv = rhythm() of
-//                the run's last PAT_WINDOW tap times; region = the hit region's id. A pat continues the run when it
+//                the run's last PAT_WINDOW tap times; region = the hit region's id; fast below. A pat continues the run when it
 //                comes ≤ PAT_GAP ms after the previous one and hits the same region id, or the same cat (Koxa: no
 //                'v:' prefix; a visitor: the same 'v:<id>:' prefix) ≤ PAT_NEAR px from the previous tap; otherwise a
-//                new run starts (n = 1). The run is cleared by a tap with pat null, every other emitted event, every
+//                new run starts (n = 1). fast = the quick taps in a row on the same cat, any region, each ≤ PESTER_GAP
+//                ms after the one before (pestering; 1 = not quick). The run is cleared by a tap with pat null, every other emitted event, every
 //                pointer released (or taken by the browser) without a tap (fingers that were only ignored, a resting
 //                thumb or a third finger, do not count), setMode(), cancel() and detach(). Two fingers that overlap in
 //                time on Koxa are a scratch (no taps) as before; taps that do not overlap form a run like any taps.
@@ -117,7 +118,7 @@ function KockaInput() {
     TOY_FRICTION: 1.2, TOY_BOUNCE: 0.6,
     TILT_DEAD: 0.025, TILT_WAIT_MS: 1000, TILT_LEVEL_MS: 300, TILT_SMOOTH: 0.4,
     MIC_CALL_LEVEL: 0.6, MIC_CALL_MS: 250, MIC_COOLDOWN_MS: 1500, MIC_POLL_MS: 50, MIC_FLOOR_DB: -60,
-    PAT_GAP: 900, PAT_NEAR: 24, PAT_WINDOW: 6,
+    PAT_GAP: 900, PAT_NEAR: 24, PAT_WINDOW: 6, PESTER_GAP: 250,
   };
   const BUZZ = { tap: 10, purr: [6, 60, 6, 60, 6, 60, 6], bite: 70, call: [20, 80, 20] };
   const IGNORE = 'button,a,input,select,textarea,label,[data-no-gesture]';
@@ -596,13 +597,16 @@ function KockaInput() {
       const id = String(reg.id), who = whoOf(id), dt = run ? t - run.t : -1;
       const goOn = run && dt >= 0 && dt <= T.PAT_GAP &&
         (id === run.id || (who === run.who && Math.hypot(x - run.x, y - run.y) <= T.PAT_NEAR));
+      // quick taps anywhere on the same cat (pestering): counted across regions, each ≤ PESTER_GAP after the last
+      const fast = run && dt >= 0 && dt <= T.PESTER_GAP && who === run.who ? (run.fast || 1) + 1 : 1;
       if (!goOn) run = { n: 0, times: [] };
+      run.fast = fast;
       run.n++;
       run.times.push(t);
       if (run.times.length > T.PAT_WINDOW) run.times.shift();
       Object.assign(run, { id, who, x, y, t });
       const r = rhythm(run.times);
-      return { n: run.n, ms: r.ms, cv: r.cv, region: reg.id };
+      return { n: run.n, ms: r.ms, cv: r.cv, region: reg.id, fast };
     }
     function swiped(dir, dx, dy, x, y, t, t0) {
       emit('swipe', { dir, dx, dy, x, y });

@@ -95,7 +95,8 @@
 //                            bang, note, splash = water from the can with drops, puff = a sneeze cloud with two droplets,
 //                            sparkle), the small head, the vet. item('mug') = the enamel mug (cream, blue rim and handle, a
 //                            chip; itemSize 26), one picture: the UI turns it while it falls.
-//   Tricks and more poses: trickSit, trickPaw (dej pac), trickSpin (turns round by CSS), trickBeg (panáček), inBox, onFence.
+//   Tricks and more poses: trickSit, trickPaw (dej pac), trickSpin (turns round by CSS), trickBeg (panáček), inBox, boxSleep
+//                            (asleep in the box, opts.peek: ears | tail | paw | back; both take opts.box = the box's scale), onFence.
 //   itemSize[name] = { w, h }  the item's 100 × 100 box in room units; itemPoints: rod / wand tip, cat-tree platforms.
 //   mouseHole(), mousePeek(phase 0..1), fish(kind) (fishes: goldfish, carp, perch), marker(done)  minigame pieces.
 //   shop(sign), shopSpots   Obchůdek (400×600 slice; sign = the text on its sign, from the UI) and where goods go on the counter.
@@ -103,6 +104,8 @@
 //   neighbour(id, pose, opts), neighbours = { id: { size } }  the visitors (mourek, liza, bivoj, ciperka, pacicka,
 //                            rambo, sedivka, fousek) in any pose; usually sit, walk, loaf, onFence (rooms.garden.spots.fence).
 //                            opts.coat = a neighbour id whose coat to wear (neighbour('k1', 'sit', { coat: 'liza', kit: 1 })).
+//   girl(pose, opts), girlPoses, girlBox, girlPoints(pose, opts), girlStride, girlLapCat  Anička, paní Nováková's
+//                            granddaughter, from the side (viewBox 0 0 240 340, feet at (120, 330); see "Anička" below).
 //   Kittens: opts.kit 0..1 in cat(), neighbour(), regions(), mouth() (0 or missing = a grown cat, exactly as without it;
 //                            1 ≈ 5–6 weeks, .35 a young cat): the whole cat kitScale(kit) big round her feet (100, 186)
 //                            (inside the same 200 box; the coat's size is not used), a bigger round head, big eyes, a
@@ -116,7 +119,7 @@
 //                            tented over her on the sill (ear points in the fabric), a lump under the armchair blanket, the
 //                            wardrobe door ajar with a dark gap. hides[pose] = { room, spot, hide, sc }: put the pose's
 //                            point (100, 186) on rooms[room].spots[spot] at depth scale sc (box 212 · sc room units), never
-//                            flipped, over room({ hide }). hideBox (hides.hideBox = { box: true }) draws its own box front
+//                            flipped, over room({ hide }). hideBox (hides.hideBox = { box: true }) draws its own box front (opts.box)
 //                            like inBox and goes where inBox goes. opts.peek: a little more (curtain: one eye and ear round
 //                            the window side; blanket: the head half out; box: the head up to the nose; wardrobe: wide eyes
 //                            and a paw on the threshold); hideBox opts.tailOnly: only the tail tip curling out of the box.
@@ -606,15 +609,45 @@ function KockaArt() {
       R.region('back', BODY, [0, 1]);
       R.mid = [100, 130];
     },
-    // in a cardboard box: only her head, ears and two paws on the rim show
+    // in a cardboard box: only her head, ears and two paws on the rim show. opts.box = the box's scale around her feet
+    // (100, 186), so the UI can make it exactly the size of the box item standing in the room (default 1)
     inBox(R, o, e) {
-      R.shadow = [100, 186, 66, 5];
-      R.raw(`<path d="M46 122L40 92H160L154 122Z" fill="#a8783e" stroke="${IO}" stroke-width="2.5" stroke-linejoin="round"/>`);
-      head(R, 100, 102, 1, 0, e);
+      const k = boxK(o), rim = 186 - 66 * k;
+      R.shadow = [100, 186, r1(66 * k), 5];
+      boxBack(R, k);
+      head(R, 100, r1(rim - 18), 1, 0, e);
       R.reg = R.reg.filter(g => g.id !== 'chin');
-      R.raw(BOX_FRONT);
-      paw(R, 82, 122, 10, 6, { toes: true }); paw(R, 118, 122, 10, 6, { toes: true });
-      R.mid = [100, 110];
+      boxFront(R, k);
+      paw(R, 82, r1(rim + 2), 10, 6, { toes: true }); paw(R, 118, r1(rim + 2), 10, 6, { toes: true });
+      R.mid = [100, r1(rim - 10)];
+    },
+    // asleep in her box: only a bit of her peeks over the rim (opts.peek): 'ears' (the ear tips and the crown, an ear
+    // twitches now and then), 'tail' (hanging over the front, swaying slowly), 'paw' (one paw over the front), 'back' (the
+    // curve of her back, breathing); the box as in inBox (opts.box)
+    boxSleep(R, o, e) {
+      const k = boxK(o), rim = 186 - 66 * k, peek = ['ears', 'tail', 'paw', 'back'].includes(o.peek) ? o.peek : 'ears';
+      R.shadow = [100, 186, r1(66 * k), 5];
+      boxBack(R, k);
+      if (peek === 'ears') head(R, 100, r1(rim + 9), 1, 0, H(e, { eyes: 'closed', mouth: 'cat', ears: o.ears || 'up', blush: false }));
+      else R.headPt = [100, r1(rim - 6)];
+      if (peek === 'back') {
+        const BACK = ell(100, r1(rim + 6), r1(46 * k), 28);
+        R.open('', 'kx-breathe', 100, r1(rim + 20));
+        R.part(BACK, { patches: spots([[86, rim - 4, 12, 0], [118, rim + 2, 9, 1]]) });
+        R.close();
+        R.region('back', BACK, [1, 0]);
+      }
+      boxFront(R, k);
+      // what hangs over the front is drawn above the box, with its own outline
+      if (peek === 'tail' || peek === 'paw') {
+        const Q = Rig(o);
+        if (peek === 'tail') tail(Q, [124, r1(rim - 8), 134, r1(rim - 6), 140, r1(rim + 14), 132, r1(rim + 40)]);
+        else Q.limb([84, r1(rim - 10), 82, r1(rim - 4), 79, r1(rim + 2), 77, r1(rim + 9)], 15, { edge: true, paw: [10.5, 7.5], toes: true });
+        R.top.push(`<g>${Q.ol.join('')}</g><g>${Q.fi.join('')}</g>`);
+        R.defs.push(...Q.defs); R.reg.push(...Q.reg);
+      }
+      R.region('back', ell(100, r1(rim - 2), r1(58 * k), 12), [1, 0]);   // the opening: a tap there is a tap on her
+      R.mid = [100, r1(rim - 6)];
     },
     // hiding (see "hiding"): only a little of her shows
     hideCurtain(R, o, e) { hideCurtain(R, o, e); },
@@ -1105,18 +1138,20 @@ function KockaArt() {
     R.mid = hidePts('blanket', [330, 392]); R.zz = hidePts('blanket', [338, 340]);
   }
   // in the cardboard box: the ear tips and the eyes over the front edge; peek: the head up to the nose;
-  // tailOnly: only the tail tip curling up out of it
+  // tailOnly: only the tail tip curling up out of it. opts.box = the box's scale as in inBox / boxSleep (the UI makes it
+  // the box item standing in the room, so there is never a second box)
   function hideBox(R, o, e) {
-    R.shadow = [100, 186, 66, 5];
-    R.raw(`<path d="M46 122L40 92H160L154 122Z" fill="#a8783e" stroke="${IO}" stroke-width="2.5" stroke-linejoin="round"/>`);
-    if (o.tailOnly) tail(R, [122, 134, 124, 112, 130, 94, 144, 86, 156, 80, 162, 90, 154, 96], 12);
-    else head(R, 100, o.peek ? 106 : 119, 1, o.peek ? 0 : -4, H(e, { eyes: o.peek ? peekEyes(o, e) : o.asleep ? 'closed' : e.eyes === 'happy' ? 'open' : e.eyes, ears: o.ears || 'up', blush: false }));
+    const k = boxK(o), dy = r1(66 - 66 * k), rim = 120 + dy, sc = ([x, y]) => [r1(100 + (x - 100) * k), r1(186 + (y - 186) * k)];
+    R.shadow = [100, 186, r1(66 * k), 5];
+    boxBack(R, k);
+    if (o.tailOnly) tail(R, [122, 134, 124, 112, 130, 94, 144, 86, 156, 80, 162, 90, 154, 96].map((v, i) => (i % 2 ? r1(v + dy) : v)), 12);
+    else head(R, 100, r1((o.peek ? 106 : 119) + dy), 1, o.peek ? 0 : -4, H(e, { eyes: o.peek ? peekEyes(o, e) : o.asleep ? 'closed' : e.eyes === 'happy' ? 'open' : e.eyes, ears: o.ears || 'up', blush: false }));
     noFace(R);
-    for (const g of R.reg) if (g.id === 'head') g.path = kitPath((x, y) => [x, Math.min(y, 121)], g.path);   // only above the rim
-    R.raw(BOX_FRONT);
-    R.region('lump', 'M38 120L162 120L156 186L44 186Z', [0, 1]);
+    for (const g of R.reg) if (g.id === 'head') g.path = kitPath((x, y) => [x, Math.min(y, rim + 1)], g.path);   // only above the rim
+    boxFront(R, k);
+    R.region('lump', poly([[38, 120], [162, 120], [156, 186], [44, 186]].map(sc)), [0, 1]);
     R.order = ['tail', 'ears', 'head', 'lump'];
-    R.mid = [100, 110]; R.zz = [130, 60];
+    R.mid = [100, r1(110 + dy)]; R.zz = [130, r1(60 + dy)];
   }
   // in the hall wardrobe: eyes glinting in the dark gap of the door ajar, the tail hanging out over the plinth onto the
   // floor; peek: the eyes wide and a front paw out on the threshold
@@ -1293,6 +1328,11 @@ function KockaArt() {
   const FEATHERS = (x, y, k) => `<g transform="translate(${x} ${y}) scale(${k})">` + [[-18, '#3fa3a0'], [0, '#e8892b'], [18, '#e05a7a']].map(([a, col]) =>
     `<g transform="rotate(${a})"><path d="M0 0C10 8 12 26 4 42C-4 28 -6 12 0 0Z" fill="${col}" stroke="${IO}" stroke-width="2"/><path d="M1 4Q4 22 4 40" stroke="#fff" stroke-width="1.4" fill="none" opacity=".7"/></g>`).join('') + '</g>';
   const BOX_FRONT = `<path d="M38 120H162L156 186H44Z" fill="#c99a5e"${st()}/><path d="M38 120L14 102L22 94L46 112Z" fill="#d8ab6c"${st(2.5)}/><path d="M162 120L186 102L178 94L154 112Z" fill="#d8ab6c"${st(2.5)}/><path d="M60 152H140" stroke="#a8783e" stroke-width="3"/><path d="M96 121V142" stroke="#e8c88a" stroke-width="7"/>`;
+  // the box in her inBox / boxSleep poses: the box item's back rim and BOX_FRONT, scaled by k around her feet (100, 186)
+  const boxK = o => (typeof o.box === 'number' && o.box > 0.3 && o.box < 2 ? o.box : 1);
+  const boxTf = k => `translate(100 186) scale(${r2(k)}) translate(-100 -186)`;
+  const boxBack = (R, k) => R.raw(`<g transform="${boxTf(k)}"><path d="M44 120L32 88H168L156 120Z" fill="#a8783e"${st(2.5)}/></g>`);
+  const boxFront = (R, k) => R.raw(`<g transform="${boxTf(k)}">${BOX_FRONT}</g>`);
   function bowl(c, inner, fill = '') {
     return groundShadow() + `<path d="M12 60H88L80 86Q50 92 20 86Z" fill="${c}"${st()}/><ellipse cx="50" cy="60" rx="38" ry="9" fill="${inner}"${st()}/>${fill || empty(inner)}` +
       `<path d="M24 73Q50 79 76 73" stroke="#fff" stroke-opacity=".35" stroke-width="3" fill="none"/><path d="M45 79l2-3 2 3 2-3" stroke="#fff" stroke-opacity=".55" stroke-width="2" fill="none" stroke-linecap="round"/>`;
@@ -2008,7 +2048,7 @@ function KockaArt() {
   const itemSize = {};
   for (const [k, v] of Object.entries({ bowl: 58, bowlEmpty: 58, bowlFull: 58, waterBowl: 52, waterBowlEmpty: 52, litter: 104, litterDirty: 104, bed: 150, mouse: 34, catnipMouse: 34,
     feather: 70, yarn: 40, laserDot: 30, treat: 30, foodBag: 60, jug: 56, brush: 50, scoop: 50, pouch: 40, chicken: 56, tuna: 44, vacuum: 140, seedPacket: 40, wateringCan: 70, trowel: 44,
-    pill: 24, pouchPack: 70, chickenPack: 70, tunaPack: 64, treatBag: 50, ballBell: 34, box: 120, tunnel: 190, scratcher: 130, catTree: 240, sillCushion: 140, bedDeluxe: 160,
+    pill: 24, pouchPack: 70, chickenPack: 70, tunaPack: 64, treatBag: 50, ballBell: 34, box: 170, tunnel: 190, scratcher: 130, catTree: 240, sillCushion: 140, bedDeluxe: 160,
     rugRound: 280, lamp: 170, birdFeeder: 150, catFlap: 60, fishingRod: 120, featherWand: 120, featherBunch: 40, mug: 26,
     cricket: 26, bird: 30, leafPile: 100, leafBurst: 100 })) itemSize[k] = { w: v, h: v };
   // in the item's own 100 × 100 box: the rod / wand tip (where the UI hangs its own string), the cat tree's platforms
@@ -2119,6 +2159,311 @@ function KockaArt() {
   }
   const neighbours = {};
   for (const k of Object.keys(NEIGHBOURS)) neighbours[k] = { size: NEIGHBOURS[k].size || 1 };
+
+  /* ---------- Anička: paní Nováková's granddaughter (6–7 years), seen from the side ---------- */
+  // girl(pose, opts) → <svg class="kx-girl kx-g-<pose>"> viewBox 0 0 240 340 = GIRL_BOX. 1 unit = 1 room unit at scale 1
+  // (the cat's box is 212 room units, so she stands ~305 tall, about twice a sitting Koxa; the head is ~1/5 of that).
+  // She faces right; opts.flip mirrors her round x = 120, so the anchor stays put. The anchor (GIRL_BOX.ax, .ay) =
+  // (120, 330) is the point between her soles: put it on the floor spot; 'sit' (bench) has its own anchor, the seat
+  // under her bottom (girlPoints(pose, opts).anchor), to put on the bench's seat top (rooms.garden.spots.bench).
+  // Poses (GIRL_POSES): stand, walk (legs and arms swing by CSS, the step time --kx-step on any ancestor, 1.2 s by
+  // default; set it to GIRL_STRIDE × her scale / speed so the feet never glide), crouch (squatting, the near hand
+  // reaching forward low: points.hand), sit (on the bench; opts.floor = cross-legged on the rug; points.lap = where a
+  // curled cat lies; opts.lapCat = the near arm round a cat lying there), hold (standing, both arms forward at chest
+  // height: put Koxa's 'carried' anchor (ANCHORS.carried) on points.hold), ribbon (a short stick with a fluttering
+  // ribbon, the arm sweeping, by CSS; points.ribbon = the ribbon's end), wave (the near hand waving by her head),
+  // call (hands cupped round the open mouth: "Kočičko!"), whisper (crouched, a finger on her lips).
+  // opts = { mood: 'happy'|'calm'|'sad' (the mouth and brows), flip, floor (sit), lapCat (sit), layer }.
+  // layer: 'body' = everything but the near arm, 'arm' = only the near arm (with the stick in 'ribbon'); draw a cat in
+  // her arms or on her lap between the two (hold, sit with lapCat), so her hand lies over the cat.
+  // girlPoints(pose, opts) → { anchor, head, mouth, hand, lap, hold, ribbon } ({x, y} in her viewBox, flip applied;
+  // null where the pose has none): hand = the near hand, lap = the top of her thighs (a cat's box point (100, 186)
+  // goes there, see GIRL_LAP_CAT for the box size), hold = where the carried cat's anchor goes. The values (facing right):
+  //   crouch hand (204, 284) = 46 above the floor, 84 ahead of the anchor: a loafing cat's back (her box ~ (198, 330));
+  //   sit lap (146, 278), anchor = the seat (110, 300); sit floor lap (144, 292), anchor (120, 330);
+  //   hold (168, 142); ribbon end (256, 298); mouth (150, 77) standing; whisper / crouch: see girlPoints.
+  const GIRL_BOX = { w: 240, h: 340, ax: 120, ay: 330 };
+  const GIRL_POSES = ['stand', 'walk', 'crouch', 'sit', 'hold', 'ribbon', 'wave', 'call', 'whisper'];
+  const GIRL_STRIDE = 144;                 // room units she moves per leg cycle at scale 1 (kx-gstride ±20°, hip to sole 126)
+  const GIRL_LAP_CAT = 130;                // the cat's box (room units) for lapCurl on her lap: a cat a little wider than the lap
+  const GC = {
+    skin: '#f2c9a8', skin2: '#e2b28c', skinOl: '#8a5a3a', hair: '#8a5228', hair2: '#704020', hairHi: '#a86a38', hairOl: '#3e2412',
+    dress: '#e0574a', dress2: '#c94a3f', dressOl: '#7a2a22', dot: '#fff1e0', collar: '#fff8ee', collarOl: '#9a7a5a',
+    tights: '#5b72b0', tights2: '#4a5e96', tightsOl: '#26305a', shoe: '#8f2f25', shoeOl: '#3e140e',
+    bow: '#f2c230', bow2: '#d9a820', bowOl: '#7a5a10', eye: '#2e2118', blush: '#ec8a84', mouth: '#8a3a2a', inMouth: '#a8403a',
+    stick: '#9a6a3a', stickOl: '#4a2e18',
+  };
+  const GOLW = 5;   // the outline stroke, as the cats' (half of it shows outside)
+  // groups of parts: in each group all outlines first, then the fills (one outline round the group's silhouette, thin
+  // edges inside); groups drawn later get their own outline over the earlier ones (an arm over the dress)
+  function GRig() {
+    const out = [];
+    let ol = [], fi = [];
+    const G = {
+      defs: [],
+      part(d, fill, olc, edge = true) {
+        ol.push(`<path d="${d}" fill="${olc}" stroke="${olc}" stroke-width="${GOLW}" stroke-linejoin="round"/>`);
+        fi.push(`<path d="${d}" fill="${fill}"${edge ? ` stroke="${olc}" stroke-width="1.3" stroke-linejoin="round"` : ''}/>`);
+      },
+      // a limb: a thick round stroke through the points (a bend at each middle point)
+      limb(pts, w, fill, olc) {
+        const d = 'M' + pts.map(q => r1(q[0]) + ' ' + r1(q[1])).join('L');
+        ol.push(`<path d="${d}" fill="none" stroke="${olc}" stroke-width="${w + GOLW}" stroke-linecap="round" stroke-linejoin="round"/>`);
+        fi.push(`<path d="${d}" fill="none" stroke="${olc}" stroke-width="${w + 2.6}" stroke-linecap="round" stroke-linejoin="round"/><path d="${d}" fill="none" stroke="${fill}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`);
+      },
+      raw(s) { fi.push(s); },
+      open(tf, cls, ox = 0, oy = 0) {
+        const g = (tf ? `<g transform="${tf}">` : '<g>') + (cls ? `<g class="${cls}" style="transform-origin:${r1(ox)}px ${r1(oy)}px">` : '<g>');
+        ol.push(g); fi.push(g);
+      },
+      close() { ol.push('</g></g>'); fi.push('</g></g>'); },
+      flush() { if (ol.length) out.push(`<g>${ol.join('')}</g><g>${fi.join('')}</g>`); ol = []; fi = []; },
+      svg() { G.flush(); return out.join(''); },
+    };
+    return G;
+  }
+  // an ellipse path turned by rot degrees (arcs, so it stays smooth)
+  function ellR(cx, cy, rx, ry, rot = 0) {
+    const a = rot * Math.PI / 180, dx = r2(rx * Math.cos(a)), dy = r2(rx * Math.sin(a));
+    return `M${r2(cx - dx)} ${r2(cy - dy)}a${rx} ${ry} ${rot} 1 0 ${r2(2 * dx)} ${r2(2 * dy)}a${rx} ${ry} ${rot} 1 0 ${r2(-2 * dx)} ${r2(-2 * dy)}Z`;
+  }
+  // two-bone reach: the middle joint (elbow, knee) between a and b; side 1 bends it to the left of a → b (for her, facing
+  // right: an elbow down or back), -1 to the right (a knee forward)
+  function ik(a, b, l1, l2, side) {
+    const dx = b[0] - a[0], dy = b[1] - a[1], L = Math.hypot(dx, dy) || 1, d = Math.min(l1 + l2 - 0.01, L);
+    const ux = dx / L, uy = dy / L, p = (l1 * l1 - l2 * l2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, l1 * l1 - p * p));
+    return [a[0] + p * ux + side * h * uy, a[1] + p * uy - side * h * ux];
+  }
+  const gTurn = (p, c, deg) => { const a = deg * Math.PI / 180, x = p[0] - c[0], y = p[1] - c[1]; return [c[0] + x * Math.cos(a) - y * Math.sin(a), c[1] + x * Math.sin(a) + y * Math.cos(a)]; };
+  const G_WAIST = [122, 164], G_NECK = [122, 96], G_ARM = [40, 36], G_LEG = [58, 56];
+  // every pose as a spec: hip joint H, torso lean a (degrees, + = forward), head nod hr, legs (knee k, ankle f, shoe turn
+  // s), arms (hand h, side, hand kind), skirt, mouth; the drawing and girlPoints() both read it
+  function girlSpec(pose, o) {
+    const S = { H: [122, 204], a: 0, hr: 0, skirt: 'stand', legs: null, arms: null, mouth: null, anchor: [120, 330] };
+    const standLegs = { near: { k: [124, 262], f: [124, 318] }, far: { k: [114, 262], f: [112, 318] } };
+    if (pose === 'stand' || pose === 'walk' || pose === 'hold' || pose === 'ribbon' || pose === 'wave' || pose === 'call') S.legs = standLegs;
+    if (pose === 'walk') S.walk = true;
+    if (pose === 'stand' || pose === 'walk') S.arms = { near: { h: [126, 184], side: 1 }, far: { h: [112, 184], side: 1 } };
+    if (pose === 'hold') {
+      S.hold = [168, 142];
+      S.arms = { near: { h: [152, 174], side: 1 }, far: { h: [166, 166], side: 1 } };
+      S.hr = 8;
+    }
+    if (pose === 'wave') S.arms = { near: { h: [174, 66], side: -1, kind: 'open', wave: true }, far: { h: [112, 184], side: 1 } };
+    if (pose === 'call') { S.hr = -8; S.mouth = 'call'; S.arms = { near: { h: [163, 84], side: -1, kind: 'cup' }, far: { h: [166, 74], side: -1, kind: 'cup' } }; }
+    if (pose === 'ribbon') {
+      S.hr = 10;
+      S.arms = { near: { h: [168, 168], side: 1, kind: 'grip', stick: [232, 228] }, far: { h: [116, 184], side: 1 } };
+      S.ribbon = [[232, 228], [238, 252], [250, 272], [256, 298]];
+    }
+    if (pose === 'crouch' || pose === 'whisper') {
+      S.H = [100, 292]; S.a = 30; S.hr = -18; S.skirt = 'crouch';
+      S.legs = { near: { k: [152, 266], f: [128, 316], s: -12 }, far: { k: [144, 262], f: [118, 316], s: -12 } };
+      if (pose === 'crouch') S.arms = { near: { h: [204, 284], side: 1 }, far: { h: [158, 252], side: 1 } };
+      else { S.hr = -8; S.mouth = 'whisper'; S.arms = { near: { h: [0, 0], side: -1, kind: 'finger', toMouth: true }, far: { h: [158, 252], side: 1 } }; }
+    }
+    if (pose === 'sit') {
+      S.hr = 12;
+      if (o.floor) {
+        S.H = [108, 312]; S.a = -2; S.skirt = 'floor';
+        S.legs = { near: { k: [168, 302], f: [146, 318], s: 0 }, far: { k: [160, 294], f: [128, 314], s: 0 } };
+        S.lap = [144, 292];
+      } else {
+        S.H = [110, 290]; S.a = -4; S.skirt = 'sit'; S.anchor = [110, 300];
+        S.legs = { near: { k: [168, 288], f: [200, 328], s: -10 }, far: { k: [160, 284], f: [190, 326], s: -10 } };
+        S.lap = [146, 278];
+      }
+      S.arms = o.lapCat
+        ? { near: { h: [S.lap[0] + 22, S.lap[1] - 30], side: 1 }, far: { h: [S.lap[0] + 16, S.lap[1] - 40], side: 1 } }
+        : { near: { h: [S.lap[0] + 10, S.lap[1] - 6], side: 1 }, far: { h: [S.lap[0] + 2, S.lap[1] - 10], side: 1 } };
+    }
+    if (!S.legs) S.legs = standLegs;
+    if (!S.arms) S.arms = { near: { h: [126, 184], side: 1 }, far: { h: [112, 184], side: 1 } };
+    // the transforms: standing coordinates → the pose (torso round the waist, head round the neck)
+    S.W = gTurn([S.H[0], S.H[1] - 40], S.H, S.a);
+    S.body = p => { const q = gTurn(p, G_WAIST, S.a); return [q[0] - G_WAIST[0] + S.W[0], q[1] - G_WAIST[1] + S.W[1]]; };
+    S.head = p => S.body(gTurn(p, G_NECK, S.hr));
+    S.bodyTf = `translate(${r1(S.W[0] - G_WAIST[0])} ${r1(S.W[1] - G_WAIST[1])}) rotate(${S.a} ${G_WAIST[0]} ${G_WAIST[1]})`;
+    S.headTf = S.bodyTf + ` rotate(${S.hr} ${G_NECK[0]} ${G_NECK[1]})`;
+    S.mouthPt = S.head([150, 77]);
+    if (S.arms.near.toMouth) { const m = S.mouthPt; S.arms.near.h = [m[0] + 6, m[1] + 12]; }
+    return S;
+  }
+  function shoe(G, x, y, s) {
+    // y = the ankle; the sole 12 lower; toes to the right; s = turned by s degrees round the ankle
+    G.open(s ? `rotate(${s} ${x} ${y})` : '');
+    G.part(`M${x - 9} ${y - 2}Q${x - 11} ${y + 12} ${x - 6} ${y + 12}H${x + 17}Q${x + 23} ${y + 12} ${x + 21} ${y + 5}Q${x + 17} ${y - 2} ${x + 6} ${y - 3}Z`, GC.shoe, GC.shoeOl);
+    G.raw(`<path d="M${x - 1} ${y - 2}L${x + 9} ${y + 3}" stroke="${GC.shoeOl}" stroke-width="2.2" stroke-linecap="round"/><path d="M${x + 12} ${y + 3}q4 -1 6 2" fill="none" stroke="#c4584a" stroke-width="1.6" stroke-linecap="round"/>`);
+    G.close();
+  }
+  function girlLeg(G, S, L, far, ph) {
+    const fill = far ? GC.tights2 : GC.tights, hip = [S.H[0] + (far ? -7 : 2), S.H[1]];
+    if (S.walk) {
+      // the leg swings at the hip, the shin bends at the knee (kx-gleg / kx-gknee, phase A or B)
+      const k = [hip[0], hip[1] + G_LEG[0]], f = [k[0], k[1] + G_LEG[1]];
+      G.open('', 'kx-gleg' + ph, hip[0], hip[1]);
+      G.limb([hip, k], 15, fill, GC.tightsOl);
+      G.open('', 'kx-gknee' + ph, k[0], k[1]);
+      G.limb([k, f], 14, fill, GC.tightsOl);
+      shoe(G, f[0], f[1], 0);
+      G.close(); G.close();
+      return;
+    }
+    G.limb([hip, L.k, L.f], 15, fill, GC.tightsOl);
+    shoe(G, L.f[0], L.f[1], L.s || 0);
+  }
+  function girlHand(G, p, kind) {
+    if (kind === 'cup') { G.part(ellR(p[0], p[1], 6, 9, -10), GC.skin, GC.skinOl); return; }
+    if (kind === 'finger') {   // a fist with the forefinger up across the lips
+      G.part(ellR(p[0], p[1], 6.5, 6), GC.skin, GC.skinOl);
+      G.limb([[p[0] - 2, p[1] - 3], [p[0] - 3, p[1] - 19]], 4.2, GC.skin, GC.skinOl);
+      return;
+    }
+    if (kind === 'open') {     // an open palm with the thumb
+      G.part(`M${p[0] - 7} ${p[1] + 6}Q${p[0] - 9} ${p[1] - 8} ${p[0] - 2} ${p[1] - 10}Q${p[0] + 6} ${p[1] - 11} ${p[0] + 7} ${p[1] - 2}Q${p[0] + 8} ${p[1] + 7} ${p[0]} ${p[1] + 8}Z`, GC.skin, GC.skinOl);
+      G.part(ellR(p[0] + 8, p[1] + 3, 4, 2.6, -40), GC.skin, GC.skinOl);
+      return;
+    }
+    G.part(ellR(p[0], p[1], 6.8, 6.2), GC.skin, GC.skinOl);
+  }
+  function girlArm(G, S, A, far, ph) {
+    const sh = S.body(far ? [114, 114] : [121, 115]), fill = far ? GC.skin2 : GC.skin;
+    const el = ik(sh, A.h, G_ARM[0], G_ARM[1], A.side);
+    const hand = A.h;
+    if (S.walk) G.open('', 'kx-garm' + ph, sh[0], sh[1]);
+    if (A.wave) {
+      G.limb([sh, el], 11, fill, GC.skinOl);
+      G.open('', 'kx-gwave', el[0], el[1]);
+      G.limb([el, hand], 10, fill, GC.skinOl);
+      girlHand(G, hand, 'open');
+      G.close();
+    } else if (A.stick) {
+      G.open('', 'kx-gsweep', sh[0], sh[1]);
+      G.limb([sh, el, hand], 10.5, fill, GC.skinOl);
+      // the stick from the fist, the ribbon flutters from its tip in three linked pieces (kx-gfl)
+      const tip = A.stick, R = S.ribbon;
+      G.limb([[hand[0] - 6, hand[1] - 6], tip], 3.4, GC.stick, GC.stickOl);
+      girlHand(G, hand);
+      for (let i = 0; i < 3; i++) {
+        const a = R[i], b = R[i + 1], m = [(a[0] + b[0]) / 2 + (i % 2 ? -6 : 6), (a[1] + b[1]) / 2];
+        G.open('', 'kx-gfl kx-gfl' + i, a[0], a[1]);
+        G.raw(`<path d="M${r1(a[0])} ${r1(a[1])}Q${r1(m[0])} ${r1(m[1])} ${r1(b[0])} ${r1(b[1])}" fill="none" stroke="${GC.bowOl}" stroke-width="9.4" stroke-linecap="round"/><path d="M${r1(a[0])} ${r1(a[1])}Q${r1(m[0])} ${r1(m[1])} ${r1(b[0])} ${r1(b[1])}" fill="none" stroke="${GC.bow}" stroke-width="6" stroke-linecap="round"/>`);
+      }
+      for (let i = 0; i < 3; i++) G.close();
+      G.close();
+    } else {
+      G.limb([sh, el, hand], far ? 10 : 10.5, fill, GC.skinOl);
+      girlHand(G, hand, A.kind);
+    }
+    // the puffed short sleeve over the shoulder, along the upper arm
+    const ang = Math.atan2(el[1] - sh[1], el[0] - sh[0]) * 180 / Math.PI, sc = [sh[0] + (el[0] - sh[0]) * 0.16, sh[1] + (el[1] - sh[1]) * 0.16];
+    G.part(ellR(r1(sc[0]), r1(sc[1]), 12, 10, r1(ang)), far ? GC.dress2 : GC.dress, GC.dressOl);
+    if (S.walk) G.close();
+  }
+  // a braid: lobes along a curve, the bow near its end and a little tuft
+  function braid(G, p, far) {
+    const pts = sample(p, 5), n = pts.length, col = far ? GC.hair2 : GC.hair;
+    for (let i = 1; i < n - 1; i++) {
+      const a = pts[i - 1], b = pts[i + 1], ang = Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI, w = 7.4 - i * 0.5;
+      G.part(ellR(r1(pts[i][0]), r1(pts[i][1]), 7, r1(w), r1(ang)), col, GC.hairOl);
+    }
+    const e = pts[n - 1], e0 = pts[n - 2], ang = Math.atan2(e[1] - e0[1], e[0] - e0[0]);
+    const tuft = [e[0] + Math.cos(ang) * 9, e[1] + Math.sin(ang) * 9];
+    G.part(`M${r1(e[0] - 4)} ${r1(e[1])}L${r1(tuft[0] - 6)} ${r1(tuft[1] + 4)}Q${r1(tuft[0])} ${r1(tuft[1] + 8)} ${r1(tuft[0] + 6)} ${r1(tuft[1] + 4)}L${r1(e[0] + 4)} ${r1(e[1])}Z`, col, GC.hairOl);
+    girlBow(G, e[0], e[1], ang * 180 / Math.PI + 90, far);
+  }
+  function girlBow(G, x, y, rotDeg, far) {
+    const c = far ? GC.bow2 : GC.bow;
+    G.open(`translate(${r1(x)} ${r1(y)}) rotate(${r1(rotDeg)})`);
+    G.part('M0 0L-12 -8Q-15 0 -12 8Z', c, GC.bowOl); G.part('M0 0L12 -8Q15 0 12 8Z', c, GC.bowOl);
+    G.part(ellR(0, 0, 3.6, 3.4), c, GC.bowOl);
+    G.close();
+  }
+  function girlHead(G, S, o, part) {
+    // in standing coordinates (the head round (126, 60)), turned by S.headTf; part 'far' = only the far braid
+    G.open(S.headTf);
+    if (part === 'far') { braid(G, [104, 52, 92, 56, 82, 66, 78, 86], true); G.close(); return; }
+    braid(G, [106, 74, 102, 90, 96, 102, 92, 120], false);
+    G.part(ellR(126, 60, 32, 31), GC.skin, GC.skinOl);
+    // hair: the cap over the top and the back, the fringe, a shine
+    G.part('M158 50C156 26 128 18 108 26C90 34 86 62 94 80C98 88 104 94 112 92C108 82 108 72 113 64C118 56 124 48 134 44C146 40 154 44 158 50Z', GC.hair, GC.hairOl);
+    G.part('M124 40C136 28 158 32 161 52L157 56Q154 49 150 53Q146 46 141 50Q137 44 131 48Q127 43 122 46Z', GC.hair, GC.hairOl);
+    G.raw(`<path d="M104 40Q114 28 130 27" fill="none" stroke="${GC.hairHi}" stroke-width="3" stroke-linecap="round"/>`);
+    // the ear in front of the hair
+    G.part(ellR(112, 66, 5.6, 7.6, 8), GC.skin, GC.skinOl);
+    G.raw(`<path d="M113 62q-3 4 0 8" fill="none" stroke="${GC.skinOl}" stroke-width="1.4" stroke-linecap="round"/>`);
+    // the face, turned three quarters to the right: two dot eyes, a small nose on the contour, rosy cheeks
+    const mood = o.mood, m = S.mouth;
+    let f = `<g class="kx-geyes" style="transform-origin:144px 60px"><circle cx="136" cy="60" r="3.6" fill="${GC.eye}"/><circle cx="151.5" cy="59.5" r="3" fill="${GC.eye}"/>` +
+      '<circle cx="137.2" cy="58.7" r="1.1" fill="#fff"/><circle cx="152.4" cy="58.3" r=".9" fill="#fff"/></g>';
+    if (mood === 'sad') f += `<path d="M130 50Q135 47 140 49M148 48Q152 46 156 49" fill="none" stroke="${GC.hairOl}" stroke-width="1.6" stroke-linecap="round"/>`;
+    f += `<path d="M157 61Q163 65 157.5 69" fill="${GC.skin}" stroke="${GC.skinOl}" stroke-width="1.6" stroke-linecap="round"/>`;
+    f += `<g fill="${GC.blush}" opacity=".55"><ellipse cx="135" cy="71" rx="6.5" ry="3.8"/><ellipse cx="156" cy="70.5" rx="2.6" ry="3"/></g>`;
+    if (m === 'call') f += `<ellipse cx="150" cy="77" rx="3.6" ry="4.6" fill="${GC.mouth}" stroke="${GC.mouth}" stroke-width="1"/>`;
+    else if (m === 'whisper') f += `<path d="M146 77q3 -2.4 6 0" fill="none" stroke="${GC.mouth}" stroke-width="1.8" stroke-linecap="round"/>`;
+    else if (mood === 'happy') f += `<path d="M142.5 74Q149 76 155 73Q153 82 148 81.5Q143.5 81 142.5 74Z" fill="${GC.inMouth}" stroke="${GC.mouth}" stroke-width="1.4" stroke-linejoin="round"/><path d="M143.5 74.6Q149 76.4 154.4 73.8L154 75.4Q149 77.6 144 76Z" fill="#fff"/>`;
+    else if (mood === 'sad') f += `<path d="M143 79Q148.5 74.5 154 78.5" fill="none" stroke="${GC.mouth}" stroke-width="1.8" stroke-linecap="round"/>`;
+    else f += `<path d="M143 75Q149 79.5 154.5 74.5" fill="none" stroke="${GC.mouth}" stroke-width="1.8" stroke-linecap="round"/>`;
+    G.raw(f);
+    G.close();
+  }
+  // the dress: the bodice (turned with the torso) and the skirt for the pose, both with white dots; a sash bow at the back
+  function girlDress(G, S, dotsId) {
+    const fill = `url(#${dotsId})`;
+    G.open(S.bodyTf);
+    G.part('M117 86H129V106H117Z', GC.skin, GC.skinOl);   // the neck
+    G.close();
+    const B = S.body;
+    const wb = B([104, 160]), wf = B([140, 160]);
+    if (S.skirt === 'stand') G.part('M104 158L140 158Q150 194 162 230Q126 241 86 232Q96 196 104 158Z', fill, GC.dressOl);
+    else {
+      // crouching or sitting: over the bottom and along the thigh (t of its length: the knees and shins show), the
+      // hem hanging a little below the thigh; on the floor it rests on the floor
+      const H = S.H, k = S.legs.near.k, t = { crouch: 0.72, sit: 0.86, floor: 0.7 }[S.skirt];
+      const L = Math.hypot(k[0] - H[0], k[1] - H[1]), u = [(k[0] - H[0]) / L, (k[1] - H[1]) / L], n = [u[1], -u[0]];   // n = the thigh's top side
+      const at = (a, b) => [H[0] + u[0] * a + n[0] * b, H[1] + u[1] * a + n[1] * b], fy = q => S.skirt === 'floor' ? [q[0], Math.min(q[1], 330)] : q;
+      const back = fy(at(-12, -16)), under = fy(at(t * L * 0.5, -17)), hemB = fy(at(t * L, -13)), hemT = at(t * L + 3, 12), top = at(t * L * 0.45, 14);
+      const c1 = at(-24, 6), q = v => r1(v[0]) + ' ' + r1(v[1]);
+      G.part(`M${q(wb)}Q${q(c1)} ${q(back)}Q${q(at(t * L * 0.2, -20))} ${q(under)}Q${q(at(t * L * 0.8, -18))} ${q(hemB)}Q${q(at(t * L + 9, 0))} ${q(hemT)}Q${q(top)} ${q(wf)}Z`, fill, GC.dressOl);
+    }
+    G.open(S.bodyTf);
+    G.part('M106 104Q122 95 136 103Q145 128 142 166L104 166Q101 136 106 104Z', fill, GC.dressOl);
+    G.part('M120 100Q130 108 141 103Q141 113 131 115Q122 114 120 100Z', GC.collar, GC.collarOl);   // the round collar
+    G.part('M103 158H142V167H103Z', GC.dress2, GC.dressOl);                                           // the sash
+    G.part('M104 162L90 152Q86 162 90 172Z', GC.dress2, GC.dressOl); G.part('M100 164L88 180L96 182L104 166Z', GC.dress2, GC.dressOl);
+    G.part(ellR(104, 162, 4.4, 4.6), GC.dress2, GC.dressOl);
+    G.close();
+  }
+  function girl(pose, x) {
+    const o = typeof x === 'string' ? { mood: x } : Object.assign({}, x);
+    if (!['happy', 'calm', 'sad'].includes(o.mood)) o.mood = 'calm';
+    if (!GIRL_POSES.includes(pose)) pose = 'stand';
+    const S = girlSpec(pose, o), G = GRig(), dots = nid();
+    G.defs.push(`<pattern id="${dots}" width="14" height="14" patternUnits="userSpaceOnUse"><rect width="14" height="14" fill="${GC.dress}"/><circle cx="3.5" cy="3.5" r="2" fill="${GC.dot}"/><circle cx="10.5" cy="10.5" r="2" fill="${GC.dot}"/></pattern>`);
+    const body = o.layer !== 'arm', arm = o.layer !== 'body';
+    if (body) {
+      girlArm(G, S, S.arms.far, true, ' kx-gB'); G.flush();
+      G.open('', S.walk ? 'kx-gbob' : '', 120, 330); girlHead(G, S, o, 'far'); G.close(); G.flush();
+      girlLeg(G, S, S.legs.far, true, ' kx-gB'); G.flush();
+      girlLeg(G, S, S.legs.near, false, ''); G.flush();
+      G.open('', S.walk ? 'kx-gbob' : '', 120, 330); girlDress(G, S, dots); G.close(); G.flush();
+      G.open('', S.walk ? 'kx-gbob' : '', 120, 330); girlHead(G, S, o); G.close(); G.flush();
+    }
+    if (arm) { G.open('', S.walk ? 'kx-gbob' : '', 120, 330); girlArm(G, S, S.arms.near, false, ''); G.close(); }
+    let inner = G.svg();
+    if (body && (pose !== 'sit' || o.floor)) inner = `<ellipse cx="${pose === 'crouch' || pose === 'whisper' ? 126 : 120}" cy="331" rx="${pose === 'sit' ? 62 : 40}" ry="5" fill="#000" opacity=".18"/>` + inner;
+    if (o.flip) inner = `<g transform="translate(240 0) scale(-1 1)">${inner}</g>`;
+    const cls = ['kx-girl', 'kx-g-' + pose, 'kx-gm-' + o.mood, S.walk ? 'kx-gwalk' : ''].filter(Boolean).join(' ');
+    return `<svg class="${cls}" viewBox="0 0 240 340" aria-hidden="true"><defs>${G.defs.join('')}</defs>${inner}</svg>`;
+  }
+  function girlPoints(pose, x) {
+    const o = typeof x === 'string' ? { mood: x } : Object.assign({}, x);
+    if (!GIRL_POSES.includes(pose)) pose = 'stand';
+    const S = girlSpec(pose, o), f = o.flip ? p => ({ x: r1(240 - p[0]), y: r1(p[1]) }) : p => ({ x: r1(p[0]), y: r1(p[1]) });
+    const near = S.arms.near;
+    return { anchor: f(S.anchor), head: f(S.head([126, 60])), mouth: f(S.mouthPt), hand: f(near.h),
+      lap: S.lap ? f(S.lap) : null, hold: S.hold ? f(S.hold) : null, ribbon: S.ribbon ? f(S.ribbon[3]) : null };
+  }
 
   /* ---------- motion ---------- */
   const css = `
@@ -2240,11 +2585,31 @@ function KockaArt() {
 @keyframes kx-dbob{0%,100%{transform:translate(0,0)}50%{transform:translate(0,-2px)}}
 @keyframes kx-burst{0%{opacity:1;transform:translate(var(--bx,0px),var(--by,0px)) rotate(0deg) scale(.6)}40%{opacity:1;transform:none}100%{opacity:0;transform:translate(0,14px) rotate(var(--br,90deg))}}
 @keyframes kx-glow{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
-@media (prefers-reduced-motion:reduce){.koxa,.koxa *,.kx-item *,.kx-room *,.kx-bubble *,.kx-fx-float{animation:none!important}.koxa .kx-z{opacity:.9}}
+.kx-girl{display:block;width:100%;height:100%;overflow:visible}
+.kx-girl .kx-geyes{animation:kx-blink 4.6s infinite 1.3s}
+.kx-gwalk .kx-gleg{animation:kx-gstride var(--kx-step,1.2s) linear infinite}
+.kx-gwalk .kx-gknee{animation:kx-gbend var(--kx-step,1.2s) linear infinite}
+.kx-gwalk .kx-garm{animation:kx-garm var(--kx-step,1.2s) ease-in-out infinite}
+.kx-gwalk .kx-gB{animation-delay:calc(var(--kx-step,1.2s) * -.5)}
+.kx-gwalk .kx-gbob{animation:kx-gbob calc(var(--kx-step,1.2s) / 2) ease-in-out infinite alternate}
+.kx-girl .kx-gwave{animation:kx-gwave .9s ease-in-out infinite}
+.kx-girl .kx-gsweep{animation:kx-gsweep 1.8s ease-in-out infinite}
+.kx-girl .kx-gfl{animation:kx-gfl .9s ease-in-out infinite}
+.kx-girl .kx-gfl1{animation-delay:-.2s}
+.kx-girl .kx-gfl2{animation-delay:-.4s}
+@keyframes kx-gstride{0%{transform:rotate(-20deg)}60%{transform:rotate(20deg)}80%{transform:rotate(0deg)}100%{transform:rotate(-20deg)}}
+@keyframes kx-gbend{0%,58%{transform:rotate(0deg)}75%{transform:rotate(55deg)}95%,100%{transform:rotate(0deg)}}
+@keyframes kx-garm{0%,100%{transform:rotate(14deg)}60%{transform:rotate(-14deg)}}
+@keyframes kx-gbob{0%{transform:translate(0,0)}100%{transform:translate(0,-3px)}}
+@keyframes kx-gwave{0%,100%{transform:rotate(-16deg)}50%{transform:rotate(14deg)}}
+@keyframes kx-gsweep{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(9deg)}}
+@keyframes kx-gfl{0%,100%{transform:rotate(-18deg)}50%{transform:rotate(18deg)}}
+@media (prefers-reduced-motion:reduce){.koxa,.koxa *,.kx-girl *,.kx-item *,.kx-room *,.kx-bubble *,.kx-fx-float{animation:none!important}.koxa .kx-z{opacity:.9}}
 `;
 
   return { css, cat, poses: Object.keys(POSES), regions, kitScale, kitAnchor, room, bedSpots, spots: spotsAt, item, items: Object.keys(ITEMS), face,
     mouth, headPoint, itemHeld, sunPatch, rooms, lap, lapSpot, crop, crops: CROPS, cropSlot, anchors: ANCHORS, itemSize, itemPoints, mouseHole, mousePeek, fish, fishes: Object.keys(FISH), marker,
-    shop, shopSpots, postcardFrame, postcardHole, photoFrame, photoHole, neighbour, neighbours, icon, icons: Object.keys(ICONS), fx, fxs: Object.keys(FX), vet, vetSpots,
+    shop, shopSpots, postcardFrame, postcardHole, photoFrame, photoHole, neighbour, neighbours, girl, girlPoses: GIRL_POSES.slice(), girlBox: GIRL_BOX,
+    girlPoints, girlStride: GIRL_STRIDE, girlLapCat: GIRL_LAP_CAT, icon, icons: Object.keys(ICONS), fx, fxs: Object.keys(FX), vet, vetSpots,
     hides: HIDES, dream, dreams: DREAMS, pawPrint };
 }

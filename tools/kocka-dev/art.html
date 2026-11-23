@@ -23,6 +23,8 @@ h2{margin:24px 0 8px;font-size:18px}
 .dfr .kx-whisk{animation-delay:-3.04s!important;animation-play-state:paused!important}
 .room .ph{position:absolute;inset:0;pointer-events:none}
 .snow{background:#f2f6f9}
+#gwalk{animation:gwalk 8.67s linear -3s infinite}
+@keyframes gwalk{from{left:-30%}to{left:100%}}
 .frame2 .kx-achoo{animation-delay:-.22s!important;animation-play-state:paused!important}
 </style>
 </head>
@@ -85,6 +87,68 @@ function teasing() {
   s += `<div class="cell paper" style="width:250px;position:relative"><div class="box">${A.cat('sit', { mood: 'calm', achoo: true })}<div style="position:absolute;left:${(q.nose.x - 46) / 2}%;top:${(q.nose.y - 2) / 2}%;width:16%;aspect-ratio:1">${A.fx('puff')}</div><div style="position:absolute;left:${(q.x + 20) / 2}%;top:${(q.y - 70) / 2}%;width:22%;aspect-ratio:1">${A.fx('splash')}</div></div>puff at headPoint.nose, splash near the head</div></div>`;
   return s;
 }
+// Anička (girl): every pose beside a sitting Koxa at the game's relative scale (1 girl unit = 1 room unit, the cat's box
+// 212 room units), the lap and the carried cat, the hot points, a walk across at the movers' speed, the real rooms
+const GB = A.girlBox, KCm = 212 / 200;
+// a stage W × H room units with the ground at GY; figures: ['girl', pose, opts, anchor x, anchor y?] or
+// ['cat', pose, opts, x, y, flip, box size (room units, default 212), cat box point (default the pose's anchor)]
+function stage(W, H, GY, figs, bg = '') {
+  const fig = figs.map(f => {
+    if (f[0] === 'girl') {
+      const [, pose, o = {}, x, y = GY] = f, a = A.girlPoints(pose, o).anchor;
+      return `<div style="position:absolute;left:${(x - a.x) / W * 100}%;top:${(y - a.y) / H * 100}%;width:${GB.w / W * 100}%;aspect-ratio:${GB.w}/${GB.h}">${A.girl(pose, o)}</div>`;
+    }
+    if (f[0] === 'bench') return `<div style="position:absolute;left:${(f[1] - 54) / W * 100}%;top:${f[2] / H * 100}%;width:${108 / W * 100}%;height:${(GY - f[2]) / H * 100}%;background:linear-gradient(#b07a42 0 12px,transparent 12px),linear-gradient(90deg,transparent 8px,#5a3a20 8px 16px,transparent 16px calc(100% - 16px),#5a3a20 calc(100% - 16px) calc(100% - 8px),transparent 0)"></div>`;
+    if (f[0] === 'dot') return `<div style="position:absolute;left:${f[1] / W * 100}%;top:${f[2] / H * 100}%;width:8px;height:8px;margin:-4px;border-radius:50%;background:${f[3] || 'red'};box-shadow:0 0 0 1.5px #fff"></div>`;
+    const [, pose, o, x, y = GY, flip, size = 212, pt] = f, [ax, ay] = pt || A.anchors[pose] || [100, 186], k = size / 200;
+    return `<div style="position:absolute;left:${(x - ax * k) / W * 100}%;top:${(y - ay * k) / H * 100}%;width:${size / W * 100}%;aspect-ratio:1"><div style="width:100%;height:100%${flip ? ';transform:scaleX(-1)' : ''}">${A.cat(pose, o)}</div></div>`;
+  }).join('');
+  return `<div style="position:relative;aspect-ratio:${W}/${H};overflow:hidden;border-radius:10px;${bg}">${fig}</div>`;
+}
+const lawn = 'background:linear-gradient(#cfe3ef 0 78%,#86b45a 78%)', floorBg = 'background:linear-gradient(#efe2c8 0 78%,#b98552 78%)';
+function girlSheet() {
+  const P = (pose, o) => A.girlPoints(pose, o);
+  let s = `<h2 id="girl">Anička (A.girl): box ${GB.w}×${GB.h}, anchor (${GB.ax}, ${GB.ay}), stride ${A.girlStride} room units per leg cycle (red dot = hand / lap / hold / ribbon point)</h2><div class="grid" style="grid-template-columns:repeat(5,1fr)">`;
+  // the girl's anchor at (gx, gy): a point of her box p goes to (p.x - anchor.x + gx, p.y - anchor.y + gy)
+  const at = (p, a, gx, gy) => [p.x - a.x + gx, p.y - a.y + gy];
+  for (const [pose, o] of A.girlPoses.map(p => [p, { mood: 'happy' }]).concat([['sit', { mood: 'calm', floor: true }]])) {
+    const p = P(pose, o), bench = pose === 'sit' && !o.floor, gx = 120, gy = bench ? 290 : 330;
+    const pt = pose === 'crouch' ? p.hand : p.hold || p.lap || p.ribbon, q = pt && at(pt, p.anchor, gx, gy);
+    const cat = pose === 'crouch' ? ['cat', 'loaf', 'calm', q[0] - 6 * KCm, 330] : ['cat', 'sit', 'calm', 330, 330];
+    s += `<div>${stage(400, 360, 330, [bench ? ['bench', 116, 290] : null, ['girl', pose, o, gx, gy], cat, q ? ['dot', ...q] : null, ['dot', p.mouth.x - p.anchor.x + gx, p.mouth.y - p.anchor.y + gy, '#36f']].filter(Boolean), pose === 'sit' || pose === 'whisper' ? floorBg : lawn)}${pose}${o.floor ? ' floor (cross-legged)' : ''} (blue = mouth)</div>`;
+  }
+  s += '</div><h2>Moods (happy, calm, sad) and flip</h2><div class="grid" style="grid-template-columns:repeat(6,1fr)">';
+  for (const m of ['happy', 'calm', 'sad']) s += cell(A.girl('stand', m), 'stand ' + m) + cell(A.girl('crouch', { mood: m, flip: true }), 'crouch flip ' + m);
+  s += '</div><h2>Lap and arms: sit + lapCurl (box ' + A.girlLapCat + '), hold + carried; the near arm is drawn over the cat (layer body → cat → layer arm)</h2><div class="grid" style="grid-template-columns:repeat(4,1fr)">';
+  const lapScene = (o, bg) => {
+    const O = x => Object.assign({ lapCat: true, mood: 'happy' }, o, x), p = P('sit', O()), gy = o.floor ? 330 : 290, q = at(p.lap, p.anchor, 120, gy);
+    return stage(400, 360, 330, [o.floor ? null : ['bench', 116, 290], ['girl', 'sit', O({ layer: 'body' }), 120, gy], ['cat', 'lapCurl', 'calm', q[0], q[1], false, A.girlLapCat, [100, 186]], ['girl', 'sit', O({ layer: 'arm' }), 120, gy]].filter(Boolean), bg);
+  };
+  const holdScene = (cat, o = {}) => {
+    const O = x => Object.assign({ mood: 'happy' }, o, x), p = P('hold', O()), q = at(p.hold, p.anchor, 160, 330);
+    return stage(400, 360, 330, [['girl', 'hold', O({ layer: 'body' }), 160], ['cat', cat, cat === 'wriggle' ? 'grumpy' : 'happy', q[0], q[1]], ['girl', 'hold', O({ layer: 'arm' }), 160]], lawn);
+  };
+  s += `<div>${lapScene({}, lawn)}sit (bench) + lapCurl</div><div>${lapScene({ floor: true }, floorBg)}sit floor + lapCurl</div><div>${holdScene('carried')}hold + carried</div><div>${holdScene('wriggle')}hold + wriggle</div></div>`;
+  // the walk: across the strip at 120 room units / s (the movers' walk), --kx-step = stride / speed
+  s += `<h2>Walking at 120 room units/s (--kx-step ${(A.girlStride / 120).toFixed(2)} s): the feet must not glide</h2><div style="position:relative;max-width:700px;aspect-ratio:800/360;overflow:hidden;border-radius:10px;${lawn}"><div id="gwalk" style="position:absolute;top:${(330 - GB.ay) / 360 * 100}%;width:${GB.w / 800 * 100}%;aspect-ratio:${GB.w}/${GB.h};--kx-step:${(A.girlStride / 120).toFixed(2)}s">${A.girl('walk', 'happy')}</div></div>`;
+  // the real places at phone width: the garden (bench, gate) and the living room (rug), no depth scaling
+  const g = A.rooms.garden.spots, l = A.rooms.living.spots, b = A.girlPoints('sit', { lapCat: true });
+  const room = (id, figs) => `<div style="width:393px"><div class="room">${A.room({ id, phase: 'day', season: 'summer' })}${figs.map(f => {
+    const [kind, pose, o, x, y, size = 212, pt] = f;
+    if (kind === 'girl') { const a = A.girlPoints(pose, o).anchor; return `<div style="position:absolute;left:${(x - a.x) / 4}%;top:${(y - a.y) / 6}%;width:${GB.w / 4}%;aspect-ratio:${GB.w}/${GB.h}">${A.girl(pose, o)}</div>`; }
+    const [ax, ay] = pt || A.anchors[pose] || [100, 186], k = size / 200;
+    return `<div style="position:absolute;left:${(x - ax * k) / 4}%;top:${(y - ay * k) / 6}%;width:${size / 4}%;aspect-ratio:1">${A.cat(pose, o)}</div>`;
+  }).join('')}</div>${id} (393 px wide)</div>`;
+  const bx = g.bench.x - 30, by = 414, lp = { x: b.lap.x - b.anchor.x + bx, y: b.lap.y - b.anchor.y + by };
+  s += '<h2>In the places at phone width (393 px; scale 1, the UI adds its depth scale)</h2><div style="display:flex;gap:10px;flex-wrap:wrap">';
+  s += room('garden', [['girl', 'sit', { layer: 'body', lapCat: true, mood: 'happy' }, bx, by], ['cat', 'lapCurl', 'calm', lp.x, lp.y, A.girlLapCat, [100, 186]], ['girl', 'sit', { layer: 'arm', lapCat: true, mood: 'happy' }, bx, by], ['girl', 'wave', 'happy', g.gate.x + 60, 470]]);
+  s += room('garden', [['girl', 'ribbon', 'happy', 110, 500], ['cat', 'pounce', 'happy', 290, 500]]);
+  const fl = A.girlPoints('sit', { floor: true, lapCat: true });
+  s += room('living', [['girl', 'sit', { floor: true, layer: 'body', lapCat: true, mood: 'happy' }, l.rug.x - 40, l.rug.y], ['cat', 'lapCurl', 'calm', fl.lap.x - fl.anchor.x + l.rug.x - 40, fl.lap.y - fl.anchor.y + l.rug.y, A.girlLapCat, [100, 186]], ['girl', 'sit', { floor: true, layer: 'arm', lapCat: true, mood: 'happy' }, l.rug.x - 40, l.rug.y]]);
+  s += room('living', [['girl', 'whisper', { mood: 'calm' }, 120, 560], ['cat', 'sleep', 'calm', 280, 560]]);
+  return s + '</div>';
+}
+h += girlSheet();
 // every pose × mood, on paper and on the dark cottage page
 for (const bg of ['paper', 'cottage']) {
   h += `<h2>Poses × moods on ${bg}</h2><div class="grid" style="grid-template-columns:repeat(10,1fr)">`;
@@ -164,6 +228,14 @@ h += '</div>';
 // Phase 3 and 5: tricks, minigames, shop, neighbours, album
 h += '<h2>Tricks and the box</h2><div class="grid" style="grid-template-columns:repeat(6,1fr)">';
 for (const [p, m] of [['trickSit', 'calm'], ['trickPaw', 'happy'], ['trickSpin', 'happy'], ['trickBeg', 'calm'], ['inBox', 'happy'], ['inBox', 'grumpy']]) h += cell(A.cat(p, m), p + ' ' + m);
+for (const pk of ['ears', 'tail', 'paw', 'back']) h += cell(A.cat('boxSleep', { mood: 'calm', asleep: true, peek: pk }), 'boxSleep ' + pk);
+h += '</div><h2>The box in her poses matches the box item (opts.box as the game computes it at the gift spot)</h2><div class="grid" style="grid-template-columns:repeat(6,1fr)">';
+{ // the game: sc = depth(fy), k = 0.005 × itemSize.box / (1.06 × sc); here the cat's box is 1.06 × sc of the item's scale
+  const w = A.itemSize.box.w, fy = 0.79 * 600 - 0.07 * w, sc = Math.min(1.04, Math.max(0.82, 0.84 + (fy - 430) / 170 * 0.2)), k = Math.round(0.005 * w / (1.06 * sc) * 1000) / 1000;
+  const item = `<div style="position:absolute;left:${50 - w / (212 * sc) * 50}%;top:${93 - 0.83 * w / (212 * sc) * 100}%;width:${w / (212 * sc) * 100}%;aspect-ratio:1;opacity:.5">${A.item('box')}</div>`;
+  for (const [p, o] of [['inBox', {}], ['boxSleep', { peek: 'ears', asleep: true }], ['boxSleep', { peek: 'tail', asleep: true }], ['boxSleep', { peek: 'back', asleep: true }]])
+    h += cell(`<div style="position:relative">${A.cat(p, Object.assign({ mood: 'calm', box: k }, o))}${item}</div>`, `${p} ${o.peek || ''} box ${k} + item (faint)`);
+}
 h += '</div><h2>Minigames: mouse hole, peeking mouse (phase 0 … 1), fish, rods, checkpoints</h2><div class="grid" style="grid-template-columns:repeat(10,1fr)">';
 h += cell(A.mouseHole(), 'mouseHole') + [0.25, 0.5, 0.75, 1].map(t => cell(A.mousePeek(t), 'mousePeek ' + t)).join('') + A.fishes.map(k => cell(A.fish(k), k)).join('') + cell(A.marker(false), 'marker') +
   cell(A.marker(true), 'marker done') + ['fishingRod', 'featherWand', 'featherBunch'].map(k => cell(A.item(k) + `<svg viewBox="0 0 100 100" style="position:absolute;inset:0">${Object.values(A.itemPoints[k] || {}).filter(p => p.x != null).map(p => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="red"/>`).join('')}</svg>`, k)).join('');

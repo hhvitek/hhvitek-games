@@ -127,7 +127,9 @@ the UI hints it (she sits by the bowl, brings a toy, meows at the litter box).
 - **Traits** (drawn once from the seed at adoption, hidden; discovered into the Deníček):
   `favFood` (kapsička | kuře | tuňák), `spots` (two of brada, za ušima, hlava, záda, kořen ocasu), `bellyOk` (0.15–0.4
   chance a belly rub is welcome), `fear` (vysavač | bouřka | ohňostroj), `quirk` (budí ráno | spí v krabici |
-  krade ponožky | pije z kohoutku), `toy` (myška | peříčko | klubíčko | laser).
+  krade ponožky | pije z kohoutku), `toy` (myška | peříčko | klubíčko | laser), `temper` (2026-11-21, how she takes
+  pestering: hravá `playful` | prskavá `huffy` | citlivá `touchy`, `drawTraits` k = 9 from the seed, so an older save
+  gets it without an `rnd(st)` draw; §13.5).
 - **Deníček** entries (unlock after the condition, then shown with the date found):
   favourite food (fed it 3×, she ate all with a happy face), each favourite spot (stroked there along the fur 10×),
   belly (5 belly rubs), fear (met it once), quirk (seen 2×), toy (played with it 5×), plus "Váží X kg", "Nejdelší
@@ -140,7 +142,7 @@ the UI hints it (she sits by the bowl, brings a toy, meows at the litter box).
 | `water` | — | fills the water dish to 100 (§6a); she drinks by herself; tap quirk: 50 % she drinks from the tap (+30 at once) |
 | `stroke` | `{ region, along, speed }` | along & speed ok: love +2 (spot: +4, purr); against: love −1, ears back; belly: bite or +6 |
 | `scratch` | `{ region, seconds }` | love +4/s on head/chin/behind ears, purr |
-| `pickUp` / `putDown` | place | love +5 if mood ≥ 10 and energy ≥ 20, else she wriggles free (event `wriggle`) |
+| `pickUp` / `putDown` | place | love +5 if mood ≥ 10 and energy ≥ 20, else she wriggles free (event `wriggle`); asleep she is not picked up; `putDown('box')` see §6b |
 | `play` | toy | fun +20…+40 (her toy +10), energy −5; ignored per §4 |
 | `brush` | — | coat +25, love +1; fleas → finds a flea, coat +10 only |
 | `cleanLitter` | — | litter = 100 |
@@ -155,7 +157,8 @@ Added for Škádlení (§13): `pat { region, n, ms, cv, eating }` (a run of taps
 blowUp, a loveBite or a trap), `boop` (a single tap on her nose: she squints and sneezes; the third within 60 s = a swat)
 and `splash` (the watering can on her in the garden). `pat` and `boop` keep her on the lap; none of the three works
 while she is out or up the tree. Sulking (`st.tease.kind`) also changes `stroke`, `scratch`, `treat`, `call`, `play`,
-`pickUp` and `lapOn` (§13.3).
+`pickUp` and `lapOn` (§13.3). Added 2026-11-21: `pester` (a run of quick taps anywhere on her, §13.5), `opened` (§8d)
+and `kidTalk`, `kidFeather`, `kidPhoto` (Anička, §8c); `goGarden` takes `'carried'` (§12g).
 
 **Settled rules (Phase 1):** she grooms herself, so her coat never falls below 50 unless she is sad, ill or outside
 (fleas come in practice from a dirty litter box); paní Nováková helps only after 72 h away, and from hour 12 of the
@@ -163,7 +166,8 @@ first 72 h keeps food, water and litter at 40 (she comes back hungry and offende
 (never below a reached level); bond −5 for a day with average mood < −30; fun and love fall at the night rate while
 she sleeps; how fears and quirks are met: storm (May–Aug, seeded per day) and fireworks (Silvestr) come from
 `advance`, vacuum from `vacuum`; quirks count once a day and need two days (budí ráno: the first act within 2 h after
-her early wake, §6a; krabice: stroking or playing while she sleeps in her box, or watching her fall asleep there; ponožky: 30 % on `play`; kohoutek:
+her early wake, §6a; krabice: stroking or playing while she sleeps in her box, watching her fall asleep there, or
+putting her into it sleepy (§6b); ponožky: 30 % on `play`; kohoutek:
 50 % on `water`); the walk entry is found on her first return, the weight entry at the first weighing, the birthday at
 once. Food prices exist (`FOODS[k].price`) but are charged only from Etapa 2 (`CHARGE_FOOD`).
 
@@ -212,9 +216,11 @@ src/engine.js).
 - **Meows** come only when she is awake, not out and not on the lap; until then `st.want` keeps the old want, so the
   meow comes when she wakes up or comes home. The vacuum while she is out: no event at all.
 - **Sleep place** `st.sleepPlace` ('box' only when the box is placed in a room of the house and she is not in the
-  garden: always with the box quirk, else for a nap;
-  'sill' for a nap with the sill cushion; 'sun' by day on a clear day; else 'bed'), shown as `health().sleepPlace`;
-  the box quirk is seen only while she really sleeps in the box.
+  garden: always with the box quirk (the night too), else for a nap with the seeded chance `BOX.nap` 0.4 (salt 81, keyed
+  on the moment she falls asleep; before 2026-11-21 every nap went to a placed box, which with the gift would have
+  emptied the sill and the sun patch); then 'sill' for a nap with the sill cushion; 'sun' for a nap in the morning or
+  by day on a clear day (neither in a real heat); else 'bed'), shown as `health().sleepPlace`; the box quirk is seen
+  only while she really sleeps in the box. Measured: the quirk 100 % of naps in the box, the other cats 30–50 %.
 - **"Dnes ráno tě vzbudila"** (the wakesEarly quirk event) only when she really woke early today (`st.day.early`) and
   the player's first act of the day comes within 2 h of it.
 - For the UI: `health()` adds `sleepPlace`, `eating`, `coming`, `drinking`, `bowl` (amount), `bowlKind`, `dish`;
@@ -223,13 +229,45 @@ src/engine.js).
 `act` returns `{ st, events: [...] }`; events drive the UI (`purr`, `bite`, `wriggle`, `meow`, `ignore`, `found`
 (deník entry), `ill`, `cured`, `levelUp`, …). Unknown or impossible actions return an event `refused` with a reason.
 
+### 6b. Her box (user's decision 2026-11-21; numbers: `BOX` in src/engine.js, `E.BOX`)
+The Deníček could say "ráda spí v krabici" while she was never seen there (the box was a 10-pamlsky shop item to be
+placed first). Now every Koxa has one.
+- **The gift:** `create` gives `owned.box` and `furniture.box = { room: 'living', x: 0.24, y: 0.79 }` (`BOX.gift`, clear
+  of the bed and the rug) and `st.gift = { box: 1 }`. `repair` gives it once to an older save (`st.gift.box !== 1`):
+  without a box it gets one in the obývák, a box it owns already (placed anywhere or not placed) stays as it is; then
+  the flag is set and nothing ever puts a box back (sold or put away it stays gone). No `rnd(st)` draw. The shop shows
+  it as owned.
+- **Nap place:** §6a (the quirk always, the other cats about 40 % of naps).
+- **Put into the box** (`putDown('box')`; only when it stands in a room of the house and food and water are ≥ 15,
+  else a plain put): **sleepy** = the box quirk, energy < 60 (`BOX.sleepy`), a night hour (22–5) or her nap due within
+  30 min (`LAP.napSoon`) → she falls asleep there at once: `put { place: 'box' }`, `sleep { place: 'box', nap, put:
+  true }`, the box quirk counts as seen. Otherwise `put { place: 'box', sit }`: she sits in it awake `sit` = 60–180 s
+  (salt 82, ms) and then hops out (the UI's `K.place`). Asleep in it she cannot be picked up (as anywhere).
+- **What peeks over the rim** while she sleeps in it: `E.boxPeek(st, ms)` → `'ears'` (ear tips and the crown, an ear
+  twitches now and then) | `'tail'` (hanging over the front, swaying) | `'paw'` (one paw over the front) | `'back'` (the
+  curve of her back, breathing); null when she is not asleep in the box. Runs of `BOX.peek` 4 min, each boundary moved
+  by ±`BOX.jitter` 30 s (salt 83), so 3–5 min; the variant from salt 84, never the same twice in a row; seeded, so a
+  reload shows the same.
+- **Art:** poses `inBox` (awake: head, ears and two paws over the rim) and `boxSleep` (`o.peek`); both draw the box
+  (the box item's back rim and `BOX_FRONT`) scaled by `o.box` round her feet (100, 186). The box item is 170 room units
+  (`itemSize.box`, before 120) so a cat fits in it.
+- **UI:** `boxPose(pose, o)` puts her pose exactly on the box item (`o.box` = the item's size), so nothing jumps when
+  she gets in; while she is in it in the viewed place (`inBox` / `boxSleep`) the furniture box is hidden
+  (`syncFurnBox`), never two boxes. `sleepSpot` gives `boxSleep` with `E.boxPeek` (default `ears`); falling asleep there
+  shows `inBox` with squinting eyes for 1.8 s first (`sleepShow`). The box is the first carry target (`carryTargets`,
+  when it stands in the viewed place); a sleepy put shows her asleep, else `inBox` for `sit` ms (90 s when missing).
+  An idle place in her box (`furnitureSpots`) also uses `boxPose('inBox')`.
+
 ## 7. Gestures (Input)
 Pointer Events on the scene; mouse and pen behave like one finger.
 - **tap**: < 250 ms, < 10 px movement. Every tap carries its time `t`; in 'care' a tap on a cat also carries `pat`
   (the run of taps it belongs to: `n`, tempo `ms`, regularity `cv`, `region`) for Škádlení (§13.1).
 - **pat run** (Škádlení, §13.1): taps on a cat at most `PAT_GAP` 900 ms apart, in the same region or within
   `PAT_NEAR` 24 px of the previous tap. Two-finger drumming stays what it is (overlapping fingers = scratch).
-- **long press**: 450 ms still (< 10 px) on Koxa → `pickup`; then drag carries her; release over a place → `drop`.
+- **quick taps** (pestering, §13.5): `pat.fast` counts the taps in a row on the same cat, any region, each at most
+  `PESTER_GAP` 250 ms after the one before (1 = not quick).
+- **long press**: 450 ms still (< 10 px) on Koxa → `pickup`; then drag carries her; release over a place → `drop`;
+  held at the screen's edge she goes to the next place (§12g).
 - **stroke**: one pointer moving ≥ 40 px over a body region; direction compared with that region's fur vector
   (cos ≥ 0.5 along, ≤ −0.5 against, else `sideways`); speed px/s: < 120 too slow (nothing), 120–900 good,
   > 900 too fast (counts as rough, love −1). Emits per 40 px of path.
@@ -444,6 +482,134 @@ not depend on the step of `advance()`.
   "dcera Lízy". Test hook: `forceKittens(mother, kind, days, n)`, `visitor.kids`, `movers`, `moverPoint(id)`,
   `visitorStrokePath(region, against, id)`, `holdVisitor(ms, id)`, `kittenDialog()`, `visitorMenu(id)`.
 
+## 8c. Anička (Phase 4, user's decisions 2026-11-21; numbers: `KID`, `KID_ACTS` in src/engine.js)
+**Who:** Anička, paní Nováková's granddaughter (about 6–7), comes to see Koxa in the garden and in the house, like the
+neighbour cats. She has her **own slot `st.kid`**, never `st.visit`: the cats' visits, their repair, the album rows and
+their tests stay as they were. New randomness only from `rndSeed` keyed on the hour or the moment (salts 100–111),
+never `rnd(st)`: one long advance, many short ones, a reload and `advance` with a probe give the same visit (tested).
+- **State:** `st.kid = { visits, friend (0–5 in quarters: how much Koxa likes her), met (her first visit, ms; 0 = never),
+  day (local day key of her last visit), owe (0–3, §8d), diary { kidFirst?, kidLap? } ('garden' | 'house': where it
+  happened), visit }`; `visit = null | { since, until, where: 'garden' | 'house', act: { kind, since, with: 'koxa' |
+  null, out? }, fx: { love, fun, energy } (what this visit changed so far, absolute), fg (liking gained this visit),
+  play (the last feather game, ms), talk (the last line, −1), noticed (ms, 0 = not yet) }`.
+- **When:** 13:00–18:30 local time (`KID.from`, `last`), home by 19:00 (`home`), at most one visit a day. Every hour
+  slot has a seeded moment (salt 100) and a seeded chance `KID.p` 0.042 (salt 101), ×3 while watched (§8d). Never
+  while a cat visits (also not before a cat that ended in the same step has gone) or a guest sleeps over, and no cat
+  comes while she is here. Measured: 1.27 visits a week (80 weeks), every one in the window, 30–60 min.
+- **Where:** rain, a storm, snow or a real frost (§12f): she rings and plays on the rug in the obývák (`'house'`);
+  otherwise through the gate into the garden, or inside anyway with `KID.inside` 0.2 (salt 102). Measured: inside on
+  20 of 82 fair days.
+- **How long:** 30–60 min (salt 103), cut at 19:00; the last 2 min (`KID.leave`) are `leave`, then she goes home
+  (`kidLeave 'called'`: "Babička volá – Anička jde domů."). Rain on a garden visit sends her home (`'rain'`); a broken
+  save at night ends it (`'called'`); an absence over 72 h ends it (`'away'`) and drops `st.due`.
+- **Koxa notices her:** at once when she is where Anička is and awake (in the garden with the player or alone there;
+  the bell in the house); awake in the house while Anička is in the garden, an exponential time with a mean of 5 min
+  after the arrival (salt 104): `kidNoticed` (watching only).
+- **Acts** (`KID_ACTS`, a programme like the cats': each act ends at a moment drawn once from its start, `min` + an
+  exponential time with `rate` per minute, salt 107, and the next is picked at that moment; fx = Koxa's needs per hour
+  while together, mood = her mood meanwhile):
+
+  | Act | With | min / rate | Mood, fx | What |
+  |---|---|---|---|---|
+  | `arrive` | — | 1 / 1 | | through the gate / at the door |
+  | `call` | — | 1 / 0.5 | | "Kočičko!": Koxa is not there |
+  | `ribbon` | either | 3 / 0.2 | +6, fun +30, energy −8 | the ribbon on a stick, alone or Koxa chases it |
+  | `stroke` | Koxa | 2 / 0.25 | +6, love +12 | she strokes her |
+  | `carry` | Koxa | 2 / 0.4 | +4, love +10 (`held`); −4, love −4 (`wriggle`) | she holds her; `out` drawn at the start (salt 106): Koxa wriggles free after 0.5 min |
+  | `lap` | Koxa | 8 / 0.05 | +8, love +6, energy +12 | sleepy Koxa on her lap (the bench, the rug), may fall asleep there |
+  | `wait` | Koxa | 4 / 0.15 | | Koxa sleeps: she whispers and waits, **never wakes her** |
+  | `hide` | Koxa | 4 / 0.15 | −8, love −4 | Koxa refused her: up the tree (garden) / under the armchair (house) |
+  | `leave` | — | 2 / – | | bye, out through the gate / the předsíň |
+
+  Together (`with: 'koxa'`) only while Koxa is where she is (`koxaPlace`: the garden with the player or alone there,
+  the house; on a walk nowhere), not on the player's lap, not held and not hiding (hide and seek, §14.1: she does not start one while Anička is here); `hide` even up the tree, the rest not; `lap` and
+  `wait` also asleep; `stroke`, `ribbon`, `carry` only awake and not sulking or cross. When that stops (Koxa went,
+  fell asleep …) the act becomes `wait` (she sleeps there) or `call`.
+  **The next act:** Koxa not there → `call` or `ribbon` alone (salt 108; never two calls); asleep → `wait`; after a
+  `hide` or a wriggle → `ribbon` alone (she lets her be); then Koxa may **refuse** (salt 109): chance `KID.refuse`
+  0.05 / 0.15 / 0.3 by temper (playful, huffy, touchy) + 0.25 grumpy / 0.35 sad − 0.04 × liking; sulking or cross
+  always. A refusal is `hide` when touchy, grumpy, sad or cross, else Anička plays alone (`ribbon`). Otherwise a joint
+  act by weight (salt 110): stroke 3, ribbon 3 (energy ≥ 20), carry 1.5 (liking ≥ 1, else 0.5), lap only when sleepy
+  (energy < 60 or her nap due within 30 min) 4 (liking ≥ 1, else 1.5); never the same joint act again. Wriggle chance
+  `KID.wriggle` 0.15 / 0.35 / 0.6 by temper + 0.3 grumpy or sad − 0.08 × liking.
+- **Caps:** each of Koxa's needs changes at most `KID.cap` (love 12, fun 20, energy 10) a visit (`V.fx`, the feather
+  included). Her liking +¼ (`KID.step`) for each good act together (stroke, ribbon, carry held, lap, the feather), at
+  most +½ a visit (`perVisit`); `kidUp { friend }` at each whole heart. A joint act's mood is in `moodValue()`; her
+  payback (§13.3) waits while they are together.
+- **Hide up the tree:** in the garden with the player (`st.yard`) she really climbs it: `st.yard.tree` is set and
+  `climbStuck { kid: true }` ("… utekla před Aničkou na strom a neumí dolů! Zavolej ji, nebo ji podrž a sundej.").
+- **Events:** `kidArrive { where, bell, noticed }` (always; bell = the house), `kidAct { kind, with, out?, hide?:
+  'tree' | 'chair' }` (watching only), `kidLeave { reason: 'called' | 'rain' | 'away', where }` (always), `kidNoticed
+  { where }`, `kidUp { friend }`, `climbStuck { kid: true }`, and for the player's actions `kidTalk`, `kidPlay`,
+  `photo { n, kid: true }`.
+- **The player's actions** (whatever Koxa does: on the lap, out, up the tree, nothing of hers ends; refused
+  `kidNotHere` "Anička už odešla domů." when she is not here):
+  - `kidTalk` → `kidTalk { line (0–5, salt 111, never the same twice in a row), act, koxa, asleep }`; the UI picks the
+    line set: with Koxa, alone ("Kočičko, kde jsi?"), or whispered when Koxa sleeps ("Pššt, spinká…").
+  - `kidFeather { toy?: 'feather' | 'featherWand' }` → `kidPlay { toy, koxa }`: when Koxa can play along (`ribbon`
+    rules, energy ≥ 10) fun +12 (+ the toy's bonus), energy −3, liking +¼, all within the caps; one game a minute, else
+    `kidResting` ("Chvilku počkej, s peříčkem si teď hrály."); the wand only when owned (`toyNotOwned`).
+  - `kidPhoto { pose?, kpose?, nokoxa? }` → a photo record with `kid: true`, `kpose` (≤ 20 chars, her pose), `room`
+    garden or living, `nokoxa` when Koxa is not with her; it shares the album's 200 and `deletePhoto`.
+- **Album:** `album(st).photos` leaves her photos out; `album(st).kid = { met, visits, friend, hearts, photos }` (null
+  until she first came). **Deníček** (after the cat entries, 25 entries in all): `kidFirst { where }` ("Poprvé přišla
+  Anička, vnučka paní Novákové. …"), `kidLikes` (liking ≥ 3, `KID.likes`: "{n} má Aničku ráda."), `kidLap { where }`
+  (the first lap act: "{n} usnula Aničce na klíně na lavičce na zahradě / na koberci v obýváku."). Measured: kidLikes
+  after about 6 visits, kidLap after 2.
+- **Repair:** `fixKidVisit` keeps a visit only with valid times (`since ≤ t < …`, at most 60 min long) and a known
+  place; an unknown act or one whose `with`/`out` does not fit becomes `call` alone; `fx`, `fg` clamped to the caps.
+  No visit of hers next to a cat's visit or a guest; `visits` ≥ 1 and `met`, `day` consistent with a visit; `owe`
+  0–3; the diary places only for found entries. `shiftTimes` moves her visit, `met`, `day`, `st.due`, `st.openAt`.
+  `E.kid(st)` = `{ here, where, act, with, out, since, until, actSince, koxa (together now), noticed, friend, hearts,
+  visits, met }` for the UI; `E.KID`, `E.KID_ACTS`.
+- **Art:** `A.girl(pose, opts)`, side view, the flat style of paní Nováková (two braids with bows, a dotted dress with
+  a sash, puffed sleeves), viewBox 240 × 340 (`A.girlBox`), about twice a sitting Koxa, anchor between her soles
+  (120, 330). Poses `stand`, `walk` (legs and arms by CSS, `--kx-step` = `A.girlStride` / speed: no gliding), `crouch`,
+  `sit` (the bench; `o.floor` cross-legged on the rug; `o.lapCat` the arm round a cat), `hold`, `ribbon` (fluttering by
+  CSS), `wave`, `call`, `whisper`; `o.layer: 'body' | 'arm'` so a cat in her arms or on her lap sits between the two.
+  `A.girlPoints(pose, opts)` = `{ anchor, head, mouth, hand, lap, hold, ribbon }`; `A.girlLapCat` = the curled cat's
+  size on her lap. In `art.html`.
+- **UI:** one mover (`KZ`) in `#visitors` with two layers (her body; her near arm over a cat she holds or has on her
+  lap), scaled by `depth()`, walking at 95 room units a second; drawn in front of Koxa when her feet are nearer. She is
+  shown only in her place: the garden ((118, 505)) or the obývák rug ((140, 556)) for a house visit;
+  she walks in through the gate or from the předsíň side and out the same way. Each engine act is a scene (her place,
+  her pose and Koxa's part): arrive wave, call, ribbon (Koxa stalks the ribbon and pounces, again and again), stroke
+  (she crouches, Koxa loafs and purrs), carry (Koxa `carried` in her arms; `wriggle` grumpy), lap (the bench or
+  cross-legged on the rug, Koxa curled on her lap), wait (she crouches by the sleeping Koxa, a finger on her lips),
+  hide (by the tree calling; inside crouched by the armchair, Koxa under it), leave (waves and goes). Koxa's part is a
+  long `kid` act (`K.act`) taken only when she is free (no care, carrying, lap, laser, game or petting going on), so
+  anything the player does interrupts it and she goes back afterwards. The bell rings twice (`clink`) for a house
+  visit; arrivals are notified wherever the player is ("Crrr! Zvoní Anička…", "Na zahradu přišla Anička…"); Koxa awake
+  in the house who noticed her in the garden goes to the obývák window ("{n} slyší Aničku na zahradě a dívá se z
+  okna."). Acts are toasted only when seen; `kidLeave` and `kidUp` (hearts) too. A tap on her opens her menu: "Anička,
+  vnučka paní Novákové", Koxa's liking as hearts ("S Koxou"), Promluvit si (a speech bubble over her head), Dát jí
+  peříčko (the wand when owned; she waves it like her ribbon), Vyfotit. The camera button with her in view takes her
+  photo. Album card "Anička" (visits, hearts, her photos), a help row after the kittens. Test hook: `forceKid(where, kind,
+  out)`, `kidPoint()`, `openedNow()`, `get kid`.
+
+## 8d. A visit the player sees (Phase 4b, user's wish 2026-11-21; numbers: `OPEN`, `VISIT.watch`, `OWE`)
+The user wanted a visit to come now and then just when the game is opened, so it is experienced at all, for the cats
+and Anička alike. No system notifications: without a push server they cannot work reliably.
+- **`opened`** (the UI: at start, when the page is shown again after more than 30 min hidden, and on a `pageshow`
+  from the back-forward cache): nothing when a guest is due already (`st.due`), a cat or Anička is here, a guest
+  sleeps over, or the last opening that drew was less than 3 h ago (`OPEN.gap`, `st.openAt`). The arrival would be
+  1–5 min later (`OPEN.delay` 60–300 s, salt 113); a cat can come when neither now nor then is night or rain, Anička
+  when her window allows (§8c). When nobody could come it does not count as a draw. Else `st.openAt = t` and with
+  `OPEN.p` 0.3 (salt 112) `st.due = { who, at }`: Anička with 0.3 when both can come (salt 114, only her when no cat
+  can), else a cat by `pickVisitor` (salt 115). No event: the guest simply comes. A second opening keeps it.
+- **The due guest** comes in the step that holds `at` if it still can then (a cat: day, no rain, a valid visitor
+  whose weight is not 0 and not a small kitten; no other visit, guest or Anička), else never (`st.due` is cleared in
+  that step either way); its stay drawn with salt 105.
+- **While watched** the hourly chances are ×3 (`VISIT.watch`, `KID.watch`). To keep the weekly total, every visit that
+  comes while watched or after an opening is **owed**: `st.owe` (cats, at most 5, `OWE`) / `st.kid.owe` (Anička, at
+  most 3) +1, and the next visit drawn while nobody watches does not come (−1). The drawback: visits move from the time
+  away to the time played, so after a long session the visits the player would find on return are fewer, and a player
+  who keeps the game open for hours still gets more in total once the debt is full.
+- **Repair:** `st.due` only with `who` 'kid' or a visitor and `at` within the next 5 min; `st.owe` 0–5; `st.openAt` ≤ t.
+- **Measured** (`tools/kocka-test.js`, a player who opens the game 3× a day for 10 min, 10 Koxas × 4 weeks, against the
+  same Koxas nobody watches): a visit within 5 min of 31 % of the fair-weather daytime openings (195/634); cats 6.30 a
+  week against 5.45 (×1.16), with the visitors' bowl 10.88 against 11.25 (×0.97); Anička 1.65 against 1.52.
+
 ## 9. Holidays (date → props, texts)
 Advent 1.–23.12 (věnec), Mikuláš 5.12 (punčocha), Vánoce 24.12–6.1 (stromeček; she knocks ornaments down),
 Silvestr 31.12 evening (ohňostroj: she hides if `fear` = ohňostroj), Masopust (Easter − 47 days: maska),
@@ -519,7 +685,7 @@ until woken). Engine actions: `lapOn` (refused/wriggle when she doesn't want it)
 
 ### 12e. Outside: the garden is a place (user's wish 2026-11-12: "go outside", "a bit more complex")
 The house has four places now: **Obývák, Kuchyně, Předsíň, Zahrada**. From the Předsíň the door leads to the
-**Zahrada** (the player goes out too; the arrows include it). The garden scene changes with season, day phase and
+**Zahrada** (the player goes out too; the arrows include it; carrying her through it: §12g). The garden scene changes with season, day phase and
 weather (rain in spring/autumn, snow in winter: she hates rain — comes back wet and grumpy, coat −; snow: paw prints,
 she shakes her paws). In the rain she never strolls on the lawn (user's wish 2026-11-17): she runs between two
 shelters, the step under the little roof of the back door (lying hunched, or sitting and meowing to be let in, with a
@@ -572,6 +738,24 @@ everything comes from `st` and the time, so `advance` with a probe still equals 
   when it is freezing already), and with the player in the garden she does not fall asleep there; **heat** (≥ 28 °C):
   water falls ×1.3, and a nap is never in the sun patch or on the window sill (her box or her bed). Constants: `E.WX`.
 
+### 12g. Carrying her (user's report 2026-11-21)
+Carried to the door, only the view used to go to the garden, not her; between the rooms she could not be carried.
+- **The back door** (předsíň ⇄ zahrada): put her down on the předsíň door → `goGarden`, the view goes to the garden and
+  she sits by the garden's door; put her down on the garden's back door → `goHouse`, she sits by the předsíň door
+  (before 2026-11-21 this started a walk). Refused (she stays home / in the garden): she stays sitting at the door.
+  **A walk starts only at the gate** ("Pustit ji ven"); the old single room's door still lets her out. `decide()` drops
+  a `K.place` from the other side of the back door (the engine says where she is).
+- **To the next place:** while she is carried, a finger within 12 % of the scene's width from the left or right edge
+  (`CARRY_EDGE`; over a drop target other than the door only the outer 6 %) shows a strip (`#carryEdge`) with an arrow
+  and the neighbouring place's name, filling up; held there 0.6 s (`CARRY_DWELL`) the view slides to that place (the
+  same slide as dragging the room, she stays under the finger) and she stays in the hand. A finger that only passes the
+  edge does nothing, and after a switch it has to leave the edge before the next one (one switch per visit to the
+  edge). Released during the slide, she is put on the floor of the new place. Předsíň ⇄ zahrada this way calls
+  `goGarden('carried')` (the engine keeps `st.held`: she is still in the player's arms) / `goHouse`; refused → a toast
+  and no switch. Put down away from a target she stays on the floor of the new place. A tip
+  (`kocka.tip.carryEdge`) explains it when she is picked up and there is more than one place.
+- **Into her box:** §6b.
+
 ## 11. Texts and names
 - `nameForms(name)`: Czech cases for the common phrases are avoided by phrasing ("Koxa má hlad", "Zavolat: Koxa",
   "Pohlaď Koxu" only when the accusative is safe: names ending in -a → -u; otherwise "Pohlaď ji").
@@ -584,7 +768,8 @@ everything comes from `st` and the time, so `advance` with a probe still equals 
 Small, funny teasing, nothing complicated: patting (taps in a row), the watering can on her, a tap on her nose, her
 payback and making it up. **Rules:** the consequences are mild (a short sulk, making up, nothing is lost); no real fear
 (no cucumber, no jump scares, no pulling the tail) and **never claws** (every swat, grab and pounce says "bez drápků" or
-shows none); **a sleeping Koxa never blows up**. This section is the contract between the three blocks and the UI:
+shows none); **a sleeping Koxa never blows up** (a single tap only flicks an ear; since 2026-11-21 a run of quick
+taps, pestering, wakes her: §13.5). This section is the contract between the three blocks and the UI:
 Engine (`src/engine.js` + `tools/kocka-test.js`), Art (`src/art.js` + `art.html`), Input (`src/input.js` +
 `feel.html`) are built in parallel without talking to each other; nobody but the UI step runs `assemble.js`. Where the
 plan left a detail open, the answer chosen here is marked **Decided:** — follow it, do not choose another.
@@ -599,7 +784,7 @@ in the UI, `st.name` in the engine); `{an}` = its accusative from the UI's `acc(
 | Field | Mode | Value |
 |---|---|---|
 | `t` | every mode | ms of the release, from `opts.time(e)` (the same clock as the other gesture times) |
-| `pat` | `'care'` only (the key is absent in other modes) | `{ n, ms, cv, region }` when the tap is on a cat (`cat: true`, a region was hit, no `item`); otherwise `null` |
+| `pat` | `'care'` only (the key is absent in other modes) | `{ n, ms, cv, region, fast }` when the tap is on a cat (`cat: true`, a region was hit, no `item`); otherwise `null` (`fast`: §13.5) |
 
 `pat.n` = the number of taps in the run including this one (1, 2, 3 …, not capped); `pat.ms`, `pat.cv` = `rhythm()` of
 the run's last `PAT_WINDOW` tap times; `pat.region` = the hit region's id as `hitRegion` gave it (`'nose'`, `'back'`,
@@ -748,6 +933,8 @@ const TEASE = deep({
   wetMin: 30,                           // splash: wet until max(st.wet, t + 30 min)
   pay: { p: 0.5, min: 5, max: 25, lapse: 120, ext: 5 },   // payback: chance for a sulk, delay after the end, lapse, see below
   mood: { sulk: -10, cross: -20 },
+  // pestering (§13.5, 2026-11-21): love and heat by the reaction, touchy is cross 10–20 min, woken she loses energy
+  pester: { love: { playful: -1, huffy: -2, touchy: -4 }, heat: { playful: 1, huffy: 2, touchy: 3 }, cross: [10, 20], wakeEnergy: 3 },
 });
 ```
 **Decided:** `heat.eat 1` and `love.eat −1` (the meal blowUp is the mild one); `heat.boop` is for the boop swat;
@@ -758,7 +945,8 @@ free in `drawTraits`). `close = clamp(1 − |ms − patTempo(st)| / 300, 0, 1)` 
 
 **New actions** (added to `ACTIONS`); `REGION_ALIAS` gets `nose: 'head'` (so `stroke`, `scratch`, `strokeVisitor` and
 the visitors' `v:<id>:nose` count the nose as the head; `REGIONS` and the diary spots do not change). `pat` and `boop`
-join the lap-keeping list (`['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff', 'photo', 'pat', 'boop']`);
+join the lap-keeping list (`['stroke', 'scratch', 'treat', 'call', 'lapOn', 'lapOff', 'photo', 'pat', 'boop']`, plus
+`'pester'` since 2026-11-21: it is not "standing up", her reaction takes her off the lap);
 `splash` does not. None of the three is in `home` or `TREE_OK`, so out → "{n} je venku.", up the tree → "{n} je na
 stromě." (the existing general refusals).
 
@@ -878,7 +1066,7 @@ dkey(te)`, `pay = null`, Deníček `payback`. Not free → it waits until it lap
 | `payback` | `kind: 'shelf'\|'ambush'` | her revenge, at most once a day |
 | `found` | `id`, `text` | as before; the five new diary ids |
 
-Order inside one action: `lapLeave` → the cause (`blowUp`/`loveBite`/`boop`/`splash`) → `sulk`/`cross` → `found`.
+Order inside one action: `lapLeave` → the cause (`blowUp`/`loveBite`/`boop`/`splash`/`pester`) → `sulk`/`cross` → `found`.
 
 **`health()` adds:** `sulk` (sulk running), `cross` (cross running), `splashed` (`st.wet > t && st.wet ===
 st.tease.splash`), `teaseUntil` (`until` while teasing, else 0). **`moodValue()`:** sulk −10, cross −20 (the wet −15
@@ -903,6 +1091,7 @@ line 1564 that expects `'nose'` to be an unknown visitor region uses `'whiskers'
 
 ### 13.4 UI (`games/kocka/index.html`, after the three blocks are assembled)
 **Tap routing** in `onTap` (the item and visitor branches stay first; then for a tap on Koxa):
+0. (2026-11-21, first) quick taps in a row → `pester` (§13.5).
 1. asleep (not on the lap) → today's tip "{n} spí, nebuď ji." and `zzz`, **plus** the class `kx-flick` on her for 450 ms;
    dozing on the lap → `zzz` as now; up the tree → as now. None of them sends `pat` or `boop`.
 2. `K.teaseLock > perf()` → the tap is ignored (no meow).
@@ -987,7 +1176,7 @@ not purr. A tap ignored by `K.teaseLock` and a boop that ends in a swat call `ge
 | Row | Picture | Text |
 |---|---|---|
 | Poplácání | `rearUp` (fallback `loaf`), happy, a tap ring | "Ťukej na ni lehce prstem pořád dokola. Na zádech má ráda klidné, pravidelné poplácávání a na jednom místě úplně nejradši – zkus ho najít, i správné tempo. Hlavu, bradu, uši a tlapky jen snese, i rychlé bubnování. Ocas nech být a bříško je past: chytí tě za ruku a kope." |
-| Než se naštve | `sit` grumpy with `warn` | "Když švihá špičkou ocasu, dává uši do stran a cuká jí kůže na zádech, má toho dost. Přestaň. Rychlé bubnování po zádech, ťukání na ocas a poplácávání, když je mrzutá: pak se naježí, uteče a urazí se. Když ji poplácáváš moc dlouho, jemně tě kousne (z klína seskočí). Při jídle ji nech. Spící ${n} jen cukne uchem." |
+| Než se naštve | `sit` grumpy with `warn` | "Když švihá špičkou ocasu, dává uši do stran a cuká jí kůže na zádech, má toho dost. Přestaň. Rychlé bubnování po zádech, ťukání na ocas a poplácávání, když je mrzutá: pak se naježí, uteče a urazí se. Když ji poplácáváš moc dlouho, jemně tě kousne (z klína seskočí). Při jídle ji nech. Rychlé ťukání kamkoli ji zlobí – podle povahy to vezme jako hru, urazí se, nebo uteče do vedlejší místnosti, a Mazlení klesne. Spící ${n} na jedno ťuknutí jen cukne uchem, rychlé ťukání ji ale vzbudí." |
 | Ťuknutí do nosu | `sit` calm with `eyes: 'cross'` | "Ťukni jí jednou do nosu: zašilhá, kýchne a zatřepe hlavou. Třikrát za minutu je ale moc – plácne tě tlapkou (drápky nechá schované) a urazí se." |
 | Usmíření | `rub` happy (fallback `sit`) | "Uražená sedí zády k tobě na druhém konci pokoje. Pohlaď ji po srsti, podrbej ji nebo jí dej pamlsek a usmíříte se – otře se ti o ruku. Za pár minut ji to přejde i samo. Když to se škádlením přeženeš, opravdu se zlobí: 20 minut tě neposlouchá, nehraje si a na pohlazení plácne tlapkou. Pak ji nech být. A někdy ti to vrátí…" |
 | Konev (Zahrada) | the can + `shake` wet (two) | "Konví zaléváš záhony. Když zaliješ i ${an}, vyskočí, otřepe se a je mokrá a uražená. Návštěvy konví nepokropíš. V zimě a když spí, to nejde." |
@@ -998,6 +1187,47 @@ engine gave them), `get tease()` (a copy of `G.st.tease` plus `health()`'s `sulk
 holding rules apply; returns true when queued). `tools/shots.js` gets a step with a tap on her nose and one with the can
 on her in the garden.
 
+### 13.5 Pestering (zlobení rychlým ťukáním, user's decisions 2026-11-21)
+Quick taps anywhere on her annoy her: asleep she wakes, then she reacts by her temper and Mazlení (`N.love`) and her
+mood drop; **`st.bond` never drops** (user's decision).
+- **Input:** `pat.fast` (§13.1) = the quick taps in a row on the same cat, any region, each at most `PESTER_GAP` 250 ms
+  after the one before; it is counted across regions (the pat run is not), 1 = not quick.
+- **UI detection** (`onTap`, before every other rule for a tap on Koxa): `pat.fast` ≥ 4 (`PESTER_N.awake`), ≥ 3 when
+  she is asleep or dozing on the lap (`PESTER_N.asleep`), on Koxa (never a `v:` region), not up the tree, not gone or
+  carried, not inside `K.teaseLock` → `gest.cancel()` and `doAct('pester')`. The steady patting at the tail base (bliss,
+  400–650 ms) is far slower and stays a pat run; a single tap on a sleeping cat still only flicks an ear.
+- **With the slower wake** (§13.3 row 0, released 1.0.32): the pester check comes first on every tap, so one tap is
+  never both. A quick run on a sleeper reaches `fast` 3 (pester, she wakes) before its pat run reaches `n` 4; a slower
+  run (taps more than 250 ms apart, within `PAT_GAP`) goes to the engine as pats and wakes her hissing at its 4th tap
+  (`woken`). Once she is awake the run goes on as for an awake cat. While she hides (§14.1) a tap on her is `seek`, never
+  a pester.
+- **Engine `pester`** (no argument): refused `outside` on a walk (alone in the garden allowed), up the tree `onTree`;
+  kept on the lap's list. Asleep → she wakes with a start (`rouse`: her next nap is planned from now, at least 45 min
+  away, `SLEEP.gap`); dozing on the lap → the doze ends and the next nap is planned; woken either way energy −3
+  (`wakeEnergy`). Then the **level** = her `temper` (`TEMPERS = ['playful', 'huffy', 'touchy']`, §5), one step up when
+  heat is left from teasing (`heatNow > 0`: pestered or teased within about the last 10 min) and one more when grumpy or
+  sad (at most touchy). Love `TEASE.pester.love` −1 / −2 / −4, heat +1 / +2 / +3 by the level; eating she leaves the
+  bowl (the meal ends, the bowl waits 2 min). Event `pester { temper, level, woke, flee? }` (after `lapLeave`, before
+  `sulk`/`cross`):
+  - `playful`: a half-play hiss, no sulk; on the lap she jumps off (`leaveLap 'annoyed'`).
+  - `huffy`: `offence()` as for a blowUp: a 3-min sulk, or a cross when the heat reaches 5, the payback planned.
+  - `touchy`: she runs off (`flee: true`), off the lap, cross for 10–20 min (salt 85; a running cross is kept when
+    longer), event `cross`, payback planned.
+  While the long offence (`st.off`) runs only the cause is sent (no sulk, cross or flight). Never `rnd(st)`: the same
+  state gives the same reaction. Escalation: a playful cat pestered again within 10 min reacts as huffy, a huffy one as
+  touchy.
+- **Deníček** `temper` (in `TEASE_DIARY` after `payback`; count `cnt.temper`): found at the second reaction:
+  "{n} bere zlobení rychlým ťukáním napůl jako hru…" / "… se urazí a odejde na druhý konec místnosti." / "{n} je
+  citlivá: … uteče do vedlejší místnosti a dlouho se zlobí."; hint "Jak snese, když ji zlobíš rychlým ťukáním?".
+- **UI reaction** (`pesterShow`): `K.place` cleared, `say('hiss')`, ears back, vibrate `bite`, `teaseLock` 1.5 s
+  (playful) / 2.5 s. Woken: an arched start first ("{n} se vylekaně probudila."). Playful: a bat at the finger (`swipe`,
+  0.7 s), then a hop 90 units aside, sitting there 8 s ("… napůl hravě prskla, plácla po prstu a uskočila. Za chvíli se
+  vrátí."). Huffy: `arch` with a hiss, then the sulk spot at the other end of the room ("… odešla se urazit na druhý
+  konec místnosti."). Touchy: she runs to a neighbouring room of the house (never out to the garden), cross there
+  (`K.sulkPlace` with `fled`, kept until she reaches that room); in the garden to its far end ("{n} zaprskala a utekla do
+  kuchyně / do obýváku / do předsíně / na druhý konec zahrady. Teď se zlobí."). The `cross` text is not added after a
+  pester (it says it itself). Help "Než se naštve" says it (§13.4).
+
 ## 14. Play and memories (user's wishes 2026-11-19)
 
 New state (create → `STATE_KEYS` → canonical repair → `shiftTimes`; older saves get the defaults): `hide` (null |
@@ -1007,15 +1237,17 @@ last scattered; top level, because `st.yard` exists only while she is in the gar
 
 **14.1 Hide and seek** (`HIDE`). She hides by herself only in a watched advance: at home for a day already, awake and
 free (not on the lap, held, out, in the garden, frightened, at the bowls), 8–21 h, not ill, sulking, cross or offended,
-no visitor, guest, jealousy, catch, call or payback pending, energy ≥ 30, mood calm or happy, no nap, litter box, meal or
+no visitor, guest, Anička (§8c), jealousy, catch, call or payback pending, energy ≥ 30, mood calm or happy, no nap, litter box, meal or
 drink due within the hide. One keyed chance 0.3 per 10-minute slot of the clock (salts 12, 13; the spot salt 14), at most
 3 a day and 30 min apart: about one hide in two watched hours (measured: 0.45 in 30 min, 1.2 in 2 h, 2 in 4 h). Spots:
-`curtain`, `blanket` (living), `wardrobe` (hall), `box` (its room, only in the house). A hide does not split the steps
+`curtain`, `blanket` (living), `wardrobe` (hall), `box` (its room, only in the house: the furniture box, the free one
+§6b or a bought one; the UI draws `hideBox` exactly where the box item stands and as big, `boxPose`, and hides the item
+meanwhile, so there is never a second box; no box in the house = no box spot). A hide does not split the steps
 (the split moved every later draw of a watched advance and changed measured tests): it begins at the end of the step
 in which its slot's moment falls and ends at the first step end ≥ `until` (150 s later) with the boo; the UI ticks every
 30 s, so it should advance at `health().hiding.until`. `seek { spot }`: right spot → `seekFound` (love +3, fun +6; within
-30 s love +5, fun +10), wrong → `seekMiss` (nothing changes). Any other action except buy, sell, deletePhoto, nameKitten
-ends it first (`unhide { by }`), a minigame too; an unwatched advance ends it silently. Schovávaná: the minigame `hide`,
+30 s love +5, fun +10), wrong → `seekMiss` (nothing changes). Any other action except buy, sell, deletePhoto, nameKitten,
+opened, kidTalk and kidPhoto ends it first (`unhide { by }`), a minigame too; an unwatched advance ends it silently. Schovávaná: the minigame `hide`,
 `minigameResult(st, 'hide', { found, secs })`, score `hideScore = max(found, 3·found − ⌊secs/10⌋)`, 1 pamlsek per 2
 points, at most 8 a game, inside the shared 30 a day.
 
