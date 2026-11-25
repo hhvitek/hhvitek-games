@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+- Sudoku: nové tlačítko **Pokus**. Když váháš, zkus číslo: co pak napíšeš, má jinou barvu a jedním ťuknutím na Zahodit se mřížka vrátí, jak byla (číslo, které vedlo ke sporu, může hra z políčka rovnou vyškrtnout). Pokus jde vnořit až třikrát, každý má svou barvu.
+
 ## 1.0.34 – 2026-11-25
 
 - Kočka: návštěvy teď chodí hlavně, když máš hru otevřenou: po otevření často přijde někdo do pár minut a mimo hru jich je mnohem méně.

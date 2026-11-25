@@ -60,6 +60,9 @@
 [data-theme="lavender"]{--page:#e4ddf0;--bar:rgba(50,20,90,.07);--ink:#2a1f3d;--board:#fbf9ff;--line:#c3b6dc;--box:#4a3870;--given:#1e1530;--user:#1d55b8;--note:#65587e;--sel-bg:#ffe8a0;--sel-ring:#c97a16;--peer:#e8e0f5;--same:#d4e3fb;--err:#c0261e;--err-bg:#fad6d2;--key:#fbf9ff;--key-ink:#2a1f3d;--key-sh:#b5a7d0;--act:rgba(50,20,90,.1);--accent:#6b4fb0;--accent-ink:#fff}
 [data-theme="slate"]{--page:#1d242b;--bar:rgba(0,0,0,.25);--ink:#e9eef2;--board:#2b343d;--line:#46525e;--box:#a8b4be;--given:#f2f5f7;--user:#8ec5ff;--note:#a9b6c1;--sel-bg:#57502a;--sel-ring:#ffcf6b;--peer:#3a4652;--same:#2f4a66;--err:#ff8f85;--err-bg:#5c2b2b;--key:#2f3943;--key-ink:#eef3f6;--key-sh:#12171c;--act:rgba(255,255,255,.08);--accent:#ffcf6b;--accent-ink:#1f262c}
 [data-theme="night"]{--page:#0b0c0e;--bar:rgba(255,255,255,.03);--ink:#e6e8eb;--board:#16181c;--line:#2b2f35;--box:#7c848e;--given:#eceef1;--user:#6fb7ff;--note:#8c949e;--sel-bg:#3a3420;--sel-ring:#ffcf6b;--peer:#23272d;--same:#1d3350;--err:#ff7b72;--err-bg:#4a1f1f;--key:#1c1f24;--key-ink:#e6e8eb;--key-sh:#050607;--act:rgba(255,255,255,.07);--accent:#6fb7ff;--accent-ink:#0a1a2a}
+/* Trial runs ("Pokus"): one colour per level, none of them the user's blue or the mistake red */
+:root{--t1:#8a35c4;--t2:#0e7d57;--t3:#c25200;--t-ink:#fff}
+[data-theme="slate"],[data-theme="night"]{--t1:#d6a4ff;--t2:#6fe0b2;--t3:#ffab5e;--t-ink:#14171b}
 
 /* ---------- Base ---------- */
 :root{--cell:40px;--kh:56px;--ah:58px;--kc:5;--ac:4;--T:3px;--bx:3;--bc:3;--nr:3;--gut:12px} /* --gut: one side margin, bar buttons, grid and bottom buttons line up (safe areas are on #app) */
@@ -101,6 +104,11 @@ a.round{text-decoration:none}
 .cell.peer{background:var(--peer)}
 .cell.same{background:var(--same)}
 .cell.sel{background:var(--sel-bg);box-shadow:inset 0 0 0 3px var(--sel-ring)}
+.L1{--tc:var(--t1)}.L2{--tc:var(--t2)}.L3{--tc:var(--t3)}
+.G1{--tg:var(--t1)}.G2{--tg:var(--t2)}.G3{--tg:var(--t3)}
+.cell.tr .v,.cell.tr .nt{color:var(--tc)}
+.cell.tr .v{font-weight:700}
+.cell.tg::after{content:"";position:absolute;inset:7%;border-radius:50%;border:2px solid var(--tg);pointer-events:none} /* the cell where a trial guesses */
 .cell.err{background:var(--err-bg)}
 .cell.err .v{color:var(--err)}
 .nt{position:absolute;inset:1px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(var(--nr),minmax(0,1fr));place-items:center;font-size:calc(var(--cell)*.36);line-height:1;font-weight:700;color:var(--note)}
@@ -116,6 +124,16 @@ a.round{text-decoration:none}
 /* Bottom controls */
 .tray{flex:none;display:flex;flex-direction:column;gap:6px;padding:8px var(--gut) 10px;background:var(--bar);border-top:1px solid var(--line)}
 .hint{height:26px;line-height:26px;text-align:center;font-size:19px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* during a trial the hint line becomes a bar in the trial's colour with Zahodit and Nechat */
+.hint.trial{height:36px;line-height:normal;display:flex;align-items:center;gap:6px;padding:0 3px 0 10px;border-radius:12px;text-align:left;background:color-mix(in srgb,var(--tc) 16%,var(--page));color:var(--ink);box-shadow:inset 0 0 0 2px var(--tc)}
+.hint.trial b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:18px}
+.hint.trial button{flex:none;height:30px;padding:0 12px;border-radius:9px;font-size:17px;font-weight:700;background:var(--board);color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.hint.trial button.keep{background:var(--tc);color:var(--t-ink);box-shadow:none}
+@media (max-width:430px){ /* phones: the bar's label stays whole (also in English) */
+  .hint.trial{gap:4px;padding-left:8px}
+  .hint.trial b{font-size:16px}
+  .hint.trial button{padding:0 8px;font-size:15px}
+}
 .ctrl{display:flex;flex-direction:column;gap:8px}
 .phone .ctrl{flex-direction:row}
 .phone .keys{flex:1.25 1 0;align-content:flex-start}
@@ -138,6 +156,9 @@ a.round{text-decoration:none}
 .act:active{transform:scale(.97)}
 .act svg{flex:none;width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .act.on{background:var(--accent);color:var(--accent-ink);box-shadow:none}
+.act.tron{background:var(--tc);color:var(--t-ink);box-shadow:none}
+.acts.five .act{font-size:min(17px,3.9vw)} /* five buttons in one row */
+.act .lb{max-width:100%;padding:0 2px;overflow:hidden;text-overflow:ellipsis} /* a longer label (another language) never spills over the button */
 .act.dim{opacity:1;filter:none;background:transparent;box-shadow:none;text-shadow:none;color:color-mix(in srgb,var(--ink) 85%,transparent);outline:2px dashed color-mix(in srgb,var(--ink) 45%,transparent);outline-offset:-2px} /* unavailable: readable text, no fill, a dashed outline (not only opacity) */
 
 /* Settings, help and dialogs: one light look, the same in every game and in the launcher (not the game theme) */
@@ -308,6 +329,7 @@ const ICONS = {
   pencil: '<path d="M4 20l1.1-4.6L15.6 4.9a2 2 0 0 1 2.8 0l.7.7a2 2 0 0 1 0 2.8L8.6 18.9z"/><path d="M14 6.5l3.5 3.5"/>',
   hint:   '<path d="M9.5 18h5"/><path d="M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
   check:  '<path d="M4 12.5l5 5L20 6.5"/>',
+  trial:  '<path d="M9 3h6"/><path d="M10 3v6.2L4.6 18.3A1.8 1.8 0 0 0 6.1 21h11.8a1.8 1.8 0 0 0 1.5-2.7L14 9.2V3"/><path d="M7.2 15h9.6"/>',
   fill:   '<path stroke-width="3.4" d="M6 6h.01M12 6h.01M18 6h.01M6 12h.01M12 12h.01M18 12h.01M6 18h.01M12 18h.01M18 18h.01"/>',
 };
 const ACTS = [
@@ -315,13 +337,15 @@ const ACTS = [
   { id: 'erase',  labelKey: 'sudoku.act.erase',  show: () => true },
   { id: 'pencil', labelKey: 'sudoku.act.pencil', show: () => S.pencilBtn },
   { id: 'hint',   labelKey: 'common.hint',       show: () => S.hintBtn },
+  { id: 'trial',  labelKey: 'sudoku.act.trial',  show: () => S.trialBtn },
   { id: 'check',  labelKey: 'sudoku.act.check',  show: () => S.checkBtn },
   { id: 'fill',   labelKey: 'sudoku.act.fill',   show: () => S.fillBtn },
 ];
+const TRIAL_MAX = 3; // trials inside trials (one colour each)
 const DEFAULTS = {
   size: 9, diff: 'medium', mode: 'cell', keypad: 'rows', errors: 'none',
   hlPeers: false, hlSame: true, counter: true, autoClean: false,
-  pencilBtn: true, noteStyle: 'corner', fillBtn: false, hintBtn: true, checkBtn: false,
+  pencilBtn: true, noteStyle: 'corner', fillBtn: false, hintBtn: true, checkBtn: false, trialBtn: true,
   theme: 'paper', vibrate: true,
   aids: 1, // 1 = the save knows that "Stejná čísla" and the counter are on by default (switched on once for older saves)
 };
@@ -536,8 +560,15 @@ function validGame(g) {
     for (let i = 0; i < n; i++) if (g.giv[i] !== '0') { if (g.giv[i] !== g.sol[i]) return false; g.val[i] = +g.giv[i]; g.notes[i] = 0; }
     // the end comes from the board, never from the save
     g.status = g.val.every((v, i) => v === +g.sol[i]) ? 'won' : 'playing';
-    // a broken history only loses Undo, not the game
-    if (!Array.isArray(g.hist) || !g.hist.every(h => Array.isArray(h) && h.length && h.every(x => x && okI(x.i) && okV(x.v) && okN(x.n)))) g.hist = [];
+    // Trial runs: each keeps the grid as it was when it started; a broken one only loses the trials (the grid stays)
+    const okTrials = T => Array.isArray(T) && T.length <= TRIAL_MAX && T.every(x => x && typeof x === 'object'
+      && Number.isInteger(x.i) && x.i >= -1 && x.i < n && Number.isInteger(x.d) && x.d >= 0 && x.d <= N
+      && Array.isArray(x.val) && x.val.length === n && x.val.every(okV) && Array.isArray(x.notes) && x.notes.length === n && x.notes.every(okN));
+    if (!okTrials(g.trials)) g.trials = [];
+    // a broken history only loses Undo, not the game; an entry may also hold the trials before it ({ tr })
+    const okRec = x => x && (Array.isArray(x.tr) ? okTrials(x.tr) : okI(x.i) && okV(x.v) && okN(x.n));
+    if (!Array.isArray(g.hist) || !g.hist.every(h => Array.isArray(h) && h.length && h.every(okRec))) g.hist = [];
+    if (g.status !== 'playing') g.trials = [];
     g.marked = Array.isArray(g.marked) ? g.marked.filter(okI) : [];
     if (!Number.isInteger(g.sel) || g.sel < -1 || g.sel >= n) g.sel = -1;
     if (!Number.isInteger(g.held) || g.held < -1 || g.held > N) g.held = 0; // -1 = the eraser
@@ -550,19 +581,19 @@ function normalize(s) {
   s.size = +s.size; pick('size', [6, 9]);
   pick('diff', DIFFS.map(d => d.id)); pick('mode', ['cell', 'digit']); pick('keypad', ['rows', 'phone']);
   pick('errors', ERRORS.map(e => e.id)); pick('noteStyle', ['corner', 'big']); pick('theme', THEMES.map(t => t.id));
-  for (const k of ['hlPeers', 'hlSame', 'counter', 'autoClean', 'pencilBtn', 'fillBtn', 'hintBtn', 'checkBtn', 'vibrate']) s[k] = !!s[k];
+  for (const k of ['hlPeers', 'hlSame', 'counter', 'autoClean', 'pencilBtn', 'fillBtn', 'hintBtn', 'checkBtn', 'trialBtn', 'vibrate']) s[k] = !!s[k];
   s.aids = s.aids === 1 ? 1 : 0;
 }
 
 function makeGame(N, diff) {
   const p = generate(N, diff);
   return { size: N, diff, giv: p.givens.join(''), sol: p.solution.join(''), val: p.givens.slice(), notes: new Array(N * N).fill(0),
-    hist: [], marked: [], status: 'playing', sel: -1, held: 0, pencil: false };
+    hist: [], marked: [], status: 'playing', sel: -1, held: 0, pencil: false, trials: [] };
 }
 function newGame(msg) {
   hinted = -1;
   busy = true;
-  $('#hint').textContent = t('sudoku.preparing');
+  $('#hint').className = 'hint'; $('#hint').textContent = t('sudoku.preparing');
   setTimeout(() => {
     G = makeGame(S.size, S.diff);
     busy = false;
@@ -573,7 +604,7 @@ function newGame(msg) {
 function restart() {
   hinted = -1;
   G.val = [...G.giv].map(Number); G.notes.fill(0);
-  G.hist = []; G.marked = []; G.status = 'playing'; G.sel = -1; G.held = 0; G.pencil = false;
+  G.hist = []; G.marked = []; G.status = 'playing'; G.sel = -1; G.held = 0; G.pencil = false; G.trials = [];
   save(); render();
 }
 
@@ -613,9 +644,12 @@ function wrongCells() { const w = []; G.val.forEach((v, i) => { if (v && v !== +
 
 /* ---------- Moves ---------- */
 // One player action = one Undo step (including automatically removed notes).
-function change(list, mark = -1) {
+// newTrials: when the step also changes the trial runs, their new list; the entry keeps the old one ({ tr }).
+function change(list, mark = -1, newTrials = null) {
   hinted = mark;
-  G.hist.push(list.map(x => ({ i: x.i, v: G.val[x.i], n: G.notes[x.i] })));
+  const rec = list.map(x => ({ i: x.i, v: G.val[x.i], n: G.notes[x.i] }));
+  if (newTrials) { rec.push({ tr: copyTrials(G.trials) }); G.trials = newTrials; }
+  G.hist.push(rec);
   if (G.hist.length > 500) G.hist.shift();
   for (const x of list) { G.val[x.i] = x.v; G.notes[x.i] = x.n; }
   const touched = new Set(list.map(x => x.i));
@@ -637,7 +671,59 @@ function input(i, d) {
   if (S.counter && remaining(d) <= 0) { toast(t('sudoku.toast.allPlaced', { size: G.size, d })); return; }
   const list = [{ i, v: d, n: 0 }];
   if (S.autoClean) for (const p of geo(G.size).peers[i]) if (!G.val[p] && (G.notes[p] & BIT(d))) list.push({ i: p, v: 0, n: G.notes[p] & ~BIT(d) });
-  change(list);
+  // the first number written in a trial is its guess: that cell gets the ring and Zahodit can cross the number out there
+  const top = G.trials[G.trials.length - 1];
+  if (top && top.i < 0) {
+    const T = copyTrials(G.trials); Object.assign(T[T.length - 1], { i, d });
+    change(list, -1, T);
+  } else change(list);
+}
+
+/* ---------- Trial runs ("Pokus") ---------- */
+// G.trials = [{ i, d, val, notes }] from the outermost: the grid as it was when the trial started (val, notes) and its
+// guess (cell i, number d; -1/0 until the first number is written). Every change is one Undo step like any other.
+// A cell is drawn in the colour of the innermost trial whose starting grid it differs from.
+const copyTrials = T => T.map(x => ({ i: x.i, d: x.d, val: x.val.slice(), notes: x.notes.slice() }));
+function trialLevel(i) {
+  for (let k = G.trials.length; k > 0; k--) { const x = G.trials[k - 1]; if (G.val[i] !== x.val[i] || G.notes[i] !== x.notes[i]) return k; }
+  return 0;
+}
+function startTrial() {
+  const k = G.trials.length;
+  if (k >= TRIAL_MAX) { toast(t('sudoku.toast.trialMax')); return; }
+  change([], -1, [...copyTrials(G.trials), { i: -1, d: 0, val: G.val.slice(), notes: G.notes.slice() }]);
+  toast(k ? t('sudoku.toast.trialNested', { lv: k + 1 }) : t('sudoku.toast.trialStart'));
+}
+// Back to the grid of the innermost trial's start; exclude: also cross its guess out of that cell's notes
+function discardTrial(exclude) {
+  const T = copyTrials(G.trials), x = T.pop(); if (!x) return;
+  const list = [];
+  G.val.forEach((v, i) => { if (!isGiven(i) && (v !== x.val[i] || G.notes[i] !== x.notes[i])) list.push({ i, v: x.val[i], n: x.notes[i] }); });
+  let left = 0;
+  if (exclude && x.i >= 0 && x.d && !x.val[x.i]) {
+    const n = x.notes[x.i] & ~BIT(x.d), e = list.find(c => c.i === x.i);
+    if (e) e.n = n; else if (n !== G.notes[x.i]) list.push({ i: x.i, v: 0, n });
+    left = n;
+  }
+  G.sel = x.i >= 0 ? x.i : G.sel;
+  change(list, -1, T);
+  if (!exclude) toast(t('sudoku.toast.trialDiscarded'));
+  else if (POP[left] === 1) toast(t('sudoku.toast.trialExcludedOne', { d: x.d, e: Math.log2(left) + 1 }));
+  else toast(t('sudoku.toast.trialExcluded', { d: x.d }));
+}
+// Ask how to throw the trial away only when it has a guess that can be crossed out
+function askDiscard() {
+  const x = G.trials[G.trials.length - 1]; if (!x) return;
+  if (x.i < 0 || !x.d || x.val[x.i]) { discardTrial(false); return; }
+  showModal(`<h2>${th('sudoku.trial.ask.title')}</h2><p>${th('sudoku.trial.ask.text', { d: x.d })}</p>`,
+    [{ text: th('sudoku.trial.ask.exclude', { d: x.d }), fn: () => discardTrial(true) },
+     { text: th('sudoku.trial.ask.discard'), fn: () => discardTrial(false) },
+     { text: th('sudoku.trial.ask.cancel'), cls: 'alt' }]);
+}
+function keepTrial() {
+  const k = G.trials.length; if (!k) return;
+  change([], -1, copyTrials(G.trials).slice(0, -1));
+  toast(k > 1 ? t('sudoku.toast.trialKeptNested', { lv: k, up: k - 1 }) : t('sudoku.toast.trialKept'));
 }
 function eraseCell(i) {
   if (i < 0) { toast(t('sudoku.toast.eraseFirst')); return; }
@@ -649,11 +735,12 @@ function undo() {
   hinted = -1;
   if (G.status !== 'playing') { toast(t('sudoku.toast.solved')); return; }
   if (!G.hist.length) { toast(t('sudoku.toast.nothingToUndo')); return; }
-  const prev = G.hist.pop();
-  for (const x of prev) { G.val[x.i] = x.v; G.notes[x.i] = x.n; }
-  const touched = new Set(prev.map(x => x.i));
+  const prev = G.hist.pop(), cells = prev.filter(x => !x.tr), tr = prev.find(x => x.tr);
+  for (const x of cells) { G.val[x.i] = x.v; G.notes[x.i] = x.n; }
+  if (tr) G.trials = copyTrials(tr.tr);
+  const touched = new Set(cells.map(x => x.i));
   G.marked = G.marked.filter(i => !touched.has(i));
-  G.sel = prev[0].i;
+  if (cells.length) G.sel = cells[0].i;
   buzz(); save(); render();
 }
 function doHint() {
@@ -704,7 +791,7 @@ function doFill() {
 }
 function checkFull() {
   if (wrongCells().length === 0) {
-    G.status = 'won'; G.pencil = false; G.held = 0;
+    G.status = 'won'; G.pencil = false; G.held = 0; G.trials = []; // a trial that solved it is simply right
     buzz([40, 60, 40, 60, 80]); save(); render();
     const solved = G;
     whenFree(solved, 500, () => {
@@ -713,7 +800,8 @@ function checkFull() {
     });
   } else {
     showModal(`<h2>${th('sudoku.wrong.title')}</h2><p>${th('sudoku.wrong.text')}</p>`,
-      [{ text: th('sudoku.wrong.show'), fn: () => { G.marked = wrongCells(); save(); render(); } }, { text: th('sudoku.wrong.keep'), cls: 'alt' }]);
+      [G.trials.length && { text: th('sudoku.wrong.discardTrial'), fn: askDiscard },
+       { text: th('sudoku.wrong.show'), fn: () => { G.marked = wrongCells(); save(); render(); } }, { text: th('sudoku.wrong.keep'), cls: 'alt' }].filter(Boolean));
   }
 }
 
@@ -760,6 +848,7 @@ function render() {
   const focus = !S.hlSame ? 0 : !cellMode ? (G.held > 0 ? G.held : 0) : (sel >= 0 ? G.val[sel] : 0);
   const peers = S.hlPeers && sel >= 0 ? new Set(P.peers[sel]) : null;
   const errs = errorSet();
+  const guess = new Map(G.trials.map((x, k) => [x.i, k + 1])); // guess cell → its trial level (an inner one wins)
   let h = '';
   for (let by = 0; by < P.by; by++) for (let bx = 0; bx < P.bx; bx++) {
     h += '<div class="box">';
@@ -770,6 +859,9 @@ function render() {
       else if (focus && v === focus) cls += ' same';
       else if (peers && peers.has(i)) cls += ' peer';
       if (errs.has(i)) cls += ' err';
+      const lv = G.trials.length ? trialLevel(i) : 0;
+      if (lv) cls += ' tr L' + lv;
+      if (guess.has(i) && i >= 0) cls += ' tg G' + guess.get(i);
       const inner = v ? `<span class="v">${v}</span>` : G.notes[i] ? notesHTML(G.notes[i], focus) : '';
       h += `<div class="${cls}" data-i="${i}">${inner}</div>`;
     }
@@ -787,17 +879,26 @@ function render() {
   $('#keys').innerHTML = k;
 
   // Buttons
-  const selI = G.sel;
+  const selI = G.sel, nt = G.trials.length;
+  $('#acts').classList.toggle('five', layoutActs().ac === 5);
   $('#acts').innerHTML = visibleActs().map(a => {
     let st = '';
     if (!playing) st = ' dim';
     else if (a.id === 'undo' && !G.hist.length) st = ' dim';
     else if (a.id === 'erase') st = !cellMode ? (G.held === -1 ? ' on' : '') : (selI < 0 || isGiven(selI) || (!G.val[selI] && !G.notes[selI]) ? ' dim' : '');
     else if (a.id === 'pencil' && G.pencil) st = ' on';
-    return `<button class="act${st}" data-a="${a.id}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.id]}</svg>${th(a.labelKey)}</button>`;
+    else if (a.id === 'trial' && nt) st = ` tron L${nt}`;
+    return `<button class="act${st}" data-a="${a.id}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[a.id]}</svg><span class="lb">${th(a.labelKey)}</span></button>`;
   }).join('');
 
-  $('#hint').textContent = hintText();
+  // the hint line, or during a trial its bar with Zahodit and Nechat
+  const bar = $('#hint');
+  if (playing && nt) {
+    const x = G.trials[nt - 1];
+    bar.className = 'hint trial L' + nt;
+    bar.innerHTML = `<b>${x.i >= 0 && x.d ? th('sudoku.trial.try', { lv: nt, d: x.d }) : th('sudoku.trial.empty', { lv: nt })}</b>`
+      + `<button data-tr="discard">${th('sudoku.trial.discard')}</button><button class="keep" data-tr="keep">${th('sudoku.trial.keep')}</button>`;
+  } else { bar.className = 'hint'; bar.textContent = hintText(); }
   layout();
 }
 function hintText() {
@@ -815,13 +916,18 @@ function hintText() {
   return t(G.val[i] ? 'sudoku.hint.overwrite' : 'sudoku.hint.pick');
 }
 
+// Columns of the buttons under the numbers: up to five in one row (narrower labels), six in two rows of three
+function layoutActs() {
+  const na = visibleActs().length;
+  const ac = S.keypad === 'phone' ? (na <= 3 ? 1 : 2) : (na <= 5 ? na : 3);
+  return { ac, ar: Math.ceil(na / ac) };
+}
 // Size the grid and keys to the available space (everything fits without scrolling)
 function layout() {
   if (!G) return;
   const N = G.size, P = geo(N), phone = S.keypad === 'phone', GAP = 8;
-  const na = visibleActs().length;
   const kc = phone ? 3 : Math.ceil(N / 2), kr = Math.ceil(N / kc);
-  const ac = phone ? (na <= 3 ? 1 : 2) : (na <= 4 ? na : 3), ar = Math.ceil(na / ac);
+  const { ac, ar } = layoutActs();
   root.style.setProperty('--kc', kc); root.style.setProperty('--ac', ac);
   const app = $('#app'), cs = getComputedStyle(app);
   const W = app.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
@@ -924,6 +1030,13 @@ $('#acts').addEventListener('click', e => {
   else if (a === 'hint') doHint();
   else if (a === 'check') doCheck();
   else if (a === 'fill') doFill();
+  else if (a === 'trial') startTrial();
+});
+// The trial bar's Zahodit and Nechat
+$('#hint').addEventListener('click', e => {
+  const b = e.target.closest('[data-tr]'); if (!b || busy || G.status !== 'playing' || !G.trials.length) return;
+  hinted = -1;
+  if (b.dataset.tr === 'keep') keepTrial(); else askDiscard();
 });
 
 function showModal(html, buttons) {
@@ -992,6 +1105,7 @@ function renderSettings() {
       <div class="fnote" style="margin-top:0">${th('sudoku.set.buttons.note')}</div>
       ${toggleRow('pencilBtn', th('sudoku.set.pencilBtn'), th('sudoku.set.pencilBtn.desc'))}
       ${toggleRow('hintBtn', th('common.hint'), th('sudoku.set.hintBtn.desc'))}
+      ${toggleRow('trialBtn', th('sudoku.act.trial'), th('sudoku.set.trialBtn.desc'))}
       ${toggleRow('checkBtn', th('sudoku.act.check'), th('sudoku.set.checkBtn.desc'))}
       ${toggleRow('fillBtn', th('sudoku.act.fill'), th('sudoku.set.fillBtn.desc'))}
     </section>
@@ -1043,6 +1157,7 @@ function renderHelp() {
     ['erase', th(S.mode === 'cell' ? 'sudoku.help.erase.cell' : 'sudoku.help.erase.digit')],
     S.pencilBtn && ['pencil', th('sudoku.help.pencil')],
     S.hintBtn && ['hint', th('sudoku.help.hint')],
+    S.trialBtn && ['trial', th('sudoku.help.trial')],
     S.checkBtn && ['check', th('sudoku.help.check')],
     S.fillBtn && ['fill', th('sudoku.help.fill')],
   ].filter(Boolean).map(([id, text]) => `<div class="legend">${ico(id)}<span>${text}</span></div>`).join('');

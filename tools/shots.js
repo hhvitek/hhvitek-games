@@ -117,7 +117,11 @@ async (page) => {
       }
       await tapButton(/Zkontrolovat/); await wait(600);
     },
-    'sudoku': async () => { await tapButton(/Poradit/); await wait(800); },
+    // Poradit, then a trial (Pokus) with one number in an empty cell: the trial bar and its colour
+    'sudoku': async () => {
+      await tapButton(/Poradit/); await wait(800); await tapButton(/^Pokus$/); await wait(300);
+      await tap('#board .cell:not(.g):not(.u)'); await wait(200); await tap('#keys .key:not(.dim)'); await wait(600);
+    },
     // a filled cell, a cross in another cell, Poradit (a mistake or a cell one line decides), a tap on it, Poradit again
     'malovane-krizovky': async () => { await tap('#grid .cell'); await wait(300); await tap('#mCross'); await wait(200); await tap('#grid .cell:nth-child(7)'); await wait(300); await tap('#btnHint'); await wait(800); await tap('#grid .hint'); await wait(600); await tap('#btnHint'); await wait(800); },
     'skladani-kostek': async () => { await tap('#tray .piece, #tray [data-i], .tray > *'); await wait(300); await page.locator('#board > *, #board .cell').nth(27).click({ force: true }).catch(() => {}); await wait(600); },
