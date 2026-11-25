@@ -7,6 +7,8 @@ Verze má tvar `1.0.1`: poslední číslo roste s každým vydáním, prostředn
 
 ## Nevydáno
 
+## 1.0.34 – 2026-11-25
+
 - Kočka: návštěvy teď chodí hlavně, když máš hru otevřenou: po otevření často přijde někdo do pár minut a mimo hru jich je mnohem méně.
 - Kočka: z krabice teď Koxa ve spánku vykukuje i kouskem hlavy, krabice se občas zakymácí a stoupají z ní „zzz“. Když na ni ťukneš, jedním okem vykoukne.
 
