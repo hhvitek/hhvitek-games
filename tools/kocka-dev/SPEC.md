@@ -243,17 +243,28 @@ placed first). Now every Koxa has one.
   30 min (`LAP.napSoon`) → she falls asleep there at once: `put { place: 'box' }`, `sleep { place: 'box', nap, put:
   true }`, the box quirk counts as seen. Otherwise `put { place: 'box', sit }`: she sits in it awake `sit` = 60–180 s
   (salt 82, ms) and then hops out (the UI's `K.place`). Asleep in it she cannot be picked up (as anywhere).
-- **What peeks over the rim** while she sleeps in it: `E.boxPeek(st, ms)` → `'ears'` (ear tips and the crown, an ear
-  twitches now and then) | `'tail'` (hanging over the front, swaying) | `'paw'` (one paw over the front) | `'back'` (the
-  curve of her back, breathing); null when she is not asleep in the box. Runs of `BOX.peek` 4 min, each boundary moved
+- **What peeks over the rim** while she sleeps in it: `E.boxPeek(st, ms)` → `'head'` (2026-11-25, user's wish "ať jí
+  kouká i kus hlavy": the top of her head with closed eyes and both ears over the rim, the tail tip curling up beside
+  it) | `'eyes'` (the same, and now and then one eye opens to a slit and closes again) | `'ears'` (ear tips and the
+  crown) | `'tail'` (hanging over the front, swaying) | `'paw'` (one paw over the front) | `'back'` (the curve of her
+  back, breathing); null when she is not asleep in the box. `BOX.peeks` has 'head' on every even place, so it is every
+  other run (about half of the time) and the others about a tenth each. Runs of `BOX.peek` 4 min, each boundary moved
   by ±`BOX.jitter` 30 s (salt 83), so 3–5 min; the variant from salt 84, never the same twice in a row; seeded, so a
   reload shows the same.
-- **Art:** poses `inBox` (awake: head, ears and two paws over the rim) and `boxSleep` (`o.peek`); both draw the box
+- **Effects while she sleeps in it** (CSS in the art block, all off under prefers-reduced-motion, the Zzz then stand
+  still): the Zzz rise from the box beside her head (`R.zz`); the flaps rise and fall with her breathing (`kx-flapL` /
+  `kx-flapR`, 3.8 s like `kx-breathe`, at rest exactly `BOX_FRONT`) and so does her head (`kx-bxbreath`); the whole box
+  wobbles now and then (`kx-bxwob`, every 13 s: she shifts); both ears twitch (`kx-twitch`, `kx-twitchL`); the tail
+  sways faster than in other sleep (4.6 s).
+- **A tap** (one tap on her or on the box, `onBoxAt`): she peeks out for 1.4 s (`o.peekOut`: the head up, one eye
+  open, the ears up, no Zzz; `K.boxPeekUntil`) and ducks back; the sleep tip as before. Quick taps on her still
+  pester (§13.5).
+- **Art:** poses `inBox` (awake: head, ears and two paws over the rim) and `boxSleep` (`o.peek`, `o.peekOut`); both draw the box
   (the box item's back rim and `BOX_FRONT`) scaled by `o.box` round her feet (100, 186). The box item is 170 room units
   (`itemSize.box`, before 120) so a cat fits in it.
 - **UI:** `boxPose(pose, o)` puts her pose exactly on the box item (`o.box` = the item's size), so nothing jumps when
   she gets in; while she is in it in the viewed place (`inBox` / `boxSleep`) the furniture box is hidden
-  (`syncFurnBox`), never two boxes. `sleepSpot` gives `boxSleep` with `E.boxPeek` (default `ears`); falling asleep there
+  (`syncFurnBox`), never two boxes. `sleepSpot` gives `boxSleep` with `E.boxPeek` (default `head`), or `peekOut` after a tap; falling asleep there
   shows `inBox` with squinting eyes for 1.8 s first (`sleepShow`). The box is the first carry target (`carryTargets`,
   when it stands in the viewed place); a sleepy put shows her asleep, else `inBox` for `sit` ms (90 s when missing).
   An idle place in her box (`furnitureSpots`) also uses `boxPose('inBox')`.
@@ -488,14 +499,15 @@ neighbour cats. She has her **own slot `st.kid`**, never `st.visit`: the cats' v
 their tests stay as they were. New randomness only from `rndSeed` keyed on the hour or the moment (salts 100–111),
 never `rnd(st)`: one long advance, many short ones, a reload and `advance` with a probe give the same visit (tested).
 - **State:** `st.kid = { visits, friend (0–5 in quarters: how much Koxa likes her), met (her first visit, ms; 0 = never),
-  day (local day key of her last visit), owe (0–3, §8d), diary { kidFirst?, kidLap? } ('garden' | 'house': where it
+  day (local day key of her last visit), owe (no longer used, 0, §8d), diary { kidFirst?, kidLap? } ('garden' | 'house': where it
   happened), visit }`; `visit = null | { since, until, where: 'garden' | 'house', act: { kind, since, with: 'koxa' |
   null, out? }, fx: { love, fun, energy } (what this visit changed so far, absolute), fg (liking gained this visit),
   play (the last feather game, ms), talk (the last line, −1), noticed (ms, 0 = not yet) }`.
 - **When:** 13:00–18:30 local time (`KID.from`, `last`), home by 19:00 (`home`), at most one visit a day. Every hour
-  slot has a seeded moment (salt 100) and a seeded chance `KID.p` 0.042 (salt 101), ×3 while watched (§8d). Never
+  slot has a seeded moment (salt 100) and a seeded chance `KID.p` 0.042 (salt 101), ×6 while the player is there, ×0.25 while not (§8d). Never
   while a cat visits (also not before a cat that ended in the same step has gone) or a guest sleeps over, and no cat
-  comes while she is here. Measured: 1.27 visits a week (80 weeks), every one in the window, 30–60 min.
+  comes while she is here. Measured: 0.33 visits a week while nobody watches (80 weeks; 1.27 before 2026-11-25), about 2 a
+  week to a player who opens the game 3× a day (§8d); every one in the window, 30–60 min.
 - **Where:** rain, a storm, snow or a real frost (§12f): she rings and plays on the rug in the obývák (`'house'`);
   otherwise through the gate into the garden, or inside anyway with `KID.inside` 0.2 (salt 102). Measured: inside on
   20 of 82 fair days.
@@ -559,7 +571,7 @@ never `rnd(st)`: one long advance, many short ones, a reload and `advance` with 
 - **Repair:** `fixKidVisit` keeps a visit only with valid times (`since ≤ t < …`, at most 60 min long) and a known
   place; an unknown act or one whose `with`/`out` does not fit becomes `call` alone; `fx`, `fg` clamped to the caps.
   No visit of hers next to a cat's visit or a guest; `visits` ≥ 1 and `met`, `day` consistent with a visit; `owe`
-  0–3; the diary places only for found entries. `shiftTimes` moves her visit, `met`, `day`, `st.due`, `st.openAt`.
+  0; the diary places only for found entries. `shiftTimes` moves her visit, `met`, `day`, `st.due`, `st.openAt`.
   `E.kid(st)` = `{ here, where, act, with, out, since, until, actSince, koxa (together now), noticed, friend, hearts,
   visits, met }` for the UI; `E.KID`, `E.KID_ACTS`.
 - **Art:** `A.girl(pose, opts)`, side view, the flat style of paní Nováková (two braids with bows, a dotted dress with
@@ -587,28 +599,38 @@ never `rnd(st)`: one long advance, many short ones, a reload and `advance` with 
   photo. Album card "Anička" (visits, hearts, her photos), a help row after the kittens. Test hook: `forceKid(where, kind,
   out)`, `kidPoint()`, `openedNow()`, `get kid`.
 
-## 8d. A visit the player sees (Phase 4b, user's wish 2026-11-21; numbers: `OPEN`, `VISIT.watch`, `OWE`)
+## 8d. A visit the player sees (Phase 4b, user's wish 2026-11-21, rebalanced 2026-11-25; numbers: `OPEN`, `VISIT.watch` / `VISIT.away`, `KID.watch` / `KID.away`)
 The user wanted a visit to come now and then just when the game is opened, so it is experienced at all, for the cats
-and Anička alike. No system notifications: without a push server they cannot work reliably.
-- **`opened`** (the UI: at start, when the page is shown again after more than 30 min hidden, and on a `pageshow`
-  from the back-forward cache): nothing when a guest is due already (`st.due`), a cat or Anička is here, a guest
-  sleeps over, or the last opening that drew was less than 3 h ago (`OPEN.gap`, `st.openAt`). The arrival would be
-  1–5 min later (`OPEN.delay` 60–300 s, salt 113); a cat can come when neither now nor then is night or rain, Anička
-  when her window allows (§8c). When nobody could come it does not count as a draw. Else `st.openAt = t` and with
-  `OPEN.p` 0.3 (salt 112) `st.due = { who, at }`: Anička with 0.3 when both can come (salt 114, only her when no cat
-  can), else a cat by `pickVisitor` (salt 115). No event: the guest simply comes. A second opening keeps it.
+and Anička alike. No system notifications: without a push server they cannot work reliably. After playing it the user
+complained (2026-11-25) that the game mostly said "X byl na návštěvě" for visits missed while away, so since then the
+visits mostly happen while the player is there.
+- **`opened`** (the UI: at start, when the page is shown again after more than 10 min hidden (before 30 min), and on a
+  `pageshow` from the back-forward cache; always right after `tick()` caught her up to now, and the engine never
+  refuses it, whatever she does): nothing when a guest is due already (`st.due`), a cat or Anička is here, a guest
+  sleeps over, or the last opening that drew was less than 1.5 h ago (`OPEN.gap`, before 3 h; `st.openAt`). The arrival
+  would be 30 s – 3 min later (`OPEN.delay` 30–180 s, before 60–300 s; salt 113); a cat can come when neither now nor
+  then is night or rain, Anička when her window allows (§8c). When nobody could come it does not count as a draw. Else
+  `st.openAt = t` and with `OPEN.p` 0.6 (before 0.3; salt 112) `st.due = { who, at }`: Anička with 0.3 when both can
+  come (salt 114, only her when no cat can), else a cat by `pickVisitor` (salt 115). No event: the guest simply comes.
+  A second opening keeps it.
 - **The due guest** comes in the step that holds `at` if it still can then (a cat: day, no rain, a valid visitor
   whose weight is not 0 and not a small kitten; no other visit, guest or Anička), else never (`st.due` is cleared in
   that step either way); its stay drawn with salt 105.
-- **While watched** the hourly chances are ×3 (`VISIT.watch`, `KID.watch`). To keep the weekly total, every visit that
-  comes while watched or after an opening is **owed**: `st.owe` (cats, at most 5, `OWE`) / `st.kid.owe` (Anička, at
-  most 3) +1, and the next visit drawn while nobody watches does not come (−1). The drawback: visits move from the time
-  away to the time played, so after a long session the visits the player would find on return are fewer, and a player
-  who keeps the game open for hours still gets more in total once the debt is full.
-- **Repair:** `st.due` only with `who` 'kid' or a visitor and `at` within the next 5 min; `st.owe` 0–5; `st.openAt` ≤ t.
+- **While the player is there** (`seen`: the steps of an advance of at most `SEEN` 10 min, i.e. the open game's own
+  ticks) the hourly chances of a cat and of Anička are ×6 (`VISIT.watch`, `KID.watch`, before ×3); **while nobody is**
+  (a longer catch-up advance, also the 10–60 min ones) ×0.25 (`VISIT.away`, `KID.away`), so a visit found on return is
+  rare but still possible. The draws are the same as before (one `rnd(st)` per step for the cats, the seeded hour slots
+  for Anička), only the rate changed.
+- **Owed visits are gone** (2026-11-25): before, every visit while watched made the next unwatched one not come
+  (`st.owe`, `st.kid.owe`) to keep the weekly total; with ×0.25 away that is no longer wanted. Both fields stay in the
+  state at 0 (`repair` sets them so), so older saves load as they are.
+- **Repair:** `st.due` only with `who` 'kid' or a visitor and `at` within the next 3 min; `st.owe` and `st.kid.owe` 0;
+  `st.openAt` ≤ t.
 - **Measured** (`tools/kocka-test.js`, a player who opens the game 3× a day for 10 min, 10 Koxas × 4 weeks, against the
-  same Koxas nobody watches): a visit within 5 min of 31 % of the fair-weather daytime openings (195/634); cats 6.30 a
-  week against 5.45 (×1.16), with the visitors' bowl 10.88 against 11.25 (×0.97); Anička 1.65 against 1.52.
+  same Koxas nobody watches): a guest within 3 min of 56 % of the fair-weather daytime openings (360/641; before 31 %
+  within 5 min), with the visitors' bowl 58 % (365/627); of the guests that came, the player was there for 87 % (415 of
+  476; with the bowl 78 %); cats 9.82 a week (with the bowl 11.63), Anička 2.08. Nobody watching: cats 1.50 a week
+  (before 5.45, ×0.28), with the bowl 3.00 (before 11.25, ×0.27); Anička 0.33 (before 1.52, ×0.21).
 
 ## 9. Holidays (date → props, texts)
 Advent 1.–23.12 (věnec), Mikuláš 5.12 (punčocha), Vánoce 24.12–6.1 (stromeček; she knocks ornaments down),

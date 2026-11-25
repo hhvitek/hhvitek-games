@@ -96,7 +96,8 @@
 //                            sparkle), the small head, the vet. item('mug') = the enamel mug (cream, blue rim and handle, a
 //                            chip; itemSize 26), one picture: the UI turns it while it falls.
 //   Tricks and more poses: trickSit, trickPaw (dej pac), trickSpin (turns round by CSS), trickBeg (panáček), inBox, boxSleep
-//                            (asleep in the box, opts.peek: ears | tail | paw | back; both take opts.box = the box's scale), onFence.
+//                            (asleep in the box, opts.peek: head | eyes | ears | tail | paw | back, opts.peekOut: one eye open
+//                            for a moment; both take opts.box = the box's scale), onFence.
 //   itemSize[name] = { w, h }  the item's 100 × 100 box in room units; itemPoints: rod / wand tip, cat-tree platforms.
 //   mouseHole(), mousePeek(phase 0..1), fish(kind) (fishes: goldfish, carp, perch), marker(done)  minigame pieces.
 //   shop(sign), shopSpots   Obchůdek (400×600 slice; sign = the text on its sign, from the UI) and where goods go on the counter.
@@ -328,7 +329,10 @@ function KockaArt() {
   }
   function faceDetails(h) {
     const open = !['happy', 'closed', 'squint'].includes(h.eyes);
-    let s = open ? `<g class="kx-eyes" style="transform-origin:0px -1px">${eye(-1, h.eyes)}${eye(1, h.eyes)}</g>` : eye(-1, h.eyes) + eye(1, h.eyes);
+    // h.eyeR: the right eye (viewer's) of another kind, one eye open (the box); h.eyeAnim: it opens now and then
+    // (kx-peekO over the closed one, kx-peekC) and closes again
+    const eR = !h.eyeR ? eye(1, h.eyes) : h.eyeAnim ? `<g class="kx-peekC">${eye(1, h.eyes)}</g><g class="kx-peekO">${eye(1, h.eyeR)}</g>` : eye(1, h.eyeR);
+    let s = open ? `<g class="kx-eyes" style="transform-origin:0px -1px">${eye(-1, h.eyes)}${eR}</g>` : eye(-1, h.eyes) + eR;
     if (h.eyes === 'sad') s += `<path d="M-19 8q2.6 4.4 0 6.4q-2.6-2 0-6.4z" fill="#a9d8f2"/>`;
     if (h.blush) s += `<g fill="${C.blush}" opacity=".38"><ellipse cx="-26" cy="12" rx="5.5" ry="3"/><ellipse cx="26" cy="12" rx="5.5" ry="3"/></g>`;
     s += `<path d="M-4.5 9Q0 7.6 4.5 9L0.9 13.4Q0 14.2 -0.9 13.4Z" fill="${h.ill === 'cold' ? '#d8645a' : C.nose}"/>`;
@@ -621,15 +625,30 @@ function KockaArt() {
       paw(R, 82, r1(rim + 2), 10, 6, { toes: true }); paw(R, 118, r1(rim + 2), 10, 6, { toes: true });
       R.mid = [100, r1(rim - 10)];
     },
-    // asleep in her box: only a bit of her peeks over the rim (opts.peek): 'ears' (the ear tips and the crown, an ear
-    // twitches now and then), 'tail' (hanging over the front, swaying slowly), 'paw' (one paw over the front), 'back' (the
-    // curve of her back, breathing); the box as in inBox (opts.box)
+    // asleep in her box: only a bit of her peeks over the rim (opts.peek): 'head' (the default: the top of her head with
+    // closed eyes and both ears over the rim, the tail tip curling up behind it), 'eyes' (the same, one eye opens to a
+    // slit now and then and closes again), 'ears' (the ear tips and the crown), 'tail' (hanging over the front, swaying
+    // slowly), 'paw' (one paw over the front), 'back' (the curve of her back, breathing); opts.peekOut: a tap woke her a
+    // little: the head up, one eye open, the ears up (the UI shows it for a moment). Effects (CSS, none under
+    // prefers-reduced-motion): the Zzz rise from the box, the flaps and her head rise and fall with her breathing, the box
+    // wobbles now and then (she shifts), the ears twitch, the tail sways. The box as in inBox (opts.box)
     boxSleep(R, o, e) {
-      const k = boxK(o), rim = 186 - 66 * k, peek = ['ears', 'tail', 'paw', 'back'].includes(o.peek) ? o.peek : 'ears';
+      const k = boxK(o), rim = 186 - 66 * k, out = !!o.peekOut;
+      const peek = out ? 'out' : ['head', 'eyes', 'ears', 'tail', 'paw', 'back'].includes(o.peek) ? o.peek : 'head';
       R.shadow = [100, 186, r1(66 * k), 5];
       boxBack(R, k);
-      if (peek === 'ears') head(R, 100, r1(rim + 9), 1, 0, H(e, { eyes: 'closed', mouth: 'cat', ears: o.ears || 'up', blush: false }));
-      else R.headPt = [100, r1(rim - 6)];
+      if (peek === 'head' || peek === 'eyes' || peek === 'out') {
+        tail(R, [136, r1(rim + 14), 141, r1(rim - 4), 147, r1(rim - 17), 154, r1(rim - 15)], 11);
+        R.tailRoot = null;   // only the tip shows: no tailBase region on the box front
+        R.open('', out ? '' : 'kx-bxbreath', 100, r1(rim));
+        const look = out ? { eyes: 'closed', eyeR: 'open', ears: o.ears || 'up' } : peek === 'eyes' ? { eyes: 'closed', eyeR: 'tired', eyeAnim: true, ears: o.ears || 'turned' } : { eyes: 'closed', ears: o.ears || 'turned' };
+        head(R, 100, r1(rim - (out ? 12 : 5)), 0.96, out ? 4 : -5, H(e, Object.assign({ mouth: 'cat', blush: false }, look)));
+        R.close();
+        noFace(R);
+        for (const g of R.reg) if (g.id === 'head') g.path = kitPath((x, y) => [x, Math.min(y, rim + 1)], g.path);   // only above the rim
+        R.zz = [134, r1(rim - 26)];
+      } else if (peek === 'ears') { head(R, 100, r1(rim + 9), 1, 0, H(e, { eyes: 'closed', mouth: 'cat', ears: o.ears || 'up', blush: false })); R.zz = [118, r1(rim - 22)]; }
+      else { R.headPt = [100, r1(rim - 6)]; R.zz = [104, r1(rim - 16)]; }
       if (peek === 'back') {
         const BACK = ell(100, r1(rim + 6), r1(46 * k), 28);
         R.open('', 'kx-breathe', 100, r1(rim + 20));
@@ -637,7 +656,7 @@ function KockaArt() {
         R.close();
         R.region('back', BACK, [1, 0]);
       }
-      boxFront(R, k);
+      boxFrontSleep(R, k);
       // what hangs over the front is drawn above the box, with its own outline
       if (peek === 'tail' || peek === 'paw') {
         const Q = Rig(o);
@@ -648,6 +667,7 @@ function KockaArt() {
       }
       R.region('back', ell(100, r1(rim - 2), r1(58 * k), 12), [1, 0]);   // the opening: a tap there is a tap on her
       R.mid = [100, r1(rim - 6)];
+      if (!out) R.wrap = { cls: 'kx-bxwob', ox: 100, oy: 186 };   // the whole box wobbles now and then
     },
     // hiding (see "hiding"): only a little of her shows
     hideCurtain(R, o, e) { hideCurtain(R, o, e); },
@@ -1327,12 +1347,18 @@ function KockaArt() {
   const PAWMARK = (x, y, k, col) => `<g transform="translate(${x} ${y}) scale(${k})" fill="${col}"><ellipse cx="0" cy="3" rx="6" ry="5"/><ellipse cx="-7.5" cy="-4" rx="2.6" ry="3.3"/><ellipse cx="-2.6" cy="-8.5" rx="2.6" ry="3.3"/><ellipse cx="2.6" cy="-8.5" rx="2.6" ry="3.3"/><ellipse cx="7.5" cy="-4" rx="2.6" ry="3.3"/></g>`;
   const FEATHERS = (x, y, k) => `<g transform="translate(${x} ${y}) scale(${k})">` + [[-18, '#3fa3a0'], [0, '#e8892b'], [18, '#e05a7a']].map(([a, col]) =>
     `<g transform="rotate(${a})"><path d="M0 0C10 8 12 26 4 42C-4 28 -6 12 0 0Z" fill="${col}" stroke="${IO}" stroke-width="2"/><path d="M1 4Q4 22 4 40" stroke="#fff" stroke-width="1.4" fill="none" opacity=".7"/></g>`).join('') + '</g>';
-  const BOX_FRONT = `<path d="M38 120H162L156 186H44Z" fill="#c99a5e"${st()}/><path d="M38 120L14 102L22 94L46 112Z" fill="#d8ab6c"${st(2.5)}/><path d="M162 120L186 102L178 94L154 112Z" fill="#d8ab6c"${st(2.5)}/><path d="M60 152H140" stroke="#a8783e" stroke-width="3"/><path d="M96 121V142" stroke="#e8c88a" stroke-width="7"/>`;
+  const BOX_PANEL = `<path d="M38 120H162L156 186H44Z" fill="#c99a5e"${st()}/>`, BOX_TAPE = '<path d="M60 152H140" stroke="#a8783e" stroke-width="3"/><path d="M96 121V142" stroke="#e8c88a" stroke-width="7"/>';
+  const BOX_FLAP_L = `<path d="M38 120L14 102L22 94L46 112Z" fill="#d8ab6c"${st(2.5)}/>`, BOX_FLAP_R = `<path d="M162 120L186 102L178 94L154 112Z" fill="#d8ab6c"${st(2.5)}/>`;
+  const BOX_FRONT = BOX_PANEL + BOX_FLAP_L + BOX_FLAP_R + BOX_TAPE;
   // the box in her inBox / boxSleep poses: the box item's back rim and BOX_FRONT, scaled by k around her feet (100, 186)
   const boxK = o => (typeof o.box === 'number' && o.box > 0.3 && o.box < 2 ? o.box : 1);
   const boxTf = k => `translate(100 186) scale(${r2(k)}) translate(-100 -186)`;
   const boxBack = (R, k) => R.raw(`<g transform="${boxTf(k)}"><path d="M44 120L32 88H168L156 120Z" fill="#a8783e"${st(2.5)}/></g>`);
   const boxFront = (R, k) => R.raw(`<g transform="${boxTf(k)}">${BOX_FRONT}</g>`);
+  // the same front while she sleeps in it: the flaps rise and fall with her breathing (kx-flapL / kx-flapR, at rest
+  // exactly BOX_FRONT, so the pose's box still matches the box item)
+  const boxFrontSleep = (R, k) => R.raw(`<g transform="${boxTf(k)}">${BOX_PANEL}<g class="kx-flapL" style="transform-origin:38px 120px">${BOX_FLAP_L}</g>` +
+    `<g class="kx-flapR" style="transform-origin:162px 120px">${BOX_FLAP_R}</g>${BOX_TAPE}</g>`);
   function bowl(c, inner, fill = '') {
     return groundShadow() + `<path d="M12 60H88L80 86Q50 92 20 86Z" fill="${c}"${st()}/><ellipse cx="50" cy="60" rx="38" ry="9" fill="${inner}"${st()}/>${fill || empty(inner)}` +
       `<path d="M24 73Q50 79 76 73" stroke="#fff" stroke-opacity=".35" stroke-width="3" fill="none"/><path d="M45 79l2-3 2 3 2-3" stroke="#fff" stroke-opacity=".55" stroke-width="2" fill="none" stroke-linecap="round"/>`;
@@ -2477,6 +2503,14 @@ function KockaArt() {
 .kx-m-sad .kx-tail{animation:none}
 .koxa.kx-asleep .kx-tail{animation:kx-sway 9s ease-in-out infinite}
 .kx-breathe{animation:kx-breathe 3.8s ease-in-out infinite}
+.kx-bxbreath{animation:kx-bxbreath 3.8s ease-in-out infinite}
+.kx-flapL{animation:kx-flapL 3.8s ease-in-out infinite}
+.kx-flapR{animation:kx-flapR 3.8s ease-in-out infinite}
+.kx-bxwob{animation:kx-bxwob 13s ease-in-out 4s infinite}
+.koxa.kx-p-boxSleep .kx-tail{animation:kx-sway 4.6s ease-in-out infinite}
+.koxa.kx-p-boxSleep .kx-ear:not(.kx-earR){animation:kx-twitchL 9s infinite 5s}
+.kx-peekO{opacity:0;animation:kx-peekO 11s infinite 3s}
+.kx-peekC{animation:kx-peekC 11s infinite 3s}
 .kx-purr{animation:kx-purr .12s linear infinite}
 .kx-sneeze{animation:kx-sneeze 5s ease-in-out infinite}
 .kx-wrig{animation:kx-wrig .34s ease-in-out infinite}
@@ -2541,6 +2575,13 @@ function KockaArt() {
 @keyframes kx-sway{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
 @keyframes kx-lash{0%,100%{transform:rotate(-13deg)}50%{transform:rotate(11deg)}}
 @keyframes kx-breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.012,1.04)}}
+@keyframes kx-bxbreath{0%,100%{transform:translate(0,0)}50%{transform:translate(0,-1.6px)}}
+@keyframes kx-flapL{0%,100%{transform:rotate(0)}50%{transform:rotate(4deg)}}
+@keyframes kx-flapR{0%,100%{transform:rotate(0)}50%{transform:rotate(-4deg)}}
+@keyframes kx-bxwob{0%,84%,100%{transform:none}87%{transform:rotate(-1.6deg)}90%{transform:rotate(1.3deg)}93%{transform:rotate(-.7deg)}96%{transform:rotate(.3deg)}}
+@keyframes kx-twitchL{0%,86%,100%{transform:rotate(0)}89%{transform:rotate(-16deg)}92%{transform:rotate(4deg)}95%{transform:rotate(-8deg)}}
+@keyframes kx-peekO{0%,62%,90%,100%{opacity:0}66%,86%{opacity:1}}
+@keyframes kx-peekC{0%,62%,90%,100%{opacity:1}66%,86%{opacity:0}}
 @keyframes kx-purr{0%,100%{transform:translate(0,0)}25%{transform:translate(.5px,-.4px)}75%{transform:translate(-.5px,.4px)}}
 @keyframes kx-sneeze{0%,82%,100%{transform:none}87%{transform:translate(0,-2px) rotate(-6deg)}91%{transform:translate(0,4px) rotate(4deg) scale(1.04)}96%{transform:none}}
 @keyframes kx-wrig{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}}

@@ -1375,7 +1375,8 @@ section('Visitors');
     withBowl += visits(s, st => { st.owned.visitorBowl = true; st.furniture.visitorBowl = { room: 'garden', x: 0.5, y: 0.8 }; }).list.length;
   }
   console.log(`  20 days × 10 cats: ${total} visits, ${withBowl} with the miska pro návštěvy, longest ${longest} min, ${ids.size} different cats`);
-  ok(total >= 50 && withBowl > total * 1.5, 'visits are regular and the bowl brings more');
+  // hourly ticks = nobody watching: ×VISIT.away (2026-11-25), so about a quarter of the visits of before
+  ok(total >= 25 && withBowl > total * 1.5, 'visits are regular and the bowl brings more');
   ok(longest <= 150, `a visit never stays long (${longest} min at most)`);
   ok(nightOthers === 0, 'only Bivoj comes at night');
   ok(ids.size === 8, 'all eight neighbour cats come over');
@@ -1532,7 +1533,7 @@ section('Visitors 2');
   ok(perSec === 0 && gapBad === 0, `stroking every 200 ms: never two acts in a second (${perSec}), every act lasts its minimum (${gapBad} shorter)`);
   { // a visit that comes by itself, watched: 'visitor' then visitAct 'arrive' on the fence; visitAct only while watching
     const st = E.create(94, at(2026, 6, 1, 9), 'Koxa'); let arrivals = 0, arriveOk = 0, actsAway = 0;
-    for (let t = st.t + 30 * MIN; t <= at(2026, 6, 15, 9); t += 30 * MIN) {
+    for (let t = st.t + 10 * MIN; t <= at(2026, 6, 15, 9); t += 10 * MIN) {
       const ev = E.advance(st, t).events;
       ev.forEach((e, i) => { if (e.type === 'visitor') { arrivals++; const n = ev[i + 1]; if (n && n.type === 'visitAct' && n.kind === 'arrive' && n.with === null && n.id === e.id) arriveOk++; } });
       if (new Date(t).getHours() === 20 && new Date(t).getMinutes() === 0) basicCare(st, t);
@@ -4352,12 +4353,13 @@ section('The box');
   // what peeks over the rim
   const bs = awake(plain, { energy: 40 }); putIn(bs);
   ok(E.boxPeek(rested, rested.t) === null && E.boxPeek(awake(plain), T) === null, 'awake: nothing peeks');
-  const seen = {}, runs = []; let last = null, since = 0;
+  const seen = {}, runs = []; let last = null, since = 0, n = 0;
   for (let ms = bs.t; ms < bs.t + 12 * H; ms += 5000) {
-    const v = E.boxPeek(bs, ms); seen[v] = 1;
+    const v = E.boxPeek(bs, ms); seen[v] = (seen[v] || 0) + 1; n++;
     if (v !== last) { if (last !== null) runs.push(ms - since); last = v; since = ms; }
   }
-  ok(Object.keys(seen).sort().join() === 'back,ears,paw,tail', 'all four: ears, tail, paw, back');
+  ok(Object.keys(seen).sort().join() === 'back,ears,eyes,head,paw,tail', `all six: head, ears, eyes, tail, paw, back (${Object.keys(seen).sort().join()})`);
+  ok(seen.head > n * 0.4 && seen.head < n * 0.6 && Object.keys(seen).every(k => k === 'head' || seen[k] < seen.head / 2), `the head is the most frequent: about half of the time (${(seen.head / n * 100).toFixed(0)} %)`);
   const inner = runs.slice(1);
   ok(inner.length > 100 && inner.every(r => r >= 3 * MIN - 5000 && r <= 5 * MIN + 5000), `runs of 3–5 min (${Math.min(...inner) / 1000}–${Math.max(...inner) / 1000} s)`);
   ok(E.boxPeek(bs, bs.t + 77777) === E.boxPeek(clone(bs), bs.t + 77777), 'seeded: the same after a reload');
@@ -4804,7 +4806,8 @@ section('Anička');
     }
   }
   console.log(`  ${weeks} weeks: ${arrivals} visits (${(arrivals / weeks).toFixed(2)} a week), ${cats} cat visits, inside on ${fairHouse}/${fair} fair days`);
-  ok(arrivals / weeks >= 1 && arrivals / weeks <= 2, `about 1–2 visits a week (${(arrivals / weeks).toFixed(2)})`);
+  // nobody watches: ×KID.away (2026-11-25), about a quarter of the 1–2 a week she comes to a player who is there
+  ok(arrivals / weeks >= 0.2 && arrivals / weeks <= 0.6, `about 0.25–0.5 visits a week while nobody watches (${(arrivals / weeks).toFixed(2)})`);
   ok(all === arrivals && window === all && length === all, `every visit 13:00–18:30, home by 19:00, 30–60 min (${window}/${length}/${all})`);
   ok(maxDay <= 1, 'at most one visit a day');
   ok(bad === 0, 'never together with a neighbour cat or a guest');
@@ -5034,7 +5037,7 @@ section('Anička');
   // 8. repair, the clock moved back, a long absence
   {
     const t = day(11, 'clear', at(2026, 6, 1), 14), base = koxa(11, t); E.act(base, 'goGarden', null, t); come(base); E.advance(base, base.t + 10 * MIN);
-    base.due = { who: 'mourek', at: base.t + 2 * MIN }; base.owe = 2; base.openAt = base.t - H;
+    base.due = { who: 'mourek', at: base.t + 2 * MIN }; base.owe = 0; base.openAt = base.t - H;
     invariants(base, 'Anička repair base');
     ok(!!base.kid.visit, 'the base has her visit');
     const G = [null, 'x', NaN, Infinity, -1, 1e308, [], {}, true, 2 ** 53, { kind: 'x' }];
@@ -5074,8 +5077,8 @@ section('Anička');
 /* ---------- Phase 4b: a guest when the game is opened; more visits while it is watched ---------- */
 section('Visits at an opening');
 {
-  // the same opening = the same guest at the same moment (also after a reload); at most once in 3 hours
-  let rolled = 0, due = 0, kidDue = 0, sameOk = 0, n = 0;
+  // the same opening = the same guest at the same moment (also after a reload); at most once in 1.5 hours
+  let rolled = 0, due = 0, kidDue = 0, sameOk = 0, n = 0, redrew = 0;
   for (let s = 1; s <= 200; s++) {
     const t = at(2026, 6, 1 + (s % 28), 9 + (s % 9), s % 60), st = E.create(s, t - D, 'Koxa'); E.advance(st, t);
     st.visit = null; st.kid.visit = null; st.guest = null; E.repair(st);
@@ -5085,14 +5088,16 @@ section('Visits at an opening');
     if (a.openAt === t) rolled++;
     if (a.due) {
       due++; if (a.due.who === 'kid') kidDue++;
-      ok(a.due.at >= t + MIN && a.due.at <= t + 5 * MIN, 'due 1–5 min later');
+      ok(a.due.at >= t + 30000 && a.due.at <= t + 3 * MIN, 'due 30 s – 3 min later');
       const c = clone(a); E.act(c, 'opened', null, t + 20000); ok(JSON.stringify(c.due) === JSON.stringify(a.due), 'a second opening keeps the guest due');
     }
-    if (a.openAt === t && !a.due) { const c = clone(a); E.act(c, 'opened', null, t + 2 * H); ok(!c.due && c.openAt === t, 'again within 3 h: no new draw'); }
+    if (a.openAt === t && !a.due) { const c = clone(a); E.act(c, 'opened', null, t + H); ok(!c.due && c.openAt === t, 'again within 1.5 h: no new draw'); }
+    if (a.openAt === t && !a.due) { const c = clone(a); E.act(c, 'opened', null, t + 2 * H); if (c.openAt === t + 2 * H) redrew++; }
   }
   console.log(`  200 openings by day: ${rolled} drew, ${due} guests due (${kidDue} Anička)`);
   ok(sameOk === n, 'the same opening gives the same guest at the same moment, also after a reload');
-  ok(due > rolled * 0.2 && due < rolled * 0.4 && kidDue > 0, `about 30 % of the draws bring a guest (${due}/${rolled})`);
+  ok(redrew > 20, `after 1.5 h an opening draws again (${redrew})`);
+  ok(due > rolled * 0.5 && due < rolled * 0.7 && kidDue > 0, `about 60 % of the draws bring a guest (${due}/${rolled})`);
   { // a night opening: nothing; an opening with a visitor here: nothing
     const st = E.create(3, at(2026, 6, 3, 23), 'Koxa'); E.act(st, 'opened', null, st.t); ok(!st.due && !st.openAt, 'at night: no guest is drawn');
     const v = E.create(3, at(2026, 6, 3, 10), 'Koxa'); v.visit = { id: 'mourek', since: v.t, until: v.t + H, gain: 0 }; E.repair(v); E.act(v, 'opened', null, v.t);
@@ -5105,28 +5110,31 @@ section('Visits at an opening');
       E.act(st, 'opened', null, t); if (!st.due || st.due.who === 'kid') continue;
       tried++;
       const D0 = st.due; let got = null;
-      for (let x = t + MIN; x <= t + 6 * MIN && !got; x += MIN) for (const e of E.advance(st, x).events) if (e.type === 'visitor') got = e;
-      if (got && got.id === D0.who && st.visit && st.visit.since === D0.at && st.owe >= 1) ok1++;
+      for (let x = t + MIN; x <= t + 4 * MIN && !got; x += MIN) for (const e of E.advance(st, x).events) if (e.type === 'visitor') got = e;
+      if (got && got.id === D0.who && st.visit && st.visit.since === D0.at && st.owe === 0) ok1++;
     }
     ok(tried >= 10 && ok1 === tried, `the due cat comes at its moment (${ok1}/${tried})`);
   }
 
   // a player who opens the game 3× a day for 10 minutes (watched minute ticks), 10 Koxas × 4 weeks, against the same
-  // Koxas nobody watches and nobody opens (the visits as before Phase 4b)
+  // Koxas nobody watches and nobody opens. 2026-11-25: most visits come while the player is there (×6 while watched,
+  // ×0.25 while not, an opening brings a guest with 0.6); before it nobody watching saw 5.45 cats a week (11.25 with the
+  // visitors' bowl) and Anička about 1.5 times, and about 30 % of fair openings brought a guest within 5 min
+  const BEFORE = { false: { cats: 5.45, kid: 1.52 }, true: { cats: 11.25, kid: 1.45 } };
   const jit = (s, d, h) => (s * 7919 + d * 131 + h * 17) % 41;
   function player(seed, opens, bowl) {
     const st = E.create(seed, at(2026, 4, 1, 7), 'Koxa');
     if (bowl) { st.owned.visitorBowl = true; st.furniture.visitorBowl = { room: 'garden', x: 0.5, y: 0.8 }; }
-    const r = { cats: 0, kid: 0, eligible: 0, quick: 0 };
-    const count = ev => { for (const e of ev) { if (e.type === 'visitor') r.cats++; if (e.type === 'kidArrive') r.kid++; } };
+    const r = { cats: 0, kid: 0, away: 0, eligible: 0, quick: 0 };
+    const count = (ev, away) => { for (const e of ev) if (e.type === 'visitor' || e.type === 'kidArrive') { r[e.type === 'visitor' ? 'cats' : 'kid']++; if (away) r.away++; } };
     for (let d = 0; d < 28; d++) for (const h of [8, 13, 19]) {
       const to = new Date(2026, 3, 2 + d, h, jit(seed, d, h)).getTime();
-      count(E.advance(st, to).events);
+      count(E.advance(st, to).events, true);   // while the player was away
       if (opens) {
-        const fair = E.weather(to + 5 * MIN, st) !== 'rain' && E.weather(to, st) !== 'rain', free = !st.visit && !st.guest && !st.kid.visit && !st.due;
+        const fair = E.weather(to + 3 * MIN, st) !== 'rain' && E.weather(to, st) !== 'rain', free = !st.visit && !st.guest && !st.kid.visit && !st.due;
         count(E.act(st, 'opened', null, to).events);
         let got = false;
-        for (let m = 1; m <= 10; m++) { const ev = E.advance(st, to + m * MIN).events; count(ev); if (m <= 5 && ev.some(e => e.type === 'visitor' || e.type === 'kidArrive')) got = true; }
+        for (let m = 1; m <= 10; m++) { const ev = E.advance(st, to + m * MIN).events; count(ev); if (m <= 3 && ev.some(e => e.type === 'visitor' || e.type === 'kidArrive')) got = true; }
         if (fair && free) { r.eligible++; if (got) r.quick++; }
       }
       count(E.act(st, 'feed', 'kibble', st.t).events); count(E.act(st, 'water', null, st.t).events); count(E.act(st, 'cleanLitter', null, st.t).events);
@@ -5135,17 +5143,19 @@ section('Visits at an opening');
     return r;
   }
   for (const bowl of [false, true]) {
-    const P = { cats: 0, kid: 0, eligible: 0, quick: 0 }, B = { cats: 0, kid: 0 };
+    const P = { cats: 0, kid: 0, away: 0, eligible: 0, quick: 0 }, B = { cats: 0, kid: 0 };
     for (let s = 1; s <= 10; s++) {
       const p = player(s, true, bowl), b = player(s, false, bowl);
       for (const k of Object.keys(P)) P[k] += p[k];
       B.cats += b.cats; B.kid += b.kid;
     }
-    const wk = 40, ratio = P.cats / B.cats;
-    console.log(`  ${bowl ? 'with' : 'without'} the visitors' bowl: a visit within 5 min of ${P.quick}/${P.eligible} fair openings; cats ${(P.cats / wk).toFixed(2)} a week (nobody watching ${(B.cats / wk).toFixed(2)}, ×${ratio.toFixed(2)}); Anička ${(P.kid / wk).toFixed(2)} (${(B.kid / wk).toFixed(2)})`);
-    ok(P.eligible > 100 && P.quick >= P.eligible / 4, `${bowl ? 'bowl' : 'no bowl'}: at least 1 in 4 fair openings by day brings a guest within 5 min (${P.quick}/${P.eligible})`);
-    ok(ratio >= 0.75 && ratio <= 1.25, `${bowl ? 'bowl' : 'no bowl'}: cat visits a week within ±25 % of before (×${ratio.toFixed(2)})`);
-    ok(P.kid / wk >= 1 && P.kid / wk <= 2 && B.kid / wk >= 1 && B.kid / wk <= 2, `${bowl ? 'bowl' : 'no bowl'}: Anička 1–2 times a week (${(P.kid / wk).toFixed(2)}, unwatched ${(B.kid / wk).toFixed(2)})`);
+    const wk = 40, was = BEFORE[bowl], all = P.cats + P.kid, cr = B.cats / wk / was.cats, kr = B.kid / wk / was.kid, nm = bowl ? 'bowl' : 'no bowl';
+    console.log(`  ${bowl ? 'with' : 'without'} the visitors' bowl: a guest within 3 min of ${P.quick}/${P.eligible} fair openings; the player saw ${all - P.away} of ${all} guests (${P.away} came while away); cats ${(P.cats / wk).toFixed(2)} a week, Anička ${(P.kid / wk).toFixed(2)}; nobody watching: cats ${(B.cats / wk).toFixed(2)} (×${cr.toFixed(2)} of before), Anička ${(B.kid / wk).toFixed(2)} (×${kr.toFixed(2)})`);
+    ok(P.eligible > 100 && P.quick >= P.eligible * 0.45, `${nm}: about half of the fair openings by day bring a guest within 3 min (${P.quick}/${P.eligible})`);
+    ok(cr >= 0.15 && cr <= 0.4, `${nm}: cat visits nobody watches about a quarter of before (×${cr.toFixed(2)})`);
+    ok(kr >= 0.1 && kr <= 0.45 && B.kid > 0, `${nm}: Anička's visits nobody watches about a quarter of before (×${kr.toFixed(2)})`);
+    ok(P.away * 3 < all, `${nm}: the player misses few guests (${P.away} of ${all} came while away)`);
+    ok(P.kid / wk >= 0.7 && P.kid / wk <= 2.5, `${nm}: the player sees Anička about once or twice a week (${(P.kid / wk).toFixed(2)})`);
   }
 }
 

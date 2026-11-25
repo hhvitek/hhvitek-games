@@ -546,7 +546,8 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 //                            sparkle), the small head, the vet. item('mug') = the enamel mug (cream, blue rim and handle, a
 //                            chip; itemSize 26), one picture: the UI turns it while it falls.
 //   Tricks and more poses: trickSit, trickPaw (dej pac), trickSpin (turns round by CSS), trickBeg (panáček), inBox, boxSleep
-//                            (asleep in the box, opts.peek: ears | tail | paw | back; both take opts.box = the box's scale), onFence.
+//                            (asleep in the box, opts.peek: head | eyes | ears | tail | paw | back, opts.peekOut: one eye open
+//                            for a moment; both take opts.box = the box's scale), onFence.
 //   itemSize[name] = { w, h }  the item's 100 × 100 box in room units; itemPoints: rod / wand tip, cat-tree platforms.
 //   mouseHole(), mousePeek(phase 0..1), fish(kind) (fishes: goldfish, carp, perch), marker(done)  minigame pieces.
 //   shop(sign), shopSpots   Obchůdek (400×600 slice; sign = the text on its sign, from the UI) and where goods go on the counter.
@@ -778,7 +779,10 @@ function KockaArt() {
   }
   function faceDetails(h) {
     const open = !['happy', 'closed', 'squint'].includes(h.eyes);
-    let s = open ? `<g class="kx-eyes" style="transform-origin:0px -1px">${eye(-1, h.eyes)}${eye(1, h.eyes)}</g>` : eye(-1, h.eyes) + eye(1, h.eyes);
+    // h.eyeR: the right eye (viewer's) of another kind, one eye open (the box); h.eyeAnim: it opens now and then
+    // (kx-peekO over the closed one, kx-peekC) and closes again
+    const eR = !h.eyeR ? eye(1, h.eyes) : h.eyeAnim ? `<g class="kx-peekC">${eye(1, h.eyes)}</g><g class="kx-peekO">${eye(1, h.eyeR)}</g>` : eye(1, h.eyeR);
+    let s = open ? `<g class="kx-eyes" style="transform-origin:0px -1px">${eye(-1, h.eyes)}${eR}</g>` : eye(-1, h.eyes) + eR;
     if (h.eyes === 'sad') s += `<path d="M-19 8q2.6 4.4 0 6.4q-2.6-2 0-6.4z" fill="#a9d8f2"/>`;
     if (h.blush) s += `<g fill="${C.blush}" opacity=".38"><ellipse cx="-26" cy="12" rx="5.5" ry="3"/><ellipse cx="26" cy="12" rx="5.5" ry="3"/></g>`;
     s += `<path d="M-4.5 9Q0 7.6 4.5 9L0.9 13.4Q0 14.2 -0.9 13.4Z" fill="${h.ill === 'cold' ? '#d8645a' : C.nose}"/>`;
@@ -1071,15 +1075,30 @@ function KockaArt() {
       paw(R, 82, r1(rim + 2), 10, 6, { toes: true }); paw(R, 118, r1(rim + 2), 10, 6, { toes: true });
       R.mid = [100, r1(rim - 10)];
     },
-    // asleep in her box: only a bit of her peeks over the rim (opts.peek): 'ears' (the ear tips and the crown, an ear
-    // twitches now and then), 'tail' (hanging over the front, swaying slowly), 'paw' (one paw over the front), 'back' (the
-    // curve of her back, breathing); the box as in inBox (opts.box)
+    // asleep in her box: only a bit of her peeks over the rim (opts.peek): 'head' (the default: the top of her head with
+    // closed eyes and both ears over the rim, the tail tip curling up behind it), 'eyes' (the same, one eye opens to a
+    // slit now and then and closes again), 'ears' (the ear tips and the crown), 'tail' (hanging over the front, swaying
+    // slowly), 'paw' (one paw over the front), 'back' (the curve of her back, breathing); opts.peekOut: a tap woke her a
+    // little: the head up, one eye open, the ears up (the UI shows it for a moment). Effects (CSS, none under
+    // prefers-reduced-motion): the Zzz rise from the box, the flaps and her head rise and fall with her breathing, the box
+    // wobbles now and then (she shifts), the ears twitch, the tail sways. The box as in inBox (opts.box)
     boxSleep(R, o, e) {
-      const k = boxK(o), rim = 186 - 66 * k, peek = ['ears', 'tail', 'paw', 'back'].includes(o.peek) ? o.peek : 'ears';
+      const k = boxK(o), rim = 186 - 66 * k, out = !!o.peekOut;
+      const peek = out ? 'out' : ['head', 'eyes', 'ears', 'tail', 'paw', 'back'].includes(o.peek) ? o.peek : 'head';
       R.shadow = [100, 186, r1(66 * k), 5];
       boxBack(R, k);
-      if (peek === 'ears') head(R, 100, r1(rim + 9), 1, 0, H(e, { eyes: 'closed', mouth: 'cat', ears: o.ears || 'up', blush: false }));
-      else R.headPt = [100, r1(rim - 6)];
+      if (peek === 'head' || peek === 'eyes' || peek === 'out') {
+        tail(R, [136, r1(rim + 14), 141, r1(rim - 4), 147, r1(rim - 17), 154, r1(rim - 15)], 11);
+        R.tailRoot = null;   // only the tip shows: no tailBase region on the box front
+        R.open('', out ? '' : 'kx-bxbreath', 100, r1(rim));
+        const look = out ? { eyes: 'closed', eyeR: 'open', ears: o.ears || 'up' } : peek === 'eyes' ? { eyes: 'closed', eyeR: 'tired', eyeAnim: true, ears: o.ears || 'turned' } : { eyes: 'closed', ears: o.ears || 'turned' };
+        head(R, 100, r1(rim - (out ? 12 : 5)), 0.96, out ? 4 : -5, H(e, Object.assign({ mouth: 'cat', blush: false }, look)));
+        R.close();
+        noFace(R);
+        for (const g of R.reg) if (g.id === 'head') g.path = kitPath((x, y) => [x, Math.min(y, rim + 1)], g.path);   // only above the rim
+        R.zz = [134, r1(rim - 26)];
+      } else if (peek === 'ears') { head(R, 100, r1(rim + 9), 1, 0, H(e, { eyes: 'closed', mouth: 'cat', ears: o.ears || 'up', blush: false })); R.zz = [118, r1(rim - 22)]; }
+      else { R.headPt = [100, r1(rim - 6)]; R.zz = [104, r1(rim - 16)]; }
       if (peek === 'back') {
         const BACK = ell(100, r1(rim + 6), r1(46 * k), 28);
         R.open('', 'kx-breathe', 100, r1(rim + 20));
@@ -1087,7 +1106,7 @@ function KockaArt() {
         R.close();
         R.region('back', BACK, [1, 0]);
       }
-      boxFront(R, k);
+      boxFrontSleep(R, k);
       // what hangs over the front is drawn above the box, with its own outline
       if (peek === 'tail' || peek === 'paw') {
         const Q = Rig(o);
@@ -1098,6 +1117,7 @@ function KockaArt() {
       }
       R.region('back', ell(100, r1(rim - 2), r1(58 * k), 12), [1, 0]);   // the opening: a tap there is a tap on her
       R.mid = [100, r1(rim - 6)];
+      if (!out) R.wrap = { cls: 'kx-bxwob', ox: 100, oy: 186 };   // the whole box wobbles now and then
     },
     // hiding (see "hiding"): only a little of her shows
     hideCurtain(R, o, e) { hideCurtain(R, o, e); },
@@ -1777,12 +1797,18 @@ function KockaArt() {
   const PAWMARK = (x, y, k, col) => `<g transform="translate(${x} ${y}) scale(${k})" fill="${col}"><ellipse cx="0" cy="3" rx="6" ry="5"/><ellipse cx="-7.5" cy="-4" rx="2.6" ry="3.3"/><ellipse cx="-2.6" cy="-8.5" rx="2.6" ry="3.3"/><ellipse cx="2.6" cy="-8.5" rx="2.6" ry="3.3"/><ellipse cx="7.5" cy="-4" rx="2.6" ry="3.3"/></g>`;
   const FEATHERS = (x, y, k) => `<g transform="translate(${x} ${y}) scale(${k})">` + [[-18, '#3fa3a0'], [0, '#e8892b'], [18, '#e05a7a']].map(([a, col]) =>
     `<g transform="rotate(${a})"><path d="M0 0C10 8 12 26 4 42C-4 28 -6 12 0 0Z" fill="${col}" stroke="${IO}" stroke-width="2"/><path d="M1 4Q4 22 4 40" stroke="#fff" stroke-width="1.4" fill="none" opacity=".7"/></g>`).join('') + '</g>';
-  const BOX_FRONT = `<path d="M38 120H162L156 186H44Z" fill="#c99a5e"${st()}/><path d="M38 120L14 102L22 94L46 112Z" fill="#d8ab6c"${st(2.5)}/><path d="M162 120L186 102L178 94L154 112Z" fill="#d8ab6c"${st(2.5)}/><path d="M60 152H140" stroke="#a8783e" stroke-width="3"/><path d="M96 121V142" stroke="#e8c88a" stroke-width="7"/>`;
+  const BOX_PANEL = `<path d="M38 120H162L156 186H44Z" fill="#c99a5e"${st()}/>`, BOX_TAPE = '<path d="M60 152H140" stroke="#a8783e" stroke-width="3"/><path d="M96 121V142" stroke="#e8c88a" stroke-width="7"/>';
+  const BOX_FLAP_L = `<path d="M38 120L14 102L22 94L46 112Z" fill="#d8ab6c"${st(2.5)}/>`, BOX_FLAP_R = `<path d="M162 120L186 102L178 94L154 112Z" fill="#d8ab6c"${st(2.5)}/>`;
+  const BOX_FRONT = BOX_PANEL + BOX_FLAP_L + BOX_FLAP_R + BOX_TAPE;
   // the box in her inBox / boxSleep poses: the box item's back rim and BOX_FRONT, scaled by k around her feet (100, 186)
   const boxK = o => (typeof o.box === 'number' && o.box > 0.3 && o.box < 2 ? o.box : 1);
   const boxTf = k => `translate(100 186) scale(${r2(k)}) translate(-100 -186)`;
   const boxBack = (R, k) => R.raw(`<g transform="${boxTf(k)}"><path d="M44 120L32 88H168L156 120Z" fill="#a8783e"${st(2.5)}/></g>`);
   const boxFront = (R, k) => R.raw(`<g transform="${boxTf(k)}">${BOX_FRONT}</g>`);
+  // the same front while she sleeps in it: the flaps rise and fall with her breathing (kx-flapL / kx-flapR, at rest
+  // exactly BOX_FRONT, so the pose's box still matches the box item)
+  const boxFrontSleep = (R, k) => R.raw(`<g transform="${boxTf(k)}">${BOX_PANEL}<g class="kx-flapL" style="transform-origin:38px 120px">${BOX_FLAP_L}</g>` +
+    `<g class="kx-flapR" style="transform-origin:162px 120px">${BOX_FLAP_R}</g>${BOX_TAPE}</g>`);
   function bowl(c, inner, fill = '') {
     return groundShadow() + `<path d="M12 60H88L80 86Q50 92 20 86Z" fill="${c}"${st()}/><ellipse cx="50" cy="60" rx="38" ry="9" fill="${inner}"${st()}/>${fill || empty(inner)}` +
       `<path d="M24 73Q50 79 76 73" stroke="#fff" stroke-opacity=".35" stroke-width="3" fill="none"/><path d="M45 79l2-3 2 3 2-3" stroke="#fff" stroke-opacity=".55" stroke-width="2" fill="none" stroke-linecap="round"/>`;
@@ -2927,6 +2953,14 @@ function KockaArt() {
 .kx-m-sad .kx-tail{animation:none}
 .koxa.kx-asleep .kx-tail{animation:kx-sway 9s ease-in-out infinite}
 .kx-breathe{animation:kx-breathe 3.8s ease-in-out infinite}
+.kx-bxbreath{animation:kx-bxbreath 3.8s ease-in-out infinite}
+.kx-flapL{animation:kx-flapL 3.8s ease-in-out infinite}
+.kx-flapR{animation:kx-flapR 3.8s ease-in-out infinite}
+.kx-bxwob{animation:kx-bxwob 13s ease-in-out 4s infinite}
+.koxa.kx-p-boxSleep .kx-tail{animation:kx-sway 4.6s ease-in-out infinite}
+.koxa.kx-p-boxSleep .kx-ear:not(.kx-earR){animation:kx-twitchL 9s infinite 5s}
+.kx-peekO{opacity:0;animation:kx-peekO 11s infinite 3s}
+.kx-peekC{animation:kx-peekC 11s infinite 3s}
 .kx-purr{animation:kx-purr .12s linear infinite}
 .kx-sneeze{animation:kx-sneeze 5s ease-in-out infinite}
 .kx-wrig{animation:kx-wrig .34s ease-in-out infinite}
@@ -2991,6 +3025,13 @@ function KockaArt() {
 @keyframes kx-sway{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(5deg)}}
 @keyframes kx-lash{0%,100%{transform:rotate(-13deg)}50%{transform:rotate(11deg)}}
 @keyframes kx-breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.012,1.04)}}
+@keyframes kx-bxbreath{0%,100%{transform:translate(0,0)}50%{transform:translate(0,-1.6px)}}
+@keyframes kx-flapL{0%,100%{transform:rotate(0)}50%{transform:rotate(4deg)}}
+@keyframes kx-flapR{0%,100%{transform:rotate(0)}50%{transform:rotate(-4deg)}}
+@keyframes kx-bxwob{0%,84%,100%{transform:none}87%{transform:rotate(-1.6deg)}90%{transform:rotate(1.3deg)}93%{transform:rotate(-.7deg)}96%{transform:rotate(.3deg)}}
+@keyframes kx-twitchL{0%,86%,100%{transform:rotate(0)}89%{transform:rotate(-16deg)}92%{transform:rotate(4deg)}95%{transform:rotate(-8deg)}}
+@keyframes kx-peekO{0%,62%,90%,100%{opacity:0}66%,86%{opacity:1}}
+@keyframes kx-peekC{0%,62%,90%,100%{opacity:1}66%,86%{opacity:0}}
 @keyframes kx-purr{0%,100%{transform:translate(0,0)}25%{transform:translate(.5px,-.4px)}75%{transform:translate(-.5px,.4px)}}
 @keyframes kx-sneeze{0%,82%,100%{transform:none}87%{transform:translate(0,-2px) rotate(-6deg)}91%{transform:translate(0,4px) rotate(4deg) scale(1.04)}96%{transform:none}}
 @keyframes kx-wrig{0%,100%{transform:rotate(-8deg)}50%{transform:rotate(8deg)}}
@@ -4860,8 +4901,8 @@ function KockaInput() {
 //   treatVisitor { id }, playVisitor { id, caught: 'koxa' | 'visitor' }, invite { id }; photo also takes
 //   { vpose, vx, vflip, nokoxa } (where the visitor stood; nokoxa: Koxa is not in the picture)
 // Phase C action: nameKitten { id, name }
-// Phase 4 (Anička, paní Nováková's granddaughter: st.kid) and 4b (a guest after the game was opened: st.due; visits ×3
-//   while watched): the events kidArrive, kidAct, kidLeave, kidNoticed, kidUp, kidTalk, kidPlay, photo { kid: true },
+// Phase 4 (Anička, paní Nováková's granddaughter: st.kid) and 4b (a guest after the game was opened: st.due; visits ×6
+//   while the player is there, ×0.25 while not): the events kidArrive, kidAct, kidLeave, kidNoticed, kidUp, kidTalk, kidPlay, photo { kid: true },
 //   climbStuck { kid: true } and the actions opened, kidTalk, kidFeather, kidPhoto are described at the block
 //   "Phase 4: Anička" below; kid(st) = her state for the UI
 //   Škádlení (teasing out of love, SPEC §13; st.tease):
@@ -4990,8 +5031,10 @@ function KockaEngine() {
   // her cardboard box (2026-11-21: every Koxa gets one, standing in the obývák): a nap goes there with this chance
   // (always with the box quirk); put into it she sleeps at once when sleepy (energy under `sleepy`, her nap due within
   // LAP.napSoon minutes, the night hours or the box quirk), else sits in it `sit` seconds and hops out; asleep in it,
-  // what peeks over the rim changes every peek ± jitter ms (boxPeek)
-  const BOX = deep({ nap: 0.4, sleepy: 60, sit: [60, 180], gift: { x: 0.24, y: 0.79 }, peek: 4 * 60000, jitter: 30000, peeks: ['ears', 'tail', 'paw', 'back'] });
+  // what peeks over the rim changes every peek ± jitter ms (boxPeek); peeks: every even place is 'head' (the top of her
+  // head with closed eyes, 2026-11-25), so it is every other run and never twice in a row (the list has an even length)
+  const BOX = deep({ nap: 0.4, sleepy: 60, sit: [60, 180], gift: { x: 0.24, y: 0.79 }, peek: 4 * 60000, jitter: 30000,
+    peeks: ['head', 'ears', 'head', 'tail', 'head', 'paw', 'head', 'back', 'head', 'eyes'] });
   // a cat's sleep (user's wish 2026-11-17): several short naps by day, few at dawn and dusk, the night mostly asleep with a
   // rare short stroll. Every moment is planned when she wakes up or falls asleep (st.napAt, st.wakeAt, st.stroll), drawn
   // from the seed and that moment (never st.n), and advance() splits its steps at them, so the step length never matters.
@@ -5679,7 +5722,7 @@ function KockaEngine() {
   function boxSeen(st, t, ev) { if (st.asleep && st.sleepPlace === 'box' && boxHome(st)) seenQuirk(st, 'box', t, ev); }
   // her box can be slept in only when it stands in a room of the house (the picture draws it only there) and she is home
   const boxHome = st => !st.yard && !!st.furniture.box && st.furniture.box.room !== 'garden';
-  // what peeks over the rim while she sleeps in her box at ms: 'ears' | 'tail' | 'paw' | 'back', null when she does not;
+  // what peeks over the rim while she sleeps in her box at ms: 'head' | 'ears' | 'tail' | 'paw' | 'back' | 'eyes', null when she does not;
   // runs of BOX.peek ± BOX.jitter at each boundary (3–5 min), seeded (the same after a reload), never twice in a row
   function boxPeek(st, ms) {
     if (!st || !st.asleep || st.sleepPlace !== 'box' || !boxHome(st) || typeof ms !== 'number' || !Number.isFinite(ms)) return null;
@@ -6305,9 +6348,9 @@ function KockaEngine() {
     if (st.lap) lapStep(st, t, dt, night, ev);
     if (st.guest) guestStep(st, t, dt, ev);
     const catEnd = st.visit ? st.visit.until : 0;
-    visitStep(st, t, dt, night, watching, ev);
+    visitStep(st, t, dt, night, watching, ev, seen);
     // Anička (after the cats: a cat that is here, or came in this step, keeps her away until it goes)
-    kidStep(st, t, dt, st.visit ? Infinity : catEnd, watching, ev);
+    kidStep(st, t, dt, st.visit ? Infinity : catEnd, watching, ev, seen);
     // jealousy ends by itself 2 min after it began: a small dip (stroking her before that makes it all right);
     // asleep, out, up the tree or back in the house she cannot be stroked for it, so it just passes, without the dip
     if (st.jealous && (st.asleep || st.out || !st.yard || st.yard.tree)) st.jealous = null;
@@ -7524,9 +7567,11 @@ function KockaEngine() {
   // per hour: a visit in the daytime (×2.5 with the miska pro návštěvy in the garden, ×1.5 with a cushion there);
   // only Bivoj comes at night; a visit lasts 20–90 min (greedy and sleepy ones +30 min when fed)
   // perVisitLiked: the cap when the strokes are where it likes them (Phase B)
-  // watch: the chance ×3 while the game is watched (Phase 4b, see visitStep and OWE)
-  const VISIT = deep({ day: 0.05, night: 0.03, bowl: 2.5, cushion: 1.5, stay: [20, 90], fedStay: 30, perVisit: 1, perVisitLiked: 1.5, watch: 3 });
-  const OWE = 5;   // cat visits owed at most (st.owe; Anička: KID.owe)
+  // watch / away: the chance ×6 while the player is there (steps of an advance of at most SEEN), ×0.25 while nobody is
+  // (2026-11-25: visits mostly happen while the player watches, "X byl na návštěvě" while away is rare; see visitStep)
+  const VISIT = deep({ day: 0.05, night: 0.03, bowl: 2.5, cushion: 1.5, stay: [20, 90], fedStay: 30, perVisit: 1, perVisitLiked: 1.5, watch: 6, away: 0.25 });
+  // OWE: st.owe and st.kid.owe counted visits owed (a visit while watched skipped a later unwatched one); no longer used
+  // since 2026-11-25, kept at 0 so older saves load as they are
   // friendship (0–5 hearts, quarter steps) from a stroke / from food, by trait; at most +1 a visit from strokes
   const BY_TRAIT = deep({
     curious: [0.5, 0.5], shy: [0.25, 0.5], bold: [0.5, 0.5], playful: [0.5, 0.5],
@@ -7601,7 +7646,7 @@ function KockaEngine() {
     st.visit = null;
   }
   // one step: a visitor may come (seeded), Koxa reacts, the visit ends after its time (never forever)
-  function visitStep(st, t, dt, night, watching, ev) {
+  function visitStep(st, t, dt, night, watching, ev, seen) {
     const h = dt / HOUR;
     // a cat due after the game was opened (st.due, Phase 4b): it comes in this step, or never
     const due = st.due && st.due.who !== 'kid' && st.due.at < t + dt ? st.due : null;
@@ -7631,23 +7676,17 @@ function KockaEngine() {
     if (st.guest || st.kid.visit) return;    // a friend sleeps over, or Anička is here: nobody else comes
     if (weather(t, st) === 'rain' && !night) return;
     const F = st.furniture, cushion = (F.sillCushion && F.sillCushion.room === 'garden') || (F.bedDeluxe && F.bedDeluxe.room === 'garden');
-    // watched (Phase 4b): the chance ×VISIT.watch; every visit that comes while the game is watched, or right after it was
-    // opened, is owed (st.owe, at most OWE): the next visit drawn while nobody watches does not come, so a week brings
-    // about as many visits as before, only more of them when the player is there
-    const rate = (night ? VISIT.night : VISIT.day * (F.visitorBowl ? VISIT.bowl : 1) * (cushion ? VISIT.cushion : 1)) * (watching ? VISIT.watch : 1);
+    // the player is there (seen: Phase 4b, 2026-11-25): the chance ×VISIT.watch, else ×VISIT.away, so most visits come
+    // while the player watches (and after an opening, st.due) and only a few while nobody does
+    const rate = (night ? VISIT.night : VISIT.day * (F.visitorBowl ? VISIT.bowl : 1) * (cushion ? VISIT.cushion : 1)) * (seen ? VISIT.watch : VISIT.away);
     if (rnd(st) < 1 - Math.exp(-rate * h)) {
-      if (!watching && st.owe > 0) st.owe--;
-      else {
-        if (watching) st.owe = Math.min(OWE, st.owe + 1);
-        const id = night ? 'bivoj' : pickVisitor(st, t, rnd(st));
-        startVisit(st, id, t, VISIT.stay[0] + Math.floor(rnd(st) * (VISIT.stay[1] - VISIT.stay[0])), watching, ev);
-        return;
-      }
+      const id = night ? 'bivoj' : pickVisitor(st, t, rnd(st));
+      startVisit(st, id, t, VISIT.stay[0] + Math.floor(rnd(st) * (VISIT.stay[1] - VISIT.stay[0])), watching, ev);
+      return;
     }
     if (!due) return;
     const a = Math.max(due.at, t);
     if (dayPhase(a) === 'night' || weather(a, st) === 'rain' || !isVisitor(st, due.who) || pickWeight(st, due.who, a) === 0 || kitUnder(st, due.who, a, KIT.alone)) return;
-    st.owe = Math.min(OWE, st.owe + 1);
     startVisit(st, due.who, a, VISIT.stay[0] + Math.floor(rndSeed(st.seed, Math.floor(a / 1000), 105) * (VISIT.stay[1] - VISIT.stay[0])), watching, ev);
     programme(st, a, t + dt - a, watching, ev);
   }
@@ -8177,16 +8216,16 @@ function KockaEngine() {
   /* --- Phase 4: Anička, paní Nováková's granddaughter (about 6–7), comes to see Koxa (user's wish 2026-11-21) --- */
   // Her own slot st.kid (never st.visit: the cats' visits, their repair, album and tests stay as they were):
   //   st.kid = { visits, friend (0–5 in quarters: how much Koxa likes her), met (her first visit, ms; 0 = never), day (the
-  //     local day key of her last visit: one a day), owe (her visits owed, at most KID.owe, see OWE), diary { kidFirst?, kidLap? } (where
+  //     local day key of her last visit: one a day), owe (no longer used, always 0, see OWE), diary { kidFirst?, kidLap? } (where
   //     it happened: 'garden' | 'house'), visit }
   //   st.kid.visit = null | { since, until, where: 'garden' | 'house', act: { kind, since, with: 'koxa' | null, out? },
   //     fx: { love, fun, energy } (how much this visit changed Koxa's needs so far, absolute), fg (Koxa's liking gained
   //     this visit), play (the last feather game, ms), talk (the last line, -1 = none), noticed (when Koxa knew she was
   //     here, 0 = not yet) }
   //   st.due = null | { who: 'kid' | a visitor id, at } (Phase 4b: a guest due after the game was opened, at most 5 min
-  //     ahead); st.openAt = the last opening that drew for a guest (ms, 0); st.owe = cat visits owed (OWE)
+  //     ahead); st.openAt = the last opening that drew for a guest (ms, 0); st.owe = 0 (no longer used, OWE)
   // When: KID.from–KID.last local time (home by KID.home), one visit a day, about 1–2 a week: each hour slot has a seeded
-  //   moment and a seeded chance KID.p (salts 100–101; ×KID.watch while watched, those visits owed); never while a cat
+  //   moment and a seeded chance KID.p (salts 100–101; ×KID.watch while the player is there, seen, else ×KID.away); never while a cat
   //   is here or a guest sleeps over, and no cat comes while she is here. Where: rain, snow, a storm or a real frost: she
   //   rings and plays in the obývák on the rug ('house'); otherwise through the gate into the garden, or with KID.inside
   //   in the house anyway. She stays 30–60 min; the last KID.leave minutes are 'leave', then she goes home ('called':
@@ -8216,16 +8255,16 @@ function KockaEngine() {
   //     'toyNotOwned'); why when Koxa did not join: 'away' | 'elsewhere' | 'asleep' | 'busy' | 'noMood'
   //   Koxa at the bowl (st.meal, st.drink) is never with Anička; the Deníček's kidLap only when she sleeps on her lap
   //   kidPhoto { pose?, kpose?, nokoxa? } → photo { n, kid: true } (in st.album with kid: true; album(st).kid)
-  // Phase 4b, opened (the UI: at start, and when shown again after more than 30 min away): when no visit, guest or
+  // Phase 4b, opened (the UI: at start, and when shown again after more than 10 min away): when no visit, guest or
   //   Anička is here and the day, the weather or her window allow a guest, at most once in OPEN.gap hours: with OPEN.p a
-  //   guest is due 1–5 min later (st.due; a cat by pickVisitor, Anička with OPEN.kid when both can come), seeded on the
+  //   guest is due OPEN.delay (30 s – 3 min) later (st.due; a cat by pickVisitor, Anička with OPEN.kid when both can come), seeded on the
   //   moment (salts 112–115); no event (it simply comes)
   const KID = deep({
-    from: 13, last: 18.5, home: 19, p: 0.042, watch: 3, stay: [30, 60], inside: 0.2, leave: 2, hear: 5,
+    from: 13, last: 18.5, home: 19, p: 0.042, watch: 6, away: 0.25, stay: [30, 60], inside: 0.2, leave: 2, hear: 5,
     cap: { love: 12, fun: 20, energy: 10 }, step: 0.25, perVisit: 0.5, likes: 3,
     refuse: [0.05, 0.15, 0.3], refuseMood: { grumpy: 0.25, sad: 0.35 }, refuseFriend: 0.04,   // by TEMPERS index
     wriggle: [0.15, 0.35, 0.6], wriggleMood: 0.3, wriggleFriend: 0.08, wriggleMin: 0.5,
-    sleepy: 60, talk: 6, feather: { fun: 12, energy: 3 }, owe: 3,
+    sleepy: 60, talk: 6, feather: { fun: 12, energy: 3 },
   });
   // with: 'koxa' (together), null (alone), 'any' (ribbon: either); min minutes, then an exponential time with `rate` per
   // minute (0: until the visit ends); fx = Koxa's needs per hour while together; mood = her mood meanwhile
@@ -8242,7 +8281,7 @@ function KockaEngine() {
   });
   const CARRY_WRIGGLE = deep({ mood: -4, fx: { love: -4 } });   // a carry that ended in a wriggle
   const KID_GOOD = ['stroke', 'ribbon', 'carry', 'lap'];
-  const OPEN = deep({ p: 0.3, gap: 3, delay: [60, 300], kid: 0.3 });   // delay in seconds
+  const OPEN = deep({ p: 0.6, gap: 1.5, delay: [30, 180], kid: 0.3 });   // delay in seconds (2026-11-25, before 0.3, 3 h, 60–300 s)
   function freshKid() { return { visits: 0, friend: 0, met: 0, day: 0, owe: 0, diary: {}, visit: null }; }
   // where Koxa is: 'garden' (with the player, or there alone), 'house', or null (out on a walk)
   const koxaPlace = st => (st.yard || gardenAlone(st) ? 'garden' : st.out ? null : 'house');
@@ -8268,20 +8307,18 @@ function KockaEngine() {
     return h >= KID.from && h < KID.last && st.kid.day !== dkey(a) && !st.guest && !st.kid.visit && !(a < catTill);
   }
   // one step (after the cats): her visit goes on, or she comes (due after an opening, or in an hour slot)
-  function kidStep(st, t, dt, catTill, watching, ev) {
+  function kidStep(st, t, dt, catTill, watching, ev, seen) {
     const K = st.kid, end = t + dt;
     const D = st.due && st.due.who === 'kid' && st.due.at < end ? st.due : null;
     if (D) st.due = null;                      // she comes in this step, or never
     if (K.visit) { kidVisitStep(st, t, dt, watching, ev); return; }
     if (D) {
       const a = Math.max(D.at, t);
-      if (kidCan(st, a, catTill)) { K.owe = Math.min(KID.owe, K.owe + 1); kidCome(st, a, end, watching, ev); return; }
+      if (kidCan(st, a, catTill)) { kidCome(st, a, end, watching, ev); return; }
     }
     for (let hn = Math.floor(t / HOUR); hn * HOUR < end; hn++) {
       const a = hn * HOUR + Math.floor(rndSeed(st.seed, hn, 100) * 3600) * 1000;
-      if (a < t || a >= end || rndSeed(st.seed, hn, 101) >= KID.p * (watching ? KID.watch : 1) || !kidCan(st, a, catTill)) continue;
-      if (!watching && K.owe > 0) { K.owe--; continue; }   // paid back: one came while the game was open
-      if (watching) K.owe = Math.min(KID.owe, K.owe + 1);
+      if (a < t || a >= end || rndSeed(st.seed, hn, 101) >= KID.p * (seen ? KID.watch : KID.away) || !kidCan(st, a, catTill)) continue;
       kidCome(st, a, end, watching, ev);
       return;
     }
@@ -8446,7 +8483,7 @@ function KockaEngine() {
     kidFriend(st, KID.step, t, ev);
     return null;
   }
-  // the game was opened (Phase 4b): maybe a guest 1–5 min later (st.due)
+  // the game was opened (Phase 4b): maybe a guest 30 s – 3 min later (st.due)
   function openedAct(st, t) {
     if (st.due || st.visit || st.guest || st.kid.visit || (st.openAt && t - st.openAt < OPEN.gap * HOUR)) return;
     const k = Math.floor(t / 1000), D = OPEN.delay;
@@ -8488,12 +8525,12 @@ function KockaEngine() {
       friend: typeof K.friend === 'number' && Number.isFinite(K.friend) ? Math.round(clamp(K.friend, 0, 5) * 4) / 4 : 0,
       met: okT(K.met) && K.met <= t && (!visit || K.met <= visit.since) ? K.met : visit ? visit.since : 0,
       day: visit ? dkey(visit.since) : isKey(K.day) && K.day <= dkey(t) ? K.day : 0,
-      owe: Number.isInteger(K.owe) ? clamp(K.owe, 0, KID.owe) : 0,
+      owe: 0,   // no longer used (2026-11-25): an older save's count is dropped
       diary, visit,
     };
     const D = st.due;
     st.due = D && typeof D === 'object' && (D.who === 'kid' || isVisitor(st, D.who)) && okT(D.at) && D.at >= t && D.at <= t + OPEN.delay[1] * 1000 ? { who: D.who, at: D.at } : null;
-    st.owe = Number.isInteger(st.owe) ? clamp(st.owe, 0, OWE) : 0;
+    st.owe = 0;   // no longer used (2026-11-25), see OWE
     st.openAt = okT(st.openAt) && st.openAt <= t ? st.openAt : 0;
   }
   // the clock moved back by d (shiftTimes)
@@ -9102,7 +9139,8 @@ const K = { bx: 105, by: 340, sc: 1, pose: '', key: '', flip: false, walking: fa
   // Škádlení (SPEC §13.4): taps ignored until teaseLock; a nose boop plays until boopUntil; squint / open mouth / warning
   // until; face = { o, until } a few cat options for a moment (cross eyes, achoo, shakeHead, grab); sulkPlace = { p, until }
   // where she sulks (p null: the player put her somewhere); welcomeAt = when the page opened or came back
-  teaseLock: 0, boopUntil: 0, squintUntil: 0, openUntil: 0, warnUntil: 0, face: null, sulkPlace: null, welcomeAt: 0, patN: 0 };
+  teaseLock: 0, boopUntil: 0, squintUntil: 0, openUntil: 0, warnUntil: 0, face: null, sulkPlace: null, welcomeAt: 0, patN: 0,
+  boxPeekUntil: 0 };   // asleep in her box: a tap makes her peek out (one eye open, ears up) until then
 const HEAD = { sit: [100, 64], loaf: [72, 126], sleep: [64, 146], eat: [66, 146], drink: [58, 154], groom: [100, 64], sulk: [100, 72],
   window: [100, 64], belly: [54, 150], stretch: [50, 134], pounce: [56, 80], walk: [66, 106], trot: [62, 104], carried: [100, 52], wriggle: [100, 52],
   lapLoaf: [72, 126], lapCurl: [64, 146], lapBelly: [54, 150], stalk: [50, 140], onBranch: [72, 120], climb: [100, 60],
@@ -9194,7 +9232,8 @@ function sleepSpot(h) {
   const pl = h.sleepPlace || 'bed';
   if (pl === 'box' && home('box')) {
     if (!hasPose('inBox')) { const f = home('box'); return { room: f.room, pose: 'sleep', fx: f.x * 400, fy: f.y * 600 - 6, ax: 108, box: true }; }
-    return boxPose(pose('boxSleep', 'inBox'), { peek: typeof E.boxPeek === 'function' ? E.boxPeek(G.st, now()) || 'ears' : 'ears' });
+    if (K.boxPeekUntil > perf()) return boxPose(pose('boxSleep', 'inBox'), { peekOut: true, asleep: false });   // a tap: she peeks out for a moment (no Zzz)
+    return boxPose(pose('boxSleep', 'inBox'), { peek: typeof E.boxPeek === 'function' ? E.boxPeek(G.st, now()) || 'head' : 'head' });
   }
   if (pl === 'sill') {
     const f = home('sillCushion'), win = spot('living', 'window');
@@ -10189,6 +10228,11 @@ function regionMid(ps, o, id) {
     }
   } catch (e) {}
   return (midMemo[key] = r);
+}
+// asleep in her box, a single tap (on her or on the box): she peeks out (one eye open, ears up) and ducks back in
+function boxPeekOut() {
+  if (K.boxPeekUntil > perf()) return;
+  moodFor('boxPeekUntil', 1400);
 }
 function flickEar() {
   artEl.classList.remove('kx-flick'); void artEl.offsetWidth; artEl.classList.add('kx-flick');
@@ -11197,7 +11241,9 @@ function onTap(ev) {
       const sp = ev.pat && !/^v:/.test(ev.pat.region) ? ev.pat : null;
       if (K.teaseLock > perf()) { gest.cancel(); return; }
       if (sp && sp.n >= 2) { patTap(sp); return; }
-      tip('sleepTap', I18N.t('kocka.tip.sleepTap', { name: n }), 2500); popFx('zzz'); if (!h.lapDoze) flickEar();
+      tip('sleepTap', I18N.t('kocka.tip.sleepTap', { name: n }), 2500);
+      if (K.pose === 'boxSleep' && !h.lapDoze) boxPeekOut();   // in her box she peeks out for a moment and ducks back
+      else { popFx('zzz'); if (!h.lapDoze) flickEar(); }
       return;
     }
     if (h.tree) { say('plaintive'); tip('tree', I18N.t('kocka.tip.treeHold'), 4000); return; }
@@ -11220,6 +11266,7 @@ function onTap(ev) {
     return;
   }
   if (!w.inScene || K.lapView) return;
+  if (K.pose === 'boxSleep' && h.asleep && G.her === G.view && !K.gone && !K.carry && onBoxAt(w.r)) { boxPeekOut(); return; }   // a tap on the box she sleeps in
   const v = G.view;
   if (v === 'garden' && (inRect(w.p, spotRect('backDoor')) || inRect(w.p, spotRect('door')))) { go('hall', -1); return; }
   if (inRect(w.p, spotRect('door'))) {
@@ -11607,6 +11654,12 @@ const furnHere = () => Object.keys(G.st.furniture || {}).filter(id => G.st.furni
 function boxPose(ps, o) {
   const f = G.st.furniture.box, w = furnSize('box'), fx = f.x * 400, fy = f.y * 600 - 0.07 * w, sc = depth(fy);
   return { room: f.room, pose: ps, fx, fy, sc, box: true, o: Object.assign({ box: Math.round(0.005 * w / (KC * sc) * 1000) / 1000 }, o) };
+}
+// a room point q on the box item in the viewed place (as furnAt measures it)
+function onBoxAt(q) {
+  const f = G.st.furniture && G.st.furniture.box; if (!f || f.room !== G.view || !q) return false;
+  const x = f.x * 400, y = f.y * 600, w = furnSize('box');
+  return q.x > x - w * 0.4 && q.x < x + w * 0.4 && q.y > y - w * 0.85 && q.y < y + 10;
 }
 // while she is in the box her pose draws it: the box item is hidden, so there are never two
 function syncFurnBox() {
@@ -13418,7 +13471,9 @@ function kidPhoto() {
   const pz = K.pose && !/^(walk|trot|jump|carried|wriggle|lap)/.test(K.pose) ? K.pose : 'sit';
   doAct('kidPhoto', { pose: pz, kpose: (KZ.m && KID_PHOTO_POSE[KZ.m.pose]) || 'wave', nokoxa: !kIn || undefined });
 }
-// the game was opened (Phase 4b): the engine may let a guest come a few minutes later (st.due)
+// the game was opened (Phase 4b): the engine may let a guest come a few minutes later (st.due). Called at start, on a
+// pageshow from the back-forward cache and when the page is shown again after more than 10 min hidden, always after
+// tick() caught her up to now; the engine never refuses 'opened' (asleep, hiding, held, on the lap, up the tree)
 function openedNow() {
   if (!G || !can('opened')) return;
   const r = E.act(G.st, 'opened', null, now()); G.st = r.st;
@@ -14203,7 +14258,7 @@ loadWeather();                                   // the real weather (only when 
 setInterval(() => loadWeather(), 5 * 60000);     // fetches only when the series is an hour old
 let hiddenAt = 0;
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) { K.welcomeAt = perf(); takeTreats(); tick(); loadWeather(); if (hiddenAt && Date.now() - hiddenAt > 30 * 60000) openedNow(); if (hiddenAt && Date.now() - hiddenAt > 60000 && !K.gone && !E.health(G.st).asleep) { say('trill'); bubble(esc(I18N.t('kocka.trill'))); } }
+  if (!document.hidden) { K.welcomeAt = perf(); takeTreats(); tick(); loadWeather(); if (hiddenAt && Date.now() - hiddenAt > 10 * 60000) openedNow(); if (hiddenAt && Date.now() - hiddenAt > 60000 && !K.gone && !E.health(G.st).asleep) { say('trill'); bubble(esc(I18N.t('kocka.trill'))); } }
   else { hiddenAt = Date.now(); screenGap = false; saveKept(); I.sound.hush(); }
 });
 addEventListener('pageshow', e => { K.welcomeAt = perf(); takeTreats(); tick(); loadWeather(); if (e.persisted) openedNow(); });

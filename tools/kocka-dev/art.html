@@ -228,13 +228,15 @@ h += '</div>';
 // Phase 3 and 5: tricks, minigames, shop, neighbours, album
 h += '<h2>Tricks and the box</h2><div class="grid" style="grid-template-columns:repeat(6,1fr)">';
 for (const [p, m] of [['trickSit', 'calm'], ['trickPaw', 'happy'], ['trickSpin', 'happy'], ['trickBeg', 'calm'], ['inBox', 'happy'], ['inBox', 'grumpy']]) h += cell(A.cat(p, m), p + ' ' + m);
-for (const pk of ['ears', 'tail', 'paw', 'back']) h += cell(A.cat('boxSleep', { mood: 'calm', asleep: true, peek: pk }), 'boxSleep ' + pk);
+for (const pk of ['head', 'eyes', 'ears', 'tail', 'paw', 'back']) h += cell(A.cat('boxSleep', { mood: 'calm', asleep: true, peek: pk }), 'boxSleep ' + pk);
+h += cell(A.cat('boxSleep', { mood: 'calm', asleep: true, peekOut: true }), 'boxSleep peekOut (a tap)');
+h += cell(A.cat('boxSleep', { mood: 'calm', asleep: true, peek: 'head', kit: 0.6 }), 'boxSleep head, kitten');
 h += '</div><h2>The box in her poses matches the box item (opts.box as the game computes it at the gift spot)</h2><div class="grid" style="grid-template-columns:repeat(6,1fr)">';
 { // the game: sc = depth(fy), k = 0.005 × itemSize.box / (1.06 × sc); here the cat's box is 1.06 × sc of the item's scale
   const w = A.itemSize.box.w, fy = 0.79 * 600 - 0.07 * w, sc = Math.min(1.04, Math.max(0.82, 0.84 + (fy - 430) / 170 * 0.2)), k = Math.round(0.005 * w / (1.06 * sc) * 1000) / 1000;
   const item = `<div style="position:absolute;left:${50 - w / (212 * sc) * 50}%;top:${93 - 0.83 * w / (212 * sc) * 100}%;width:${w / (212 * sc) * 100}%;aspect-ratio:1;opacity:.5">${A.item('box')}</div>`;
-  for (const [p, o] of [['inBox', {}], ['boxSleep', { peek: 'ears', asleep: true }], ['boxSleep', { peek: 'tail', asleep: true }], ['boxSleep', { peek: 'back', asleep: true }]])
-    h += cell(`<div style="position:relative">${A.cat(p, Object.assign({ mood: 'calm', box: k }, o))}${item}</div>`, `${p} ${o.peek || ''} box ${k} + item (faint)`);
+  for (const [p, o] of [['inBox', {}], ['boxSleep', { peek: 'head', asleep: true }], ['boxSleep', { peek: 'ears', asleep: true }], ['boxSleep', { peek: 'tail', asleep: true }], ['boxSleep', { peekOut: true, asleep: true }], ['boxSleep', { peek: 'back', asleep: true }]])
+    h += cell(`<div style="position:relative">${A.cat(p, Object.assign({ mood: 'calm', box: k }, o))}${item}</div>`, `${p} ${o.peek || (o.peekOut ? 'peekOut' : '')} box ${k} + item (faint)`);
 }
 h += '</div><h2>Minigames: mouse hole, peeking mouse (phase 0 … 1), fish, rods, checkpoints</h2><div class="grid" style="grid-template-columns:repeat(10,1fr)">';
 h += cell(A.mouseHole(), 'mouseHole') + [0.25, 0.5, 0.75, 1].map(t => cell(A.mousePeek(t), 'mousePeek ' + t)).join('') + A.fishes.map(k => cell(A.fish(k), k)).join('') + cell(A.marker(false), 'marker') +
